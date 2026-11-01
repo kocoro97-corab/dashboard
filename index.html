@@ -87,7 +87,7 @@ a{color:var(--blue)}
 <!-- 2. 대시보드 본문 -->
 <div id="appContainer">
   <header>
-    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v29 · 이벤트 바인딩 안정화</div><div class="sub" id="status">시세 불러오는 중...</div></div>
+    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v31 · 실시간 주도 테마 패치</div><div class="sub" id="status">시세 불러오는 중...</div></div>
     <div class="hr">
       <span id="sessionBadge" class="badge">시장 판별 중</span>
       <button id="adminBtn" style="display:none;background:#3f261e;color:#ffab71;border-color:#f97316" onclick="openAdminModal()">👥 회원승인</button>
@@ -123,7 +123,7 @@ a{color:var(--blue)}
       </section>
     </div>
     <section>
-      <div class="sh"><div><h2>주도 테마 & 강도판</h2><p id="thS">주도주 중심</p></div></div>
+      <div class="sh"><div><h2>실시간 주도 테마 & 강도판</h2><p id="thS">거래대금 + 상승률 상위</p></div></div>
       <div class="grid three" id="themes"></div>
     </section>
     <section>
@@ -174,7 +174,6 @@ const MYP=()=>String(LS('invest_myproxy')||DEFAULT_GAS_URL).trim();
 
 let isRegisterMode = false;
 
-// 💡 이벤트 바인딩 안정화 (DOMContentLoaded 시점에 명확히 연결)
 document.addEventListener('DOMContentLoaded', () => {
   const submitBtn = $('authSubmitBtn');
   const toggleTxt = $('authToggleTxt');
@@ -278,7 +277,6 @@ function startSessionTimer(){
     if(sessionSeconds <= 0){ logout(); }
   }, 1000);
 
-  // 이벤트 감지 시 세션 연장 (passive 옵션 적용으로 터치 방해 방지)
   ['mousemove', 'keydown', 'touchstart', 'click'].forEach(ev=>{
     window.addEventListener(ev, resetSessionTime, {passive: true});
   });
@@ -404,15 +402,25 @@ async function quote(s){
 }
 const KY={};
 async function quoteKR(c){for(const x of['.KS','.KQ']){const q=await quote(c+x);if(q){KY[c]=c+x;return q}}return null}
-async function fillQuotes(list){let i=0;await Promise.all(Array.from({length:4},async()=>{while(i<list.length){const c=list[i++];const q=await(isKR(c)?quoteKR(c):quote(c));if(q){Q[c]=q;SRC[c]='Y';}}}))}
+
+async function fillQuotes(list){
+  let i=0;
+  await Promise.all(Array.from({length:4}, async()=>{
+    while(i < list.length){
+      const c = list[i++];
+      const q = await(isKR(c) ? quoteKR(c) : quote(c));
+      if(q){ Q[c] = q; SRC[c] = 'Y'; }
+    }
+  }));
+}
 
 async function refresh(){
   $('status').textContent='시세 갱신 중...';
-  const want=new Set();['KR','US'].forEach(s=>CFG[s].forEach(x=>x.y&&want.add(x.y)));H.forEach(r=>r[7]&&want.add(r[7]));TH.forEach(t=>t[1].forEach(x=>want.add(x[1])));
+  const want=new Set();['KR','US'].forEach(s=>CFG[s].forEach(x=>x.y&&want.add(x.y)));H.forEach(r=>r[7]&&want.add(r[7]));
   const all=[...want],fr=new Set(),nn=await fillNaver(all,fr);
   await fillQuotes(all.filter(c=>!fr.has(c)));
   const got=all.filter(c=>Q[c]).length;
-  renderCards();renderHoldings();renderThemes();updateTickGauge();generateScenario();
+  renderCards();renderHoldings();fetchTopThemes();updateTickGauge();generateScenario();
   $('thS').textContent=((openKR()||openUS())?'장중실시간':'장마감')+' · '+new Date().toLocaleTimeString('ko-KR');
   $('status').textContent='시세 완료 ('+got+'/'+all.length+' 건)';
 }
@@ -456,21 +464,71 @@ function renderHoldings(){
   }).join('')
 }
 
-const TH=[
-['시장 주도주',[['삼성전자','005930'],['SK하이닉스','000660'],['한미반도체','042700'],['알테오젠','196170'],['현대로템','064350']]],
-['반도체 & HBM',[['삼성전자','005930'],['SK하이닉스','000660'],['한미반도체','042700'],['리노공업','058470'],['DB하이텍','000990']]],
-['방산 & 우주',[['한화에어로스페이스','012450'],['현대로템','064350'],['LIG넥스원','079550'],['한국항공우주','047810'],['풍산','103140']]],
-['로봇 & AI',[['두산로보틱스','454910'],['레인보우로보틱스','277810'],['로보티즈','108490'],['에스피지','058610']]],
-['2차전지 & 전력',[['HD현대일렉트릭','267260'],['LS 일렉트릭','010120'],['LG에너지솔루션','373220'],['에코프로비엠','247540']]],
-['미국 성장주',[['엔비디아','NVDA'],['팔란티어','PLTR'],['테슬라','TSLA'],['SERV','SERV'],['SMR','SMR']]]];
+// 💡 실시간 거래대금/상승률 상위 주도 테마 및 종목 동적 추출 함수
+async function fetchTopThemes(){
+  $('themes').innerHTML = '<div class="mini" style="grid-column:1/-1;text-align:center;padding:20px">🔥 실시간 주도 테마 & 거래대금 상위 종목 분석 중...</div>';
+  
+  try {
+    // 1. 네이버 실시간 주도 테마 (상승률/거래량 상위 테마 목록)
+    const themeRes = await getJSON('https://finance.naver.com/api/sise/themeList.naver?sortOrder=up&pageSize=6');
+    const themeList = narr(themeRes).slice(0, 6);
+    
+    // 2. 만약 테마 API 수신 불가 시 거래대금 상위 주도종목 기반 동적 테마 구성
+    if (!themeList || !themeList.length) {
+      const topStocksRes = await getJSON('https://polling.finance.naver.com/api/realtime/domestic/trend/tradeVolume?page=1&pageSize=30');
+      const stocks = narr(topStocksRes).sort((a,b) => nnum(b.changeRate) - nnum(a.changeRate));
+      
+      const myMap = {};
+      H.forEach(r => { if(r[7]){ const q = Q[r[7]]; myMap[r[7]] = { rt: q ? (q.p/r[3]-1)*100 : r[6] }; } });
 
-function renderThemes(){
-  const myMap={};H.forEach(r=>{if(r[7]){const q=Q[r[7]];myMap[r[7]]={p:q?q.p:r[4],rt:q?(q.p/r[3]-1)*100:r[6]}}});
-  $('themes').innerHTML=TH.map(t=>{
-    const rs=t[1].map(x=>{const q=Q[x[1]];return{n:x[0],c:x[1],p:q&&q.prev?(q.p/q.prev-1)*100:null,my:myMap[x[1]]}}).filter(r=>r.p!=null).sort((a,b)=>b.p-a.p);
-    const avg=rs.length?rs.reduce((a,r)=>a+r.p,0)/rs.length:null,sc=avg==null?0:Math.round(Math.max(0,Math.min(100,50+avg*10)));
-    return `<div class="card"><div class="cl"><b>${t[0]}</b><span>${avg==null?'불러오는 중':'강도 '+sc+' · 평균 '+(avg>=0?'+':'')+avg.toFixed(2)+'%'}</span></div><div class="bar" style="margin-bottom:4px"><i style="width:${sc}%"></i></div>${rs.slice(0,5).map((r,i)=>`<div class="kr" style="cursor:pointer;padding:3px 0" onclick="showQ('${r.c}','${r.n}','')"><span>${i+1}. ${r.n}${r.my?`<b style="font-size:9px;color:var(--amber);margin-left:4px">[보유 ${r.my.rt>=0?'+':''}${r.my.rt.toFixed(1)}%]</b>`:''}</span><b class="${r.p>=0?'up':'down'}">${r.p>=0?'+':''}${r.p.toFixed(2)}%</b></div>`).join('')}</div>`
-  }).join('')
+      let html = '<div class="card" style="grid-column:1/-1"><div class="cl"><b>🔥 실시간 주도주 (거래대금/상승률 상위)</b><span>실시간 집계</span></div><div style="margin-top:8px">';
+      stocks.slice(0, 10).forEach((s, idx) => {
+        const cd = s.itemCode || s.cd, nm = s.itemName || s.nm, rt = nnum(s.changeRate || s.cr);
+        const my = myMap[cd];
+        html += `<div class="kr" style="cursor:pointer;padding:5px 0" onclick="showQ('${cd}','${nm}','')">
+          <span>${idx+1}. <b>${nm}</b> (${cd})${my ? `<b style="font-size:9px;color:var(--amber);margin-left:4px">[보유 ${my.rt>=0?'+':''}${my.rt.toFixed(1)}%]</b>` : ''}</span>
+          <b class="${rt>=0?'up':'down'}">${rt>=0?'+':''}${rt?rt.toFixed(2):'0.00'}%</b>
+        </div>`;
+      });
+      html += '</div></div>';
+      $('themes').innerHTML = html;
+      return;
+    }
+
+    // 3. 실시간 상승 테마별 종목 상세 수신
+    const themeCards = await Promise.all(themeList.map(async (t) => {
+      const themeNo = t.themeNo || t.no;
+      const themeName = t.themeName || t.name;
+      const themeRate = nnum(t.changeRate || t.rate || 0);
+
+      const detailRes = await getJSON(`https://finance.naver.com/api/sise/themeItemList.naver?themeNo=${themeNo}`);
+      const itemList = narr(detailRes).sort((a,b) => nnum(b.changeRate || b.rate) - nnum(a.changeRate || a.rate)).slice(0, 5);
+
+      const myMap = {};
+      H.forEach(r => { if(r[7]){ const q = Q[r[7]]; myMap[r[7]] = { rt: q ? (q.p/r[3]-1)*100 : r[6] }; } });
+
+      const sc = Math.round(Math.max(0, Math.min(100, 50 + themeRate * 10)));
+      
+      let itemsHtml = itemList.map((r, i) => {
+        const cd = r.itemCode || r.cd, nm = r.itemName || r.nm, rt = nnum(r.changeRate || r.rate || 0);
+        const my = myMap[cd];
+        return `<div class="kr" style="cursor:pointer;padding:3px 0" onclick="showQ('${cd}','${nm}','')">
+          <span>${i+1}. ${nm}${my ? `<b style="font-size:9px;color:var(--amber);margin-left:4px">[보유 ${my.rt>=0?'+':''}${my.rt.toFixed(1)}%]</b>` : ''}</span>
+          <b class="${rt>=0?'up':'down'}">${rt>=0?'+':''}${rt.toFixed(2)}%</b>
+        </div>`;
+      }).join('');
+
+      return `<div class="card">
+        <div class="cl"><b>${themeName}</b><span>강도 ${sc} · 평균 ${themeRate>=0?'+':''}${themeRate.toFixed(2)}%</span></div>
+        <div class="bar" style="margin-bottom:4px"><i style="width:${sc}%"></i></div>
+        ${itemsHtml || '<div class="mini">종목 불러오는 중...</div>'}
+      </div>`;
+    }));
+
+    $('themes').innerHTML = themeCards.join('');
+  } catch(e) {
+    $('themes').innerHTML = '<div class="mini" style="grid-column:1/-1;text-align:center">주도 테마 수신 중 오류 발생</div>';
+  }
 }
 
 function updateTickGauge(){
@@ -592,7 +650,7 @@ window.addEventListener('resize',drawQ);
 function initDashboard(){
   embed($('tickq'),'single-quote',{symbol:'USI:TICK',width:'100%',colorTheme:'dark',isTransparent:true,locale:'kr'});
   const ti=LS('invest_tick');if(ti){$('tin').value=ti;setTick()}
-  showQ('^KS11','코스피','',1);renderThemes();renderCards();renderHoldings();clock();refresh();loadNews();
+  showQ('^KS11','코스피','',1);fetchTopThemes();renderCards();renderHoldings();clock();refresh();loadNews();
   setInterval(clock,1000);setInterval(loadNews,300000);setInterval(refresh,60000);
 }
 </script>
