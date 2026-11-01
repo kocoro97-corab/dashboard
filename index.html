@@ -11,10 +11,17 @@
 body{background:var(--bg);color:var(--text);font:12px/1.4 system-ui,-apple-system,sans-serif;padding:10px;overflow-x:hidden}
 
 #authGuard{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90vh;text-align:center;padding:20px}
+.auth-box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px;width:100%;max-width:340px;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 #authGuard h2{font-size:18px;margin-bottom:8px;color:var(--text)}
-#authGuard p{color:var(--muted);margin-bottom:20px;font-size:12px;max-width:320px;line-height:1.6}
-.btn-auth{display:inline-block;padding:14px 28px;background:var(--blue);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:14px;text-decoration:none;margin-bottom:14px}
+#authGuard p{color:var(--muted);margin-bottom:16px;font-size:11px;line-height:1.5}
+.auth-input{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;color:var(--text);font:inherit;margin-bottom:10px;font-size:12px}
+.btn-auth{width:100%;padding:12px;background:var(--blue);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;margin-top:6px}
 .btn-auth:hover{opacity:0.9}
+.auth-toggle{margin-top:12px;font-size:11px;color:var(--muted);cursor:pointer;text-decoration:underline}
+
+#sessionTimerBox{position:fixed;top:10px;right:10px;background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:999px;font-size:10px;z-index:99;display:none;align-items:center;gap:6px}
+#sessionBar{width:50px;height:4px;background:var(--line);border-radius:2px;overflow:hidden}
+#sessionFill{width:100%;height:100%;background:var(--blue);transition:width 1s linear}
 
 #appContainer{display:none}
 header,.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
@@ -23,7 +30,7 @@ header{padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-b
 .hr{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .badge{padding:3px 8px;border-radius:999px;font-size:10px;font-weight:700;border:1px solid var(--line);background:var(--panel2)}
 .badge-kr{background:#3f1e1e;color:#ff7171;border-color:#ef4444}.badge-us{background:#1e293f;color:#71a3ff;border-color:#3b82f6}
-button,select,input[type=number],input[type=text]{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 9px;cursor:pointer;font-size:11px}
+button,select,input[type=number],input[type=text],input[type=password]{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 9px;cursor:pointer;font-size:11px}
 button:hover{border-color:var(--blue)}
 main{display:flex;flex-direction:column;gap:12px;margin-top:10px}
 .sh{display:flex;align-items:center;justify-content:space-between;margin:4px 0 6px;gap:8px;flex-wrap:wrap}
@@ -57,21 +64,37 @@ a{color:var(--blue)}
 </head>
 <body>
 
-<!-- 1. 보안 인증 화면 -->
+<!-- 세션 타이머 표시 배지 -->
+<div id="sessionTimerBox">
+  <span>세션 <b id="sessionTimeTxt">05:00</b></span>
+  <div id="sessionBar"><div id="sessionFill"></div></div>
+  <button onclick="logout()" style="padding:1px 5px;font-size:9px;background:#3f1e1e;color:#ff7171;border-color:#ef4444">로그아웃</button>
+</div>
+
+<!-- 1. 로그인 / 회원가입 화면 -->
 <div id="authGuard">
-  <h2>🔒 구글 계정 보안 인증</h2>
-  <p>최초 1회 구글 인증을 완료하면 이 기기에서는 자동으로 대시보드로 진입합니다.</p>
-  <a id="authBtn" href="#" class="btn-auth">구글 계정 로그인 인증</a>
-  <div class="mini" style="margin-top:15px;">
-    <a href="#" onclick="manualBypass()" style="color:var(--muted);text-decoration:underline;">이 기기에서 인증 완료 처리하기</a>
+  <div class="auth-box">
+    <h2 id="authTitle">🔒 대시보드 로그인</h2>
+    <p id="authDesc">안전한 자산 관리를 위해 아이디와 비밀번호를 입력하세요.</p>
+    <input type="text" id="authId" class="auth-input" placeholder="아이디">
+    <input type="password" id="authPw" class="auth-input" placeholder="비밀번호">
+    <button onclick="handleAuthSubmit()" id="authSubmitBtn" class="btn-auth">로그인</button>
+    <div class="auth-toggle" onclick="toggleAuthMode()" id="authToggleTxt">계정이 없으신가요? 회원가입하기</div>
+    <div id="authMsg" style="margin-top:10px;font-size:11px;color:var(--red)"></div>
   </div>
 </div>
 
 <!-- 2. 대시보드 본문 -->
 <div id="appContainer">
   <header>
-    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v21 · 최신 웹앱 반영</div><div class="sub" id="status">시세 불러오는 중...</div></div>
-    <div class="hr"><span id="sessionBadge" class="badge">시장 판별 중</span><button onclick="refresh()">↻ 새로고침</button><button onclick="openDg()">🩺 진단</button><button onclick="openModal()">⚙️ 지수 설정</button></div>
+    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v25 · 최신 웹앱 반영</div><div class="sub" id="status">시세 불러오는 중...</div></div>
+    <div class="hr">
+      <span id="sessionBadge" class="badge">시장 판별 중</span>
+      <button id="adminBtn" style="display:none;background:#3f261e;color:#ffab71;border-color:#f97316" onclick="openAdminModal()">👥 회원승인</button>
+      <button onclick="refresh()">↻ 새로고침</button>
+      <button onclick="openDg()">🩺 진단</button>
+      <button onclick="openModal()">⚙️ 지수 설정</button>
+    </div>
   </header>
   <main>
     <section class="card" id="chartsec">
@@ -118,6 +141,7 @@ a{color:var(--blue)}
   </main>
 </div>
 
+<!-- 지수 설정 모달 -->
 <div class="mo" id="mo"><div class="md">
 <div class="hr" style="justify-content:space-between"><h3 style="font-size:14px">⚙️ 지수 설정</h3><button onclick="closeModal()">✕</button></div>
 <div class="tabs" style="margin-top:8px"><button id="tKR" onclick="swTab('KR')">🇰🇷 한국장</button><button id="tUS" onclick="swTab('US')">🇺🇸 미국장</button></div>
@@ -125,6 +149,13 @@ a{color:var(--blue)}
 <div class="hr" style="justify-content:space-between"><button onclick="resetSettings()">기본값 복원</button><span class="hr"><button onclick="addItem()">+ 추가</button><button style="background:var(--blue);color:#000;font-weight:700" onclick="saveSettings()">저장</button></span></div>
 </div></div>
 
+<!-- 관리자 회원승인 모달 -->
+<div class="mo" id="adminMo"><div class="md">
+<div class="hr" style="justify-content:space-between"><h3 style="font-size:14px">👥 가입 회원 관리 및 승인</h3><button onclick="closeAdminModal()">✕</button></div>
+<div class="mb" id="adminUserList" style="margin-top:8px">목록 불러오는 중...</div>
+</div></div>
+
+<!-- 연결 진단 모달 -->
 <div class="mo" id="dg" onclick="if(event.target===this)closeDg()"><div class="md" style="max-width:600px">
 <div class="hr" style="justify-content:space-between"><h3 style="font-size:14px">🩺 연결 진단</h3><button onclick="closeDg()">✕</button></div>
 <div class="mb"><div id="dgs" style="font-weight:700"></div>
@@ -138,32 +169,140 @@ a{color:var(--blue)}
 const $=id=>document.getElementById(id);
 const LS=(k,v)=>{try{if(v===undefined){const r=localStorage.getItem(k);return r?JSON.parse(r):null}localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}};
 
-// 💡 최신 발급 웹앱 URL 적용
-const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbxQ0-OTRZy-HJ-m1-4OqE90OJ4fWpF0XzJE8je4oENjDDoJMeZY6TfQOrPPBmWqCridfg/exec";
+// 💡 새로운 웹앱 URL 적용
+const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbyWIySVJNEDdVgQppA50v-gHwY22U4jMueKqh_NatlldzCQDHbv04YOluKbAcGhQ36cFA/exec";
 const MYP=()=>String(LS('invest_myproxy')||DEFAULT_GAS_URL).trim();
 
-function manualBypass(){
-  LS('invest_auth_ok', 'true');
-  $('authGuard').style.display = 'none';
-  $('appContainer').style.display = 'block';
-  initDashboard();
+let isRegisterMode = false;
+function toggleAuthMode(){
+  isRegisterMode = !isRegisterMode;
+  $('authTitle').textContent = isRegisterMode ? "📝 회원가입" : "🔒 대시보드 로그인";
+  $('authSubmitBtn').textContent = isRegisterMode ? "가입신청" : "로그인";
+  $('authToggleTxt').textContent = isRegisterMode ? "이미 계정이 있으신가요? 로그인하기" : "계정이 없으신가요? 회원가입하기";
+  $('authMsg').textContent = "";
+}
+
+async function handleAuthSubmit(){
+  const user = $('authId').value.trim();
+  const pass = $('authPw').value.trim();
+  if(!user || !pass){$('authMsg').textContent="아이디와 비밀번호를 모두 입력하세요.";return;}
+  
+  const action = isRegisterMode ? 'register' : 'login';
+  const url = MYP() + (MYP().includes('?')?'&':'?') + `action=${action}&user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}`;
+  
+  $('authMsg').textContent = "처리 중...";
+  try{
+    const res = await fetch(url);
+    const data = await res.json();
+    if(data.success){
+      if(isRegisterMode){
+        alert(data.message);
+        toggleAuthMode();
+      } else {
+        LS('invest_session_token', data.token);
+        LS('invest_is_admin', data.isAdmin ? 'true' : 'false');
+        startSessionTimer();
+        enterDashboard(data.isAdmin);
+      }
+    } else {
+      $('authMsg').textContent = data.message;
+    }
+  }catch(e){
+    $('authMsg').textContent = "서버 통신 오류가 발생했습니다.";
+  }
+}
+
+async function openAdminModal(){
+  $('adminMo').classList.add('on');
+  $('adminUserList').innerHTML = '불러오는 중...';
+  const token = LS('invest_session_token');
+  const url = MYP() + (MYP().includes('?')?'&':'?') + `action=getPendingUsers&token=${token}`;
+  try{
+    const res = await fetch(url);
+    const data = await res.json();
+    if(data.success){
+      $('adminUserList').innerHTML = data.users.length ? data.users.map(u=>`
+        <div class="si">
+          <div><b>${u.id}</b> <span class="mini">(${u.status})</span></div>
+          <div>${u.status==='approved'?'<span style="color:var(--blue);font-size:10px">승인됨</span>':`<button style="background:var(--blue);color:#000;font-weight:700" onclick="approveUser('${u.id}')">승인하기</button>`}</div>
+        </div>
+      `).join('') : '<div class="mini">가입된 회원이 없습니다.</div>';
+    } else {
+      $('adminUserList').innerHTML = '<div style="color:var(--red)">목록을 불러오지 못했습니다.</div>';
+    }
+  }catch(e){
+    $('adminUserList').innerHTML = '<div style="color:var(--red)">통신 오류</div>';
+  }
+}
+function closeAdminModal(){$('adminMo').classList.remove('on')}
+
+async function approveUser(targetId){
+  const token = LS('invest_session_token');
+  const url = MYP() + (MYP().includes('?')?'&':'?') + `action=approveUser&token=${token}&target=${encodeURIComponent(targetId)}`;
+  try{
+    const res = await fetch(url);
+    const data = await res.json();
+    alert(data.message);
+    if(data.success) openAdminModal();
+  }catch(e){alert('승인 처리 중 오류 발생');}
+}
+
+let sessionSeconds = 300;
+let sessionInterval = null;
+
+function startSessionTimer(){
+  sessionSeconds = 300;
+  $('sessionTimerBox').style.display = 'flex';
+  if(sessionInterval) clearInterval(sessionInterval);
+  
+  sessionInterval = setInterval(()=>{
+    sessionSeconds--;
+    const m = String(Math.floor(sessionSeconds/60)).padStart(2,'0');
+    const s = String(sessionSeconds%60).padStart(2,'0');
+    $('sessionTimeTxt').textContent = `${m}:${s}`;
+    $('sessionFill').style.width = (sessionSeconds/300*100) + '%';
+    
+    if(sessionSeconds <= 0){
+      logout();
+    }
+  }, 1000);
+
+  ['mousemove', 'keydown', 'touchstart', 'click'].forEach(ev=>{
+    window.addEventListener(ev, resetSessionTime, {passive: true});
+  });
+}
+
+function resetSessionTime(){
+  if($('appContainer').style.display === 'block'){
+    sessionSeconds = 300;
+  }
+}
+
+function logout(){
+  if(sessionInterval) clearInterval(sessionInterval);
+  localStorage.removeItem('invest_session_token');
+  localStorage.removeItem('invest_is_admin');
+  $('sessionTimerBox').style.display = 'none';
+  $('appContainer').style.display = 'none';
+  $('authGuard').style.display = 'flex';
+  $('authPw').value = '';
+  $('authMsg').textContent = "세션이 만료되었거나 로그아웃되었습니다.";
 }
 
 function checkAuthentication(){
-  const proxy = MYP();
-  $('authBtn').href = proxy + (proxy.includes('?') ? '&' : '?') + "action=login";
-
-  const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('auth') === 'ok') {
-    LS('invest_auth_ok', 'true');
-    window.history.replaceState({}, document.title, window.location.pathname);
+  const token = LS('invest_session_token');
+  if(token){
+    const isAdmin = LS('invest_is_admin') === 'true';
+    startSessionTimer();
+    enterDashboard(isAdmin);
   }
+}
 
-  if(LS('invest_auth_ok') === 'true'){
-    $('authGuard').style.display = 'none';
-    $('appContainer').style.display = 'block';
-    initDashboard();
-  }
+function enterDashboard(isAdmin){
+  $('authGuard').style.display = 'none';
+  $('appContainer').style.display = 'block';
+  if(isAdmin) $('adminBtn').style.display = 'inline-block';
+  initDashboard();
 }
 
 const DEF={
@@ -205,8 +344,6 @@ const TABS=[['코스피','^KS11'],['코스닥','^KQ11'],['S&P500','^GSPC'],['나
 $('tabs').innerHTML=TABS.map(t=>`<button data-y="${t[1]}" onclick="showQ('${t[1]}','${t[0]}','')">${t[0]}</button>`).join('');
 
 const NET={log:[],ok:0,fail:0};
-const dlog=t=>{NET.log.unshift(new Date().toLocaleTimeString('ko-KR')+' '+t);NET.log.length=Math.min(NET.log.length,60)};
-
 async function getTxt(targetUrl){
   const proxy=MYP();
   if(!proxy)return null;
@@ -215,10 +352,7 @@ async function getTxt(targetUrl){
     const c=new AbortController(),t=setTimeout(()=>c.abort(),9000);
     const r=await fetch(fullUrl,{signal:c.signal});
     clearTimeout(t);
-    if(r.ok){
-      const x=await r.text();
-      if(x&&x.length>10&&!/Unauthorized/i.test(x)){NET.ok++;return x;}
-    }
+    if(r.ok){const x=await r.text();if(x&&x.length>10){NET.ok++;return x;}}
     NET.fail++;
   }catch(e){NET.fail++;}
   return null;
@@ -372,7 +506,7 @@ async function loadNews(){
 }
 
 function setTick(){const v=parseFloat($('tin').value);LS('invest_tick',$('tin').value);if(isNaN(v)){updateTickGauge();return}
-$('tm').style.left='calc('+((Math.max(-1000,Math.min(1000,v))+1000)/20)+'% - 1px)';
+$('tm').style.left='calc('+((Math.max(-1000,Math.min(1000,tv))+1000)/20)+'% - 1px)';
 $('tl2').textContent='입력값: '+v}
 
 let cur='KR';
