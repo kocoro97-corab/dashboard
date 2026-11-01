@@ -87,7 +87,7 @@ a{color:var(--blue)}
 <!-- 2. 대시보드 본문 -->
 <div id="appContainer">
   <header>
-    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v26 · 안정성 패치</div><div class="sub" id="status">시세 불러오는 중...</div></div>
+    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v27 · 안정형 패치</div><div class="sub" id="status">시세 불러오는 중...</div></div>
     <div class="hr">
       <span id="sessionBadge" class="badge">시장 판별 중</span>
       <button id="adminBtn" style="display:none;background:#3f261e;color:#ffab71;border-color:#f97316" onclick="openAdminModal()">👥 회원승인</button>
@@ -211,7 +211,7 @@ async function handleAuthSubmit(){
       $('authMsg').textContent = data.message || "처리에 실패했습니다.";
     }
   }catch(e){
-    $('authMsg').textContent = "서버 통신 오류가 발생했습니다. (진단 버튼을 확인해보세요)";
+    $('authMsg').textContent = "서버 통신 오류가 발생했습니다. (진단 버튼 확인)";
   }
 }
 
@@ -264,10 +264,7 @@ function startSessionTimer(){
     const s = String(sessionSeconds%60).padStart(2,'0');
     $('sessionTimeTxt').textContent = `${m}:${s}`;
     $('sessionFill').style.width = (sessionSeconds/300*100) + '%';
-    
-    if(sessionSeconds <= 0){
-      logout();
-    }
+    if(sessionSeconds <= 0){ logout(); }
   }, 1000);
 
   ['mousemove', 'keydown', 'touchstart', 'click'].forEach(ev=>{
