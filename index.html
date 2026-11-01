@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0b1220">
-<title>개인 투자 대시보드 (모바일 호환형)</title>
+<title>개인 투자 대시보드 (모바일 터치 최적화)</title>
 <style>
 :root{--bg:#0b1220;--panel:#121c2d;--panel2:#172338;--line:#26364d;--text:#edf3fb;--muted:#91a2ba;--red:#ff4d4d;--blue:#4d94ff;--amber:#ffc96b}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
@@ -13,7 +13,7 @@ body{background:var(--bg);color:var(--text);font:12px/1.4 system-ui,-apple-syste
 #authGuard{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90vh;text-align:center;padding:20px}
 #authGuard h2{font-size:18px;margin-bottom:8px;color:var(--text)}
 #authGuard p{color:var(--muted);margin-bottom:20px;font-size:12px;max-width:320px;line-height:1.6}
-.btn-auth{padding:10px 20px;background:var(--blue);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:12px;text-decoration:none}
+.btn-auth{display:inline-block;padding:12px 24px;background:var(--blue);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;text-decoration:none;margin-bottom:10px}
 .btn-auth:hover{opacity:0.9}
 
 #appContainer{display:none}
@@ -57,15 +57,18 @@ a{color:var(--blue)}
 </head>
 <body>
 
+<!-- 1. 보안 인증 화면 (링크 태그 기반으로 모바일 터치 즉시 반응) -->
 <div id="authGuard">
   <h2>🔒 구글 계정 보안 인증</h2>
-  <p>승인된 구글 계정으로 로그인하여 인증을 완료해 주세요.</p>
-  <button class="btn-auth" onclick="redirectToGoogleLogin()">구글 계정 로그인 인증</button>
+  <p>아래 버튼을 터치하여 구글 로그인 인증을 진행해 주세요.</p>
+  <a id="loginLink" href="#" class="btn-auth">구글 계정 로그인 인증</a>
+  <div class="mini" style="margin-top:8px"><a id="directProxyLink" href="#" style="color:var(--muted);text-decoration:underline">직접 GAS 인증 페이지 열기</a></div>
 </div>
 
+<!-- 2. 대시보드 본문 -->
 <div id="appContainer">
   <header>
-    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v9 · 모바일 다이렉트 인증 연동</div><div class="sub" id="status">시세 불러오는 중...</div></div>
+    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v10 · 모바일 터치 최적화</div><div class="sub" id="status">시세 불러오는 중...</div></div>
     <div class="hr"><span id="sessionBadge" class="badge">시장 판별 중</span><button onclick="refresh()">↻ 새로고침</button><button onclick="openDg()">🩺 진단</button><button onclick="openModal()">⚙️ 지수 설정</button></div>
   </header>
   <main>
@@ -136,12 +139,16 @@ const LS=(k,v)=>{try{if(v===undefined){const r=localStorage.getItem(k);return r?
 const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbybMuGMwmuJrFi6iQIAVRF7JQBYRJNF5vK9v0F0gbPo4p_mC9UIjjfc8ifTfSDSrhcZiw/exec";
 const MYP=()=>String(LS('invest_myproxy')||DEFAULT_GAS_URL).trim();
 
-function redirectToGoogleLogin(){
+// 링크 주소 동적 세팅 (모바일 브라우저 터치 100% 보장)
+function setupLoginLinks(){
   const proxy = MYP();
-  window.location.href = proxy + (proxy.includes('?') ? '&' : '?') + "action=login";
+  const loginUrl = proxy + (proxy.includes('?') ? '&' : '?') + "action=login";
+  if($('loginLink')) $('loginLink').href = loginUrl;
+  if($('directProxyLink')) $('directProxyLink').href = loginUrl;
 }
 
 async function checkAuthentication(){
+  setupLoginLinks();
   if(LS('invest_auth_ok') === 'true'){
     $('authGuard').style.display = 'none';
     $('appContainer').style.display = 'block';
@@ -222,7 +229,7 @@ async function getJSON(u){const x=await getTxt(u);try{return JSON.parse(x)}catch
 
 function openDg(){$('dgs').textContent='성공 '+NET.ok+'회 · 실패 '+NET.fail+'회';$('dgl').textContent=NET.log.join('\n')||'기록 없음';$('dgp').value=MYP();$('dg').classList.add('on')}
 function closeDg(){$('dg').classList.remove('on')}
-function saveProxy(){LS('invest_myproxy',$('dgp').value.trim());NET.ok=0;NET.fail=0;closeDg();refresh();loadNews();}
+function saveProxy(){LS('invest_myproxy',$('dgp').value.trim());NET.ok=0;NET.fail=0;closeDg();setupLoginLinks();refresh();loadNews();}
 
 const nnum=v=>{const n=parseFloat(String(v==null?'':v).replace(/[,+\s]/g,''));return isFinite(n)?n:null};
 function nsgn(o,ch){if(ch==null)return ch;const c=(o&&(o.compareToPreviousPrice||o.fluctuationsType))||{},cd=String(c.code||''),tx=String(c.name||'')+String(c.text||'');
@@ -345,7 +352,7 @@ function copyScenario(){navigator.clipboard.writeText($('gv').textContent).then(
 function refreshScenario(){generateScenario()}
 
 const openKR=()=>{const n=new Date(),m=n.getHours()*60+n.getMinutes(),d=n.getDay();return d>0&&d<6&&m>=540&&m<=930},openUS=()=>{const n=new Date(),m=n.getHours()*60+n.getMinutes();return m>=1350||m<=360};
-const esc=v=>String(v).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const esc=v=>String(v).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt; '}[c]));
 const ago=d=>{const m=(Date.now()-d)/60000;return m<1?'방금':m<60?Math.floor(m)+'분 전':Math.floor(m/1440)+'일 전'};
 
 async function fetchNews(q){
