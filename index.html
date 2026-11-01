@@ -61,13 +61,14 @@ a{color:var(--blue)}
 <div id="authGuard">
   <h2>🔒 구글 계정 보안 인증</h2>
   <p>아래 버튼을 터치하여 구글 로그인 인증을 진행해 주세요.</p>
-  <a href="https://script.google.com/macros/s/AKfycbwI0nxy5VVb3WveWrGD7f9QIgYzZPCsno3fAOyPwH30eIcDLdJACBKRa_BSpgNXxOza8g/exec?action=login" class="btn-auth">구글 계정 로그인 인증</a>
+  <a href="https://script.google.com/macros/s/AKfycbwm5v9oVTs_V9iNS7ULK0v00QHLZ0Cpk1S0oStz0hkevYO8fW3ORC-kj-YE0yU6HCUX4w/exec?action=login" class="btn-auth">구글 계정 로그인 인증</a>
+  <div class="mini" style="margin-top:10px"><a href="#" onclick="forceBypass()" style="color:var(--muted);text-decoration:underline">인증 세션 강제 활성화</a></div>
 </div>
 
 <!-- 2. 대시보드 본문 -->
 <div id="appContainer">
   <header>
-    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v15 · 최신 웹앱 연동</div><div class="sub" id="status">시세 불러오는 중...</div></div>
+    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v17 · 최종 웹앱 연동</div><div class="sub" id="status">시세 불러오는 중...</div></div>
     <div class="hr"><span id="sessionBadge" class="badge">시장 판별 중</span><button onclick="refresh()">↻ 새로고침</button><button onclick="openDg()">🩺 진단</button><button onclick="openModal()">⚙️ 지수 설정</button></div>
   </header>
   <main>
@@ -136,12 +137,19 @@ const $=id=>document.getElementById(id);
 const LS=(k,v)=>{try{if(v===undefined){const r=localStorage.getItem(k);return r?JSON.parse(r):null}localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}};
 
 // 💡 최신 웹앱 URL 반영
-const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwI0nxy5VVb3WveWrGD7f9QIgYzZPCsno3fAOyPwH30eIcDLdJACBKRa_BSpgNXxOza8g/exec";
+const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwm5v9oVTs_V9iNS7ULK0v00QHLZ0Cpk1S0oStz0hkevYO8fW3ORC-kj-YE0yU6HCUX4w/exec";
 const MYP=()=>String(LS('invest_myproxy')||DEFAULT_GAS_URL).trim();
+
+function forceBypass(){
+  LS('invest_auth_ok', 'true');
+  $('authGuard').style.display = 'none';
+  $('appContainer').style.display = 'block';
+  initDashboard();
+}
 
 async function checkAuthentication(){
   const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('auth') === 'ok') {
+  if (urlParams.get('auth') && urlParams.get('auth').includes('ok')) {
     LS('invest_auth_ok', 'true');
     window.history.replaceState({}, document.title, window.location.pathname);
   }
@@ -152,17 +160,6 @@ async function checkAuthentication(){
     initDashboard();
     return;
   }
-  const proxy = MYP();
-  try{
-    const res = await fetch(proxy + (proxy.includes('?') ? '&' : '?') + "action=checkAuth");
-    const data = await res.json();
-    if(data && data.authorized){
-      LS('invest_auth_ok', 'true');
-      $('authGuard').style.display = 'none';
-      $('appContainer').style.display = 'block';
-      initDashboard();
-    }
-  }catch(e){}
 }
 
 const DEF={
