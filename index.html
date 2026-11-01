@@ -57,18 +57,17 @@ a{color:var(--blue)}
 </head>
 <body>
 
-<!-- 1. 보안 인증 화면 (최신 웹앱 URL 반영) -->
+<!-- 1. 보안 인증 화면 -->
 <div id="authGuard">
   <h2>🔒 구글 계정 보안 인증</h2>
-  <p>아래 버튼을 터치하여 구글 로그인 인증을 진행해 주세요.</p>
+  <p>최초 1회 구글 로그인 인증을 진행하면 이 기기에서는 이후 자동으로 대시보드에 진입합니다.</p>
   <a href="https://script.google.com/macros/s/AKfycbwm5v9oVTs_V9iNS7ULK0v00QHLZ0Cpk1S0oStz0hkevYO8fW3ORC-kj-YE0yU6HCUX4w/exec?action=login" class="btn-auth">구글 계정 로그인 인증</a>
-  <div class="mini" style="margin-top:10px"><a href="#" onclick="forceBypass()" style="color:var(--muted);text-decoration:underline">인증 세션 강제 활성화</a></div>
 </div>
 
 <!-- 2. 대시보드 본문 -->
 <div id="appContainer">
   <header>
-    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v17 · 최종 웹앱 연동</div><div class="sub" id="status">시세 불러오는 중...</div></div>
+    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v19 · 보안 인증 적용</div><div class="sub" id="status">시세 불러오는 중...</div></div>
     <div class="hr"><span id="sessionBadge" class="badge">시장 판별 중</span><button onclick="refresh()">↻ 새로고침</button><button onclick="openDg()">🩺 진단</button><button onclick="openModal()">⚙️ 지수 설정</button></div>
   </header>
   <main>
@@ -136,30 +135,37 @@ a{color:var(--blue)}
 const $=id=>document.getElementById(id);
 const LS=(k,v)=>{try{if(v===undefined){const r=localStorage.getItem(k);return r?JSON.parse(r):null}localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}};
 
-// 💡 최신 웹앱 URL 반영
 const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbwm5v9oVTs_V9iNS7ULK0v00QHLZ0Cpk1S0oStz0hkevYO8fW3ORC-kj-YE0yU6HCUX4w/exec";
 const MYP=()=>String(LS('invest_myproxy')||DEFAULT_GAS_URL).trim();
 
-function forceBypass(){
-  LS('invest_auth_ok', 'true');
-  $('authGuard').style.display = 'none';
-  $('appContainer').style.display = 'block';
-  initDashboard();
-}
-
 async function checkAuthentication(){
+  // 1. 구글 인증 리다이렉트 신호(?auth=...) 감지 시 인증 토큰 영구 저장
   const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.get('auth') && urlParams.get('auth').includes('ok')) {
+  if (urlParams.get('auth')) {
     LS('invest_auth_ok', 'true');
     window.history.replaceState({}, document.title, window.location.pathname);
   }
 
+  // 2. 인증 토큰이 존재하는 경우 대시보드 바로 표시
   if(LS('invest_auth_ok') === 'true'){
     $('authGuard').style.display = 'none';
     $('appContainer').style.display = 'block';
     initDashboard();
     return;
   }
+
+  // 3. 미인증 기기일 경우 백엔드로 권한 조회
+  const proxy = MYP();
+  try{
+    const res = await fetch(proxy + (proxy.includes('?') ? '&' : '?') + "action=checkAuth");
+    const data = await res.json();
+    if(data && data.authorized){
+      LS('invest_auth_ok', 'true');
+      $('authGuard').style.display = 'none';
+      $('appContainer').style.display = 'block';
+      initDashboard();
+    }
+  }catch(e){}
 }
 
 const DEF={
