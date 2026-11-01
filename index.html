@@ -78,8 +78,8 @@ a{color:var(--blue)}
     <p id="authDesc">안전한 자산 관리를 위해 아이디와 비밀번호를 입력하세요.</p>
     <input type="text" id="authId" class="auth-input" placeholder="아이디">
     <input type="password" id="authPw" class="auth-input" placeholder="비밀번호">
-    <button onclick="handleAuthSubmit()" id="authSubmitBtn" class="btn-auth">로그인</button>
-    <div class="auth-toggle" onclick="toggleAuthMode()" id="authToggleTxt">계정이 없으신가요? 회원가입하기</div>
+    <button id="authSubmitBtn" class="btn-auth">로그인</button>
+    <div class="auth-toggle" id="authToggleTxt">계정이 없으신가요? 회원가입하기</div>
     <div id="authMsg" style="margin-top:10px;font-size:11px;color:var(--red)"></div>
   </div>
 </div>
@@ -87,7 +87,7 @@ a{color:var(--blue)}
 <!-- 2. 대시보드 본문 -->
 <div id="appContainer">
   <header>
-    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v28 · 완성형</div><div class="sub" id="status">시세 불러오는 중...</div></div>
+    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v29 · 이벤트 바인딩 안정화</div><div class="sub" id="status">시세 불러오는 중...</div></div>
     <div class="hr">
       <span id="sessionBadge" class="badge">시장 판별 중</span>
       <button id="adminBtn" style="display:none;background:#3f261e;color:#ffab71;border-color:#f97316" onclick="openAdminModal()">👥 회원승인</button>
@@ -173,6 +173,17 @@ const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbyWIySVJNEDdVgQ
 const MYP=()=>String(LS('invest_myproxy')||DEFAULT_GAS_URL).trim();
 
 let isRegisterMode = false;
+
+// 💡 이벤트 바인딩 안정화 (DOMContentLoaded 시점에 명확히 연결)
+document.addEventListener('DOMContentLoaded', () => {
+  const submitBtn = $('authSubmitBtn');
+  const toggleTxt = $('authToggleTxt');
+  
+  if(submitBtn) submitBtn.addEventListener('click', handleAuthSubmit);
+  if(toggleTxt) toggleTxt.addEventListener('click', toggleAuthMode);
+
+  checkAuthentication();
+});
 
 function toggleAuthMode(){
   isRegisterMode = !isRegisterMode;
@@ -267,6 +278,7 @@ function startSessionTimer(){
     if(sessionSeconds <= 0){ logout(); }
   }, 1000);
 
+  // 이벤트 감지 시 세션 연장 (passive 옵션 적용으로 터치 방해 방지)
   ['mousemove', 'keydown', 'touchstart', 'click'].forEach(ev=>{
     window.addEventListener(ev, resetSessionTime, {passive: true});
   });
@@ -583,8 +595,6 @@ function initDashboard(){
   showQ('^KS11','코스피','',1);renderThemes();renderCards();renderHoldings();clock();refresh();loadNews();
   setInterval(clock,1000);setInterval(loadNews,300000);setInterval(refresh,60000);
 }
-
-window.addEventListener('DOMContentLoaded', checkAuthentication);
 </script>
 </body>
 </html>
