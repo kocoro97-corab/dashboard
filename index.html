@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0b1220">
-<title>개인 투자 대시보드 (팝업 인증형)</title>
+<title>개인 투자 대시보드 (모바일 호환형)</title>
 <style>
 :root{--bg:#0b1220;--panel:#121c2d;--panel2:#172338;--line:#26364d;--text:#edf3fb;--muted:#91a2ba;--red:#ff4d4d;--blue:#4d94ff;--amber:#ffc96b}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
@@ -13,7 +13,7 @@ body{background:var(--bg);color:var(--text);font:12px/1.4 system-ui,-apple-syste
 #authGuard{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90vh;text-align:center;padding:20px}
 #authGuard h2{font-size:18px;margin-bottom:8px;color:var(--text)}
 #authGuard p{color:var(--muted);margin-bottom:20px;font-size:12px;max-width:320px;line-height:1.6}
-.btn-auth{padding:10px 20px;background:var(--blue);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:12px}
+.btn-auth{padding:10px 20px;background:var(--blue);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:12px;text-decoration:none}
 .btn-auth:hover{opacity:0.9}
 
 #appContainer{display:none}
@@ -60,12 +60,12 @@ a{color:var(--blue)}
 <div id="authGuard">
   <h2>🔒 구글 계정 보안 인증</h2>
   <p>승인된 구글 계정으로 로그인하여 인증을 완료해 주세요.</p>
-  <button class="btn-auth" onclick="openGoogleLogin()">구글 계정 로그인 인증</button>
+  <button class="btn-auth" onclick="redirectToGoogleLogin()">구글 계정 로그인 인증</button>
 </div>
 
 <div id="appContainer">
   <header>
-    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v8 · 팝업 인증 연동</div><div class="sub" id="status">시세 불러오는 중...</div></div>
+    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v9 · 모바일 다이렉트 인증 연동</div><div class="sub" id="status">시세 불러오는 중...</div></div>
     <div class="hr"><span id="sessionBadge" class="badge">시장 판별 중</span><button onclick="refresh()">↻ 새로고침</button><button onclick="openDg()">🩺 진단</button><button onclick="openModal()">⚙️ 지수 설정</button></div>
   </header>
   <main>
@@ -133,27 +133,14 @@ a{color:var(--blue)}
 const $=id=>document.getElementById(id);
 const LS=(k,v)=>{try{if(v===undefined){const r=localStorage.getItem(k);return r?JSON.parse(r):null}localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}};
 
-// 💡 최신 웹 앱 URL 반영 완료
-const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbxm3He6oGW-iZwqWaEqM9_Y0_dGa5BUyJuy5tO_NVux3ricZD_rrU5Hi-98JO9iFi_W/exec";
+const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbybMuGMwmuJrFi6iQIAVRF7JQBYRJNF5vK9v0F0gbPo4p_mC9UIjjfc8ifTfSDSrhcZiw/exec";
 const MYP=()=>String(LS('invest_myproxy')||DEFAULT_GAS_URL).trim();
 
-function openGoogleLogin(){
+function redirectToGoogleLogin(){
   const proxy = MYP();
-  const loginUrl = proxy + (proxy.includes('?') ? '&' : '?') + "action=login";
-  window.open(loginUrl, "GoogleAuthPopup", "width=500,height=600");
+  window.location.href = proxy + (proxy.includes('?') ? '&' : '?') + "action=login";
 }
 
-// 팝업 창으로부터 인증 성공 메시지 수신
-window.addEventListener("message", (event) => {
-  if (event.data && event.data.status === "SUCCESS") {
-    LS('invest_auth_ok', 'true');
-    $('authGuard').style.display = 'none';
-    $('appContainer').style.display = 'block';
-    initDashboard();
-  }
-});
-
-// 자동 인증 체크
 async function checkAuthentication(){
   if(LS('invest_auth_ok') === 'true'){
     $('authGuard').style.display = 'none';
