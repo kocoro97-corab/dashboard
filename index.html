@@ -404,7 +404,7 @@ async function quote(s){
 }
 const KY={};
 async function quoteKR(c){for(const x of['.KS','.KQ']){const q=await quote(c+x);if(q){KY[c]=c+x;return q}}return null}
-async function fillQuotes(list){let i=0;await Promise.all(Array.from({length:4},async()=>{while(i<list.length){const c=list[i++];const q=await(isKR(c)?quoteKR(c):quote(c));if(q){Q[c]=q;SRC[c]='Y';}}}})}
+async function fillQuotes(list){let i=0;await Promise.all(Array.from({length:4},async()=>{while(i<list.length){const c=list[i++];const q=await(isKR(c)?quoteKR(c):quote(c));if(q){Q[c]=q;SRC[c]='Y';}}}))}
 
 async function refresh(){
   $('status').textContent='시세 갱신 중...';
