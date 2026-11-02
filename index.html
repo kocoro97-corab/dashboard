@@ -201,15 +201,21 @@ function toggleAuthMode(){
   $('authMsg').textContent="";
 }
 
-async function handleAuthSubmit(){
+function handleAuthSubmit(){return doAuth(false)}
+
+async function doAuth(retried){
   const user=$('authId').value.trim(),pass=$('authPw').value.trim();
   if(!user||!pass){$('authMsg').textContent="아이디와 비밀번호를 모두 입력하세요.";return}
-  const action=isRegisterMode?'register':'login';
-  const url=MYP()+(MYP().includes('?')?'&':'?')+`action=${action}&user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}`;
+  const action=isRegisterMode?'register':'login',base=MYP();
+  const url=base+(base.includes('?')?'&':'?')+`action=${action}&user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}`;
   $('authMsg').textContent="서버 통신 중...";
+  let step='연결';
   try{
     const res=await fetch(url);
-    const data=await res.json();
+    step='응답(HTTP '+res.status+')';
+    const txt=await res.text();
+    let data;
+    try{data=JSON.parse(txt)}catch(e){throw new Error('JSON 아님: '+txt.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,80))}
     if(data.success){
       if(isRegisterMode){alert(data.message);toggleAuthMode()}
       else{
@@ -219,7 +225,13 @@ async function handleAuthSubmit(){
         enterDashboard(data.isAdmin);
       }
     }else{$('authMsg').textContent=data.message||"처리에 실패했습니다."}
-  }catch(e){$('authMsg').textContent="서버 통신 오류가 발생했습니다."}
+  }catch(e){
+    if(!retried&&LS('invest_myproxy')&&base!==DEFAULT_GAS_URL){
+      localStorage.removeItem('invest_myproxy');
+      return doAuth(true);
+    }
+    $('authMsg').textContent='서버 통신 오류 ['+step+'] '+(e.message||'')+' · 주소 …'+base.slice(-8);
+  }
 }
 
 async function openAdminModal(){
