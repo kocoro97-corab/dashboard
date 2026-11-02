@@ -9,20 +9,17 @@
 :root{--bg:#0b1220;--panel:#121c2d;--panel2:#172338;--line:#26364d;--text:#edf3fb;--muted:#91a2ba;--red:#ff4d4d;--blue:#4d94ff;--amber:#ffc96b}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font:12px/1.4 system-ui,-apple-system,sans-serif;padding:10px;overflow-x:hidden}
-
 #authGuard{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90vh;text-align:center;padding:20px}
 .auth-box{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px;width:100%;max-width:340px;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 #authGuard h2{font-size:18px;margin-bottom:8px;color:var(--text)}
 #authGuard p{color:var(--muted);margin-bottom:16px;font-size:11px;line-height:1.5}
 .auth-input{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;color:var(--text);font:inherit;margin-bottom:10px;font-size:12px}
 .btn-auth{width:100%;padding:12px;background:var(--blue);color:#000;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;margin-top:6px}
-.btn-auth:hover{opacity:0.9}
-.auth-toggle{margin-top:12px;font-size:11px;color:var(--muted);cursor:pointer;text-decoration:underline}
-
+.btn-auth:hover{opacity:.9}
+.auth-toggle{margin-top:12px;font-size:11px;color:var(--muted);cursor:pointer;text-decoration:underline;padding:6px}
 #sessionTimerBox{position:fixed;top:10px;right:10px;background:var(--panel);border:1px solid var(--line);padding:4px 10px;border-radius:999px;font-size:10px;z-index:99;display:none;align-items:center;gap:6px}
 #sessionBar{width:50px;height:4px;background:var(--line);border-radius:2px;overflow:hidden}
 #sessionFill{width:100%;height:100%;background:var(--blue);transition:width 1s linear}
-
 #appContainer{display:none}
 header,.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
 header{padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
@@ -64,30 +61,27 @@ a{color:var(--blue)}
 </head>
 <body>
 
-<!-- 세션 타이머 표시 배지 -->
 <div id="sessionTimerBox">
   <span>세션 <b id="sessionTimeTxt">05:00</b></span>
   <div id="sessionBar"><div id="sessionFill"></div></div>
   <button onclick="logout()" style="padding:1px 5px;font-size:9px;background:#3f1e1e;color:#ff7171;border-color:#ef4444">로그아웃</button>
 </div>
 
-<!-- 1. 로그인 / 회원가입 화면 -->
 <div id="authGuard">
   <div class="auth-box">
     <h2 id="authTitle">🔒 대시보드 로그인</h2>
     <p id="authDesc">안전한 자산 관리를 위해 아이디와 비밀번호를 입력하세요.</p>
-    <input type="text" id="authId" class="auth-input" placeholder="아이디">
-    <input type="password" id="authPw" class="auth-input" placeholder="비밀번호">
-    <button id="authSubmitBtn" class="btn-auth">로그인</button>
+    <input type="text" id="authId" class="auth-input" placeholder="아이디" autocomplete="username">
+    <input type="password" id="authPw" class="auth-input" placeholder="비밀번호" autocomplete="current-password">
+    <button type="button" id="authSubmitBtn" class="btn-auth">로그인</button>
     <div class="auth-toggle" id="authToggleTxt">계정이 없으신가요? 회원가입하기</div>
     <div id="authMsg" style="margin-top:10px;font-size:11px;color:var(--red)"></div>
   </div>
 </div>
 
-<!-- 2. 대시보드 본문 -->
 <div id="appContainer">
   <header>
-    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v33 · 새 웹앱 주소 반영 완료</div><div class="sub" id="status">시세 불러오는 중...</div></div>
+    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v34 · 로그인 복구 · 실시간 테마</div><div class="sub" id="status">시세 불러오는 중...</div></div>
     <div class="hr">
       <span id="sessionBadge" class="badge">시장 판별 중</span>
       <button id="adminBtn" style="display:none;background:#3f261e;color:#ffab71;border-color:#f97316" onclick="openAdminModal()">👥 회원승인</button>
@@ -123,7 +117,7 @@ a{color:var(--blue)}
       </section>
     </div>
     <section>
-      <div class="sh"><div><h2>실시간 주도 테마 & 강도판</h2><p id="thS">거래대금 + 상승률 상위</p></div></div>
+      <div class="sh"><div><h2>실시간 주도 테마 & 강도판</h2><p id="thS">거래대금·거래량·상승률 종합</p></div><button onclick="THM_AT=0;fetchTopThemes()">↻ 테마 갱신</button></div>
       <div class="grid three" id="themes"></div>
     </section>
     <section>
@@ -133,15 +127,12 @@ a{color:var(--blue)}
       <div class="tw"><table><thead><tr><th>계좌</th><th>종목</th><th>수량</th><th>평단가</th><th>현재가</th><th>평가손익</th><th>수익률</th></tr></thead><tbody id="hd"></tbody></table></div>
     </section>
     <div class="grid two">
-      <section class="card"><div class="sh"><div><h2>실시간 시장 뉴스</h2><p id="nst_mk">기사 불러오는 중...</p></div></div>
-      <div id="nl_mk"></div></section>
-      <section class="card"><div class="sh"><div><h2>내 보유종목 뉴스</h2><p id="nst_hd">기사 불러오는 중...</p></div></div>
-      <div id="nl_hd"></div></section>
+      <section class="card"><div class="sh"><div><h2>실시간 시장 뉴스</h2><p id="nst_mk">기사 불러오는 중...</p></div></div><div id="nl_mk"></div></section>
+      <section class="card"><div class="sh"><div><h2>내 보유종목 뉴스</h2><p id="nst_hd">기사 불러오는 중...</p></div></div><div id="nl_hd"></div></section>
     </div>
   </main>
 </div>
 
-<!-- 지수 설정 모달 -->
 <div class="mo" id="mo"><div class="md">
 <div class="hr" style="justify-content:space-between"><h3 style="font-size:14px">⚙️ 지수 설정</h3><button onclick="closeModal()">✕</button></div>
 <div class="tabs" style="margin-top:8px"><button id="tKR" onclick="swTab('KR')">🇰🇷 한국장</button><button id="tUS" onclick="swTab('US')">🇺🇸 미국장</button></div>
@@ -149,13 +140,11 @@ a{color:var(--blue)}
 <div class="hr" style="justify-content:space-between"><button onclick="resetSettings()">기본값 복원</button><span class="hr"><button onclick="addItem()">+ 추가</button><button style="background:var(--blue);color:#000;font-weight:700" onclick="saveSettings()">저장</button></span></div>
 </div></div>
 
-<!-- 관리자 회원승인 모달 -->
 <div class="mo" id="adminMo"><div class="md">
 <div class="hr" style="justify-content:space-between"><h3 style="font-size:14px">👥 가입 회원 관리 및 승인</h3><button onclick="closeAdminModal()">✕</button></div>
 <div class="mb" id="adminUserList" style="margin-top:8px">목록 불러오는 중...</div>
 </div></div>
 
-<!-- 연결 진단 모달 -->
 <div class="mo" id="dg" onclick="if(event.target===this)closeDg()"><div class="md" style="max-width:600px">
 <div class="hr" style="justify-content:space-between"><h3 style="font-size:14px">🩺 연결 진단</h3><button onclick="closeDg()">✕</button></div>
 <div class="mb"><div id="dgs" style="font-weight:700"></div>
@@ -165,161 +154,152 @@ a{color:var(--blue)}
 <button onclick="saveProxy()" style="background:var(--blue);color:#000;font-weight:700;margin-top:6px">저장 후 테스트</button>
 </div></div></div>
 
+<!-- ===== 진단용: 스크립트 오류를 화면 아래에 표시 ===== -->
+<script>
+(function(){
+  function show(m){
+    var el=document.getElementById('authMsg');if(el)el.textContent=m;
+    var b=document.getElementById('errBar');
+    if(!b){b=document.createElement('div');b.id='errBar';
+      b.style.cssText='position:fixed;left:0;right:0;bottom:0;background:#7f1d1d;color:#fff;font:11px/1.4 system-ui;padding:8px;z-index:9999;white-space:pre-wrap';
+      document.body.appendChild(b)}
+    b.textContent=m;
+  }
+  window.addEventListener('error',function(e){show('⚠ 스크립트 오류: '+e.message+(e.lineno?' (줄 '+e.lineno+')':''))});
+  window.addEventListener('unhandledrejection',function(e){show('⚠ 비동기 오류: '+(e.reason&&e.reason.message||e.reason))});
+  window.addEventListener('load',function(){
+    if(typeof handleAuthSubmit!=='function')show('⚠ 로그인 스크립트(1부)가 실행되지 않았습니다.');
+    else if(typeof fetchTopThemes!=='function')show('⚠ 2부·3부 스크립트가 아직 없거나 오류가 있습니다.');
+  });
+})();
+</script>
+
+<!-- ===== 1부 스크립트: 로그인 / 회원가입 / 세션 ===== -->
 <script>
 const $=id=>document.getElementById(id);
 const LS=(k,v)=>{try{if(v===undefined){const r=localStorage.getItem(k);return r?JSON.parse(r):null}localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}};
 
-const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbyYifSuqSGeQ16UynRYFxJ0qH1aNsvUNqrbmPvrOB0ZDKiTyL65gZDdUQPgiGOTRDgq1w/exec";
+const DEFAULT_GAS_URL="https://script.google.com/macros/s/AKfycbyYifSuqSGeQ16UynRYFxJ0qH1aNsvUNqrbmPvrOB0ZDKiTyL65gZDdUQPgiGOTRDgq1w/exec";
 const MYP=()=>String(LS('invest_myproxy')||DEFAULT_GAS_URL).trim();
 
-let isRegisterMode = false;
+let isRegisterMode=false;
 
-document.addEventListener('DOMContentLoaded', () => {
-  const submitBtn = $('authSubmitBtn');
-  const toggleTxt = $('authToggleTxt');
-  
-  if(submitBtn) submitBtn.addEventListener('click', handleAuthSubmit);
-  if(toggleTxt) toggleTxt.addEventListener('click', toggleAuthMode);
-
+function bindAuth(){
+  const b=$('authSubmitBtn'),t=$('authToggleTxt'),pw=$('authPw');
+  if(b&&!b.dataset.bound){b.dataset.bound='1';b.addEventListener('click',handleAuthSubmit)}
+  if(t&&!t.dataset.bound){t.dataset.bound='1';t.addEventListener('click',toggleAuthMode)}
+  if(pw&&!pw.dataset.bound){pw.dataset.bound='1';pw.addEventListener('keydown',e=>{if(e.key==='Enter')handleAuthSubmit()})}
   checkAuthentication();
-});
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bindAuth);else bindAuth();
 
 function toggleAuthMode(){
-  isRegisterMode = !isRegisterMode;
-  $('authTitle').textContent = isRegisterMode ? "📝 회원가입" : "🔒 대시보드 로그인";
-  $('authSubmitBtn').textContent = isRegisterMode ? "가입신청" : "로그인";
-  $('authToggleTxt').textContent = isRegisterMode ? "이미 계정이 있으신가요? 로그인하기" : "계정이 없으신가요? 회원가입하기";
-  $('authMsg').textContent = "";
+  isRegisterMode=!isRegisterMode;
+  $('authTitle').textContent=isRegisterMode?"📝 회원가입":"🔒 대시보드 로그인";
+  $('authSubmitBtn').textContent=isRegisterMode?"가입신청":"로그인";
+  $('authToggleTxt').textContent=isRegisterMode?"이미 계정이 있으신가요? 로그인하기":"계정이 없으신가요? 회원가입하기";
+  $('authMsg').textContent="";
 }
 
 async function handleAuthSubmit(){
-  const user = $('authId').value.trim();
-  const pass = $('authPw').value.trim();
-  if(!user || !pass){
-    $('authMsg').textContent = "아이디와 비밀번호를 모두 입력하세요.";
-    return;
-  }
-  
-  const action = isRegisterMode ? 'register' : 'login';
-  const url = MYP() + (MYP().includes('?')?'&':'?') + `action=${action}&user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}`;
-  
-  $('authMsg').textContent = "서버 통신 중...";
+  const user=$('authId').value.trim(),pass=$('authPw').value.trim();
+  if(!user||!pass){$('authMsg').textContent="아이디와 비밀번호를 모두 입력하세요.";return}
+  const action=isRegisterMode?'register':'login';
+  const url=MYP()+(MYP().includes('?')?'&':'?')+`action=${action}&user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}`;
+  $('authMsg').textContent="서버 통신 중...";
   try{
-    const res = await fetch(url);
-    const data = await res.json();
+    const res=await fetch(url);
+    const data=await res.json();
     if(data.success){
-      if(isRegisterMode){
-        alert(data.message);
-        toggleAuthMode();
-      } else {
-        LS('invest_session_token', data.token);
-        LS('invest_is_admin', data.isAdmin ? 'true' : 'false');
+      if(isRegisterMode){alert(data.message);toggleAuthMode()}
+      else{
+        LS('invest_session_token',data.token);
+        LS('invest_is_admin',data.isAdmin?'true':'false');
         startSessionTimer();
         enterDashboard(data.isAdmin);
       }
-    } else {
-      $('authMsg').textContent = data.message || "처리에 실패했습니다.";
-    }
-  }catch(e){
-    $('authMsg').textContent = "서버 통신 오류가 발생했습니다.";
-  }
+    }else{$('authMsg').textContent=data.message||"처리에 실패했습니다."}
+  }catch(e){$('authMsg').textContent="서버 통신 오류가 발생했습니다."}
 }
 
 async function openAdminModal(){
   $('adminMo').classList.add('on');
-  $('adminUserList').innerHTML = '불러오는 중...';
-  const token = LS('invest_session_token');
-  const url = MYP() + (MYP().includes('?')?'&':'?') + `action=getPendingUsers&token=${token}`;
+  $('adminUserList').innerHTML='불러오는 중...';
+  const token=LS('invest_session_token');
+  const url=MYP()+(MYP().includes('?')?'&':'?')+`action=getPendingUsers&token=${token}`;
   try{
-    const res = await fetch(url);
-    const data = await res.json();
+    const res=await fetch(url);
+    const data=await res.json();
     if(data.success){
-      $('adminUserList').innerHTML = data.users.length ? data.users.map(u=>`
+      $('adminUserList').innerHTML=data.users.length?data.users.map(u=>`
         <div class="si">
           <div><b>${u.id}</b> <span class="mini">(${u.status})</span></div>
           <div>${u.status==='approved'?'<span style="color:var(--blue);font-size:10px">승인됨</span>':`<button style="background:var(--blue);color:#000;font-weight:700" onclick="approveUser('${u.id}')">승인하기</button>`}</div>
-        </div>
-      `).join('') : '<div class="mini">가입된 회원이 없습니다.</div>';
-    } else {
-      $('adminUserList').innerHTML = '<div style="color:var(--red)">목록을 불러오지 못했습니다.</div>';
-    }
-  }catch(e){
-    $('adminUserList').innerHTML = '<div style="color:var(--red)">통신 오류</div>';
-  }
+        </div>`).join(''):'<div class="mini">가입된 회원이 없습니다.</div>';
+    }else{$('adminUserList').innerHTML='<div style="color:var(--red)">목록을 불러오지 못했습니다.</div>'}
+  }catch(e){$('adminUserList').innerHTML='<div style="color:var(--red)">통신 오류</div>'}
 }
 function closeAdminModal(){$('adminMo').classList.remove('on')}
 
 async function approveUser(targetId){
-  const token = LS('invest_session_token');
-  const url = MYP() + (MYP().includes('?')?'&':'?') + `action=approveUser&token=${token}&target=${encodeURIComponent(targetId)}`;
+  const token=LS('invest_session_token');
+  const url=MYP()+(MYP().includes('?')?'&':'?')+`action=approveUser&token=${token}&target=${encodeURIComponent(targetId)}`;
   try{
-    const res = await fetch(url);
-    const data = await res.json();
+    const res=await fetch(url);
+    const data=await res.json();
     alert(data.message);
-    if(data.success) openAdminModal();
-  }catch(e){alert('승인 처리 중 오류 발생');}
+    if(data.success)openAdminModal();
+  }catch(e){alert('승인 처리 중 오류 발생')}
 }
-  
-let sessionSeconds = 300;
-let sessionInterval = null;
+
+let sessionSeconds=300,sessionInterval=null,sessionBound=false;
 
 function startSessionTimer(){
-  sessionSeconds = 300;
-  $('sessionTimerBox').style.display = 'flex';
-  if(sessionInterval) clearInterval(sessionInterval);
-  
-  sessionInterval = setInterval(()=>{
+  sessionSeconds=300;
+  $('sessionTimerBox').style.display='flex';
+  if(sessionInterval)clearInterval(sessionInterval);
+  sessionInterval=setInterval(()=>{
     sessionSeconds--;
-    const m = String(Math.floor(sessionSeconds/60)).padStart(2,'0');
-    const s = String(sessionSeconds%60).padStart(2,'0');
-    $('sessionTimeTxt').textContent = `${m}:${s}`;
-    $('sessionFill').style.width = (sessionSeconds/300*100) + '%';
-    if(sessionSeconds <= 0){ logout(); }
-  }, 1000);
-
-  // 💡 수정됨: 단순 마우스 움직임(mousemove)은 제외하고, 
-  // 실제 키 입력이나 화면 터치/클릭 시에만 세션이 연장되도록 변경
-  ['keydown', 'touchstart', 'click'].forEach(ev=>{
-    window.addEventListener(ev, resetSessionTime, {passive: true});
-  });
-}
-
-function resetSessionTime(){
-  if($('appContainer').style.display === 'block'){
-    sessionSeconds = 300;
+    const m=String(Math.floor(sessionSeconds/60)).padStart(2,'0'),s=String(sessionSeconds%60).padStart(2,'0');
+    $('sessionTimeTxt').textContent=`${m}:${s}`;
+    $('sessionFill').style.width=(sessionSeconds/300*100)+'%';
+    if(sessionSeconds<=0)logout();
+  },1000);
+  if(!sessionBound){
+    sessionBound=true;
+    ['mousemove','keydown','touchstart','click'].forEach(ev=>window.addEventListener(ev,resetSessionTime,{passive:true}));
   }
 }
-
-function resetSessionTime(){
-  if($('appContainer').style.display === 'bl
+function resetSessionTime(){if($('appContainer').style.display==='block')sessionSeconds=300}
 
 function logout(){
-  if(sessionInterval) clearInterval(sessionInterval);
+  if(sessionInterval)clearInterval(sessionInterval);
   localStorage.removeItem('invest_session_token');
   localStorage.removeItem('invest_is_admin');
-  $('sessionTimerBox').style.display = 'none';
-  $('appContainer').style.display = 'none';
-  $('authGuard').style.display = 'flex';
-  $('authPw').value = '';
-  $('authMsg').textContent = "세션이 만료되었거나 로그아웃되었습니다.";
+  $('sessionTimerBox').style.display='none';
+  $('appContainer').style.display='none';
+  $('authGuard').style.display='flex';
+  $('authPw').value='';
+  $('authMsg').textContent="세션이 만료되었거나 로그아웃되었습니다.";
 }
 
 function checkAuthentication(){
-  const token = LS('invest_session_token');
+  const token=LS('invest_session_token');
   if(token){
-    const isAdmin = LS('invest_is_admin') === 'true';
     startSessionTimer();
-    enterDashboard(isAdmin);
+    enterDashboard(LS('invest_is_admin')==='true');
   }
 }
 
 function enterDashboard(isAdmin){
-  $('authGuard').style.display = 'none';
-  $('appContainer').style.display = 'block';
-  if(isAdmin) $('adminBtn').style.display = 'inline-block';
-  initDashboard();
+  $('authGuard').style.display='none';
+  $('appContainer').style.display='block';
+  if(isAdmin)$('adminBtn').style.display='inline-block';
+  if(typeof initDashboard==='function')initDashboard();
 }
-
+</script>
+<!-- ===== 2부 스크립트: 설정 / 시세 수집 / 화면 렌더 ===== -->
+<script>
 const DEF={
 KR:[
   {id:'k1',name:'코스피',y:'^KS11',tv:'KRX:KOSPI',vis:1},
@@ -367,16 +347,16 @@ async function getTxt(targetUrl){
     const c=new AbortController(),t=setTimeout(()=>c.abort(),9000);
     const r=await fetch(fullUrl,{signal:c.signal});
     clearTimeout(t);
-    if(r.ok){const x=await r.text();if(x&&x.length>10){NET.ok++;return x;}}
+    if(r.ok){const x=await r.text();if(x&&x.length>10){NET.ok++;return x}}
     NET.fail++;
-  }catch(e){NET.fail++;}
+  }catch(e){NET.fail++}
   return null;
 }
 async function getJSON(u){const x=await getTxt(u);try{return JSON.parse(x)}catch(e){return null}}
 
 function openDg(){$('dgs').textContent='성공 '+NET.ok+'회 · 실패 '+NET.fail+'회';$('dgl').textContent=NET.log.join('\n')||'기록 없음';$('dgp').value=MYP();$('dg').classList.add('on')}
 function closeDg(){$('dg').classList.remove('on')}
-function saveProxy(){LS('invest_myproxy',$('dgp').value.trim());NET.ok=0;NET.fail=0;closeDg();refresh();loadNews();}
+function saveProxy(){LS('invest_myproxy',$('dgp').value.trim());NET.ok=0;NET.fail=0;closeDg();refresh();loadNews();THM_AT=0;fetchTopThemes()}
 
 const nnum=v=>{const n=parseFloat(String(v==null?'':v).replace(/[,+\s]/g,''));return isFinite(n)?n:null};
 function nsgn(o,ch){if(ch==null)return ch;const c=(o&&(o.compareToPreviousPrice||o.fluctuationsType))||{},cd=String(c.code||''),tx=String(c.name||'')+String(c.text||'');
@@ -410,11 +390,11 @@ async function quoteKR(c){for(const x of['.KS','.KQ']){const q=await quote(c+x);
 
 async function fillQuotes(list){
   let i=0;
-  await Promise.all(Array.from({length:4}, async()=>{
-    while(i < list.length){
-      const c = list[i++];
-      const q = await(isKR(c) ? quoteKR(c) : quote(c));
-      if(q){ Q[c] = q; SRC[c] = 'Y'; }
+  await Promise.all(Array.from({length:4},async()=>{
+    while(i<list.length){
+      const c=list[i++];
+      const q=await(isKR(c)?quoteKR(c):quote(c));
+      if(q){Q[c]=q;SRC[c]='Y'}
     }
   }));
 }
@@ -422,11 +402,11 @@ async function fillQuotes(list){
 async function refresh(){
   $('status').textContent='시세 갱신 중...';
   const want=new Set();['KR','US'].forEach(s=>CFG[s].forEach(x=>x.y&&want.add(x.y)));H.forEach(r=>r[7]&&want.add(r[7]));
-  const all=[...want],fr=new Set(),nn=await fillNaver(all,fr);
+  const all=[...want],fr=new Set();
+  await fillNaver(all,fr);
   await fillQuotes(all.filter(c=>!fr.has(c)));
   const got=all.filter(c=>Q[c]).length;
-  renderCards();renderHoldings();fetchTopThemes();updateTickGauge();generateScenario();
-  $('thS').textContent=((openKR()||openUS())?'장중실시간':'장마감')+' · '+new Date().toLocaleTimeString('ko-KR');
+  renderCards();renderHoldings();fetchTopThemes();renderThemes();updateTickGauge();generateScenario();
   $('status').textContent='시세 완료 ('+got+'/'+all.length+' 건)';
 }
 
@@ -469,69 +449,6 @@ function renderHoldings(){
   }).join('')
 }
 
-async function fetchTopThemes(){
-  $('themes').innerHTML = '<div class="mini" style="grid-column:1/-1;text-align:center;padding:20px">🔥 실시간 주도 테마 & 거래대금 상위 종목 분석 중...</div>';
-  
-  try {
-    const themeRes = await getJSON('https://finance.naver.com/api/sise/themeList.naver?sortOrder=up&pageSize=6');
-    const themeList = narr(themeRes).slice(0, 6);
-    
-    if (!themeList || !themeList.length) {
-      const topStocksRes = await getJSON('https://polling.finance.naver.com/api/realtime/domestic/trend/tradeVolume?page=1&pageSize=30');
-      const stocks = narr(topStocksRes).sort((a,b) => nnum(b.changeRate) - nnum(a.changeRate));
-      
-      const myMap = {};
-      H.forEach(r => { if(r[7]){ const q = Q[r[7]]; myMap[r[7]] = { rt: q ? (q.p/r[3]-1)*100 : r[6] }; } });
-
-      let html = '<div class="card" style="grid-column:1/-1"><div class="cl"><b>🔥 실시간 주도주 (거래대금/상승률 상위)</b><span>실시간 집계</span></div><div style="margin-top:8px">';
-      stocks.slice(0, 10).forEach((s, idx) => {
-        const cd = s.itemCode || s.cd, nm = s.itemName || s.nm, rt = nnum(s.changeRate || s.cr);
-        const my = myMap[cd];
-        html += `<div class="kr" style="cursor:pointer;padding:5px 0" onclick="showQ('${cd}','${nm}','')">
-          <span>${idx+1}. <b>${nm}</b> (${cd})${my ? `<b style="font-size:9px;color:var(--amber);margin-left:4px">[보유 ${my.rt>=0?'+':''}${my.rt.toFixed(1)}%]</b>` : ''}</span>
-          <b class="${rt>=0?'up':'down'}">${rt>=0?'+':''}${rt?rt.toFixed(2):'0.00'}%</b>
-        </div>`;
-      });
-      html += '</div></div>';
-      $('themes').innerHTML = html;
-      return;
-    }
-
-    const themeCards = await Promise.all(themeList.map(async (t) => {
-      const themeNo = t.themeNo || t.no;
-      const themeName = t.themeName || t.name;
-      const themeRate = nnum(t.changeRate || t.rate || 0);
-
-      const detailRes = await getJSON(`https://finance.naver.com/api/sise/themeItemList.naver?themeNo=${themeNo}`);
-      const itemList = narr(detailRes).sort((a,b) => nnum(b.changeRate || b.rate) - nnum(a.changeRate || a.rate)).slice(0, 5);
-
-      const myMap = {};
-      H.forEach(r => { if(r[7]){ const q = Q[r[7]]; myMap[r[7]] = { rt: q ? (q.p/r[3]-1)*100 : r[6] }; } });
-
-      const sc = Math.round(Math.max(0, Math.min(100, 50 + themeRate * 10)));
-      
-      let itemsHtml = itemList.map((r, i) => {
-        const cd = r.itemCode || r.cd, nm = r.itemName || r.nm, rt = nnum(r.changeRate || r.rate || 0);
-        const my = myMap[cd];
-        return `<div class="kr" style="cursor:pointer;padding:3px 0" onclick="showQ('${cd}','${nm}','')">
-          <span>${i+1}. ${nm}${my ? `<b style="font-size:9px;color:var(--amber);margin-left:4px">[보유 ${my.rt>=0?'+':''}${my.rt.toFixed(1)}%]</b>` : ''}</span>
-          <b class="${rt>=0?'up':'down'}">${rt>=0?'+':''}${rt.toFixed(2)}%</b>
-        </div>`;
-      }).join('');
-
-      return `<div class="card">
-        <div class="cl"><b>${themeName}</b><span>강도 ${sc} · 평균 ${themeRate>=0?'+':''}${themeRate.toFixed(2)}%</span></div>
-        <div class="bar" style="margin-bottom:4px"><i style="width:${sc}%"></i></div>
-        ${itemsHtml || '<div class="mini">종목 불러오는 중...</div>'}
-      </div>`;
-    }));
-
-    $('themes').innerHTML = themeCards.join('');
-  } catch(e) {
-    $('themes').innerHTML = '<div class="mini" style="grid-column:1/-1;text-align:center">주도 테마 수신 중 오류 발생</div>';
-  }
-}
-
 function updateTickGauge(){
   const qN=Q['^IXIC'],qS=Q['^GSPC'];let tv=0;
   if(qN&&qN.prev){const pc=(qN.p/qN.prev-1)*100;tv=Math.round(pc*450)}
@@ -546,11 +463,10 @@ function generateScenario(){
   const h=new Date().getHours(),isDay=h>=7&&h<21;
   const qK=Q['^KS11'],qQ=Q['^KQ11'],qN=Q['^IXIC'],qS=Q['^GSPC'];
   const getP=q=>q&&q.prev?((q.p/q.prev-1)*100).toFixed(2):'0.00';
-  let txt=isDay ? `[📊 한국장 주간 시나리오]\n• 코스피(${getP(qK)}%), 코스닥(${getP(qQ)}%)\n• 주도 테마 수급 집중 구간, 5일선 눌림목 중심 대응.` : `[🌙 미국장 야간 시나리오]\n• 나스닥(${getP(qN)}%), S&P500(${getP(qS)}%)\n• 필라델피아 반도체 및 빅테크 흐름 연동 대응.`;
+  const txt=isDay?`[📊 한국장 주간 시나리오]\n• 코스피(${getP(qK)}%), 코스닥(${getP(qQ)}%)\n• 주도 테마 수급 집중 구간, 5일선 눌림목 중심 대응.`:`[🌙 미국장 야간 시나리오]\n• 나스닥(${getP(qN)}%), S&P500(${getP(qS)}%)\n• 필라델피아 반도체 및 빅테크 흐름 연동 대응.`;
   $('gv').textContent=txt;
   $('gptTime').textContent=new Date().toLocaleTimeString('ko-KR')+' 생성';
 }
-
 function copyScenario(){navigator.clipboard.writeText($('gv').textContent).then(()=>alert('복사되었습니다.'))}
 function refreshScenario(){generateScenario()}
 
@@ -576,9 +492,12 @@ async function loadNews(){
   renderN(mks,'nl_mk','nst_mk');renderN(hds,'nl_hd','nst_hd');
 }
 
-function setTick(){const v=parseFloat($('tin').value);LS('invest_tick',$('tin').value);if(isNaN(v)){updateTickGauge();return}
-$('tm').style.left='calc('+((Math.max(-1000,Math.min(1000,tv))+1000)/20)+'% - 1px)';
-$('tl2').textContent='입력값: '+v}
+function setTick(){
+  const v=parseFloat($('tin').value);LS('invest_tick',$('tin').value);
+  if(isNaN(v)){updateTickGauge();return}
+  $('tm').style.left='calc('+((Math.max(-1000,Math.min(1000,v))+1000)/20)+'% - 1px)';   // tv → v 수정
+  $('tl2').textContent='입력값: '+v;
+}
 
 let cur='KR';
 function openModal(){swTab(sess());$('mo').classList.add('on')}
@@ -591,7 +510,11 @@ CFG[cur].push({id:'c'+Date.now(),name:n,y:y,tv:'NASDAQ:'+y,vis:1});swTab(cur)}
 function resetSettings(){CFG=JSON.parse(JSON.stringify(DEF));LS('invest_cfg_v4',CFG);swTab(cur);renderCards();refresh()}
 function saveSettings(){LS('invest_cfg_v4',CFG);renderCards();closeModal();refresh()}
 function clock(){const n=new Date(),p=v=>String(v).padStart(2,'0');$('clock').textContent=`${n.getMonth()+1}.${n.getDate()} ${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())} KST`}
+</script>
 
+<!-- ===== 3부 스크립트: 차트 / 주도 테마 / 초기화 ===== -->
+<script>
+/* ---------- 차트 ---------- */
 const QR=[['1일','5m','1d'],['5일','15m','5d'],['1개월','1d','1mo'],['3개월','1d','3mo'],['1년','1d','1y']];
 let QX=null,qrg=0,qmd='c',QD=[],qhi=-1,qseq=0;
 const ysym=c=>isKR(c)?[...new Set([KY[c]||c+'.KS',c+'.KS',c+'.KQ'])]:[c];
@@ -648,12 +571,112 @@ if(k===qhi)return;qhi=k;drawQ();const d=QD[k];$('qi').textContent=new Date(d.t).
 $('qcv').addEventListener('pointerleave',()=>{qhi=-1;drawQ()});
 window.addEventListener('resize',drawQ);
 
+/* ---------- 주도 테마 & 강도판 (거래대금·거래량·상승률 종합) ---------- */
+const TH_API='https://stock.naver.com/api/domestic/market/theme/';
+const TH_CAND=12,TH_TOP=6;
+let THM=[],THM_MSG='',THM_BUSY=false,THM_AT=0;
+
+const sm=a=>a.reduce((s,x)=>s+(x||0),0);
+const escA=v=>esc(v).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+const dbg=(l,o)=>{NET.log.push(l+' 필드: '+(o?Object.keys(o).join(','):'(없음)'));if(NET.log.length>30)NET.log.shift()};
+const fv=(o,names,re)=>{
+  if(!o)return null;
+  for(const n of names){const v=o[n];if(v!=null&&typeof v!=='object')return v}
+  if(re)for(const k in o){const v=o[k];if(re.test(k)&&v!=null&&typeof v!=='object')return v}
+  return null;
+};
+const rowsOf=j=>{
+  if(Array.isArray(j))return j;
+  if(!j||typeof j!=='object')return [];
+  for(const k of ['stocks','stockList','themes','themeList','items','list','datas','data','result','contents']){
+    const v=j[k];
+    if(Array.isArray(v))return v;
+    if(v&&typeof v==='object'){const r=rowsOf(v);if(r.length)return r}
+  }
+  for(const v of Object.values(j)){if(Array.isArray(v)&&v.length&&typeof v[0]==='object')return v}
+  return [];
+};
+const RATE_RE=/(fluct|change).*(ratio|rate)/i;
+function parseTheme(o){return{
+  no:fv(o,['no','themeNo','categoryNo','themeId','id'],/(^no$|No$|Id$)/),
+  name:String(fv(o,['name','themeName','categoryName','title'],/name/i)||''),
+  rate:nsgn(o,nnum(fv(o,['changeRate','fluctuationsRatio','fluctuationRate'],RATE_RE)))}}
+function parseStock(o){
+  const code=String(fv(o,['itemCode','stockCode','code','symbolCode'],/code$/i)||'');
+  return{code:code,
+    name:String(fv(o,['stockName','itemName','name'],/name/i)||code),
+    rate:nsgn(o,nnum(fv(o,['fluctuationsRatio','changeRate','fluctuationRate'],RATE_RE))),
+    val:nnum(fv(o,['accumulatedTradingValue','tradingValue','accumulatedTradingAmount','amount'],/(trading|accum).*(value|amount)/i)),
+    vol:nnum(fv(o,['accumulatedTradingVolume','tradingVolume','volume'],/(trading|accum).*volume/i))}}
+async function pool(items,n,fn){
+  let i=0;
+  await Promise.all(Array.from({length:n},async()=>{
+    while(i<items.length){const t=items[i++];try{await fn(t)}catch(e){}}
+  }));
+}
+const prank=(list,f)=>{const v=list.map(f);return v.map(x=>list.length>1?v.filter(y=>y<x).length/(list.length-1):1)};
+
+async function fetchTopThemes(){
+  if(THM_BUSY||(THM.length&&Date.now()-THM_AT<300000))return;   // 5분 캐시
+  THM_BUSY=true;$('thS').textContent='테마 분석 중...';
+  try{
+    const raw=rowsOf(await getJSON(TH_API+'list?startIdx=0&pageSize=100&sortType=changeRate'));
+    dbg('테마목록',raw[0]);
+    const all=raw.map(parseTheme).filter(t=>t.no!=null&&t.name&&t.rate!=null);
+    const cand=all.filter(t=>t.rate>0).sort((a,b)=>b.rate-a.rate).slice(0,TH_CAND);
+    if(!cand.length){
+      if(!THM.length)THM_MSG=all.length?'현재 상승 중인 테마가 없습니다.':'테마 데이터를 받지 못했습니다. (🩺 진단에서 로그 확인)';
+      return;
+    }
+    await pool(cand,4,async t=>{
+      const rows=rowsOf(await getJSON(TH_API+t.no+'/stocklist?marketType=ALL&orderType=priceTop&startIdx=0&pageSize=10'));
+      if(t===cand[0])dbg('테마종목',rows[0]);
+      const rs=rows.map(parseStock);
+      t.val=sm(rs.map(r=>r.val));t.vol=sm(rs.map(r=>r.vol));
+    });
+    const rr=prank(cand,t=>t.rate),rv=prank(cand,t=>t.val||0),rq=prank(cand,t=>t.vol||0),tot=sm(cand.map(t=>t.val));
+    cand.forEach((t,i)=>{t.sc=Math.round(100*(.35*rr[i]+.45*rv[i]+.2*rq[i]));t.share=tot?t.val/tot*100:null});
+    const top=cand.sort((a,b)=>b.sc-a.sc||b.rate-a.rate).slice(0,TH_TOP);
+    await pool(top,4,async t=>{
+      const rows=rowsOf(await getJSON(TH_API+t.no+'/stocklist?marketType=ALL&orderType=up&startIdx=0&pageSize=10'));
+      t.top=rows.map(parseStock).filter(r=>r.name&&r.rate!=null).sort((a,b)=>b.rate-a.rate).slice(0,5);
+    });
+    THM=top;THM_MSG='';THM_AT=Date.now();
+    $('thS').textContent=(openKR()?'장중':'장마감')+' · 상승률·거래대금·거래량 종합 · '+new Date().toLocaleTimeString('ko-KR');
+  }catch(e){
+    if(!THM.length)THM_MSG='테마 분석 중 오류가 발생했습니다.';
+  }finally{
+    THM_BUSY=false;renderThemes();
+  }
+}
+
+function renderThemes(){
+  const box=$('themes');
+  if(!THM.length){box.innerHTML='<div class="card mini">'+(THM_MSG||'테마 불러오는 중...')+'</div>';return}
+  const my={};H.forEach(r=>{if(isKR(r[7]||'')){const q=Q[r[7]];my[r[7]]=q?(q.p/r[3]-1)*100:r[6]}});
+  box.innerHTML=THM.map(t=>{
+    const rows=(t.top||[]).map((r,i)=>{
+      const m=my[r.code];
+      return `<div class="kr" style="cursor:pointer;padding:3px 0" data-code="${escA(r.code)}" data-name="${escA(r.name)}"><span>${i+1}. ${esc(r.name)}${m!=null?`<b style="font-size:9px;color:var(--amber);margin-left:4px">[보유 ${m>=0?'+':''}${m.toFixed(1)}%]</b>`:''}</span><b class="${r.rate>=0?'up':'down'}">${r.rate>=0?'+':''}${r.rate.toFixed(2)}%</b></div>`;
+    }).join('');
+    return `<div class="card"><div class="cl"><b>${esc(t.name)}</b><span>강도 ${t.sc} · 테마 +${t.rate.toFixed(2)}%</span></div><div class="bar" style="margin-bottom:4px"><i style="width:${t.sc}%"></i></div><div class="mini" style="margin-bottom:4px">${t.share!=null?'거래대금 비중 '+t.share.toFixed(0)+'%':''}</div>${rows||'<div class="mini">종목 불러오기 실패</div>'}</div>`;
+  }).join('');
+}
+$('themes').addEventListener('click',e=>{const d=e.target.closest('[data-code]');if(d)showQ(d.dataset.code,d.dataset.name,'')});
+
+/* ---------- 초기화 ---------- */
+let IV_SET=false;
 function initDashboard(){
   embed($('tickq'),'single-quote',{symbol:'USI:TICK',width:'100%',colorTheme:'dark',isTransparent:true,locale:'kr'});
   const ti=LS('invest_tick');if(ti){$('tin').value=ti;setTick()}
   showQ('^KS11','코스피','',1);fetchTopThemes();renderCards();renderHoldings();clock();refresh();loadNews();
-  setInterval(clock,1000);setInterval(loadNews,300000);setInterval(refresh,60000);
+  if(!IV_SET){   // 재로그인 시 타이머 중복 등록 방지
+    IV_SET=true;
+    setInterval(clock,1000);setInterval(loadNews,300000);setInterval(refresh,60000);
+  }
 }
 </script>
+
 </body>
 </html>
+  
