@@ -259,7 +259,7 @@ async function approveUser(targetId){
     if(data.success) openAdminModal();
   }catch(e){alert('승인 처리 중 오류 발생');}
 }
-
+  
 let sessionSeconds = 300;
 let sessionInterval = null;
 
@@ -277,7 +277,9 @@ function startSessionTimer(){
     if(sessionSeconds <= 0){ logout(); }
   }, 1000);
 
-  ['mousemove', 'keydown', 'touchstart', 'click'].forEach(ev=>{
+  // 💡 수정됨: 단순 마우스 움직임(mousemove)은 제외하고, 
+  // 실제 키 입력이나 화면 터치/클릭 시에만 세션이 연장되도록 변경
+  ['keydown', 'touchstart', 'click'].forEach(ev=>{
     window.addEventListener(ev, resetSessionTime, {passive: true});
   });
 }
@@ -287,6 +289,9 @@ function resetSessionTime(){
     sessionSeconds = 300;
   }
 }
+
+function resetSessionTime(){
+  if($('appContainer').style.display === 'bl
 
 function logout(){
   if(sessionInterval) clearInterval(sessionInterval);
