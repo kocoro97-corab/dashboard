@@ -87,7 +87,7 @@ a{color:var(--blue)}
 <!-- 2. 대시보드 본문 -->
 <div id="appContainer">
   <header>
-    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v31 · 실시간 주도 테마 패치</div><div class="sub" id="status">시세 불러오는 중...</div></div>
+    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v33 · 새 웹앱 주소 반영 완료</div><div class="sub" id="status">시세 불러오는 중...</div></div>
     <div class="hr">
       <span id="sessionBadge" class="badge">시장 판별 중</span>
       <button id="adminBtn" style="display:none;background:#3f261e;color:#ffab71;border-color:#f97316" onclick="openAdminModal()">👥 회원승인</button>
@@ -169,7 +169,7 @@ a{color:var(--blue)}
 const $=id=>document.getElementById(id);
 const LS=(k,v)=>{try{if(v===undefined){const r=localStorage.getItem(k);return r?JSON.parse(r):null}localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}};
 
-const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbyWIySVJNEDdVgQppA50v-gHwY22U4jMueKqh_NatlldzCQDHbv04YOluKbAcGhQ36cFA/exec";
+const DEFAULT_GAS_URL = "https://script.google.com/macros/s/AKfycbyYifSuqSGeQ16UynRYFxJ0qH1aNsvUNqrbmPvrOB0ZDKiTyL65gZDdUQPgiGOTRDgq1w/exec";
 const MYP=()=>String(LS('invest_myproxy')||DEFAULT_GAS_URL).trim();
 
 let isRegisterMode = false;
@@ -464,16 +464,13 @@ function renderHoldings(){
   }).join('')
 }
 
-// 💡 실시간 거래대금/상승률 상위 주도 테마 및 종목 동적 추출 함수
 async function fetchTopThemes(){
   $('themes').innerHTML = '<div class="mini" style="grid-column:1/-1;text-align:center;padding:20px">🔥 실시간 주도 테마 & 거래대금 상위 종목 분석 중...</div>';
   
   try {
-    // 1. 네이버 실시간 주도 테마 (상승률/거래량 상위 테마 목록)
     const themeRes = await getJSON('https://finance.naver.com/api/sise/themeList.naver?sortOrder=up&pageSize=6');
     const themeList = narr(themeRes).slice(0, 6);
     
-    // 2. 만약 테마 API 수신 불가 시 거래대금 상위 주도종목 기반 동적 테마 구성
     if (!themeList || !themeList.length) {
       const topStocksRes = await getJSON('https://polling.finance.naver.com/api/realtime/domestic/trend/tradeVolume?page=1&pageSize=30');
       const stocks = narr(topStocksRes).sort((a,b) => nnum(b.changeRate) - nnum(a.changeRate));
@@ -495,7 +492,6 @@ async function fetchTopThemes(){
       return;
     }
 
-    // 3. 실시간 상승 테마별 종목 상세 수신
     const themeCards = await Promise.all(themeList.map(async (t) => {
       const themeNo = t.themeNo || t.no;
       const themeName = t.themeName || t.name;
