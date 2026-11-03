@@ -179,7 +179,7 @@ a{color:var(--blue)}
 const $=id=>document.getElementById(id);
 const LS=(k,v)=>{try{if(v===undefined){const r=localStorage.getItem(k);return r?JSON.parse(r):null}localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}};
 
-const DEFAULT_GAS_URL="https://script.google.com/macros/s/AKfycbysSPbwf21fM3tDPbNKsXZA3L1dDv7Q3RkOOFe9AXHpLb6g9o2lrPgOKcfLDKfVPBEF/exec"
+const DEFAULT_GAS_URL="https://script.google.com/macros/s/AKfycbzw0G3-DI-UGdbJsQCxwMlxBSCwtyNLKQoWF72sqXgTB8dnlq6C895pgFy9FuCGfcDe/exec"
 const MYP=()=>String(LS('invest_myproxy')||DEFAULT_GAS_URL).trim();
 
 let isRegisterMode=false;
