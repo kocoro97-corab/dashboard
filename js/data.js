@@ -1,12 +1,15 @@
 /* ===== data.js: 지수 기본 설정(DEF) / 보유 종목(H) =====
    종목이 바뀌면 이 파일만 수정하세요.
    H 컬럼: [계좌, 종목명, 수량, 평단가, 현재가(기본), 평가손익(기본), 수익률(기본), 야후/네이버 코드, TradingView 심볼] */
+/* 다음금융 선물 월물 코드 (만기 때 새 코드로 교체: finance.daum.net 선물 페이지 > 개발자도구에서 확인) */
+const FUT={k3:'KR4A016C0004'};
+
 const DEF={
 KR:[
   {id:'k1',name:'코스피',y:'^KS11',tv:'KRX:KOSPI',vis:1},
   {id:'k2',name:'코스닥',y:'^KQ11',tv:'KRX:KOSDAQ',vis:1},
-  {id:'k3',name:'코스피 선물',y:'KM24.KS',tv:'KRX:KOSPI200',vis:1},
-  {id:'k4',name:'코스닥 선물',y:'KQ24.KQ',tv:'KRX:KOSDAQ150',vis:1},
+  {id:'k3',name:'코스피200 선물',fut:FUT.k3,vis:1},
+  {id:'k4',name:'코스닥150 선물',m:1,vis:1},
   {id:'k5',name:'S&P 500',y:'^GSPC',tv:'FOREXCOM:SPXUSD',vis:1},
   {id:'k6',name:'나스닥',y:'^IXIC',tv:'FOREXCOM:NSXUSD',vis:1},
   {id:'k7',name:'달러/원',y:'KRW=X',tv:'FX_IDC:USDKRW',t:'fx',vis:1},

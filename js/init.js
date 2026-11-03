@@ -1,7 +1,8 @@
 /* ===== init.js: 초기화 (반드시 마지막에 로드) ===== */
 let IV_SET=false;
 function initDashboard(){
-  embed($('tickq'),'single-quote',{symbol:'USI:TICK',width:'100%',colorTheme:'dark',isTransparent:true,locale:'kr'});
+  TS.w='wait';tickStatus();
+  embed($('tickq'),'single-quote',{symbol:'USI:TICK',width:'100%',colorTheme:'dark',isTransparent:true,locale:'kr'},ok=>{TS.w=ok?'ok':'fail';TS.wAt=new Date();tickStatus()});
   const ti=LS('invest_tick');if(ti){$('tin').value=ti;setTick()}
   showQ('^KS11','코스피','',1);fetchTopThemes();renderCards();renderHoldings();clock();refresh();loadNews();
   if(!IV_SET){   // 재로그인 시 타이머 중복 등록 방지

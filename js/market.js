@@ -1,10 +1,30 @@
 /* ===== market.js: 시세 수집 / 카드 / 보유종목 / 시나리오 / 뉴스 / 설정 ===== */
 let CFG=LS('invest_cfg_v4')||JSON.parse(JSON.stringify(DEF)),MAN=LS('invest_man')||{},Q={};
+// 이전에 저장된 설정에도 선물 항목을 새 방식으로 맞춤
+['KR','US'].forEach(s=>CFG[s].forEach(x=>{
+  if(FUT[x.id]){x.fut=FUT[x.id];x.name='코스피200 선물';delete x.y;delete x.m}
+  else if(x.id==='k4'&&x.y==='KQ24.KQ'){delete x.y;x.m=1;x.name='코스닥150 선물'}
+}));
+const FQ={},FST={};
+async function fillFutures(){
+  let ok=0,fail=0;
+  await Promise.all(Object.keys(FUT).map(async id=>{
+    const t=hms(new Date());
+    try{
+      const j=await getJSON('https://finance.daum.net/api/home/sec?path='+encodeURIComponent('/api/futures/'+FUT[id]));
+      const p=j&&nnum(j.tradePrice),prev=j&&nnum(j.prevClosingPrice);
+      if(p==null||prev==null)throw 0;
+      const k=j.kospi200&&nnum(j.kospi200.tradePrice);
+      FQ[id]={p:p,prev:prev,basis:k!=null?p-k:null,t:t};FST[id]='';ok++;
+    }catch(e){FST[id]='수신 실패 · '+t;fail++}
+  }));
+  return{ok:ok,fail:fail};
+}
 
 const isKR=c=>/^\d{6}$/.test(c);
-function embed(el,name,cfg){el.innerHTML='';const w=document.createElement('div');w.className='tradingview-widget-container';w.style.height='100%';
+function embed(el,name,cfg,cb){el.innerHTML='';const w=document.createElement('div');w.className='tradingview-widget-container';w.style.height='100%';
 const i=document.createElement('div');i.className='tradingview-widget-container__widget';i.style.height='100%';w.appendChild(i);
-const s=document.createElement('script');s.src='https://s3.tradingview.com/external-embedding/embed-widget-'+name+'.js';s.async=true;s.text=JSON.stringify(cfg);w.appendChild(s);el.appendChild(w)}
+const s=document.createElement('script');s.src='https://s3.tradingview.com/external-embedding/embed-widget-'+name+'.js';s.async=true;s.text=JSON.stringify(cfg);if(cb){s.onload=()=>cb(true);s.onerror=()=>cb(false)}w.appendChild(s);el.appendChild(w)}
 const TABS=[['코스피','^KS11'],['코스닥','^KQ11'],['S&P500','^GSPC'],['나스닥','^IXIC'],['반도체','^SOX']];
 $('tabs').innerHTML=TABS.map(t=>`<button data-y="${t[1]}" onclick="showQ('${t[1]}','${t[0]}','')">${t[0]}</button>`).join('');
 
@@ -75,9 +95,10 @@ async function refresh(){
   const all=[...want],fr=new Set();
   await fillNaver(all,fr);
   await fillQuotes(all.filter(c=>!fr.has(c)));
+  const fu=await fillFutures();
   const got=all.filter(c=>Q[c]).length;
   renderCards();renderHoldings();fetchTopThemes();renderThemes();updateTickGauge();generateScenario();
-  $('status').textContent='시세 완료 ('+got+'/'+all.length+' 건)';
+  $('status').textContent='시세 갱신 '+hms(new Date())+' · 성공 '+got+' · 실패 '+(all.length-got)+'건 · 선물 '+fu.ok+'/'+(fu.ok+fu.fail);
 }
 
 const nf=(v,d=2)=>v==null?'—':Number(v).toLocaleString('ko-KR',{maximumFractionDigits:d});
@@ -92,6 +113,10 @@ function renderCards(){
     if(x.inv){
       const r=INV?nnum(INV[{foreign:'f',inst:'i',personal:'p'}[x.inv]]):null;
       if(r!=null){v=(r>=0?'+':'')+nf(r,0)+'억';c=(r>=0?'순매수':'순매도')+' · '+(INV.d||'');d=r>0?1:r<0?-1:0}
+    }else if(x.fut){
+      const f=FQ[x.id];
+      if(f){const df=f.p-f.prev,pc=df/f.prev*100;d=df>0?1:df<0?-1:0;v=nf(f.p);c=(pc>=0?'+':'')+nf(pc)+'%'+(f.basis!=null?' · 베이시스 '+(f.basis>=0?'+':'')+nf(f.basis):'')+' · '+(FST[x.id]||f.t)}
+      else c=FST[x.id]||'불러오는 중';
     }else if(x.m){v=MAN[x.id]||'입력';c='직접 입력'}
     else{
       const q=Q[x.y];if(q){const df=q.p-q.prev,pc=df/q.prev*100;d=df>0?1:df<0?-1:0;
@@ -99,7 +124,7 @@ function renderCards(){
       else if(x.t==='fx'){v=nf(q.p);c=(df>=0?'+':'')+nf(df)+' ('+nf(pc)+'%)'}
       else{v=nf(q.p);c=(pc>=0?'+':'')+nf(pc)+'%'}}
     }
-    return `<div class="card" style="cursor:pointer" onclick="${x.inv?'':x.m?`manIn('${x.id}')`:`openQ('${x.id}')`}"><div class="cl"><span>${x.name}</span><span>${x.inv?'':x.m?'✎':'📈'}</span></div><div class="value">${v}</div><div class="change ${d>0?'up':d<0?'down':'neutral'}">${c}</div></div>`
+    return `<div class="card" style="cursor:pointer" onclick="${x.inv||x.fut?'':x.m?`manIn('${x.id}')`:`openQ('${x.id}')`}"><div class="cl"><span>${x.name}</span><span>${x.inv||x.fut?'':x.m?'✎':'📈'}</span></div><div class="value">${v}</div><div class="change ${d>0?'up':d<0?'down':'neutral'}">${c}</div></div>`
   }).join('')
 }
 
@@ -119,14 +144,26 @@ function renderHoldings(){
   }).join('')
 }
 
+const TS={w:'wait',wAt:null,g:null,gAt:null};
+const hms=d=>d?d.toLocaleTimeString('ko-KR',{hour12:false}):'—';
+function tickStatus(){
+  const el=$('tickSt');if(!el)return;
+  const c=ok=>ok===true?'#4ade80':ok===false?'var(--red)':'var(--amber)';
+  const wo=TS.w==='ok'?true:TS.w==='fail'?false:null,wl=wo===true?'성공':wo===false?'실패':'대기';
+  const g=TS.g;
+  el.innerHTML='실시간 위젯 <b style="color:'+c(wo)+'">'+wl+'</b> · '+hms(TS.wAt)+'<br>게이지 <b style="color:'+c(g?g.ok:null)+'">'+(g?(g.ok?'성공':'실패'):'대기')+'</b> · '+(g?g.src:'')+' · '+hms(TS.gAt);
+}
 function updateTickGauge(){
-  const qN=Q['^IXIC'],qS=Q['^GSPC'];let tv=0;
-  if(qN&&qN.prev){const pc=(qN.p/qN.prev-1)*100;tv=Math.round(pc*450)}
-  else if(qS&&qS.prev){const pc=(qS.p/qS.prev-1)*100;tv=Math.round(pc*550)}
-  if(!isNaN(tv)&&!$('tin').value){
-    $('tm').style.left='calc('+((Math.max(-1000,Math.min(1000,tv))+1000)/20)+'% - 1px)';
-    $('tl2').textContent='추정: '+(tv>=600?'매수 우위':tv<=-600?'매도 우위':'중립권')+' ('+tv+')';
-  }
+  if($('tin').value)return;   // 직접 입력값이 있으면 입력값 우선
+  const qN=Q['^IXIC'],qS=Q['^GSPC'];let tv=null,src='';
+  if(qN&&qN.prev){tv=Math.round((qN.p/qN.prev-1)*100*450);src='나스닥 등락률로 추정'}
+  else if(qS&&qS.prev){tv=Math.round((qS.p/qS.prev-1)*100*550);src='S&P500 등락률로 추정'}
+  TS.gAt=new Date();
+  if(tv==null||isNaN(tv)){TS.g={ok:false,src:'지수 시세 없음'};$('tl2').textContent='데이터 없음';tickStatus();return}
+  TS.g={ok:true,src:src};
+  $('tm').style.left='calc('+((Math.max(-1000,Math.min(1000,tv))+1000)/20)+'% - 1px)';
+  $('tl2').textContent='추정: '+(tv>=600?'매수 우위':tv<=-600?'매도 우위':'중립권')+' ('+tv+')';
+  tickStatus();
 }
 
 function generateScenario(){
@@ -166,7 +203,7 @@ function setTick(){
   const v=parseFloat($('tin').value);LS('invest_tick',$('tin').value);
   if(isNaN(v)){updateTickGauge();return}
   $('tm').style.left='calc('+((Math.max(-1000,Math.min(1000,v))+1000)/20)+'% - 1px)';   // tv → v 수정
-  $('tl2').textContent='입력값: '+v;
+  $('tl2').textContent='입력값: '+v;TS.g={ok:true,src:'직접 입력'};TS.gAt=new Date();tickStatus();
 }
 
 let cur='KR';
