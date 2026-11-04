@@ -89,6 +89,26 @@ async function fillQuotes(list){
   }));
 }
 
+let MK_BUSY=false;
+async function refreshMarket(){   // '시장 종합' 카드(지수·선물·수급)만 갱신
+  if(MK_BUSY)return;MK_BUSY=true;
+  const btn=$('mkBtn'),st=$('mkSt');
+  if(btn){btn.disabled=true;btn.textContent='갱신 중...'}
+  try{
+    const list=CFG[sess()],want=[...new Set(list.filter(x=>x.y).map(x=>x.y))],fr=new Set();
+    await fillNaver(want,fr);
+    await fillQuotes(want.filter(c=>!fr.has(c)));
+    const hasFut=list.some(x=>x.fut),fu=hasFut?await fillFutures():{ok:0,fail:0};
+    const got=want.filter(c=>Q[c]).length;
+    renderCards();updateTickGauge();generateScenario();
+    st.textContent='갱신 '+hms(new Date())+' · 성공 '+got+'/'+want.length+(hasFut?' · 선물 '+fu.ok+'/'+(fu.ok+fu.fail):'');
+  }catch(e){
+    if(st)st.textContent='갱신 실패 '+hms(new Date());
+  }finally{
+    MK_BUSY=false;
+    if(btn){btn.disabled=false;btn.textContent='↻ 지수 갱신'}
+  }
+}
 function manualRefresh(){THM_AT=0;refresh();loadNews()}
 async function refresh(){
   $('status').textContent='시세 갱신 중...';
@@ -100,6 +120,7 @@ async function refresh(){
   const got=all.filter(c=>Q[c]).length;
   renderCards();renderHoldings();fetchTopThemes();renderThemes();updateTickGauge();generateScenario();
   $('status').textContent='시세 갱신 '+hms(new Date())+' · 성공 '+got+' · 실패 '+(all.length-got)+'건 · 선물 '+fu.ok+'/'+(fu.ok+fu.fail);
+  if($('mkSt'))$('mkSt').textContent='갱신 '+hms(new Date())+' · 전체 갱신 · 선물 '+fu.ok+'/'+(fu.ok+fu.fail);
 }
 
 const nf=(v,d=2)=>v==null?'—':Number(v).toLocaleString('ko-KR',{maximumFractionDigits:d});
@@ -146,7 +167,7 @@ function renderHoldings(){
 }
 
 const TS={w:'wait',wAt:null,g:null,gAt:null};
-const hms=d=>d?d.toLocaleTimeString('ko-KR',{hour12:false}):'—';
+const hms=d=>{if(!d)return'—';const p=n=>String(n).padStart(2,'0');return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds())};   // HH:MM:SS 고정 형식
 function tickStatus(){
   const el=$('tickSt');if(!el)return;
   const c=ok=>ok===true?'#4ade80':ok===false?'var(--red)':'var(--amber)';
