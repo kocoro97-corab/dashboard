@@ -3,7 +3,7 @@ const $=id=>document.getElementById(id);
 const LS=(k,v)=>{try{if(v===undefined){const r=localStorage.getItem(k);return r?JSON.parse(r):null}localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}};
 
 // ★ 여기에 정상 동작이 확인된 Apps Script 웹 앱 주소(/exec)를 넣으세요
-const DEFAULT_GAS_URL="https://script.google.com/macros/s/AKfycbxLEueueH1R4oNxaAE2iuzAKO5lS5Ah7ETzYNM03xfsmefCk_0o6PqlX-c-rYwz3paz/exec"
+const DEFAULT_GAS_URL="https://script.google.com/macros/s/AKfycbwIDOi79EhV4UUa-MIAX5iPoN_lt-fSvljAhVx4CnBvKX6AILLOiG424S-MT-Msj0AR/exec"
 const MYP=()=>String(LS('invest_myproxy')||DEFAULT_GAS_URL).trim();
 
 let isRegisterMode=false;
@@ -103,13 +103,15 @@ function startSessionTimer(){
   },1000);
   if(!sessionBound){
     sessionBound=true;
-    ['mousemove','keydown','touchstart','click'].forEach(ev=>window.addEventListener(ev,resetSessionTime,{passive:true}));
+    // 사용자가 직접 한 동작만 인정: 스크롤(휠·터치 이동), 클릭·터치, 키 입력, 입력창 입력. 마우스를 올려두기만 하거나 자동 갱신은 제외
+    ['wheel','touchstart','touchmove','pointerdown','click','keydown','input'].forEach(ev=>window.addEventListener(ev,resetSessionTime,{passive:true,capture:true}));
   }
 }
 function resetSessionTime(){if($('appContainer').style.display==='block')sessionSeconds=300}
 
 function logout(){
   if(sessionInterval)clearInterval(sessionInterval);
+  if(typeof stopTimers==='function')stopTimers();   // 자동 갱신 종료
   localStorage.removeItem('invest_session_token');
   localStorage.removeItem('invest_is_admin');
   $('sessionTimerBox').style.display='none';
