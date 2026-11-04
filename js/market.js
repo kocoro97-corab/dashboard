@@ -89,6 +89,7 @@ async function fillQuotes(list){
   }));
 }
 
+function manualRefresh(){THM_AT=0;refresh();loadNews()}
 async function refresh(){
   $('status').textContent='시세 갱신 중...';
   const want=new Set();['KR','US'].forEach(s=>CFG[s].forEach(x=>x.y&&want.add(x.y)));H.forEach(r=>r[7]&&want.add(r[7]));
