@@ -21,6 +21,7 @@ header{padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-b
 .badge-kr{background:#3f1e1e;color:#ff7171;border-color:#ef4444}.badge-us{background:#1e293f;color:#71a3ff;border-color:#3b82f6}
 button,select,input[type=number],input[type=text],input[type=password]{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 9px;cursor:pointer;font-size:11px}
 button:hover{border-color:var(--blue)}
+button:disabled{opacity:.5;cursor:default}
 main{display:flex;flex-direction:column;gap:12px;margin-top:10px}
 .sh{display:flex;align-items:center;justify-content:space-between;margin:4px 0 6px;gap:8px;flex-wrap:wrap}
 .sh h2{font-size:14px}.sh p{font-size:10px;color:var(--muted)}
