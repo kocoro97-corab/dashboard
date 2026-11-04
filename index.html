@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0b1220">
 <title>개인 투자 대시보드</title>
-<link rel="stylesheet" href="css/style.css?v=1">
+<link rel="stylesheet" href="css/style.css?v=2">
 </head>
 <body>
 
@@ -47,7 +47,8 @@
       <div class="hr" style="justify-content:space-between;margin-top:6px"><span class="tabs"><button id="qm1" onclick="qMode('l')">라인</button><button id="qm2" class="active" onclick="qMode('c')">캔들</button></span><a id="qy" target="_blank" rel="noopener" class="mini">Yahoo Finance ↗</a></div>
     </section>
     <section>
-      <div class="sh"><div><h2 id="mt">시장 종합</h2><p id="ms"></p></div></div>
+      <div class="sh"><div><h2 id="mt">시장 종합</h2><p id="ms"></p></div>
+        <div class="hr"><span class="mini" id="mkSt"></span><button id="mkBtn" onclick="refreshMarket()">↻ 지수 갱신</button></div></div>
       <div class="grid mg" id="cards"></div>
     </section>
     <div class="grid two">
@@ -107,10 +108,10 @@
 <script src="js/debug.js?v=1"></script>
 <script src="js/auth.js?v=3"></script>
 <script src="js/data.js?v=3"></script>
-<script src="js/market.js?v=4"></script>
+<script src="js/market.js?v=5"></script>
 <script src="js/chart.js?v=1"></script>
 <script src="js/themes.js?v=3"></script>
-<script src="js/init.js?v=3"></script>
+<script src="js/init.js?v=4"></script>
 
 </body>
 </html>
