@@ -41,10 +41,30 @@ async function pool(items,n,fn){
     while(i<items.length){const t=items[i++];try{await fn(t)}catch(e){}}
   }));
 }
+const TH_STOCK_URLS=no=>[
+  'https://m.stock.naver.com/api/stocks/theme/'+no+'?page=1&pageSize=100',
+  TH_API+no+'/stocklist?marketType=ALL&orderType=priceTop&startIdx=0&pageSize=100'
+];
+let TH_URL_IDX=0;   // 성공한 주소 번호를 기억해 다음부터 먼저 시도
+async function themeStocks(no,logIt){
+  const urls=TH_STOCK_URLS(no);
+  for(let k=0;k<urls.length;k++){
+    const i=(TH_URL_IDX+k)%urls.length;
+    const raw=rowsOf(await getJSON(urls[i]));
+    const rows=raw.map(parseStock).filter(r=>/^\d{6}$/.test(r.code)&&r.name&&r.rate!=null);
+    if(logIt){
+      if(raw[0])dbg('테마종목(주소'+(i+1)+')',raw[0]);
+      NET.log.push('테마종목 주소'+(i+1)+': 원본 '+raw.length+'행 · 사용 '+rows.length+'행');
+      if(NET.log.length>30)NET.log.shift();
+    }
+    if(rows.length){TH_URL_IDX=i;return rows}
+  }
+  return [];
+}
 const prank=(list,f)=>{const v=list.map(f);return v.map(x=>list.length>1?v.filter(y=>y<x).length/(list.length-1):1)};
 
 async function fetchTopThemes(){
-  if(THM_BUSY||(THM.length&&Date.now()-THM_AT<300000))return;   // 5분 캐시
+  if(THM_BUSY||(THM.length&&Date.now()-THM_AT<REFRESH_MS-30000))return;   // 갱신 주기 캐시(수동 갱신 시 THM_AT=0)
   THM_BUSY=true;$('thS').textContent='테마 분석 중...';
   try{
     const raw=rowsOf(await getJSON(TH_API+'list?startIdx=0&pageSize=100&sortType=changeRate'));
@@ -56,18 +76,13 @@ async function fetchTopThemes(){
       return;
     }
     await pool(cand,4,async t=>{
-      const rows=rowsOf(await getJSON(TH_API+t.no+'/stocklist?marketType=ALL&orderType=priceTop&startIdx=0&pageSize=10'));
-      if(t===cand[0])dbg('테마종목',rows[0]);
-      const rs=rows.map(parseStock);
-      t.val=sm(rs.map(r=>r.val));t.vol=sm(rs.map(r=>r.vol));
+      const rs=await themeStocks(t.no,t===cand[0]);
+      t.rows=rs;t.val=sm(rs.map(r=>r.val));t.vol=sm(rs.map(r=>r.vol));
     });
     const rr=prank(cand,t=>t.rate),rv=prank(cand,t=>t.val||0),rq=prank(cand,t=>t.vol||0),tot=sm(cand.map(t=>t.val));
     cand.forEach((t,i)=>{t.sc=Math.round(100*(.35*rr[i]+.45*rv[i]+.2*rq[i]));t.share=tot?t.val/tot*100:null});
     const top=cand.sort((a,b)=>b.sc-a.sc||b.rate-a.rate).slice(0,TH_TOP);
-    await pool(top,4,async t=>{
-      const rows=rowsOf(await getJSON(TH_API+t.no+'/stocklist?marketType=ALL&orderType=up&startIdx=0&pageSize=10'));
-      t.top=rows.map(parseStock).filter(r=>r.name&&r.rate!=null).sort((a,b)=>b.rate-a.rate).slice(0,5);
-    });
+    top.forEach(t=>{t.top=(t.rows||[]).slice().sort((a,b)=>b.rate-a.rate).slice(0,5)});
     THM=top;THM_MSG='';THM_AT=Date.now();
     $('thS').textContent=(openKR()?'장중':'장마감')+' · 상승률·거래대금·거래량 종합 · '+new Date().toLocaleTimeString('ko-KR');
   }catch(e){
