@@ -3,7 +3,7 @@ const $=id=>document.getElementById(id);
 const LS=(k,v)=>{try{if(v===undefined){const r=localStorage.getItem(k);return r?JSON.parse(r):null}localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}};
 
 // ★ 여기에 정상 동작이 확인된 Apps Script 웹 앱 주소(/exec)를 넣으세요
-const DEFAULT_GAS_URL="https://script.google.com/macros/s/AKfycbwIDOi79EhV4UUa-MIAX5iPoN_lt-fSvljAhVx4CnBvKX6AILLOiG424S-MT-Msj0AR/exec"
+const DEFAULT_GAS_URL="https://script.google.com/macros/s/AKfycbxvzTCIoDZD2CgcLbcqqvDcO3F_QvxdDQQBYZWBtiJ6fLcfvmAY7woqwkEH5fJYbzlH5g/exec"
 const MYP=()=>String(LS('invest_myproxy')||DEFAULT_GAS_URL).trim();
 
 let isRegisterMode=false;
