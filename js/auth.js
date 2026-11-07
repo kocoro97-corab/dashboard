@@ -3,7 +3,7 @@ const $=id=>document.getElementById(id);
 const LS=(k,v)=>{try{if(v===undefined){const r=localStorage.getItem(k);return r?JSON.parse(r):null}localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}};
 
 // ★ 여기에 정상 동작이 확인된 Apps Script 웹 앱 주소(/exec)를 넣으세요
-const DEFAULT_GAS_URL="https://script.google.com/macros/s/AKfycbxFs2IWXmH1tO8JWavJWpNGhIvXS5BKaKatc_RiUIJI3IAxuWZ_e7WvE31ex3Axm829/exec"
+const DEFAULT_GAS_URL="https://script.google.com/macros/s/AKfycbxV90UdxDfhHC9vdWHFtXPfHcacMlwBfbBNENM0WXPABZYcIiEYs_ynxrtCST0c9tbf/exec"
 const MYP=()=>String(LS('invest_myproxy')||DEFAULT_GAS_URL).trim();
 // 로그인·가입·관리자 요청은 POST 본문으로 전송 (비밀번호·토큰이 주소·브라우저 기록·콘솔 오류에 남지 않게). text/plain이라 CORS 사전 요청 없음
 const post=payload=>fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
