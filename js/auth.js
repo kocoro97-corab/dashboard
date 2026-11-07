@@ -45,7 +45,7 @@ async function doAuth(retried){
       else{
         LS('invest_session_token',data.token);
         LS('invest_is_admin',data.isAdmin?'true':'false');
-        startSessionTimer();
+        startSessionTimer(true);
         enterDashboard(data.isAdmin);
       }
     }else{$('authMsg').textContent=data.message||"처리에 실패했습니다."}
@@ -88,32 +88,51 @@ async function approveUser(targetId){
   }catch(e){alert('승인 처리 중 오류 발생')}
 }
 
-let sessionSeconds=300,sessionInterval=null,sessionBound=false;
+const SESSION_MS=300000;   // 5분. 절대 시각 기준이라 화면 꺼짐·백그라운드에서도 정확히 만료
+let sessionInterval=null,sessionBound=false,lastWrite=0;
+const lastActive=()=>Number(localStorage.getItem('invest_last_active'))||0;
+function touchActive(force){
+  const n=Date.now();
+  if(force||n-lastWrite>1000){lastWrite=n;try{localStorage.setItem('invest_last_active',String(n))}catch(e){}}
+}
+function sessionLeftMs(){return SESSION_MS-(Date.now()-lastActive())}
 
-function startSessionTimer(){
-  sessionSeconds=300;
+function renderSession(){
+  if(!LS('invest_session_token')){logout();return}   // 다른 탭에서 로그아웃된 경우
+  const left=sessionLeftMs();
+  if(left<=0){logout();return}
+  const sec=Math.ceil(left/1000);
+  const m=String(Math.floor(sec/60)).padStart(2,'0'),s=String(sec%60).padStart(2,'0');
+  $('sessionTimeTxt').textContent=`${m}:${s}`;
+  $('sessionFill').style.width=(left/SESSION_MS*100)+'%';
+}
+
+function startSessionTimer(fresh){
+  if(fresh)touchActive(true);
   $('sessionTimerBox').style.display='flex';
   if(sessionInterval)clearInterval(sessionInterval);
-  sessionInterval=setInterval(()=>{
-    sessionSeconds--;
-    const m=String(Math.floor(sessionSeconds/60)).padStart(2,'0'),s=String(sessionSeconds%60).padStart(2,'0');
-    $('sessionTimeTxt').textContent=`${m}:${s}`;
-    $('sessionFill').style.width=(sessionSeconds/300*100)+'%';
-    if(sessionSeconds<=0)logout();
-  },1000);
+  renderSession();
+  sessionInterval=setInterval(renderSession,1000);
   if(!sessionBound){
     sessionBound=true;
     // 사용자가 직접 한 동작만 인정: 스크롤(휠·터치 이동), 클릭·터치, 키 입력, 입력창 입력. 마우스를 올려두기만 하거나 자동 갱신은 제외
     ['wheel','touchstart','touchmove','pointerdown','click','keydown','input'].forEach(ev=>window.addEventListener(ev,resetSessionTime,{passive:true,capture:true}));
+    // 탭 복귀·화면 켜짐 시 즉시 만료 확인 (타이머는 백그라운드에서 멈출 수 있음)
+    ['visibilitychange','pageshow','focus'].forEach(ev=>window.addEventListener(ev,()=>{if($('appContainer').style.display==='block')renderSession()}));
   }
 }
-function resetSessionTime(){if($('appContainer').style.display==='block')sessionSeconds=300}
+function resetSessionTime(){
+  if($('appContainer').style.display!=='block')return;
+  if(sessionLeftMs()<=0){logout();return}   // 이미 만료됐으면 터치로 되살리지 않음
+  touchActive();
+}
 
 function logout(){
   if(sessionInterval)clearInterval(sessionInterval);
   if(typeof stopTimers==='function')stopTimers();   // 자동 갱신 종료
   localStorage.removeItem('invest_session_token');
   localStorage.removeItem('invest_is_admin');
+  localStorage.removeItem('invest_last_active');
   $('sessionTimerBox').style.display='none';
   $('appContainer').style.display='none';
   $('authGuard').style.display='flex';
@@ -123,10 +142,10 @@ function logout(){
 
 function checkAuthentication(){
   const token=LS('invest_session_token');
-  if(token){
-    startSessionTimer();
-    enterDashboard(LS('invest_is_admin')==='true');
-  }
+  if(!token)return;
+  if(sessionLeftMs()<=0){logout();return}   // 마지막 사용 후 5분 경과 → 다시 로그인
+  startSessionTimer(false);
+  enterDashboard(LS('invest_is_admin')==='true');
 }
 
 function enterDashboard(isAdmin){
