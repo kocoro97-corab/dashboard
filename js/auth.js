@@ -5,6 +5,8 @@ const LS=(k,v)=>{try{if(v===undefined){const r=localStorage.getItem(k);return r?
 // ★ 여기에 정상 동작이 확인된 Apps Script 웹 앱 주소(/exec)를 넣으세요
 const DEFAULT_GAS_URL="https://script.google.com/macros/s/AKfycbxc7ayS7d9gxtiXm8COGeFt8Kwp28SJJV2qomIxVX5c3zWv1Ec39J_qmu6bxQ6BV5XI/exec"
 const MYP=()=>String(LS('invest_myproxy')||DEFAULT_GAS_URL).trim();
+// 로그인·가입·관리자 요청은 POST 본문으로 전송 (비밀번호·토큰이 주소·브라우저 기록·콘솔 오류에 남지 않게). text/plain이라 CORS 사전 요청 없음
+const post=payload=>fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
 
 let isRegisterMode=false;
 
@@ -31,11 +33,10 @@ async function doAuth(retried){
   const user=$('authId').value.trim(),pass=$('authPw').value.trim();
   if(!user||!pass){$('authMsg').textContent="아이디와 비밀번호를 모두 입력하세요.";return}
   const action=isRegisterMode?'register':'login',base=MYP();
-  const url=base+(base.includes('?')?'&':'?')+`action=${action}&user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}`;
   $('authMsg').textContent="서버 통신 중...";
   let step='연결';
   try{
-    const res=await fetch(url);
+    const res=await post({action,user,pass});
     step='응답(HTTP '+res.status+')';
     const txt=await res.text();
     let data;
@@ -62,9 +63,8 @@ async function openAdminModal(){
   $('adminMo').classList.add('on');
   $('adminUserList').innerHTML='불러오는 중...';
   const token=LS('invest_session_token');
-  const url=MYP()+(MYP().includes('?')?'&':'?')+`action=getPendingUsers&token=${token}`;
   try{
-    const res=await fetch(url);
+    const res=await post({action:'getPendingUsers',token});
     const data=await res.json();
     if(data.success){
       $('adminUserList').innerHTML=data.users.length?data.users.map(u=>`
@@ -79,9 +79,8 @@ function closeAdminModal(){$('adminMo').classList.remove('on')}
 
 async function approveUser(targetId){
   const token=LS('invest_session_token');
-  const url=MYP()+(MYP().includes('?')?'&':'?')+`action=approveUser&token=${token}&target=${encodeURIComponent(targetId)}`;
   try{
-    const res=await fetch(url);
+    const res=await post({action:'approveUser',token,target:targetId});
     const data=await res.json();
     alert(data.message);
     if(data.success)openAdminModal();
