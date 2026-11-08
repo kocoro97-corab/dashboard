@@ -1,6 +1,7 @@
 /* ===== themes.js: 주도 테마 & 강도판 (거래대금·거래량·상승률 종합) ===== */
 const TH_API='https://stock.naver.com/api/domestic/market/theme/';
 const TH_CAND=12,TH_TOP=6;
+const TH_CACHE_MS=10*60*1000;   // 자동 갱신 아님: 설정 저장 등으로 곧바로 다시 불릴 때 재수신을 막는 캐시 (↻ 버튼은 THM_AT=0 으로 무시)
 let THM=[],THM_MSG='',THM_BUSY=false,THM_AT=0;
 
 const sm=a=>a.reduce((s,x)=>s+(x||0),0);
@@ -64,7 +65,7 @@ async function themeStocks(no,logIt){
 const prank=(list,f)=>{const v=list.map(f);return v.map(x=>list.length>1?v.filter(y=>y<x).length/(list.length-1):1)};
 
 async function fetchTopThemes(){
-  if(THM_BUSY||(THM.length&&Date.now()-THM_AT<REFRESH_MS-30000))return;   // 갱신 주기 캐시(수동 갱신 시 THM_AT=0)
+  if(THM_BUSY||(THM.length&&Date.now()-THM_AT<TH_CACHE_MS))return;   // 수동 갱신(↻) 시 THM_AT=0
   THM_BUSY=true;$('thS').textContent='테마 분석 중...';
   try{
     const raw=rowsOf(await getJSON(TH_API+'list?startIdx=0&pageSize=100&sortType=changeRate'));
