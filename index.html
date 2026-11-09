@@ -70,8 +70,17 @@
       <div class="sh"><div><h2>실시간 주도 테마 & 강도판</h2><p id="thS">거래대금·거래량·상승률 종합</p></div><button onclick="THM_AT=0;fetchTopThemes()">↻ 테마 갱신</button></div>
       <div class="grid three" id="themes"></div>
     </section>
+    <section class="card" id="nhdc">
+      <div class="sh">
+        <div><h2>NH 나무증권 데이터센터</h2><p id="nhdcStatus">계좌·잔고 조회 대기</p></div>
+        <button id="nhdcBtn" onclick="refreshNHDataCenter()">↻ NH 계좌 갱신</button>
+      </div>
+      <div class="grid three" id="nhdcSummary"></div>
+      <div id="nhdcAccounts" class="mb"><div class="mini">로그인 후 NH 계좌 데이터를 불러옵니다.</div></div>
+      <div class="mini">보안: 계좌번호는 서버에서만 사용하며 화면에는 끝 4자리만 표시합니다. 조회 전용이며 주문 API는 연결하지 않았습니다.</div>
+    </section>
     <section>
-      <div class="sh"><div><h2>내 계좌 · 보유 종목</h2><p>현재가·손익 자동 재계산 · 출처: 네=네이버 Y=Yahoo NH=나무증권 기준=저장된 값</p></div>
+      <div class="sh"><div><h2>기존 저장 보유종목 (참고용)</h2><p>기존 수동 저장 데이터 참고용 · 실제 NH 잔고는 위 데이터센터 기준</p></div>
       <select id="af" onchange="renderHoldings()"><option value="all">전체 계좌</option><option>일반주식</option><option>ISA</option><option>연금저축</option><option>DC·IRP</option><option>해외주식</option></select></div>
       <div class="grid three" id="ps" style="margin-bottom:8px"></div>
       <div class="tw"><table><thead><tr><th>계좌</th><th>종목</th><th>수량</th><th>평단가</th><th>현재가</th><th>평가손익</th><th>수익률</th></tr></thead><tbody id="hd"></tbody></table></div>
@@ -108,10 +117,10 @@
 <script src="js/debug.js?v=2"></script>
 <script src="js/auth.js?v=4"></script>
 <script src="js/data.js?v=5"></script>
-<script src="js/market.js?v=8"></script>
+<script src="js/market.js?v=9"></script>
 <script src="js/chart.js?v=4"></script>
 <script src="js/themes.js?v=4"></script>
-<script src="js/init.js?v=5"></script>
+<script src="js/init.js?v=6"></script>
 
 </body>
 </html>
