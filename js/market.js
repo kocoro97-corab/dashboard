@@ -5,10 +5,34 @@ let CFG=LS('invest_cfg_v4')||JSON.parse(JSON.stringify(DEF)),MAN=LS('invest_man'
   if(FUT[x.id]){x.fut=FUT[x.id];x.name='코스피200 선물';delete x.y;delete x.m}
   else if(x.id==='k4'&&x.y==='KQ24.KQ'){delete x.y;x.m=1;x.name='코스닥150 선물'}
 }));
-const FQ={},FST={};
-async function fillFutures(){
+const FQ={},FST={},NQ={};
+// ----- 나무증권(NH PLUG) 선물 시세: 서버(GAS)가 대신 조회, 로그인 토큰 필요 -----
+async function nhFetch(items){
+  const tk=LS('invest_session_token');
+  if(!tk)return{ok:false,msg:'로그인 토큰 없음'};
+  try{
+    const c=new AbortController(),t=setTimeout(()=>c.abort(),25000);
+    const r=await fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'nhQuotes',token:tk,items:items}),signal:c.signal});
+    clearTimeout(t);
+    const j=JSON.parse(await r.text());
+    if(!j.success)return{ok:false,msg:j.message||'서버 거부'};
+    return{ok:true,data:j.data||{},errors:j.errors||{}};
+  }catch(e){return{ok:false,msg:'통신 실패('+(e&&e.name==='AbortError'?'시간 초과':'서버 주소·배포 확인')+')'}}
+}
+async function fillNH(){
+  const ids=Object.keys(NHF),t=hms(new Date());
+  const r=await nhFetch(ids.map(id=>({k:id,t:'fut',c:NHF[id]})));
+  if(!r.ok){ids.forEach(id=>delete NQ[id]);NH_STATUS='실패 · '+r.msg+' · '+t;return{ok:0,fail:ids.length}}
+  let ok=0;const ds=[],er=[];
+  ids.forEach(id=>{const d=r.data[id];
+    if(d&&d.p!=null&&d.prev!=null){NQ[id]={p:d.p,prev:d.prev,basis:d.basis,t:d.t||t,at:t};ok++;ds.push(id+':'+d.code+'('+d.dir+')')}
+    else{delete NQ[id];er.push(id+': '+(r.errors[id]||'응답 없음'))}});
+  NH_STATUS='선물 '+ok+'/'+ids.length+' 성공 · '+t+(ds.length?' · '+ds.join(' '):'')+(er.length?' · 실패 '+er.join(' / '):'');
+  return{ok:ok,fail:ids.length-ok};
+}
+async function fillFutures(skip){
   let ok=0,fail=0;
-  await Promise.all(Object.keys(FUT).map(async id=>{
+  await Promise.all(Object.keys(FUT).filter(id=>!(skip&&skip.has(id))).map(async id=>{
     const t=hms(new Date());
     try{
       const j=await getJSON('https://finance.daum.net/api/home/sec?path='+encodeURIComponent('/api/futures/'+FUT[id]));
@@ -105,10 +129,11 @@ async function refreshMarket(){   // '시장 종합' 카드(지수·선물·수�
     const list=CFG[sess()],want=[...new Set(list.filter(x=>x.y).map(x=>x.y))],fr=new Set();
     await fillNaver(want,fr);
     await fillQuotes(want.filter(c=>!fr.has(c)));
-    const hasFut=list.some(x=>x.fut),fu=hasFut?await fillFutures():{ok:0,fail:0};
+    const hasNH=list.some(x=>NHF[x.id]),nh=hasNH?await fillNH():{ok:0,fail:0};
+    const hasFut=list.some(x=>x.fut),fu=hasFut?await fillFutures(new Set(Object.keys(NQ))):{ok:0,fail:0};
     const got=want.filter(c=>Q[c]).length;
     renderCards();updateTickGauge();generateScenario();
-    st.textContent='갱신 '+hms(new Date())+' · 성공 '+got+'/'+want.length+(hasFut?' · 선물(다음) '+fu.ok+'/'+(fu.ok+fu.fail):'')+' · 출처 '+srcSummary(want);
+    st.textContent='갱신 '+hms(new Date())+' · 성공 '+got+'/'+want.length+(hasNH?' · 선물 NH '+nh.ok+'/'+(nh.ok+nh.fail):'')+(fu.ok+fu.fail?' · 다음 '+fu.ok+'/'+(fu.ok+fu.fail):'')+' · 출처 '+srcSummary(want);
   }catch(e){
     if(st)st.textContent='갱신 실패 '+hms(new Date());
   }finally{
@@ -123,11 +148,12 @@ async function refresh(){
   const all=[...want],fr=new Set();
   await fillNaver(all,fr);
   await fillQuotes(all.filter(c=>!fr.has(c)));
-  const fu=await fillFutures();
+  const nh=await fillNH();
+  const fu=await fillFutures(new Set(Object.keys(NQ)));
   const got=all.filter(c=>Q[c]).length;
   renderCards();renderHoldings();fetchTopThemes();renderThemes();updateTickGauge();generateScenario();
-  $('status').textContent='시세 갱신 '+hms(new Date())+' · 성공 '+got+' · 실패 '+(all.length-got)+'건 · 선물(다음) '+fu.ok+'/'+(fu.ok+fu.fail)+' · 출처 '+srcSummary(all);
-  if($('mkSt'))$('mkSt').textContent='갱신 '+hms(new Date())+' · 전체 갱신 · 선물 '+fu.ok+'/'+(fu.ok+fu.fail);
+  $('status').textContent='시세 갱신 '+hms(new Date())+' · 성공 '+got+' · 실패 '+(all.length-got)+'건 · 선물 NH '+nh.ok+'/'+(nh.ok+nh.fail)+(fu.ok+fu.fail?' · 다음 '+fu.ok+'/'+(fu.ok+fu.fail):'')+' · 출처 '+srcSummary(all);
+  if($('mkSt'))$('mkSt').textContent='갱신 '+hms(new Date())+' · 전체 갱신 · 선물 NH '+nh.ok+'/'+(nh.ok+nh.fail)+(fu.ok+fu.fail?' · 다음 '+fu.ok+'/'+(fu.ok+fu.fail):'');
 }
 
 const nf=(v,d=2)=>v==null?'—':Number(v).toLocaleString('ko-KR',{maximumFractionDigits:d});
@@ -142,6 +168,8 @@ function renderCards(){
     if(x.inv){
       const r=INV?nnum(INV[{foreign:'f',inst:'i',personal:'p'}[x.inv]]):null;
       if(r!=null){v=(r>=0?'+':'')+nf(r,0)+'억';c=(r>=0?'순매수':'순매도')+' · '+(INV.d||'');d=r>0?1:r<0?-1:0}
+    }else if(NQ[x.id]){
+      const f=NQ[x.id],df=f.p-f.prev,pc=f.prev?df/f.prev*100:0;d=df>0?1:df<0?-1:0;v=nf(f.p);c=(pc>=0?'+':'')+nf(pc)+'%'+(f.basis!=null?' · 베이시스 '+(f.basis>=0?'+':'')+nf(f.basis):'')+' · '+f.t;
     }else if(x.fut){
       const f=FQ[x.id];
       if(f){const df=f.p-f.prev,pc=df/f.prev*100;d=df>0?1:df<0?-1:0;v=nf(f.p);c=(pc>=0?'+':'')+nf(pc)+'%'+(f.basis!=null?' · 베이시스 '+(f.basis>=0?'+':'')+nf(f.basis):'')+' · '+(FST[x.id]||f.t)}
@@ -153,8 +181,8 @@ function renderCards(){
       else if(x.t==='fx'){v=nf(q.p);c=(df>=0?'+':'')+nf(df)+' ('+nf(pc)+'%)'}
       else{v=nf(q.p);c=(pc>=0?'+':'')+nf(pc)+'%'}}
     }
-    const tag=x.inv?(INV?'네이버':''):x.fut?(FQ[x.id]?'다음':''):x.m?'수동 입력':srcTag(x.y,true);
-    return `<div class="card" style="cursor:pointer" onclick="${x.inv||x.fut?'':x.m?`manIn('${x.id}')`:`openQ('${x.id}')`}"><div class="cl"><span>${x.name}</span><span>${x.inv||x.fut?'':x.m?'✎':'📈'}</span></div><div class="value">${v}</div><div class="change ${d>0?'up':d<0?'down':'neutral'}">${c}</div>${srcLine(tag)}</div>`
+    const tag=x.inv?(INV?'네이버':''):NQ[x.id]?'NH 나무증권 · '+NQ[x.id].at:x.fut?(FQ[x.id]?'다음':''):x.m?'수동 입력':srcTag(x.y,true);
+    return `<div class="card" style="cursor:pointer" onclick="${x.inv||x.fut||NQ[x.id]?'':x.m?`manIn('${x.id}')`:`openQ('${x.id}')`}"><div class="cl"><span>${x.name}</span><span>${x.inv||x.fut||NQ[x.id]?'':x.m?'✎':'📈'}</span></div><div class="value">${v}</div><div class="change ${d>0?'up':d<0?'down':'neutral'}">${c}</div>${srcLine(tag)}</div>`
   }).join('')
 }
 
