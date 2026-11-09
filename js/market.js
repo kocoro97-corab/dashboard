@@ -297,12 +297,18 @@ function nhHoldingRows(rows, overseas) {
 function nhAccountBlock(a) {
   const sections = [];
   if (a.domestic) {
-    const s = a.domestic.summary || {};
+    const s = a.domestic.summary || {}, hs = a.domestic.holdings || [];
+    const rowEval = hs.reduce((n,x)=>n+(Number(x.marketValue)||0),0);
+    const rowPnl = hs.reduce((n,x)=>n+(Number(x.pnl)||0),0);
+    const invested = hs.reduce((n,x)=>n+((Number(x.marketValue)||0)-(Number(x.pnl)||0)),0);
+    const evalAmount = s.evalAmount == null || (Number(s.evalAmount)===0 && rowEval>0) ? (hs.length?rowEval:s.evalAmount) : s.evalAmount;
+    const evalPnl = s.evalPnl == null || (Number(s.evalPnl)===0 && rowPnl!==0) ? (hs.length?rowPnl:s.evalPnl) : s.evalPnl;
+    const returnPct = s.returnPct == null || (Number(s.returnPct)===0 && evalPnl!==0) ? (invested>0?evalPnl/invested*100:null) : s.returnPct;
     sections.push(`<div class="card" style="margin-top:8px"><div class="sh"><b>국내주식</b><span class="mini">예수금 ${nhWon(s.cash)} · 주문가능 ${nhWon(s.orderable)}</span></div>
       <div class="grid three">
-        <div class="mini">평가금액<br><b>${nhWon(s.evalAmount)}</b></div>
-        <div class="mini">평가손익<br><b class="${Number(s.evalPnl)>=0?'up':'down'}">${nhWon(s.evalPnl)}</b></div>
-        <div class="mini">수익률<br><b>${s.returnPct==null?'—':Number(s.returnPct).toFixed(2)+'%'}</b></div>
+        <div class="mini">평가금액<br><b>${nhWon(evalAmount)}</b></div>
+        <div class="mini">평가손익<br><b class="${evalPnl==null?'':Number(evalPnl)>=0?'up':'down'}">${nhWon(evalPnl)}</b></div>
+        <div class="mini">수익률<br><b>${returnPct==null?'—':Number(returnPct).toFixed(2)+'%'}</b></div>
       </div>
       <div class="tw"><table><thead><tr><th>종목</th><th>코드</th><th>수량</th><th>평단가</th><th>현재가</th><th>평가금액</th><th>손익</th><th>수익률</th></tr></thead><tbody>${nhHoldingRows(a.domestic.holdings,false)}</tbody></table></div></div>`);
   } else if (a.domesticError) sections.push(`<div class="mini" style="color:var(--red)">국내주식 조회 실패: ${nhEsc(a.domesticError)}</div>`);
@@ -316,7 +322,7 @@ function nhAccountBlock(a) {
       </div>
       <div class="tw"><table><thead><tr><th>종목</th><th>티커</th><th>수량</th><th>평단가</th><th>기준가</th><th>원화평가금액</th><th>원화손익</th><th>수익률</th></tr></thead><tbody>${nhHoldingRows(a.overseas.holdings,true)}</tbody></table></div></div>`);
   } else if (a.overseasError) sections.push(`<div class="mini" style="color:var(--red)">해외주식 조회 실패: ${nhEsc(a.overseasError)}</div>`);
-  return `<div class="sh" style="margin-top:14px"><b>${nhEsc(a.label || 'NH 계좌')} ${nhEsc(a.masked)}</b><span class="mini">${nhEsc(a.environment || '')}</span></div>${sections.join('')}`;
+  return `<div class="sh" style="margin-top:14px"><b>${nhEsc(a.label || 'NH 계좌')} ${nhEsc(a.masked)}</b><span class="mini">${nhEsc(a.accountCategory || (a.type === '03' ? '모의투자' : '운영계좌'))} · ${nhEsc(a.environment || '')}</span></div>${sections.join('')}`;
 }
 async function refreshNHDataCenter() {
   const status = $('nhdcStatus'), btn = $('nhdcBtn'), box = $('nhdcAccounts');
@@ -337,14 +343,30 @@ async function refreshNHDataCenter() {
     const accounts = data.accounts || [];
     const domestic = accounts.reduce((n,a)=>n+(a.domestic&&a.domestic.holdings?a.domestic.holdings.length:0),0);
     const overseas = accounts.reduce((n,a)=>n+(a.overseas&&a.overseas.holdings?a.overseas.holdings.length:0),0);
-    const dEval = accounts.reduce((n,a)=>n+(a.domestic&&a.domestic.summary&&a.domestic.summary.evalAmount||0),0);
-    const dPnl = accounts.reduce((n,a)=>n+(a.domestic&&a.domestic.summary&&a.domestic.summary.evalPnl||0),0);
-    const oEval = accounts.reduce((n,a)=>n+(a.overseas&&a.overseas.summary&&a.overseas.summary.evalAmountKRW||0),0);
-    const oPnl = accounts.reduce((n,a)=>n+(a.overseas&&a.overseas.summary&&a.overseas.summary.evalPnlKRW||0),0);
+    // API 계좌합계가 누락되거나 null이면 보유종목별 평가금액·손익을 합산한다.
+    // 모든 계좌에서 값이 확인되지 않은 경우 0원으로 오인하지 않도록 '—'로 표시한다.
+    const sumKnown = vals => vals.some(v=>v!==null&&v!==undefined&&Number.isFinite(Number(v)))
+      ? vals.reduce((n,v)=>n+(v===null||v===undefined?0:Number(v)),0) : null;
+    const dEval = sumKnown(accounts.filter(a=>a.domestic).map(a=>{
+      const s=a.domestic.summary||{}, rows=a.domestic.holdings||[], h=sumKnown(rows.map(x=>x.marketValue));
+      return s.evalAmount!=null && !(Number(s.evalAmount)===0 && h>0) ? s.evalAmount : h;
+    }));
+    const dPnl = sumKnown(accounts.filter(a=>a.domestic).map(a=>{
+      const s=a.domestic.summary||{}, rows=a.domestic.holdings||[], h=sumKnown(rows.map(x=>x.pnl));
+      return s.evalPnl!=null && !(Number(s.evalPnl)===0 && h!==0) ? s.evalPnl : h;
+    }));
+    const oEval = sumKnown(accounts.filter(a=>a.overseas).map(a=>{
+      const s=a.overseas.summary||{}, rows=a.overseas.holdings||[], h=sumKnown(rows.map(x=>x.marketValue));
+      return s.evalAmountKRW!=null && !(Number(s.evalAmountKRW)===0 && h>0) ? s.evalAmountKRW : h;
+    }));
+    const oPnl = sumKnown(accounts.filter(a=>a.overseas).map(a=>{
+      const s=a.overseas.summary||{}, rows=a.overseas.holdings||[], h=sumKnown(rows.map(x=>x.pnl));
+      return s.evalPnlKRW!=null && !(Number(s.evalPnlKRW)===0 && h!==0) ? s.evalPnlKRW : h;
+    }));
     $('nhdcSummary').innerHTML = `
       <div class="card"><div class="mini">연결 계좌</div><div class="value">${accounts.length}개</div></div>
-      <div class="card"><div class="mini">국내주식 평가금액</div><div class="value">${nhWon(dEval)}</div><div class="${dPnl>=0?'up':'down'} mini">손익 ${nhWon(dPnl)}</div></div>
-      <div class="card"><div class="mini">해외주식 원화환산 평가금액</div><div class="value">${nhWon(oEval)}</div><div class="${oPnl>=0?'up':'down'} mini">손익 ${nhWon(oPnl)}</div></div>`;
+      <div class="card"><div class="mini">국내주식 평가금액</div><div class="value">${nhWon(dEval)}</div><div class="${dPnl==null?'mini':dPnl>=0?'up':'down'} mini">손익 ${nhWon(dPnl)}</div></div>
+      <div class="card"><div class="mini">해외주식 원화환산 평가금액</div><div class="value">${nhWon(oEval)}</div><div class="${oPnl==null?'mini':oPnl>=0?'up':'down'} mini">손익 ${nhWon(oPnl)}</div></div>`;
     box.innerHTML = accounts.length ? accounts.map(nhAccountBlock).join('') : '<div class="mini">현재 조회된 보유 종목이 있는 계좌가 없습니다. 계좌별 조회 권한과 API 지원 범위를 확인해 주세요.</div>';
     const errs = data.errors && data.errors.length ? ` · 오류 ${data.errors.length}건` : '';
     status.textContent = `NH 조회 완료 ${data.fetchedAt} · 국내 ${domestic}종목 · 해외 ${overseas}종목${errs}`;
