@@ -15,10 +15,13 @@ function openQ(id){const x=[...CFG.KR,...CFG.US].find(v=>v.id===id);if(x&&x.y)sh
 function showH(i){const r=H[i];if(r&&r[7])showQ(r[7],r[1],'')}
 function qMode(m){qmd=m;$('qm1').classList.toggle('active',m==='l');$('qm2').classList.toggle('active',m==='c');drawQ()}
 
+// 등락 비교 기준 = 선택한 단위의 "직전 캔들 종가": 일=전일 대비, 주=전주 대비, 월=전월 대비, 년=전년 대비
+const QCMP=['전일','전주','전월','전년'];
 function finishQ(i,b0,src){
-  const last=QD[QD.length-1].c,base=b0!=null?b0:QD[0].c,df=last-base,pc=df/base*100,u=QX.t==='yld'?'%':'';
-  $('qp').textContent=nf(last)+u;$('qc').textContent=(df>=0?'+':'')+nf(df)+' ('+(pc>=0?'+':'')+nf(pc)+'%) · '+QR[i][3];$('qc').className='change '+(df>=0?'up':'down');
-  $('qi').textContent='고가 '+nf(Math.max(...QD.map(d=>d.h!=null?d.h:d.c)))+' · 저가 '+nf(Math.min(...QD.map(d=>d.l!=null?d.l:d.c)))+' · '+src;drawQ();
+  const n=QD.length,last=QD[n-1].c,u=QX.t==='yld'?'%':'';
+  const base=n>1?QD[n-2].c:(QD[0].o!=null?QD[0].o:QD[0].c),df=last-base,pc=base?df/base*100:0;   // 캔들이 1개뿐이면 그 캔들 시가 기준
+  $('qp').textContent=nf(last)+u;$('qc').textContent=(df>=0?'+':'')+nf(df)+' ('+(pc>=0?'+':'')+nf(pc)+'%) · '+QCMP[i]+' 대비';$('qc').className='change '+(df>=0?'up':'down');
+  $('qi').textContent=QR[i][3]+' · 고가 '+nf(Math.max(...QD.map(d=>d.h!=null?d.h:d.c)))+' · 저가 '+nf(Math.min(...QD.map(d=>d.l!=null?d.l:d.c)))+' · '+src;drawQ();
 }
 
 async function nvChart(y,n,pg){
