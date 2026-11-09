@@ -141,7 +141,7 @@ async function refreshMarket(){   // '시장 종합' 카드(지수·선물·수�
     if(btn){btn.disabled=false;btn.textContent='↻ 지수 갱신'}
   }
 }
-function manualRefresh(){THM_AT=0;refresh();loadNews()}
+function manualRefresh(){THM_AT=0;refresh();refreshNHDataCenter();loadNews()}
 async function refresh(){
   $('status').textContent='시세 갱신 중...';
   const want=new Set();['KR','US'].forEach(s=>CFG[s].forEach(x=>x.y&&want.add(x.y)));H.forEach(r=>r[7]&&want.add(r[7]));
@@ -275,3 +275,84 @@ CFG[cur].push({id:'c'+Date.now(),name:n,y:y,tv:'NASDAQ:'+y,vis:1});swTab(cur)}
 function resetSettings(){CFG=JSON.parse(JSON.stringify(DEF));LS('invest_cfg_v4',CFG);swTab(cur);renderCards();refresh()}
 function saveSettings(){LS('invest_cfg_v4',CFG);renderCards();closeModal();refresh()}
 function clock(){const n=new Date(),p=v=>String(v).padStart(2,'0');$('clock').textContent=`${n.getMonth()+1}.${n.getDate()} ${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())} KST`}
+
+
+// ---------- NH 데이터센터 화면 ----------
+let NHDC = null;
+const nhEsc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const nhWon = v => v == null ? '—' : Number(v).toLocaleString('ko-KR',{maximumFractionDigits:0}) + '원';
+const nhNumFmt = v => v == null ? '—' : Number(v).toLocaleString('ko-KR',{maximumFractionDigits:2});
+function nhHoldingRows(rows, overseas) {
+  if (!rows || !rows.length) return '<tr><td colspan="8" class="mini">보유 종목 없음</td></tr>';
+  return rows.map(x => {
+    const qty = x.qty == null ? '—' : nhNumFmt(x.qty);
+    const price = x.currentPrice == null ? '—' : (overseas ? nhNumFmt(x.currentPrice) + ' ' + nhEsc(x.currency || 'USD') : nhWon(x.currentPrice));
+    const avg = x.avgPrice == null ? '—' : (overseas ? nhNumFmt(x.avgPrice) + ' ' + nhEsc(x.currency || 'USD') : nhWon(x.avgPrice));
+    const pnl = x.pnl == null ? '—' : (overseas ? nhWon(x.pnl) : nhWon(x.pnl));
+    const pc = x.returnPct == null ? '—' : Number(x.returnPct).toFixed(2) + '%';
+    const cls = Number(x.pnl) > 0 ? 'up' : Number(x.pnl) < 0 ? 'down' : '';
+    return `<tr><td>${nhEsc(x.name)}</td><td>${nhEsc(x.code)}</td><td>${qty}</td><td>${avg}</td><td>${price}</td><td>${nhWon(x.marketValue)}</td><td class="${cls}">${pnl}</td><td class="${cls}">${pc}</td></tr>`;
+  }).join('');
+}
+function nhAccountBlock(a) {
+  const sections = [];
+  if (a.domestic) {
+    const s = a.domestic.summary || {};
+    sections.push(`<div class="card" style="margin-top:8px"><div class="sh"><b>국내주식</b><span class="mini">예수금 ${nhWon(s.cash)} · 주문가능 ${nhWon(s.orderable)}</span></div>
+      <div class="grid three">
+        <div class="mini">평가금액<br><b>${nhWon(s.evalAmount)}</b></div>
+        <div class="mini">평가손익<br><b class="${Number(s.evalPnl)>=0?'up':'down'}">${nhWon(s.evalPnl)}</b></div>
+        <div class="mini">수익률<br><b>${s.returnPct==null?'—':Number(s.returnPct).toFixed(2)+'%'}</b></div>
+      </div>
+      <div class="tw"><table><thead><tr><th>종목</th><th>코드</th><th>수량</th><th>평단가</th><th>현재가</th><th>평가금액</th><th>손익</th><th>수익률</th></tr></thead><tbody>${nhHoldingRows(a.domestic.holdings,false)}</tbody></table></div></div>`);
+  } else if (a.domesticError) sections.push(`<div class="mini" style="color:var(--red)">국내주식 조회 실패: ${nhEsc(a.domesticError)}</div>`);
+  if (a.overseas) {
+    const s = a.overseas.summary || {};
+    sections.push(`<div class="card" style="margin-top:8px"><div class="sh"><b>해외주식 (미국)</b><span class="mini">원화예수금 ${nhWon(s.cashKRW)} · 외화예수금 ${nhNumFmt(s.cashForeign)} USD</span></div>
+      <div class="grid three">
+        <div class="mini">원화환산 평가금액<br><b>${nhWon(s.evalAmountKRW)}</b></div>
+        <div class="mini">원화환산 평가손익<br><b class="${Number(s.evalPnlKRW)>=0?'up':'down'}">${nhWon(s.evalPnlKRW)}</b></div>
+        <div class="mini">수익률<br><b>${s.returnPct==null?'—':Number(s.returnPct).toFixed(2)+'%'}</b></div>
+      </div>
+      <div class="tw"><table><thead><tr><th>종목</th><th>티커</th><th>수량</th><th>평단가</th><th>기준가</th><th>원화평가금액</th><th>원화손익</th><th>수익률</th></tr></thead><tbody>${nhHoldingRows(a.overseas.holdings,true)}</tbody></table></div></div>`);
+  } else if (a.overseasError) sections.push(`<div class="mini" style="color:var(--red)">해외주식 조회 실패: ${nhEsc(a.overseasError)}</div>`);
+  if (a.status === 'mock_not_connected') sections.push('<div class="mini">모의투자 계좌: 별도 모의 서버 설정이 필요하여 이번 조회에서 제외했습니다.</div>');
+  return `<div class="sh" style="margin-top:14px"><b>계좌 ${nhEsc(a.masked)} · ${a.type==='01'?'일반':a.type==='02'?'주문대리인':'모의투자'}</b><span class="mini">${nhEsc(a.environment)}</span></div>${sections.join('')}`;
+}
+async function refreshNHDataCenter() {
+  const status = $('nhdcStatus'), btn = $('nhdcBtn'), box = $('nhdcAccounts');
+  if (!status || !box) return;
+  const token = LS('invest_session_token');
+  if (!token) { status.textContent = '로그인 필요'; return; }
+  status.textContent = 'NH 계좌 및 잔고 조회 중...';
+  if (btn) btn.disabled = true;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 55000);
+    const res = await fetch(MYP(), {method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({action:'nhDataCenter',token:token}),signal:ctrl.signal});
+    clearTimeout(timer);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'NH 조회 실패');
+    NHDC = data;
+    const accounts = data.accounts || [];
+    const domestic = accounts.reduce((n,a)=>n+(a.domestic&&a.domestic.holdings?a.domestic.holdings.length:0),0);
+    const overseas = accounts.reduce((n,a)=>n+(a.overseas&&a.overseas.holdings?a.overseas.holdings.length:0),0);
+    const dEval = accounts.reduce((n,a)=>n+(a.domestic&&a.domestic.summary&&a.domestic.summary.evalAmount||0),0);
+    const dPnl = accounts.reduce((n,a)=>n+(a.domestic&&a.domestic.summary&&a.domestic.summary.evalPnl||0),0);
+    const oEval = accounts.reduce((n,a)=>n+(a.overseas&&a.overseas.summary&&a.overseas.summary.evalAmountKRW||0),0);
+    const oPnl = accounts.reduce((n,a)=>n+(a.overseas&&a.overseas.summary&&a.overseas.summary.evalPnlKRW||0),0);
+    $('nhdcSummary').innerHTML = `
+      <div class="card"><div class="mini">연결 계좌</div><div class="value">${accounts.length}개</div></div>
+      <div class="card"><div class="mini">국내주식 평가금액</div><div class="value">${nhWon(dEval)}</div><div class="${dPnl>=0?'up':'down'} mini">손익 ${nhWon(dPnl)}</div></div>
+      <div class="card"><div class="mini">해외주식 원화환산 평가금액</div><div class="value">${nhWon(oEval)}</div><div class="${oPnl>=0?'up':'down'} mini">손익 ${nhWon(oPnl)}</div></div>`;
+    box.innerHTML = accounts.length ? accounts.map(nhAccountBlock).join('') : '<div class="mini">NH 연결 계좌가 없습니다.</div>';
+    const errs = data.errors && data.errors.length ? ` · 오류 ${data.errors.length}건` : '';
+    status.textContent = `NH 조회 완료 ${data.fetchedAt} · 국내 ${domestic}종목 · 해외 ${overseas}종목${errs}`;
+  } catch (e) {
+    status.textContent = 'NH 조회 실패 · ' + (e.name === 'AbortError' ? '응답 시간 초과' : (e.message || '통신 오류'));
+    box.innerHTML = '<div class="mini" style="color:var(--red)">NH API 연결 상태와 GAS 배포 버전을 확인해 주세요.</div>';
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}

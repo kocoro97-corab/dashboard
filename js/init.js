@@ -11,6 +11,6 @@ function initDashboard(){
   TS.w='wait';tickStatus();
   embed($('tickq'),'single-quote',{symbol:'USI:TICK',width:'100%',colorTheme:'dark',isTransparent:true,locale:'kr'},ok=>{TS.w=ok?'ok':'fail';TS.wAt=new Date();tickStatus()});
   const ti=LS('invest_tick');if(ti){$('tin').value=ti;setTick()}
-  showQ('^KS11','코스피','',1);fetchTopThemes();renderCards();renderHoldings();clock();refresh();loadNews();
+  showQ('^KS11','코스피','',1);fetchTopThemes();renderCards();renderHoldings();clock();refresh();refreshNHDataCenter();loadNews();
   startTimers();
 }
