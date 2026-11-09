@@ -316,8 +316,7 @@ function nhAccountBlock(a) {
       </div>
       <div class="tw"><table><thead><tr><th>종목</th><th>티커</th><th>수량</th><th>평단가</th><th>기준가</th><th>원화평가금액</th><th>원화손익</th><th>수익률</th></tr></thead><tbody>${nhHoldingRows(a.overseas.holdings,true)}</tbody></table></div></div>`);
   } else if (a.overseasError) sections.push(`<div class="mini" style="color:var(--red)">해외주식 조회 실패: ${nhEsc(a.overseasError)}</div>`);
-  if (a.status === 'mock_not_connected') sections.push('<div class="mini">모의투자 계좌: 별도 모의 서버 설정이 필요하여 이번 조회에서 제외했습니다.</div>');
-  return `<div class="sh" style="margin-top:14px"><b>계좌 ${nhEsc(a.masked)} · ${a.type==='01'?'일반':a.type==='02'?'주문대리인':'모의투자'}</b><span class="mini">${nhEsc(a.environment)}</span></div>${sections.join('')}`;
+  return `<div class="sh" style="margin-top:14px"><b>${nhEsc(a.label || 'NH 계좌')} ${nhEsc(a.masked)}</b><span class="mini">${nhEsc(a.environment || '')}</span></div>${sections.join('')}`;
 }
 async function refreshNHDataCenter() {
   const status = $('nhdcStatus'), btn = $('nhdcBtn'), box = $('nhdcAccounts');
@@ -346,7 +345,7 @@ async function refreshNHDataCenter() {
       <div class="card"><div class="mini">연결 계좌</div><div class="value">${accounts.length}개</div></div>
       <div class="card"><div class="mini">국내주식 평가금액</div><div class="value">${nhWon(dEval)}</div><div class="${dPnl>=0?'up':'down'} mini">손익 ${nhWon(dPnl)}</div></div>
       <div class="card"><div class="mini">해외주식 원화환산 평가금액</div><div class="value">${nhWon(oEval)}</div><div class="${oPnl>=0?'up':'down'} mini">손익 ${nhWon(oPnl)}</div></div>`;
-    box.innerHTML = accounts.length ? accounts.map(nhAccountBlock).join('') : '<div class="mini">NH 연결 계좌가 없습니다.</div>';
+    box.innerHTML = accounts.length ? accounts.map(nhAccountBlock).join('') : '<div class="mini">현재 조회된 보유 종목이 있는 계좌가 없습니다. 계좌별 조회 권한과 API 지원 범위를 확인해 주세요.</div>';
     const errs = data.errors && data.errors.length ? ` · 오류 ${data.errors.length}건` : '';
     status.textContent = `NH 조회 완료 ${data.fetchedAt} · 국내 ${domestic}종목 · 해외 ${overseas}종목${errs}`;
   } catch (e) {
