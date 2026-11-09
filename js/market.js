@@ -44,7 +44,7 @@ async function getTxt(targetUrl){
 }
 async function getJSON(u){const x=await getTxt(u);try{return JSON.parse(x)}catch(e){return null}}
 
-function openDg(){$('dgs').textContent='성공 '+NET.ok+'회 · 실패 '+NET.fail+'회';$('dgl').textContent=NET.log.join('\n')||'기록 없음';$('dgp').value=MYP();$('dg').classList.add('on')}
+function openDg(){$('dgs').textContent='성공 '+NET.ok+'회 · 실패 '+NET.fail+'회';$('dgl').textContent=['NH 나무증권: '+NH_STATUS,'출처별 수신: '+srcSummary(Object.keys(Q)),'--- 통신 기록'].concat(NET.log.length?NET.log:['기록 없음']).join('\n');$('dgp').value=MYP();$('dg').classList.add('on')}
 function closeDg(){$('dg').classList.remove('on')}
 function saveProxy(){LS('invest_myproxy',$('dgp').value.trim());NET.ok=0;NET.fail=0;closeDg();refresh();loadNews();THM_AT=0;fetchTopThemes()}
 
@@ -54,10 +54,17 @@ const dn=cd==='4'||cd==='5'||/FALL|하락|하한/.test(tx),up=cd==='1'||cd==='2'
 function nq(o){if(!o)return null;const p=nnum(o.closePrice??o.calcPrice);if(p==null)return null;const ch=nsgn(o,nnum(o.compareToPreviousClosePrice??o.fluctuations));return{p:p,prev:ch==null?p:p-ch}}
 const narr=j=>Array.isArray(j)?j:j?(j.datas||j.result||j.data||j.items||Object.values(j).find(Array.isArray)||((j.closePrice||j.calcPrice)?[j]:[])):[];
 let INV=null;const SRC={};
+// ----- 시세 출처 표시: N=네이버 · Y=Yahoo · D=다음 · H=NH(나무증권) · M=수동 -----
+const QT={};   // 종목별 마지막 수신 시각
+const SRC_NAME={N:'네이버',Y:'Yahoo',D:'다음',H:'NH 나무증권',M:'수동'},SRC_SHORT={N:'네',Y:'Y',D:'다',H:'NH',M:'수'};
+let NH_STATUS='아직 연결 전';   // 나무증권 연동 상태 (🩺 진단에 표시)
+const srcTag=(k,full)=>{const s=SRC[k];if(!s||!Q[k])return '';return full?(SRC_NAME[s]||s)+(QT[k]?' · '+hms(new Date(QT[k])):''):(SRC_SHORT[s]||s)};
+const srcSummary=keys=>{const c={};keys.forEach(k=>{const s=SRC[k];if(Q[k]&&s)c[s]=(c[s]||0)+1});return Object.keys(c).map(s=>(SRC_NAME[s]||s)+' '+c[s]).join(' · ')||'수신 없음'};
+const srcLine=t=>t?`<div class="mini" style="font-size:9px;margin-top:2px;opacity:.75">출처 ${t}</div>`:'';
 
 async function fillNaver(want,fr){
   const W=new Set(want),T=[];let n=0;
-  const put=(k,o)=>{const q=nq(o);if(q&&W.has(k)){Q[k]=q;SRC[k]='N';fr.add(k);n++}};
+  const put=(k,o)=>{const q=nq(o);if(q&&W.has(k)){Q[k]=q;SRC[k]='N';QT[k]=Date.now();fr.add(k);n++}};
   [['^KS11','KOSPI'],['^KQ11','KOSDAQ']].forEach(([k,c])=>{if(W.has(k))T.push(getJSON('https://polling.finance.naver.com/api/realtime/domestic/index/'+c).then(j=>put(k,narr(j)[0])))});
   const wi={'.INX':'^GSPC','.IXIC':'^IXIC','.DJI':'^DJI','.SOX':'^SOX','.VIX':'^VIX'},wk=Object.keys(wi).filter(c=>W.has(wi[c]));
   if(wk.length)T.push(getJSON('https://stock.naver.com/api/polling/worldstock/index?reutersCodes='+wk.join(',')).then(j=>narr(j).forEach((o,i)=>{const rc=o.reutersCode||o.symbolCode||wk[i];if(wi[rc])put(wi[rc],o)})));
@@ -84,7 +91,7 @@ async function fillQuotes(list){
     while(i<list.length){
       const c=list[i++];
       const q=await(isKR(c)?quoteKR(c):quote(c));
-      if(q){Q[c]=q;SRC[c]='Y'}
+      if(q){Q[c]=q;SRC[c]='Y';QT[c]=Date.now()}
     }
   }));
 }
@@ -101,7 +108,7 @@ async function refreshMarket(){   // '시장 종합' 카드(지수·선물·수�
     const hasFut=list.some(x=>x.fut),fu=hasFut?await fillFutures():{ok:0,fail:0};
     const got=want.filter(c=>Q[c]).length;
     renderCards();updateTickGauge();generateScenario();
-    st.textContent='갱신 '+hms(new Date())+' · 성공 '+got+'/'+want.length+(hasFut?' · 선물 '+fu.ok+'/'+(fu.ok+fu.fail):'');
+    st.textContent='갱신 '+hms(new Date())+' · 성공 '+got+'/'+want.length+(hasFut?' · 선물(다음) '+fu.ok+'/'+(fu.ok+fu.fail):'')+' · 출처 '+srcSummary(want);
   }catch(e){
     if(st)st.textContent='갱신 실패 '+hms(new Date());
   }finally{
@@ -119,7 +126,7 @@ async function refresh(){
   const fu=await fillFutures();
   const got=all.filter(c=>Q[c]).length;
   renderCards();renderHoldings();fetchTopThemes();renderThemes();updateTickGauge();generateScenario();
-  $('status').textContent='시세 갱신 '+hms(new Date())+' · 성공 '+got+' · 실패 '+(all.length-got)+'건 · 선물 '+fu.ok+'/'+(fu.ok+fu.fail);
+  $('status').textContent='시세 갱신 '+hms(new Date())+' · 성공 '+got+' · 실패 '+(all.length-got)+'건 · 선물(다음) '+fu.ok+'/'+(fu.ok+fu.fail)+' · 출처 '+srcSummary(all);
   if($('mkSt'))$('mkSt').textContent='갱신 '+hms(new Date())+' · 전체 갱신 · 선물 '+fu.ok+'/'+(fu.ok+fu.fail);
 }
 
@@ -146,7 +153,8 @@ function renderCards(){
       else if(x.t==='fx'){v=nf(q.p);c=(df>=0?'+':'')+nf(df)+' ('+nf(pc)+'%)'}
       else{v=nf(q.p);c=(pc>=0?'+':'')+nf(pc)+'%'}}
     }
-    return `<div class="card" style="cursor:pointer" onclick="${x.inv||x.fut?'':x.m?`manIn('${x.id}')`:`openQ('${x.id}')`}"><div class="cl"><span>${x.name}</span><span>${x.inv||x.fut?'':x.m?'✎':'📈'}</span></div><div class="value">${v}</div><div class="change ${d>0?'up':d<0?'down':'neutral'}">${c}</div></div>`
+    const tag=x.inv?(INV?'네이버':''):x.fut?(FQ[x.id]?'다음':''):x.m?'수동 입력':srcTag(x.y,true);
+    return `<div class="card" style="cursor:pointer" onclick="${x.inv||x.fut?'':x.m?`manIn('${x.id}')`:`openQ('${x.id}')`}"><div class="cl"><span>${x.name}</span><span>${x.inv||x.fut?'':x.m?'✎':'📈'}</span></div><div class="value">${v}</div><div class="change ${d>0?'up':d<0?'down':'neutral'}">${c}</div>${srcLine(tag)}</div>`
   }).join('')
 }
 
@@ -157,7 +165,7 @@ function renderHoldings(){
   const calc=r=>{const q=Q[r[7]];if(!q)return{cur:r[4],pl:r[5],rt:r[6],live:0};return{cur:q.p,pl:(q.p-r[3])*r[2],rt:(q.p/r[3]-1)*100,live:1}};
   $('hd').innerHTML=rows.map(r=>{
     const k=calc(r),cl=v=>v==null?'':v>=0?'up':'down';
-    return `<tr><td>${r[0]}</td><td class="name" ${r[7]?`onclick="showH(${H.indexOf(r)})"`:''}>${r[1]}</td><td>${nf(r[2])}</td><td>${nf(r[3])}</td><td>${nf(k.cur)}${k.live?' <span class="up">●</span>':''}</td><td class="${cl(k.pl)}">${nf(k.pl,0)}</td><td class="${cl(k.rt)}">${k.rt==null?'—':k.rt.toFixed(2)+'%'}</td></tr>`
+    return `<tr><td>${r[0]}</td><td class="name" ${r[7]?`onclick="showH(${H.indexOf(r)})"`:''}>${r[1]}</td><td>${nf(r[2])}</td><td>${nf(r[3])}</td><td>${nf(k.cur)}${k.live?' <span class="up">●</span> <span class="mini" style="font-size:8px;opacity:.7">'+srcTag(r[7])+'</span>':' <span class="mini" style="font-size:8px;opacity:.7">기준</span>'}</td><td class="${cl(k.pl)}">${nf(k.pl,0)}</td><td class="${cl(k.rt)}">${k.rt==null?'—':k.rt.toFixed(2)+'%'}</td></tr>`
   }).join('');
   const accs=[...new Set(rows.map(r=>r[0]))];
   $('ps').innerHTML=accs.map(a=>{
