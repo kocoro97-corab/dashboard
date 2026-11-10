@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0b1220">
 <title>개인 투자 대시보드</title>
-<link rel="stylesheet" href="css/style.css?v=2">
+<link rel="stylesheet" href="css/style.css?v=3">
 </head>
 <body>
 
@@ -70,20 +70,37 @@
       <div class="sh"><div><h2>실시간 주도 테마 & 강도판</h2><p id="thS">거래대금·거래량·상승률 종합</p></div><button onclick="THM_AT=0;fetchTopThemes()">↻ 테마 갱신</button></div>
       <div class="grid three" id="themes"></div>
     </section>
-    <section class="card" id="nhdc">
-      <div class="sh">
-        <div><h2>NH 나무증권 데이터센터</h2><p id="nhdcStatus">계좌·잔고 조회 대기</p></div>
-        <button id="nhdcBtn" onclick="refreshNHDataCenter()">↻ NH 계좌 갱신</button>
-      </div>
-      <div class="grid three" id="nhdcSummary"></div>
-      <div id="nhdcAccounts" class="mb"><div class="mini">로그인 후 NH 계좌 데이터를 불러옵니다.</div></div>
-      <div class="mini">보안: 계좌번호는 서버에서만 사용하며 화면에는 끝 4자리만 표시합니다. 조회 전용이며 주문 API는 연결하지 않았습니다.</div>
+    <section class="card" id="nhAccountSection">
+      <div class="sh"><div><h2>NH 나무 일반계좌 · 실시간 잔고</h2><p>운영 일반계좌(01·02)만 조회 · ISA·연금저축·IRP 및 모의계좌 제외 · 주문 기능 없음</p><div class="mini" id="nhAccountStatus">계좌 조회 대기</div></div>
+        <div class="hr"><select id="nhAssetFilter" onchange="renderNHAccounts()"><option value="all">국내+해외 전체</option><option value="domestic">국내주식</option><option value="overseas">해외주식</option></select><button id="nhAccountBtn" onclick="loadNHAccounts()">↻ 계좌 잔고 조회</button></div></div>
+      <div class="grid three" id="nhAccountCards" style="margin-bottom:8px"></div>
+      <div class="tw"><table><thead><tr><th>계좌</th><th>구분</th><th>종목</th><th>코드</th><th>수량</th><th>평단가</th><th>현재가</th><th>평가금액(원)</th><th>평가손익(원)</th><th>수익률</th></tr></thead><tbody id="nhAccountRows"><tr><td colspan="10" style="text-align:center">조회 버튼을 눌러 NH 계좌 잔고를 불러오세요.</td></tr></tbody></table></div>
     </section>
-    <section>
-      <div class="sh"><div><h2>기존 저장 보유종목 (참고용)</h2><p>기존 수동 저장 데이터 참고용 · 실제 NH 잔고는 위 데이터센터 기준</p></div>
-      <select id="af" onchange="renderHoldings()"><option value="all">전체 계좌</option><option>일반주식</option><option>ISA</option><option>연금저축</option><option>DC·IRP</option><option>해외주식</option></select></div>
-      <div class="grid three" id="ps" style="margin-bottom:8px"></div>
-      <div class="tw"><table><thead><tr><th>계좌</th><th>종목</th><th>수량</th><th>평단가</th><th>현재가</th><th>평가손익</th><th>수익률</th></tr></thead><tbody id="hd"></tbody></table></div>
+    <section class="card" id="externalAssetSection">
+      <div class="sh"><div><h2>외부계좌 통합 자산관리 · ISA / 연금저축 / IRP</h2><p>캡처 이미지 인식 → 종목·수량 확인 → NH 현재가 조회 · 주문 기능 없음</p><div class="mini" id="externalStatus">외부계좌 자료를 불러오는 중...</div></div>
+        <div class="hr"><button onclick="refreshExternalPrices()">↻ 현재가 새로고침</button></div></div>
+      <div class="grid three" id="externalSummaryCards"></div>
+      <div class="hr" style="margin:8px 0;align-items:flex-end">
+        <label>계좌 구분<br><select id="externalAccountType"><option value="ISA">ISA</option><option value="PENSION">연금저축</option><option value="IRP">IRP</option></select></label>
+        <label>캡처 이미지 직접 업로드<br><input type="file" id="externalImageFiles" accept="image/*" multiple></label>
+        <button id="externalUploadBtn" onclick="processExternalUploads()">이미지 인식</button>
+      </div>
+      <div class="hr" style="margin:6px 0;align-items:flex-end">
+        <label style="flex:1;min-width:220px">Google Drive 폴더 ID<br><input id="externalDriveFolder" type="text" placeholder="Drive 폴더 ID 붙여넣기" style="width:100%"></label>
+        <button onclick="importExternalDriveImages()">Drive 이미지 가져오기</button>
+      </div>
+      <div class="hr" style="margin:6px 0;align-items:flex-end">
+        <label>종목코드(6자리)<br><input id="externalManualCode" maxlength="6" placeholder="예: 360750"></label>
+        <label>종목명<br><input id="externalManualName" placeholder="ETF/주식명"></label>
+        <label>수량<br><input id="externalManualQty" type="number" min="0" step="any" placeholder="0"></label>
+        <label>평균매입가<br><input id="externalManualAvg" type="number" min="0" step="any" placeholder="0"></label>
+        <button onclick="addExternalManual()">종목 직접 추가</button>
+      </div>
+      <div class="mini" style="line-height:1.6;margin:4px 0 8px">Drive 폴더에는 계좌별 캡처 이미지를 넣어주세요. 이미지 파일을 읽으려면 Apps Script 배포 계정에 해당 폴더 접근권한이 필요합니다. 인식 결과는 저장 전에 직접 확인·수정할 수 있습니다.</div>
+      <div id="externalOcrProgress" class="mini" style="margin:6px 0"></div>
+      <div class="tw"><table style="min-width:760px"><thead><tr><th>계좌</th><th>종목명</th><th>종목코드</th><th>보유수량</th><th>평균매입가</th><th>현재가(NH)</th><th>평가금액</th><th>평가손익</th><th>관리</th></tr></thead><tbody id="externalAssetRows"><tr><td colspan="9" style="text-align:center">등록된 외부계좌 종목이 없습니다.</td></tr></tbody></table></div>
+      <div class="hr" style="justify-content:space-between;margin-top:8px"><div class="hr"><label class="mini"><input type="checkbox" id="externalAutoRefresh"> 자동갱신 사용</label><label class="mini">간격 <select id="externalAutoMinutes"><option value="5">5분</option><option value="10" selected>10분</option><option value="30">30분</option><option value="60">60분</option></select></label></div><button onclick="saveExternalSettings()">갱신 설정 저장</button></div>
+      <div class="mini" style="margin-top:5px">기본 설정은 자동갱신 꺼짐입니다. 대시보드 접속 시 1회 조회하며, 이후에는 수동 새로고침을 사용합니다. 자동갱신을 켜면 선택한 간격으로 현재가만 갱신합니다.</div>
     </section>
     <div class="grid two">
       <section class="card"><div class="sh"><div><h2>실시간 시장 뉴스</h2><p id="nst_mk">기사 불러오는 중...</p></div></div><div id="nl_mk"></div></section>
@@ -116,10 +133,12 @@
 <!-- 스크립트: 순서를 바꾸지 마세요. 코드 수정 후 반영이 안 되면 ?v= 숫자를 올리세요. -->
 <script src="js/debug.js?v=2"></script>
 <script src="js/auth.js?v=4"></script>
-<script src="js/data.js?v=5"></script>
-<script src="js/market.js?v=9"></script>
+<script src="js/data.js?v=6"></script>
+<script src="js/market.js?v=10"></script>
 <script src="js/chart.js?v=4"></script>
 <script src="js/themes.js?v=4"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="js/external_accounts.js?v=1"></script>
 <script src="js/init.js?v=6"></script>
 
 </body>
