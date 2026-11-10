@@ -291,7 +291,7 @@ async function loadNHAccounts(){
     const res=await fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'nhAccounts',token:tk})});
     const data=JSON.parse(await res.text());
     if(!data.success)throw new Error(data.message||'계좌 조회 실패');
-    NH_ACCOUNTS=Array.isArray(data.accounts)?data.accounts:[];
+    NH_ACCOUNTS=(Array.isArray(data.accounts)?data.accounts:[]).filter(a=>['domestic','overseas'].some(k=>Array.isArray(a[k]&&a[k].holdings)&&a[k].holdings.length>0));
     NH_ACCOUNT_UPDATED=data.updatedAt||'';
     renderNHAccounts();
     const count=NH_ACCOUNTS.length;
@@ -307,13 +307,13 @@ function renderNHAccounts(){
   const rows=[];let cardHtml='';
   NH_ACCOUNTS.forEach(a=>{
     [['domestic','국내주식',a.domestic],['overseas','해외주식',a.overseas]].forEach(([key,label,d])=>{
-      if(!d)return;
+      if(!d||!Array.isArray(d.holdings)||!d.holdings.length)return;
       const sm=d.summary||{},hs=Array.isArray(d.holdings)?d.holdings:[];
       const money=sm.evalAmount,profit=sm.profit,dep=sm.deposit;
-      cardHtml+=`<div class="card"><div class="cl"><span>${nhSafe(a.masked)} · ${label}</span><span>${hs.length}종목</span></div><div class="value">${nhMoney(money)}<span class="mini"> 원 평가금액</span></div><div class="change ${profit>0?'up':profit<0?'down':'neutral'}">손익 ${nhMoney(profit)}원${sm.returnRate!=null?' · '+Number(sm.returnRate).toFixed(2)+'%':''}</div><div class="mini">예수금 ${nhMoney(dep)}원 · 계좌유형 ${a.acctType==='02'?'주문대리인':'일반'}</div></div>`;
-      if(filter==='all'||filter===key)hs.forEach(h=>rows.push({a:a.masked,market:label,h:h}));
+      cardHtml+=`<div class="card"><div class="cl"><span>일반계좌 · ${label}</span><span>${hs.length}종목</span></div><div class="value">${nhMoney(money)}<span class="mini"> 원 평가금액</span></div><div class="change ${profit>0?'up':profit<0?'down':'neutral'}">손익 ${nhMoney(profit)}원${sm.returnRate!=null?' · '+Number(sm.returnRate).toFixed(2)+'%':''}</div><div class="mini">예수금 ${nhMoney(dep)}원 · 계좌유형 ${a.acctType==='02'?'주문대리인':'일반'}</div></div>`;
+      if(filter==='all'||filter===key)hs.forEach(h=>rows.push({a:'일반계좌',market:label,h:h}));
     });
-    if(a.errors&&a.errors.length)cardHtml+=`<div class="mini" style="grid-column:1/-1;color:var(--amber)">${nhSafe(a.masked)} 조회 안내: ${nhSafe(a.errors.join(' / '))}</div>`;
+    if(a.errors&&a.errors.length)cardHtml+=`<div class="mini" style="grid-column:1/-1;color:var(--amber)">일반계좌 조회 안내: ${nhSafe(a.errors.join(' / '))}</div>`;
   });
   cards.innerHTML=cardHtml||'<div class="mini">표시할 계좌 요약이 없습니다.</div>';
   tbody.innerHTML=rows.length?rows.map(x=>{const h=x.h,cl=v=>v>0?'up':v<0?'down':'neutral';return `<tr><td>${nhSafe(x.a)}</td><td>${x.market}</td><td class="name">${nhSafe(h.name)}</td><td>${nhSafe(h.code)}</td><td>${nhMoney(h.quantity)}</td><td>${nhMoney(h.avgPrice)} ${nhSafe(h.currency||'')}</td><td>${nhMoney(h.currentPrice)} ${nhSafe(h.currency||'')}</td><td>${nhMoney(h.evalAmount)}</td><td class="${cl(h.profit)}">${nhMoney(h.profit)}</td><td class="${cl(h.returnRate)}">${h.returnRate==null?'—':Number(h.returnRate).toFixed(2)+'%'}</td></tr>`}).join(''):'<tr><td colspan="10" style="text-align:center">해당 구분의 보유종목이 없습니다.</td></tr>';
