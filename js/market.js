@@ -298,6 +298,7 @@ async function loadNHAccounts(){
     NH_ACCOUNTS=(Array.isArray(data.accounts)?data.accounts:[]).filter(a=>['domestic','overseas'].some(k=>Array.isArray(a[k]&&a[k].holdings)&&a[k].holdings.length>0));
     NH_ACCOUNT_UPDATED=data.updatedAt||'';
     renderNHAccounts();
+    if(typeof extSyncWithNH==='function')extSyncWithNH();
     const count=NH_ACCOUNTS.length;
     if(st)st.textContent='조회 '+(NH_ACCOUNT_UPDATED||hms(new Date()))+' · 일반계좌 '+count+'개 · 모의계좌 제외';
   }catch(e){if(st)st.textContent='조회 실패(기존 조회값 유지) · '+String(e.message||e).slice(0,240);if(typeof renderExternalAssets==='function')renderExternalAssets()}

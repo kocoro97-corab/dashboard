@@ -16,7 +16,7 @@ async function extPost(action,extra={}){
   const j=JSON.parse(await r.text());if(!j.success)throw new Error(j.message||'요청 실패');return j;
 }
 async function loadExternalAssets(){
-  const st=$('externalStatus');try{const j=await extPost('externalHoldings');EXT_ASSETS=(Array.isArray(j.holdings)?j.holdings:[]).filter(x=>!(x.code==='485987'&&!extNum(x.quantity)&&!extNum(x.avgPrice)&&(!x.name||x.name==='--'))).filter(extIsRealHolding).map(x=>({...x,name:extNormalizeOcrName(x.name)}));renderExternalAssets();
+  const st=$('externalStatus');try{const j=await extPost('externalHoldings');EXT_ASSETS=(Array.isArray(j.holdings)?j.holdings:[]).filter(x=>!(x.code==='485987'&&!extNum(x.quantity)&&!extNum(x.avgPrice)&&(!x.name||x.name==='--'))).filter(extIsRealHolding).map(x=>({...x,name:extNormalizeOcrName(x.name)}));extResolveCodes();renderExternalAssets();
     const cfg=LS('invest_external_settings')||{auto:false,minutes:10};$('externalDriveFolder').value=LS('invest_external_drive_folder')||'';$('externalAutoRefresh').checked=!!cfg.auto;$('externalAutoMinutes').value=String(cfg.minutes||10);applyExternalAutoRefresh();
     if(EXT_ASSETS.length){await refreshExternalPrices(true)}else if(st)st.textContent='외부계좌 종목 없음 · 이미지 업로드 또는 Drive 가져오기로 등록하세요.';
   }catch(e){if(st)st.textContent='외부계좌 자료 조회 실패 · '+e.message}
@@ -31,7 +31,7 @@ async function ocrImage(file){
 // 종목코드가 없는 나무 모바일 잔고 캡처를 기본으로 지원한다.
 // 계좌번호를 6자리 종목코드로 오인하지 않도록 표 헤더 이전의 숫자는 무시한다.
 // 종목코드는 공식 시세조회 결과로 검증된 경우에만 자동 연결한다.
-const EXT_KNOWN_CODES={'카카오':'035720'};
+const EXT_KNOWN_CODES={'카카오':'035720','KCC글라스':'344820','씨앤투스':'352700'}; // NH 일반계좌 응답에서 확인된 코드만 고정
 const EXT_SCREEN_NAMES=new Set(['카카오','서호전기','크레버스','풍산','KCC글라스','씨앤투스','에스엔시스']);
 const EXT_SCREEN_BAD=new Set(['현금','신용','미수','대출','비용포함','평생우대','일괄매도','자산현황']);
 // 나무 잔고 화면의 '현금'은 매수구분, 종목이 아니다. OCR 오독 보정.
@@ -39,6 +39,12 @@ const EXT_OCR_ALIASES={'KCC2atA':'KCC글라스','KCC2ATA':'KCC글라스','YHA':'
 const EXT_OCR_BAD_NAMES=new Set(['현금','신용','미수','대출','YHA']);
 function extNormalizeOcrName(v){const n=extCleanName(v);return EXT_OCR_ALIASES[n]||n}
 function extIsRealHolding(x){const n=extNormalizeOcrName(x.name);return !!n&&!EXT_OCR_BAD_NAMES.has(n)&&!EXT_SCREEN_BAD.has(n)&&!/^\d+$/.test(n)&&!(/^[A-Za-z]{1,3}$/.test(n))}
+function extResolveCodes(){
+ const map={...EXT_KNOWN_CODES};
+ if(typeof NH_ACCOUNTS!=='undefined'&&Array.isArray(NH_ACCOUNTS))NH_ACCOUNTS.forEach(a=>['domestic'].forEach(k=>((a[k]&&a[k].holdings)||[]).forEach(h=>{const n=extNormalizeOcrName(h.name),c=String(h.code||'');if(n&&/^\d{6}$/.test(c))map[n]=c})));
+ let changed=false;EXT_ASSETS=EXT_ASSETS.filter(extIsRealHolding).map(x=>{const name=extNormalizeOcrName(x.name),code=String(x.code||'');if(!/^\d{6}$/.test(code)&&map[name]){changed=true;return {...x,name,code:map[name]}}return {...x,name}});return changed;
+}
+function extSyncWithNH(){if(extResolveCodes()){renderExternalAssets();showExternalSaveButton()}if(EXT_ASSETS.some(x=>/^\d{6}$/.test(String(x.code||''))))refreshExternalPrices(true)}
 
 const EXT_OCR_STOP=/^(현금|종목명|구분|주식잔고|매입금액|평가금액|총자산|평가손익|수익률|매입가|현재가|잔고수량|일괄매도|자산현황|비용포함|예수금|종목코드|국내잔고|평생우대|계좌|주식잔고손익|매매손익|평가손익률|순자산|총자산|원|KRW)$/;
 function extCleanName(t){return String(t||'').replace(/\s+/g,'').replace(/^[•·\-]+|[•·\-]+$/g,'').replace(/[^가-힣A-Za-z0-9&+._-]/g,'').slice(0,60)}
@@ -97,7 +103,7 @@ async function processExternalUploads(){
   const btn=$('externalUploadBtn');btn.disabled=true;let all=[],texts=[];
   try{for(let i=0;i<files.length;i++){ $('externalOcrProgress').textContent=(i+1)+'/'+files.length+' 이미지 분석 중...';const data=await ocrImage(files[i]);texts.push(data.text||'');all=all.concat(parseExternalOcr(data,$('externalAccountType').value));}
     showOcrReview(texts);if(!all.length){$('externalOcrProgress').textContent='종목을 인식하지 못했습니다. 아래 OCR 원문을 확인하고 직접 등록하세요.';return}
-    EXT_ASSETS=mergeExternalRows(EXT_ASSETS,all);renderExternalAssets();$('externalOcrProgress').textContent='인식 후보 '+all.length+'개 · 수량·평균매입가를 확인·수정하고 [인식자료 저장]을 누르세요. 종목코드는 비워도 저장됩니다.';showExternalSaveButton();
+    EXT_ASSETS=mergeExternalRows(EXT_ASSETS,all);extResolveCodes();renderExternalAssets();$('externalOcrProgress').textContent='인식 후보 '+all.length+'개 · 수량·평균매입가를 확인·수정하고 [인식자료 저장]을 누르세요. 종목코드는 비워도 저장됩니다.';showExternalSaveButton();
   }catch(e){$('externalOcrProgress').textContent='이미지 인식 실패 · '+e.message}finally{btn.disabled=false}
 }
 function mergeExternalRows(base,add){const map=new Map();const norm=x=>({...x,name:extNormalizeOcrName(x.name)});const key=x=>x.accountType+'_'+(extNormalizeOcrName(x.name)||x.code);base.filter(extIsRealHolding).map(norm).forEach(x=>map.set(key(x),x));add.filter(extIsRealHolding).map(norm).forEach(x=>{const k=key(x);const old=map.get(k)||{};map.set(k,{...old,...x,code:x.code||old.code||''})});return [...map.values()]}
@@ -108,10 +114,11 @@ async function importExternalDriveImages(){
   $('externalOcrProgress').textContent='Google Drive 폴더에서 이미지 목록을 불러오는 중...';
   try{const j=await extPost('externalDriveImages',{folderId});if(!j.images||!j.images.length)throw new Error('폴더에 이미지 파일이 없습니다.');let all=[],texts=[];
     for(let i=0;i<j.images.length;i++){const im=j.images[i];$('externalOcrProgress').textContent='Drive 이미지 OCR '+(i+1)+'/'+j.images.length+' · '+im.name;const blob=await fetch('data:'+im.mimeType+';base64,'+im.base64).then(r=>r.blob());const f=new File([blob],im.name,{type:im.mimeType});const data=await ocrImage(f);texts.push(data.text||'');all=all.concat(parseExternalOcr(data,$('externalAccountType').value));}
-    showOcrReview(texts);if(!all.length)throw new Error('종목을 인식하지 못했습니다. 아래 OCR 원문을 보고 직접 등록하세요.');EXT_ASSETS=mergeExternalRows(EXT_ASSETS,all);renderExternalAssets();$('externalOcrProgress').textContent='Drive 이미지 '+j.images.length+'개 · 인식 후보 '+all.length+'개. 수량·평단가를 확인하고 저장하세요.';showExternalSaveButton();
+    showOcrReview(texts);if(!all.length)throw new Error('종목을 인식하지 못했습니다. 아래 OCR 원문을 보고 직접 등록하세요.');EXT_ASSETS=mergeExternalRows(EXT_ASSETS,all);extResolveCodes();renderExternalAssets();$('externalOcrProgress').textContent='Drive 이미지 '+j.images.length+'개 · 인식 후보 '+all.length+'개. 수량·평단가를 확인하고 저장하세요.';showExternalSaveButton();
   }catch(e){$('externalOcrProgress').textContent='Drive 가져오기 실패 · '+e.message}
 }
 function renderExternalAssets(){
+  extResolveCodes();
   const tb=$('externalAssetRows'),cards=$('externalSummaryCards');if(!tb||!cards)return;
   if(!EXT_ASSETS.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center">등록된 외부계좌 종목이 없습니다.</td></tr>';cards.innerHTML='';return}
   const totals={ISA:{eval:0,cost:0,count:0,priced:0},PENSION:{eval:0,cost:0,count:0,priced:0},IRP:{eval:0,cost:0,count:0,priced:0}};
@@ -122,8 +129,8 @@ function renderExternalAssets(){
   const nh={eval:0,profit:0,count:0};
   (typeof NH_ACCOUNTS!=='undefined' && Array.isArray(NH_ACCOUNTS)?NH_ACCOUNTS:[]).forEach(a=>['domestic','overseas'].forEach(k=>{const d=a[k];if(!d)return;const sm=d.summary||{},hs=d.holdings||[];const holdingEval=hs.reduce((v,h)=>v+extNum(h.evalAmount),0),holdingProfit=hs.reduce((v,h)=>v+extNum(h.profit),0);nh.eval+=extNum(sm.evalAmount)>0?extNum(sm.evalAmount):holdingEval;nh.profit+=extNum(sm.profit)!==0?extNum(sm.profit):holdingProfit;nh.count+=hs.length}));
   const extEval=Object.values(totals).reduce((v,t)=>v+t.eval,0),extProfit=Object.values(totals).reduce((v,t)=>v+t.eval-t.cost,0),extCount=Object.values(totals).reduce((v,t)=>v+t.count,0),extPriced=Object.values(totals).reduce((v,t)=>v+t.priced,0);
-  const allEval=nh.eval+extEval,allProfit=nh.profit+extProfit;
-  html=`<div class="card"><div class="cl"><b>NH 일반계좌</b><span>${nh.count}종목</span></div><div class="value">${(typeof NH_ACCOUNT_UPDATED!=='undefined'&&NH_ACCOUNT_UPDATED)?extFmt(nh.eval):'—'}<span class="mini">원 평가금액</span></div><div class="change ${nh.profit>=0?'up':'down'}">평가손익 ${extFmt(nh.profit)}원</div></div>`+html+`<div class="card" style="border-color:var(--blue)"><div class="cl"><b>전체 통합 합계</b><span>NH + 외부계좌</span></div><div class="value">${(nh.count||extPriced)?extFmt(allEval):'—'}<span class="mini">원 평가금액</span></div><div class="change ${allProfit>=0?'up':'down'}">평가손익 ${extFmt(allProfit)}원</div><div class="mini">외부계좌 시세 확인 ${extPriced}/${extCount}종목</div></div>`;
+  const allEval=nh.eval+extEval,allProfit=nh.profit+extProfit;const incomplete=extPriced<extCount;
+  html=`<div class="card"><div class="cl"><b>NH 일반계좌</b><span>${nh.count}종목</span></div><div class="value">${(typeof NH_ACCOUNT_UPDATED!=='undefined'&&NH_ACCOUNT_UPDATED)?extFmt(nh.eval):'—'}<span class="mini">원 평가금액</span></div><div class="change ${nh.profit>=0?'up':'down'}">평가손익 ${extFmt(nh.profit)}원</div></div>`+html+`<div class="card" style="border-color:var(--blue)"><div class="cl"><b>전체 통합 합계</b><span>NH + 외부계좌</span></div><div class="value">${(nh.count||extPriced)?extFmt(allEval):'—'}<span class="mini">원 평가금액</span></div><div class="change ${allProfit>=0?'up':'down'}">평가손익 ${extFmt(allProfit)}원</div><div class="mini">${incomplete?'부분 합계 · 미조회 종목 제외 · ':''}외부계좌 시세 확인 ${extPriced}/${extCount}종목</div></div>`;
   cards.innerHTML=html;
 }
 function editExternalText(i,k,v){if(!EXT_ASSETS[i])return;EXT_ASSETS[i][k]=String(v).trim();EXT_ASSETS[i].needsReview=false;showExternalSaveButton();renderExternalAssets()}
@@ -135,7 +142,7 @@ async function saveExternalAssets(){
   }catch(e){$('externalStatus').textContent='저장 실패 · '+e.message}
 }
 async function refreshExternalPrices(silent){
-  if(EXT_PRICE_BUSY)return;EXT_PRICE_BUSY=true;const st=$('externalStatus');try{
+  extResolveCodes();if(EXT_PRICE_BUSY)return;EXT_PRICE_BUSY=true;const st=$('externalStatus');try{
     if(!EXT_ASSETS.length){if(!silent&&st)st.textContent='조회할 외부계좌 종목이 없습니다.';return}
     const codes=[...new Set(EXT_ASSETS.map(x=>String(x.code||'')).filter(x=>/^\d{6}$/.test(x)))];if(!codes.length){renderExternalAssets();if(st)st.textContent='종목은 저장되어 있습니다. 현재가 조회를 위해 종목코드를 입력하세요.';return;}
     if(st)st.textContent='NH PLUG 국내주식·ETF 현재가 조회 중...';let got=0,errors=0;for(let i=0;i<codes.length;i+=40){const j=await extPost('nhExternalQuotes',{codes:codes.slice(i,i+40)});EXT_PRICES={...EXT_PRICES,...(j.prices||{})};got+=Object.keys(j.prices||{}).length;errors+=Object.keys(j.errors||{}).length; if(j.errors&&Object.keys(j.errors).length)window.EXT_LAST_QUOTE_ERRORS=j.errors;}renderExternalAssets();
