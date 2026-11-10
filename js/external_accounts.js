@@ -16,7 +16,7 @@ async function extPost(action,extra={}){
   const j=JSON.parse(await r.text());if(!j.success)throw new Error(j.message||'요청 실패');return j;
 }
 async function loadExternalAssets(){
-  const st=$('externalStatus');try{const j=await extPost('externalHoldings');EXT_ASSETS=(Array.isArray(j.holdings)?j.holdings:[]).filter(x=>!(x.code==='485987'&&!extNum(x.quantity)&&!extNum(x.avgPrice)&&(!x.name||x.name==='--')));renderExternalAssets();
+  const st=$('externalStatus');try{const j=await extPost('externalHoldings');EXT_ASSETS=(Array.isArray(j.holdings)?j.holdings:[]).filter(x=>!(x.code==='485987'&&!extNum(x.quantity)&&!extNum(x.avgPrice)&&(!x.name||x.name==='--'))).filter(extIsRealHolding).map(x=>({...x,name:extNormalizeOcrName(x.name)}));renderExternalAssets();
     const cfg=LS('invest_external_settings')||{auto:false,minutes:10};$('externalDriveFolder').value=LS('invest_external_drive_folder')||'';$('externalAutoRefresh').checked=!!cfg.auto;$('externalAutoMinutes').value=String(cfg.minutes||10);applyExternalAutoRefresh();
     if(EXT_ASSETS.length){await refreshExternalPrices(true)}else if(st)st.textContent='외부계좌 종목 없음 · 이미지 업로드 또는 Drive 가져오기로 등록하세요.';
   }catch(e){if(st)st.textContent='외부계좌 자료 조회 실패 · '+e.message}
@@ -31,6 +31,12 @@ async function ocrImage(file){
 // 종목코드가 없는 나무 모바일 잔고 캡처를 기본으로 지원한다.
 // 계좌번호를 6자리 종목코드로 오인하지 않도록 표 헤더 이전의 숫자는 무시한다.
 const EXT_KNOWN_CODES={'카카오':'035720'};
+// 나무 잔고 화면의 '현금'은 매수구분, 종목이 아니다. OCR 오독 보정.
+const EXT_OCR_ALIASES={'KCC2atA':'KCC글라스','KCC2ATA':'KCC글라스','YHA':'크레버스'};
+const EXT_OCR_BAD_NAMES=new Set(['현금','신용','미수','대출','YHA']);
+function extNormalizeOcrName(v){const n=extCleanName(v);return EXT_OCR_ALIASES[n]||n}
+function extIsRealHolding(x){const n=extNormalizeOcrName(x.name);return !!n&&!EXT_OCR_BAD_NAMES.has(n)&&!/^\d+$/.test(n)&&!(/^[A-Za-z]{1,3}$/.test(n))}
+
 const EXT_OCR_STOP=/^(현금|종목명|구분|주식잔고|매입금액|평가금액|총자산|평가손익|수익률|매입가|현재가|잔고수량|일괄매도|자산현황|비용포함|예수금|종목코드|국내잔고|평생우대|계좌|주식잔고손익|매매손익|평가손익률|순자산|총자산|원|KRW)$/;
 function extCleanName(t){return String(t||'').replace(/\s+/g,'').replace(/^[•·\-]+|[•·\-]+$/g,'').replace(/[^가-힣A-Za-z0-9&+._-]/g,'').slice(0,60)}
 function extLooksLikeName(t){return /[가-힣A-Za-z]/.test(t)&&t.length>=2&&!EXT_OCR_STOP.test(t)&&!/(조회|평가|매입|손익|잔고|계좌|증권|비용|주문|설정|기준|현황|수익|총자산|예수금|일괄|매도)/.test(t)}
@@ -55,8 +61,9 @@ function parseExternalOcr(data,accountType){
   // 종목명은 첫 번째 열(왼쪽 약 30%)의 한글이며 수량/매입가는 같은 행 오른쪽 두 열에 위치.
   rows.forEach((r,i)=>{
     const left=r.parts.filter(w=>w.x<.30).map(w=>w.t).join('');
-    const name=extCleanName(left);
-    if(!extLooksLikeName(name))return;
+    const name=extNormalizeOcrName(left);
+    if(/^(현금|신용|미수|대출)$/i.test(left.trim()))return;
+    if(!extLooksLikeName(name)||!extIsRealHolding({name}))return;
     const right=r.parts.filter(w=>w.x>.56).map(w=>({x:w.x,n:extNum(w.t),raw:w.t})).filter(w=>/^\d[\d,]*$/.test(w.raw));
     // 수량은 세 번째 열, 매입가는 네 번째 열. 매입가가 OCR에서 분리되면 수정 가능하게 둔다.
     const q=right.filter(w=>w.x>.56&&w.x<.80).sort((a,b)=>a.x-b.x);
@@ -88,7 +95,7 @@ async function processExternalUploads(){
     EXT_ASSETS=mergeExternalRows(EXT_ASSETS,all);renderExternalAssets();$('externalOcrProgress').textContent='인식 후보 '+all.length+'개 · 수량·평균매입가를 확인·수정하고 [인식자료 저장]을 누르세요. 종목코드는 비워도 저장됩니다.';showExternalSaveButton();
   }catch(e){$('externalOcrProgress').textContent='이미지 인식 실패 · '+e.message}finally{btn.disabled=false}
 }
-function mergeExternalRows(base,add){const map=new Map();const key=x=>x.accountType+'_'+(String(x.name||'').replace(/\s/g,'')||x.code);base.forEach(x=>map.set(key(x),x));add.forEach(x=>{const k=key(x);const old=map.get(k)||{};map.set(k,{...old,...x,code:x.code||old.code||''})});return [...map.values()]}
+function mergeExternalRows(base,add){const map=new Map();const norm=x=>({...x,name:extNormalizeOcrName(x.name)});const key=x=>x.accountType+'_'+(extNormalizeOcrName(x.name)||x.code);base.filter(extIsRealHolding).map(norm).forEach(x=>map.set(key(x),x));add.filter(extIsRealHolding).map(norm).forEach(x=>{const k=key(x);const old=map.get(k)||{};map.set(k,{...old,...x,code:x.code||old.code||''})});return [...map.values()]}
 function addExternalManual(){const accountType=$('externalAccountType').value,code=$('externalManualCode').value.trim(),name=$('externalManualName').value.trim(),quantity=extNum($('externalManualQty').value),avgPrice=extNum($('externalManualAvg').value);if((code&&!/^\d{6}$/.test(code))||!name){alert('종목명을 입력하고, 종목코드는 비워두거나 6자리로 입력하세요.');return}EXT_ASSETS=mergeExternalRows(EXT_ASSETS,[{accountType,code,name,quantity,avgPrice,source:'manual'}]);renderExternalAssets();showExternalSaveButton();$('externalManualCode').value='';$('externalManualName').value='';$('externalManualQty').value='';$('externalManualAvg').value=''}
 function showExternalSaveButton(){let b=$('externalSaveBtn');if(!b){b=document.createElement('button');b.id='externalSaveBtn';b.textContent='인식자료 저장';b.onclick=saveExternalAssets;$('externalOcrProgress').after(b)}b.style.display='inline-block'}
 async function importExternalDriveImages(){
