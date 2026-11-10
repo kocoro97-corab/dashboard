@@ -290,13 +290,17 @@ async function loadNHAccounts(){
     if(!tk)throw new Error('로그인이 필요합니다.');
     const res=await fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'nhAccounts',token:tk})});
     const data=JSON.parse(await res.text());
-    if(!data.success)throw new Error(data.message||'계좌 조회 실패');
+    if(!data.success){
+      const msg=String(data.message||'계좌 조회 실패');
+      if(/잘못된 요청/.test(msg))throw new Error('GAS 배포 버전 불일치 가능성: Apps Script Code.gs·Nhplug.gs를 확인하고 새 버전 배포 후 접속 URL을 확인하세요.');
+      throw new Error(msg);
+    }
     NH_ACCOUNTS=(Array.isArray(data.accounts)?data.accounts:[]).filter(a=>['domestic','overseas'].some(k=>Array.isArray(a[k]&&a[k].holdings)&&a[k].holdings.length>0));
     NH_ACCOUNT_UPDATED=data.updatedAt||'';
     renderNHAccounts();
     const count=NH_ACCOUNTS.length;
     if(st)st.textContent='조회 '+(NH_ACCOUNT_UPDATED||hms(new Date()))+' · 일반계좌 '+count+'개 · 모의계좌 제외';
-  }catch(e){if(st)st.textContent='조회 실패 · '+String(e.message||e).slice(0,120)}
+  }catch(e){if(st)st.textContent='조회 실패(기존 조회값 유지) · '+String(e.message||e).slice(0,240);if(typeof renderExternalAssets==='function')renderExternalAssets()}
   finally{NH_ACCOUNT_BUSY=false;if(btn){btn.disabled=false;btn.textContent='↻ 계좌 잔고 조회'}}
 }
 let NH_ACCOUNT_UPDATED='';
