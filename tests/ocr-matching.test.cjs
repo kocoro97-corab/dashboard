@@ -3,6 +3,28 @@ const fs=require('node:fs');const path=require('node:path');
 const core=require('../js/external_core.js');
 const document=JSON.parse(fs.readFileSync(path.join(__dirname,'../data/krx-instruments.json')));
 const index=core.master(document);
+test('fragmented two-tier NH headers and cash subrows retain same-row synthetic values',()=>{
+  const w=(text,x,y,width=25)=>({text,bbox:{x0:x,x1:x+width,y0:y,y1:y+20}});
+  const data={words:[w('종',120,100),w('명',160,100),w('잔',665,100),w('고',690,100),w('수량',715,100,40),w('매',945,100),w('입',975,100),w('가',1005,100),w('구분',130,145,45),w('수익률.',410,145,60),w('평가금액',665,145,90),w('현재가',945,145,85),w('카',20,200),w('카',48,200),w('오',76,200),w('-999',450,200,70),w('101',780,200,35),w('20,100',1000,200,90),w('현금',20,245,45),w('999,999',700,245,110),w('99,999',1000,245,90),w('순자산액 안내',20,300,150)]};
+  const rows=core.parse(data,'ISA',index).holdings;assert.equal(rows.length,1);assert.equal(rows[0].code,'035720');assert.equal(rows[0].quantity,101);assert.equal(rows[0].avgPrice,20100);
+});
+test('mixed-script names require high-confidence nonoverlapping pixels and an exact master match',()=>{
+  const symbol=(text,x0,x1,confidence=99)=>({text,confidence,bbox:{x0,x1,y0:10,y1:30}});
+  const korean={words:[{symbols:[symbol('테',45,65),symbol('스',66,86),symbol('트',87,107)]}]};
+  const english={words:[{symbols:[symbol('A',5,20),symbol('B',21,36),symbol('Z',40,64)]}]};
+  const m=core.master({schema:1,source:{},instruments:[{name:'AB테스트',code:'000001',type:'STOCK'}]});
+  assert.equal(core.mixedName(korean,english,m),'AB테스트');assert.equal(core.mixedName(korean,english,index),null);
+  english.words[0].symbols[0].confidence=40;assert.equal(core.mixedName(korean,english,m),null);
+  english.words[0].symbols[0].confidence=99;korean.words[0].symbols[0].bbox.y0=40;korean.words[0].symbols[0].bbox.y1=60;assert.equal(core.mixedName(korean,english,m),null);
+});
+test('a refined name replaces only its own name cell and keeps original financial columns',()=>{
+  const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/isa-ocr.json')));
+  const word=fixture.data.words.find(w=>w.text==='카카오');const b=word.bbox;
+  const region={x0:0,x1:300,y0:b.y0-1,y1:b.y1+1,bbox:b};
+  const replaced=core.replaceName(fixture.data,region,'카카오');
+  const before=core.parse(fixture.data,'ISA',index).holdings,after=core.parse(replaced,'ISA',index).holdings;
+  assert.deepEqual(after,before);assert.equal(fixture.data.words.find(w=>w.text==='카카오'),word);
+});
 for(const account of ['isa','pension','irp'])test(account+' synthetic OCR keeps values on the same physical row, removes cash/menu noise and duplicate captures',()=>{
   const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures',account+'-ocr.json')));
   const result=core.parse(fixture.data,fixture.accountType,index);

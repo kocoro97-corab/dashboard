@@ -88,7 +88,31 @@ function applyExternalAutoRefresh(){if(EXT_AUTO_TIMER)clearInterval(EXT_AUTO_TIM
 async function ocrImage(file){
   if(!window.Tesseract)throw new Error('OCR 엔진을 불러오지 못했습니다. 인터넷 연결을 확인하세요.');
   const result=await Tesseract.recognize(file,'kor+eng',{logger:m=>{if(m.status==='recognizing text')$('externalOcrProgress').textContent='이미지 인식 중 '+Math.round((m.progress||0)*100)+'%'}});
-  return result.data||{text:''};
+  let data=result.data||{text:''};
+  const regions=ExternalCore.parse(data,$('externalAccountType').value,EXT_MASTER).regions||[];
+  if(!regions.length||!EXT_MASTER||typeof Tesseract.createWorker!=='function')return data;
+  const bitmap=await createImageBitmap(file);
+  try{
+    const crops=regions.slice(0,12).map(region=>{
+      const canvas=document.createElement('canvas'),scale=2;
+      const width=Math.min(bitmap.width,region.x1)-region.x0,height=Math.min(bitmap.height,region.y1)-region.y0;
+      canvas.width=Math.ceil(width*scale);canvas.height=Math.ceil(height*scale);
+      const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(bitmap,region.x0,region.y0,width,height,0,0,canvas.width,canvas.height);
+      return canvas;
+    });
+    const readings={};
+    for(const language of ['kor','eng']){
+      const worker=await Tesseract.createWorker(language);
+      try{await worker.setParameters({tessedit_pageseg_mode:'7'});readings[language]=[];
+        for(const canvas of crops){const reading=await worker.recognize(canvas.toDataURL());readings[language].push(reading.data)}
+      }finally{await worker.terminate()}
+    }
+    regions.slice(0,12).forEach((region,i)=>{const name=ExternalCore.mixedName(readings.kor[i],readings.eng[i],EXT_MASTER);if(name)data=ExternalCore.replaceName(data,region,name)});
+  }catch(error){
+    // Optional refinement must preserve the original candidates for user review.
+  }finally{bitmap.close()}
+  return data;
 }
 // No guessed names, hardcoded symbol mappings, or destructive saved-row normalization.
 function extNormalizeOcrName(v){return String(v||'').trim()}
