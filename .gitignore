@@ -5,3 +5,5 @@ __pycache__/
 node_modules/
 .venv*/
 test-results/
+staging-build/
+nh-staging-report.json

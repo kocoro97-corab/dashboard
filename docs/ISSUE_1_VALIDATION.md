@@ -35,7 +35,7 @@ python3 tools/update_instrument_master.py
 
 ## 테스트와 검증 범위
 
-로컬 결과: Node 56개 + Python 14개 = **70개** 통과. 별도로 ISA/연금저축/IRP 모바일 브라우저 흐름 3개 통과.
+로컬 결과: Node 61개 + Python 22개 = **83개** 통과. 별도로 ISA/연금저축/IRP 모바일 브라우저 흐름 3개 통과.
 
 ```bash
 for file in tests/*.test.cjs; do node "$file" || exit 1; done
@@ -59,6 +59,6 @@ python3 tests/browser_external.py
 운영 배포 전 복구 버전을 생성하는 기존 절차는 유지합니다. 코드 롤백은 기존 GAS 배포 버전 복원으로,
 보유목록 롤백은 사용자별 저장 복구 기록으로 처리합니다. 코드 롤백만으로 Sheets 변경이 되돌아가지는 않습니다.
 
-PR CI에는 Google/NH secrets가 없습니다. 실패는 PR 체크에 표시됩니다. 현재 main은 보호 브랜치가 아니므로,
+기본 회귀 CI에는 Google/NH secrets가 없습니다. 별도 `nh-staging` 환경 승인·설정 후에만 실제 연동 job을 활성화할 수 있습니다. 현재 실제 테스트는 환경 미설정으로 BLOCKED입니다. 절차와 결과는 [NH_STAGING_TEST.md](NH_STAGING_TEST.md)를 참고하세요. 실패는 PR 체크에 표시됩니다. 현재 main은 보호 브랜치가 아니므로,
 GitHub 차원의 병합 강제 차단을 원하면 관리자가 `PR regression tests / regression`을 필수 체크로 지정해야 합니다.
 이번 작업에서는 저장소 보호 규칙을 변경하지 않았습니다.

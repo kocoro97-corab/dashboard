@@ -131,8 +131,9 @@ function doPost(e) {
     if(text.length>200000)return jsonResponse({success:false,message:'요청이 너무 큽니다.'});
     const body=JSON.parse(text);
     if(!body||Array.isArray(body)||typeof body!=='object')return jsonResponse({success:false,message:'잘못된 요청입니다.'});
+    if(typeof securityEnvironmentGuard_==='function')securityEnvironmentGuard_(body);
     const action=body.action;
-    if(action==='appVersion')return jsonResponse({success:true,version:'v10-security',securityVersion:1,features:['nhAccounts','externalHoldings','nhExternalQuotes','changePassword'],readOnly:true});
+    if(action==='appVersion')return jsonResponse(Object.assign({success:true,version:'v10-security',securityVersion:1,features:['nhAccounts','externalHoldings','nhExternalQuotes','changePassword'],readOnly:true},typeof securityEnvironmentMetadata_==='function'?securityEnvironmentMetadata_():{}));
     if(action==='login')return securityLogin_(body.user,body.pass);
     if(action==='register')return securityRegister_(body.user,body.pass);
     if(action==='logout'){deleteSession_(body.token);return jsonResponse({success:true})}

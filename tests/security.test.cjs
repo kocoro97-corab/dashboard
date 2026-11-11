@@ -104,3 +104,8 @@ test('proxy rejects untrusted hosts, userinfo, ports, backslashes, and control c
   for(const url of ['http://finance.daum.net/x','https://finance.daum.net.evil.test/x','https://finance.daum.net@evil.test/x','https://finance.daum.net:8443/x','https://finance.daum.net/\\evil','https://finance.daum.net/\nx'])assert.ok(b.ctx.doGet({parameter:{url}}).error);
   assert.equal(b.ctx.doGet({parameter:{url:'https://finance.daum.net/quotes'}}).allowed,true);
 });
+test('optional staging hooks leave default production metadata intact and can fail closed before login',()=>{
+  const b=fastBackend();assert.equal(b.post({action:'appVersion'}).testEnvironment,undefined);
+  b.ctx.securityEnvironmentGuard_=()=>{throw Error('staging binding failed')};
+  assert.equal(b.post({action:'login',user:'owner',pass:'old-pass'}).success,false);assert.equal(b.rows[1][1],'old-pass');
+});

@@ -26,3 +26,31 @@ jobs:
           .venv-browser/bin/python -m playwright install --with-deps chromium
       - name: Synthetic browser regression (no Google or NH secrets)
         run: .venv-browser/bin/python tests/browser_external.py
+  nh-staging-live:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.NH_STAGING_ENABLED == 'true'
+    needs: regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: nh-staging
+    concurrency:
+      group: nh-staging-live
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Explicitly isolated live NH and GAS checks
+        env:
+          NH_STAGING_URL: ${{ secrets.NH_STAGING_URL }}
+          NH_STAGING_SCRIPT_ID: ${{ secrets.NH_STAGING_SCRIPT_ID }}
+          NH_STAGING_SHEET_ID: ${{ secrets.NH_STAGING_SHEET_ID }}
+          NH_STAGING_USER: ${{ secrets.NH_STAGING_USER }}
+          NH_STAGING_PASSWORD: ${{ secrets.NH_STAGING_PASSWORD }}
+        run: python3 tools/nh_staging_test.py --allow-staging-write --report /tmp/nh-staging-report.json
+      - name: Safe staging result summary
+        if: always()
+        run: |
+          if test -f /tmp/nh-staging-report.json; then
+            python3 -c 'import os,pathlib;report=pathlib.Path("/tmp/nh-staging-report.json").read_text();open(os.environ["GITHUB_STEP_SUMMARY"],"a").write("## NH staging result\n\n```json\n"+report+"\n```\n")'
+          fi
