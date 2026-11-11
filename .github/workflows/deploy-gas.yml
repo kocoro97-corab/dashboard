@@ -22,8 +22,7 @@ jobs:
           persist-credentials: false
       - name: Test quote handling and deployment safeguards
         run: |
-          node tests/external-quotes.test.cjs
-          node tests/security.test.cjs
+          for file in tests/*.test.cjs; do node "$file" || exit 1; done
           python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Preserve private GAS files, replace Nhplug, and update the existing deployment
         env:

@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.clasprc.json
+.env
+node_modules/
+.venv*/
+test-results/

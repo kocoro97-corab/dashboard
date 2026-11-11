@@ -193,6 +193,9 @@ function clearAccountState(){
   if(typeof H!=='undefined')H.splice(0,H.length);
   ['hd','ps'].forEach(id=>{const el=$(id);if(el)el.replaceChildren()});
   localStorage.removeItem('invest_external_drive_folder');
+  if(typeof EXT_UNDO!=='undefined'){EXT_DRAFT_VERSION++;EXT_LOAD_RUN++;EXT_UNDO=[];EXT_SAVED_ROWS=[];EXT_SAVED_REV=null;EXT_HISTORY=[]}
+  ['externalHistory','externalQuoteDiagnostics'].forEach(id=>{const el=$(id);if(el)el.replaceChildren()});
+  window.EXT_LAST_QUOTE_DIAGNOSTICS={};
   window.EXT_LAST_QUOTE_ERRORS={};
 }
 function showPasswordChange(){

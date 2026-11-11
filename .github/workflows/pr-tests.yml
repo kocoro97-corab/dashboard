@@ -1,0 +1,28 @@
+name: PR regression tests
+on:
+  pull_request:
+  push:
+    branches: ['fix/**']
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Node regressions and GAS syntax
+        run: |
+          for file in tests/*.test.cjs; do node "$file" || exit 1; done
+          node -e "const fs=require('fs'),vm=require('vm');for(const dir of ['js','gas'])for(const name of fs.readdirSync(dir))if(/\.(js|gs)$/.test(name))new vm.Script(fs.readFileSync(dir+'/'+name,'utf8'),{filename:name})"
+      - name: Python storage/deployment/master regressions
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Install browser test dependency
+        run: |
+          python3 -m venv .venv-browser
+          .venv-browser/bin/python -m pip install playwright==1.56.0
+          .venv-browser/bin/python -m playwright install --with-deps chromium
+      - name: Synthetic browser regression (no Google or NH secrets)
+        run: .venv-browser/bin/python tests/browser_external.py

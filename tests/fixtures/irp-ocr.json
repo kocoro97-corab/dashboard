@@ -1,0 +1,276 @@
+{
+  "synthetic": true,
+  "description": "Synthetic OCR word boxes, not real account imagery. No private account identifiers.",
+  "accountType": "IRP",
+  "data": {
+    "text": "SYNTHETIC FIXTURE",
+    "words": [
+      {
+        "text": "계좌번호 SYNTHETIC ONLY",
+        "confidence": 97,
+        "bbox": {
+          "x0": 50,
+          "x1": 270,
+          "y0": 40,
+          "y1": 60
+        }
+      },
+      {
+        "text": "종목명",
+        "confidence": 97,
+        "bbox": {
+          "x0": 60,
+          "x1": 160,
+          "y0": 180,
+          "y1": 200
+        }
+      },
+      {
+        "text": "현재가",
+        "confidence": 97,
+        "bbox": {
+          "x0": 390,
+          "x1": 470,
+          "y0": 180,
+          "y1": 200
+        }
+      },
+      {
+        "text": "잔고수량",
+        "confidence": 97,
+        "bbox": {
+          "x0": 610,
+          "x1": 720,
+          "y0": 180,
+          "y1": 200
+        }
+      },
+      {
+        "text": "평균매입가",
+        "confidence": 97,
+        "bbox": {
+          "x0": 800,
+          "x1": 940,
+          "y0": 180,
+          "y1": 200
+        }
+      },
+      {
+        "text": "KODEX 200",
+        "confidence": 97,
+        "bbox": {
+          "x0": 50,
+          "x1": 158,
+          "y0": 250,
+          "y1": 270
+        }
+      },
+      {
+        "text": "100",
+        "confidence": 97,
+        "bbox": {
+          "x0": 400,
+          "x1": 450,
+          "y0": 250,
+          "y1": 270
+        }
+      },
+      {
+        "text": "101",
+        "confidence": 97,
+        "bbox": {
+          "x0": 650,
+          "x1": 690,
+          "y0": 250,
+          "y1": 270
+        }
+      },
+      {
+        "text": "20,100",
+        "confidence": 97,
+        "bbox": {
+          "x0": 840,
+          "x1": 930,
+          "y0": 250,
+          "y1": 270
+        }
+      },
+      {
+        "text": "현금",
+        "confidence": 97,
+        "bbox": {
+          "x0": 50,
+          "x1": 100,
+          "y0": 280,
+          "y1": 300
+        }
+      },
+      {
+        "text": "9999",
+        "confidence": 97,
+        "bbox": {
+          "x0": 650,
+          "x1": 690,
+          "y0": 280,
+          "y1": 300
+        }
+      },
+      {
+        "text": "0",
+        "confidence": 97,
+        "bbox": {
+          "x0": 840,
+          "x1": 870,
+          "y0": 280,
+          "y1": 300
+        }
+      },
+      {
+        "text": "RISE 머니마켓액티브",
+        "confidence": 97,
+        "bbox": {
+          "x0": 50,
+          "x1": 194,
+          "y0": 335,
+          "y1": 355
+        }
+      },
+      {
+        "text": "101",
+        "confidence": 97,
+        "bbox": {
+          "x0": 400,
+          "x1": 450,
+          "y0": 335,
+          "y1": 355
+        }
+      },
+      {
+        "text": "102",
+        "confidence": 97,
+        "bbox": {
+          "x0": 650,
+          "x1": 690,
+          "y0": 335,
+          "y1": 355
+        }
+      },
+      {
+        "text": "20,200",
+        "confidence": 97,
+        "bbox": {
+          "x0": 840,
+          "x1": 930,
+          "y0": 335,
+          "y1": 355
+        }
+      },
+      {
+        "text": "현금",
+        "confidence": 97,
+        "bbox": {
+          "x0": 50,
+          "x1": 100,
+          "y0": 365,
+          "y1": 385
+        }
+      },
+      {
+        "text": "9999",
+        "confidence": 97,
+        "bbox": {
+          "x0": 650,
+          "x1": 690,
+          "y0": 365,
+          "y1": 385
+        }
+      },
+      {
+        "text": "0",
+        "confidence": 97,
+        "bbox": {
+          "x0": 840,
+          "x1": 870,
+          "y0": 365,
+          "y1": 385
+        }
+      },
+      {
+        "text": "KODEX 200",
+        "confidence": 97,
+        "bbox": {
+          "x0": 50,
+          "x1": 158,
+          "y0": 420,
+          "y1": 440
+        }
+      },
+      {
+        "text": "101",
+        "confidence": 97,
+        "bbox": {
+          "x0": 650,
+          "x1": 690,
+          "y0": 420,
+          "y1": 440
+        }
+      },
+      {
+        "text": "20,100",
+        "confidence": 97,
+        "bbox": {
+          "x0": 840,
+          "x1": 930,
+          "y0": 420,
+          "y1": 440
+        }
+      },
+      {
+        "text": "일괄매도",
+        "confidence": 97,
+        "bbox": {
+          "x0": 50,
+          "x1": 170,
+          "y0": 1100,
+          "y1": 1120
+        }
+      },
+      {
+        "text": "999",
+        "confidence": 97,
+        "bbox": {
+          "x0": 650,
+          "x1": 700,
+          "y0": 1100,
+          "y1": 1120
+        }
+      },
+      {
+        "text": "888",
+        "confidence": 97,
+        "bbox": {
+          "x0": 840,
+          "x1": 890,
+          "y0": 1100,
+          "y1": 1120
+        }
+      }
+    ],
+    "width": 1000,
+    "height": 1200
+  },
+  "expected": [
+    {
+      "name": "KODEX 200",
+      "code": "069500",
+      "quantity": 101,
+      "avgPrice": 20100
+    },
+    {
+      "name": "RISE 머니마켓액티브",
+      "code": "455890",
+      "quantity": 102,
+      "avgPrice": 20200
+    }
+  ]
+}

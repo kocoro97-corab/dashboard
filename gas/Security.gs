@@ -119,7 +119,7 @@ function securityChangePassword_(token,current,password) {
 }
 function securitySafeHolding_(x) {
   return x&&typeof x==='object'&&['ISA','PENSION','IRP'].includes(x.accountType)&&
-    typeof x.code==='string'&&(!x.code||/^\d{6}$/.test(x.code))&&
+    typeof x.code==='string'&&(!x.code||/^[A-Z0-9]{6}$/.test(x.code))&&
     typeof x.name==='string'&&x.name.trim().length>0&&x.name.length<=60&&!/^[\s]*[=+@\-\t\r\n]/.test(x.name)&&
     typeof x.quantity==='number'&&Number.isFinite(x.quantity)&&x.quantity>=0&&
     typeof x.avgPrice==='number'&&Number.isFinite(x.avgPrice)&&x.avgPrice>=0&&
@@ -141,6 +141,9 @@ function doPost(e) {
     if(!session)return jsonResponse({success:false,message:'로그인이 필요합니다. 다시 로그인하세요.'});
     if(action==='sessionInfo')return jsonResponse({success:true,isAdmin:verifyAdmin(body.token),mustChangePassword:!!session.p});
     if(session.p)return jsonResponse({success:false,message:'12자 이상 비밀번호로 변경한 후 이용하세요.',mustChangePassword:true});
+    if(action==='externalHoldings')return handleExternalHoldingsV2(body.token);
+    if(action==='externalHistory')return handleExternalHistory(body.token);
+    if(action==='restoreExternalHoldings')return handleRestoreExternalHoldings(body.token,body.snapshotId,body.expectedRevision,body.confirmReplace);
     if(action==='nhAccounts'&&!verifyAdmin(body.token))return jsonResponse({success:false,message:'소유자 NH 계좌 잔고는 관리자만 조회할 수 있습니다.'});
     if(action==='protectedHoldings'){
       if(!verifyAdmin(body.token))return jsonResponse({success:false,message:'소유자 보유목록은 관리자만 조회할 수 있습니다.'});
@@ -148,7 +151,7 @@ function doPost(e) {
     }
     if(action==='saveExternalHoldings'){
       if(!Array.isArray(body.holdings)||body.holdings.length>150||!body.holdings.every(securitySafeHolding_)||/^[\s]*[=+@\-\t\r\n]/.test(session.u))return jsonResponse({success:false,message:'저장할 종목 형식이 올바르지 않습니다. 기존 자료는 유지됩니다.'});
-      return securityWithLock_(function(){return handleSaveExternalHoldings(body.token,body.holdings)});
+      return handleSaveExternalHoldingsV2(body.token,body.holdings,body.expectedRevision,body.confirmReplace);
     }
     return securityLegacyDoPost_(e);
   }catch(error){return jsonResponse({success:false,message:'요청을 처리하지 못했습니다. 입력값과 연결 상태를 확인하세요.'})}

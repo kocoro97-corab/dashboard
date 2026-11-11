@@ -18,7 +18,7 @@ function backend(){
     Utilities:{getUuid:()=>crypto.randomUUID(),newBlob:s=>({getBytes:()=>[...Buffer.from(s)]}),DigestAlgorithm:{SHA_256:'sha256'},computeDigest:(algorithm,s)=>[...crypto.createHash('sha256').update(s).digest()]},
     securityLegacyDoPost_:()=>{legacyCalls++;return {success:true}},securityLegacyDoGet_:()=>({allowed:true}),
     PROXY_ALLOWED_HOSTS:['finance.daum.net'],
-    handleSaveExternalHoldings:()=>{legacyCalls++;return {success:true}}
+    handleSaveExternalHoldingsV2:()=>{legacyCalls++;return {success:true}}
   });
   vm.runInContext(fs.readFileSync(path.join(root,'gas/SecurityKdf.gs'),'utf8'),ctx);
   vm.runInContext(fs.readFileSync(path.join(root,'gas/Security.gs'),'utf8'),ctx);
