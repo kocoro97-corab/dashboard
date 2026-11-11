@@ -6,6 +6,24 @@ let EXT_ASSETS=[];
 let EXT_PRICES={};
 let EXT_AUTO_TIMER=null;
 let EXT_PRICE_BUSY=false;
+let EXT_PRICE_PENDING=false;
+const EXT_NH_QUOTE_TTL_MS=5*60*1000;
+function extPositivePrice(v){
+  const text=String(v==null?'':v).replace(/[,\s]/g,'');
+  if(!/^\+?\d+(?:\.\d+)?$/.test(text))return null;
+  const n=Number(text);return Number.isFinite(n)&&n>0?n:null;
+}
+function extNHPrices(){
+  const prices={};
+  if(typeof NH_ACCOUNT_SESSION==='undefined'||NH_ACCOUNT_SESSION!==LS('invest_session_token'))return prices;
+  if(typeof NH_ACCOUNT_FETCHED_AT==='undefined'||!NH_ACCOUNT_FETCHED_AT||Date.now()-NH_ACCOUNT_FETCHED_AT>EXT_NH_QUOTE_TTL_MS)return prices;
+  if(typeof NH_ACCOUNTS==='undefined'||!Array.isArray(NH_ACCOUNTS))return prices;
+  NH_ACCOUNTS.forEach(a=>((a.domestic&&a.domestic.holdings)||[]).forEach(h=>{
+    const code=String(h.code||'').trim(),price=extPositivePrice(h.currentPrice);
+    if(/^\d{6}$/.test(code)&&price!=null)prices[code]={price,name:h.name,source:'NH 일반계좌',updatedAt:NH_ACCOUNT_UPDATED};
+  }));
+  return prices;
+}
 const EXT_TYPES={ISA:'ISA',PENSION:'연금저축',IRP:'IRP'};
 const extNum=v=>{if(v==null)return 0;const n=Number(String(v).replace(/[^0-9.-]/g,''));return Number.isFinite(n)?n:0};
 const extFmt=v=>Number(v||0).toLocaleString('ko-KR',{maximumFractionDigits:2});
@@ -16,7 +34,7 @@ async function extPost(action,extra={}){
   const j=JSON.parse(await r.text());if(!j.success)throw new Error(j.message||'요청 실패');return j;
 }
 async function loadExternalAssets(){
-  const st=$('externalStatus');try{const j=await extPost('externalHoldings');EXT_ASSETS=(Array.isArray(j.holdings)?j.holdings:[]).filter(x=>!(x.code==='485987'&&!extNum(x.quantity)&&!extNum(x.avgPrice)&&(!x.name||x.name==='--'))).filter(extIsRealHolding).map(x=>({...x,name:extNormalizeOcrName(x.name)}));extResolveCodes();renderExternalAssets();
+  const st=$('externalStatus');try{const j=await extPost('externalHoldings');EXT_ASSETS=Array.isArray(j.holdings)?j.holdings:[];extResolveCodes();renderExternalAssets();
     const cfg=LS('invest_external_settings')||{auto:false,minutes:10};$('externalDriveFolder').value=LS('invest_external_drive_folder')||'';$('externalAutoRefresh').checked=!!cfg.auto;$('externalAutoMinutes').value=String(cfg.minutes||10);applyExternalAutoRefresh();
     if(EXT_ASSETS.length){await refreshExternalPrices(true)}else if(st)st.textContent='외부계좌 종목 없음 · 이미지 업로드 또는 Drive 가져오기로 등록하세요.';
   }catch(e){if(st)st.textContent='외부계좌 자료 조회 실패 · '+e.message}
@@ -35,16 +53,28 @@ const EXT_KNOWN_CODES={'카카오':'035720','KCC글라스':'344820','씨앤투�
 const EXT_SCREEN_NAMES=new Set(['카카오','서호전기','크레버스','풍산','KCC글라스','씨앤투스','에스엔시스']);
 const EXT_SCREEN_BAD=new Set(['현금','신용','미수','대출','비용포함','평생우대','일괄매도','자산현황']);
 // 나무 잔고 화면의 '현금'은 매수구분, 종목이 아니다. OCR 오독 보정.
-const EXT_OCR_ALIASES={'KCC2atA':'KCC글라스','KCC2ATA':'KCC글라스','YHA':'크레버스','KCC2atA':'KCC글라스','KCC2ATA':'KCC글라스'};
+const EXT_OCR_ALIASES={'KCC2atA':'KCC글라스','KCC2ATA':'KCC글라스','YHA':'크레버스'};
 const EXT_OCR_BAD_NAMES=new Set(['현금','신용','미수','대출','YHA']);
 function extNormalizeOcrName(v){const n=extCleanName(v);return EXT_OCR_ALIASES[n]||n}
-function extIsRealHolding(x){const n=extNormalizeOcrName(x.name);return !!n&&!EXT_OCR_BAD_NAMES.has(n)&&!EXT_SCREEN_BAD.has(n)&&!/^\d+$/.test(n)&&!(/^[A-Za-z]{1,3}$/.test(n))}
+function extIsRealHolding(x){if(!x||typeof x!=='object')return false;const n=extNormalizeOcrName(x.name);return !!n&&!EXT_OCR_BAD_NAMES.has(n)&&!EXT_SCREEN_BAD.has(n)&&!/^\d+$/.test(n)&&!(/^[A-Za-z]{1,3}$/.test(n))}
 function extResolveCodes(){
  const map={...EXT_KNOWN_CODES};
  if(typeof NH_ACCOUNTS!=='undefined'&&Array.isArray(NH_ACCOUNTS))NH_ACCOUNTS.forEach(a=>['domestic'].forEach(k=>((a[k]&&a[k].holdings)||[]).forEach(h=>{const n=extNormalizeOcrName(h.name),c=String(h.code||'');if(n&&/^\d{6}$/.test(c))map[n]=c})));
- let changed=false;EXT_ASSETS=EXT_ASSETS.filter(extIsRealHolding).map(x=>{const name=extNormalizeOcrName(x.name),code=String(x.code||'');if(!/^\d{6}$/.test(code)&&map[name]){changed=true;return {...x,name,code:map[name]}}return {...x,name}});return changed;
+ let changed=false;
+ const clean=EXT_ASSETS.filter(extIsRealHolding).map(x=>{
+   const name=extNormalizeOcrName(x.name),oldCode=String(x.code||'').trim();
+   const code=/^\d{6}$/.test(oldCode)?oldCode:(map[name]||oldCode);
+   if(name!==x.name||code!==String(x.code||''))changed=true;
+   return {...x,name,code};
+ });
+ changed=changed||clean.length!==EXT_ASSETS.length;EXT_ASSETS=clean;
+ if(changed)showExternalSaveButton();return changed;
 }
-function extSyncWithNH(){if(extResolveCodes()){renderExternalAssets();showExternalSaveButton()}if(EXT_ASSETS.some(x=>/^\d{6}$/.test(String(x.code||''))))refreshExternalPrices(true)}
+function extSyncWithNH(){
+  extResolveCodes();renderExternalAssets();
+  if(EXT_PRICE_BUSY){EXT_PRICE_PENDING=true;return}
+  if(EXT_ASSETS.some(x=>/^\d{6}$/.test(String(x.code||''))))refreshExternalPrices(true);
+}
 
 const EXT_OCR_STOP=/^(현금|종목명|구분|주식잔고|매입금액|평가금액|총자산|평가손익|수익률|매입가|현재가|잔고수량|일괄매도|자산현황|비용포함|예수금|종목코드|국내잔고|평생우대|계좌|주식잔고손익|매매손익|평가손익률|순자산|총자산|원|KRW)$/;
 function extCleanName(t){return String(t||'').replace(/\s+/g,'').replace(/^[•·\-]+|[•·\-]+$/g,'').replace(/[^가-힣A-Za-z0-9&+._-]/g,'').slice(0,60)}
@@ -93,7 +123,7 @@ function parseExternalOcr(data,accountType){
 }
 function showOcrReview(texts){
   let el=$('externalOcrReview');if(!el){el=document.createElement('div');el.id='externalOcrReview';$('externalOcrProgress').after(el)}
-  el.innerHTML='<div class="mini" style="margin:8px 0">인식된 원문을 확인하세요. 종목코드 없는 캡처도 후보를 추출합니다. 종목명·수량·평단가를 확인하고 코드가 빈 종목은 직접 입력하세요.</div><textarea id="externalOcrRaw" rows="7" style="width:100%;box-sizing:border-box" readonly></textarea>';
+  el.innerHTML='<details><summary style="cursor:pointer;margin:8px 0">OCR 원문 보기</summary><div class="mini" style="margin:8px 0">종목명·수량·평균매입가를 확인하세요. 코드가 빈 종목은 직접 입력할 수 있습니다.</div><textarea id="externalOcrRaw" rows="7" style="width:100%;box-sizing:border-box" readonly></textarea></details>';
   $('externalOcrRaw').value=texts.join('\n\n----- 이미지 구분 -----\n\n').slice(0,18000);
 }
 
@@ -122,10 +152,10 @@ function renderExternalAssets(){
   const tb=$('externalAssetRows'),cards=$('externalSummaryCards');if(!tb||!cards)return;
   if(!EXT_ASSETS.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center">등록된 외부계좌 종목이 없습니다.</td></tr>';cards.innerHTML='';return}
   const totals={ISA:{eval:0,cost:0,count:0,priced:0},PENSION:{eval:0,cost:0,count:0,priced:0},IRP:{eval:0,cost:0,count:0,priced:0}};
-  tb.innerHTML=EXT_ASSETS.map((x,i)=>{const q=extNum(x.quantity),a=extNum(x.avgPrice),raw=EXT_PRICES[x.code]&&EXT_PRICES[x.code].price,p=raw==null?null:extNum(raw),evalAmt=p==null?0:p*q,cost=q*a,pl=p==null?null:evalAmt-cost;const t=totals[x.accountType]||totals.ISA;t.eval+=evalAmt;if(p!=null){t.cost+=cost;t.priced++}t.count++;
-    return `<tr><td>${EXT_TYPES[x.accountType]||extEsc(x.accountType)}</td><td><input class="external-edit" style="min-width:100px" value="${extEsc(x.name)}" onchange="editExternalText(${i},'name',this.value)"></td><td><input class="external-edit" style="width:92px" maxlength="6" value="${extEsc(x.code)}" placeholder="코드 확인" onchange="editExternalText(${i},'code',this.value)"></td><td><input class="external-edit" type="number" min="0" step="any" value="${q}" onchange="editExternal(${i},'quantity',this.value)"></td><td><input class="external-edit" type="number" min="0" step="any" value="${a}" onchange="editExternal(${i},'avgPrice',this.value)"></td><td>${p==null?'<span class="external-pending">조회 대기</span>':extFmt(p)}</td><td>${p==null?'—':extFmt(evalAmt)}</td><td class="${pl==null?'neutral':pl>=0?'up':'down'}">${pl==null?'—':extFmt(pl)}</td><td><button onclick="removeExternal(${i})">삭제</button></td></tr>`;
+  tb.innerHTML=EXT_ASSETS.map((x,i)=>{const q=extNum(x.quantity),a=extNum(x.avgPrice),raw=EXT_PRICES[x.code]&&EXT_PRICES[x.code].price,p=extPositivePrice(raw),evalAmt=p==null?0:p*q,cost=q*a,pl=p==null?null:evalAmt-cost;const t=totals[x.accountType]||totals.ISA;t.eval+=evalAmt;if(p!=null){t.cost+=cost;t.priced++}t.count++;
+    return `<tr><td>${EXT_TYPES[x.accountType]||extEsc(x.accountType)}</td><td><input class="external-edit" style="min-width:100px" value="${extEsc(x.name)}" onchange="editExternalText(${i},'name',this.value)"></td><td><input class="external-edit" style="width:92px" maxlength="6" value="${extEsc(x.code)}" placeholder="코드 확인" onchange="editExternalText(${i},'code',this.value)"></td><td><input class="external-edit" type="number" min="0" step="any" value="${q}" onchange="editExternal(${i},'quantity',this.value)"></td><td><input class="external-edit" type="number" min="0" step="any" value="${a}" onchange="editExternal(${i},'avgPrice',this.value)"></td><td>${p==null?'<span class="external-pending">시세 미확인</span>':extFmt(p)}</td><td>${p==null?'—':extFmt(evalAmt)}</td><td class="${pl==null?'neutral':pl>=0?'up':'down'}">${pl==null?'—':extFmt(pl)}</td><td><button onclick="removeExternal(${i})">삭제</button></td></tr>`;
   }).join('');
-  let html=Object.keys(totals).map(k=>{const t=totals[k],pl=t.eval-t.cost;return `<div class="card"><div class="cl"><b>${EXT_TYPES[k]}</b><span>${t.count}종목 · 시세 ${t.priced}/${t.count}</span></div><div class="value">${t.priced?extFmt(t.eval):'—'}<span class="mini">원 평가금액</span></div><div class="change ${pl>=0?'up':'down'}">평가손익 ${t.priced?extFmt(pl)+'원':'시세 미확인'}</div></div>`}).join('');
+  let html=Object.keys(totals).map(k=>{const t=totals[k],pl=t.eval-t.cost;return `<div class="card"><div class="cl"><b>${EXT_TYPES[k]}</b><span>${t.count}종목 · 시세 ${t.priced}/${t.count}</span></div><div class="value">${t.priced?extFmt(t.eval):'—'}<span class="mini">원 평가금액</span></div><div class="change ${pl>=0?'up':'down'}">평가손익 ${t.priced?extFmt(pl)+'원':'시세 미확인'}</div>${t.priced<t.count?'<div class="mini">부분 합계 · 미조회 종목 제외</div>':''}</div>`}).join('');
   const nh={eval:0,profit:0,count:0};
   (typeof NH_ACCOUNTS!=='undefined' && Array.isArray(NH_ACCOUNTS)?NH_ACCOUNTS:[]).forEach(a=>['domestic','overseas'].forEach(k=>{const d=a[k];if(!d)return;const sm=d.summary||{},hs=d.holdings||[];const holdingEval=hs.reduce((v,h)=>v+extNum(h.evalAmount),0),holdingProfit=hs.reduce((v,h)=>v+extNum(h.profit),0);nh.eval+=extNum(sm.evalAmount)>0?extNum(sm.evalAmount):holdingEval;nh.profit+=extNum(sm.profit)!==0?extNum(sm.profit):holdingProfit;nh.count+=hs.length}));
   const extEval=Object.values(totals).reduce((v,t)=>v+t.eval,0),extProfit=Object.values(totals).reduce((v,t)=>v+t.eval-t.cost,0),extCount=Object.values(totals).reduce((v,t)=>v+t.count,0),extPriced=Object.values(totals).reduce((v,t)=>v+t.priced,0);
@@ -142,10 +172,41 @@ async function saveExternalAssets(){
   }catch(e){$('externalStatus').textContent='저장 실패 · '+e.message}
 }
 async function refreshExternalPrices(silent){
-  extResolveCodes();if(EXT_PRICE_BUSY)return;EXT_PRICE_BUSY=true;const st=$('externalStatus');try{
-    if(!EXT_ASSETS.length){if(!silent&&st)st.textContent='조회할 외부계좌 종목이 없습니다.';return}
-    const codes=[...new Set(EXT_ASSETS.map(x=>String(x.code||'')).filter(x=>/^\d{6}$/.test(x)))];if(!codes.length){renderExternalAssets();if(st)st.textContent='종목은 저장되어 있습니다. 현재가 조회를 위해 종목코드를 입력하세요.';return;}
-    if(st)st.textContent='NH PLUG 국내주식·ETF 현재가 조회 중...';let got=0,errors=0;for(let i=0;i<codes.length;i+=40){const j=await extPost('nhExternalQuotes',{codes:codes.slice(i,i+40)});EXT_PRICES={...EXT_PRICES,...(j.prices||{})};got+=Object.keys(j.prices||{}).length;errors+=Object.keys(j.errors||{}).length; if(j.errors&&Object.keys(j.errors).length)window.EXT_LAST_QUOTE_ERRORS=j.errors;}renderExternalAssets();
-    if(st)st.textContent='NH 현재가 갱신 '+new Date().toLocaleString('ko-KR')+' · '+got+'/'+codes.length+'종목'+(errors?' · 조회 실패 '+errors+'종목 · '+String(Object.values(window.EXT_LAST_QUOTE_ERRORS||{})[0]||'').slice(0,100):'');
-  }catch(e){if(st)st.textContent='현재가 조회 실패 · '+e.message}finally{EXT_PRICE_BUSY=false}
+  extResolveCodes();if(EXT_PRICE_BUSY)return;EXT_PRICE_BUSY=true;
+  const st=$('externalStatus');
+  try{
+    window.EXT_LAST_QUOTE_ERRORS={};
+    if(!EXT_ASSETS.length){renderExternalAssets();if(!silent&&st)st.textContent='조회할 외부계좌 종목이 없습니다.';return}
+    const codes=[...new Set(EXT_ASSETS.map(x=>String(x.code||'')).filter(x=>/^\d{6}$/.test(x)))];
+    // 이번 조회에 실패한 종목이 지난 가격으로 합산되지 않도록 새 결과만 사용한다.
+    EXT_PRICES={};const nhPrices=extNHPrices();let reused=0;
+    codes.forEach(code=>{if(nhPrices[code]){EXT_PRICES[code]=nhPrices[code];reused++}});
+    renderExternalAssets();
+    if(!codes.length){if(st)st.textContent='현재가 조회를 위해 종목코드를 입력하세요. 미확인 종목은 합계에서 제외됩니다.';return}
+    if(st)st.textContent='NH 국내주식·ETF 현재가 조회 중...';
+    const pending=codes.filter(code=>!EXT_PRICES[code]);
+    for(let i=0;i<pending.length;i+=40){
+      const batch=pending.slice(i,i+40);
+      try{
+        const j=await extPost('nhExternalQuotes',{codes:batch});
+        batch.forEach(code=>{
+          const quote=j.prices&&j.prices[code],price=extPositivePrice(quote&&quote.price);
+          if(price!=null&&!(j.errors&&j.errors[code]))EXT_PRICES[code]={...quote,price,source:'NH 현재가'};
+          else window.EXT_LAST_QUOTE_ERRORS[code]=(j.errors&&j.errors[code])||'현재가 응답 없음';
+        });
+      }catch(e){batch.forEach(code=>{window.EXT_LAST_QUOTE_ERRORS[code]=e.message||'연결 실패'})}
+    }
+    renderExternalAssets();
+    const got=codes.filter(code=>EXT_PRICES[code]).length,errors=Object.keys(window.EXT_LAST_QUOTE_ERRORS).length;
+    const missing=EXT_ASSETS.filter(x=>!/^\d{6}$/.test(String(x.code||''))).length;
+    if(st)st.textContent='현재가 확인 '+got+'/'+codes.length+'종목 · NH 일반계좌 재사용 '+reused+'종목'+
+      (reused?' (최근 5분 내 조회)':'')+(pending.length?' · 시세 조회 '+(got-reused)+'종목':'')+
+      (missing?' · 코드 미확인 '+missing+'행':'')+
+      (errors?' · 조회 실패 '+errors+'종목 · '+String(Object.values(window.EXT_LAST_QUOTE_ERRORS)[0]).slice(0,160):'')+
+      ' · '+new Date().toLocaleString('ko-KR');
+  }catch(e){if(st)st.textContent='현재가 조회 실패 · '+e.message}
+  finally{
+    EXT_PRICE_BUSY=false;
+    if(EXT_PRICE_PENDING){EXT_PRICE_PENDING=false;refreshExternalPrices(true)}
+  }
 }

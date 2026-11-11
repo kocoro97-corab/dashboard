@@ -3,8 +3,10 @@ const $=id=>document.getElementById(id);
 const LS=(k,v)=>{try{if(v===undefined){const r=localStorage.getItem(k);return r?JSON.parse(r):null}localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}};
 
 // ★ 여기에 정상 동작이 확인된 Apps Script 웹 앱 주소(/exec)를 넣으세요
-const DEFAULT_GAS_URL="https://script.google.com/macros/s/AKfycbyXiFgORGm3hHKulInKXUGkAgmhvM0H9WbDp9eClLpTdAFRMkuYH14D2ERQpgMVVHBc/exec"
-const MYP=()=>String(LS('invest_myproxy')||DEFAULT_GAS_URL).trim();
+const DEFAULT_GAS_URL="https://script.google.com/macros/s/AKfycbxySfUKUai418Ar7C8RI6gwBJpjSZXH4y8EX2JhJZG9nGz7RVB0WCZGl3H1wHxOWGVd/exec";
+const LEGACY_GAS_URL="https://script.google.com/macros/s/AKfycbyXiFgORGm3hHKulInKXUGkAgmhvM0H9WbDp9eClLpTdAFRMkuYH14D2ERQpgMVVHBc/exec";
+// 이전 기본 주소만 전환하고 사용자가 지정한 다른 주소는 유지한다.
+const MYP=()=>{const saved=String(LS('invest_myproxy')||'').trim();return saved&&saved!==LEGACY_GAS_URL?saved:DEFAULT_GAS_URL};
 // 로그인·가입·관리자 요청은 POST 본문으로 전송 (비밀번호·토큰이 주소·브라우저 기록·콘솔 오류에 남지 않게). text/plain이라 CORS 사전 요청 없음
 const post=payload=>fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
 
@@ -155,3 +157,4 @@ function enterDashboard(isAdmin){
   if(isAdmin)$('adminBtn').style.display='inline-block';
   if(typeof initDashboard==='function')initDashboard();
 }
+

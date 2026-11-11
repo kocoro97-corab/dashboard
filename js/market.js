@@ -297,6 +297,8 @@ async function loadNHAccounts(){
     }
     NH_ACCOUNTS=(Array.isArray(data.accounts)?data.accounts:[]).filter(a=>['domestic','overseas'].some(k=>Array.isArray(a[k]&&a[k].holdings)&&a[k].holdings.length>0));
     NH_ACCOUNT_UPDATED=data.updatedAt||'';
+    NH_ACCOUNT_FETCHED_AT=Date.now();
+    NH_ACCOUNT_SESSION=tk;
     renderNHAccounts();
     if(typeof extSyncWithNH==='function')extSyncWithNH();
     const count=NH_ACCOUNTS.length;
@@ -305,6 +307,8 @@ async function loadNHAccounts(){
   finally{NH_ACCOUNT_BUSY=false;if(btn){btn.disabled=false;btn.textContent='↻ 계좌 잔고 조회'}}
 }
 let NH_ACCOUNT_UPDATED='';
+let NH_ACCOUNT_FETCHED_AT=0;
+let NH_ACCOUNT_SESSION='';
 function renderNHAccounts(){
   const cards=$('nhAccountCards'),tbody=$('nhAccountRows');if(!cards||!tbody)return;
   if(!NH_ACCOUNTS.length){cards.innerHTML='';tbody.innerHTML='<tr><td colspan="10" style="text-align:center">조회된 일반계좌가 없습니다.</td></tr>';if(typeof renderExternalAssets==='function')renderExternalAssets();return}
@@ -326,3 +330,4 @@ function renderNHAccounts(){
 }
 
 function clock(){const n=new Date(),p=v=>String(v).padStart(2,'0');$('clock').textContent=`${n.getMonth()+1}.${n.getDate()} ${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())} KST`}
+
