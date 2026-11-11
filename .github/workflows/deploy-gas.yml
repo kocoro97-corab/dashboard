@@ -1,0 +1,32 @@
+name: Deploy verified Nhplug to Google Apps Script
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gas-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the approved source revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Test quote handling and deployment safeguards
+        run: |
+          node tests/external-quotes.test.cjs
+          python3 -m unittest discover -s tests -p 'test_deploy_gas.py'
+      - name: Preserve private GAS files, replace Nhplug, and update the existing deployment
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          GAS_SCRIPT_ID: 1WwqTZuH36L3sYdwmz8POXLmW-1Xw4oC4AGkFPSeueaEVBMB31ua_CkYL
+          GAS_DEPLOYMENT_ID: AKfycbxySfUKUai418Ar7C8RI6gwBJpjSZXH4y8EX2JhJZG9nGz7RVB0WCZGl3H1wHxOWGVd
+        run: python3 tools/deploy_gas.py
