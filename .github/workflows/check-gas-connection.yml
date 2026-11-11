@@ -1,0 +1,85 @@
+name: Check Google Apps Script connection
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      GAS_SCRIPT_ID: 1WwqTZuH36L3sYdwmz8POXLmW-1Xw4oC4AGkFPSeueaEVBMB31ua_CkYL
+      GAS_DEPLOYMENT_ID: AKfycbxySfUKUai418Ar7C8RI6gwBJpjSZXH4y8EX2JhJZG9nGz7RVB0WCZGl3H1wHxOWGVd
+    steps:
+      - name: Verify Google authorization, source access, and deployment
+        shell: python
+        run: |
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          
+          def fail(message):
+              print("::error::" + message)
+              sys.exit(1)
+          
+          raw = os.environ.get("CLASPRC_JSON", "")
+          if not raw:
+              fail("Add the CLASPRC_JSON repository Actions secret after Google OAuth authorization.")
+          try:
+              config = json.loads(raw)
+          except ValueError:
+              fail("CLASPRC_JSON must contain valid clasp authorization JSON.")
+          credentials = config.get("tokens", {}).get("default", {})
+          if not credentials and config.get("token") and config.get("oauth2ClientSettings"):
+              settings = config["oauth2ClientSettings"]
+              credentials = dict(config["token"], client_id=settings.get("clientId"),
+                                 client_secret=settings.get("clientSecret"))
+          fields = ("client_id", "client_secret", "refresh_token")
+          if not all(isinstance(credentials.get(k), str) and credentials[k] for k in fields):
+              fail("The clasp authorization JSON is missing OAuth client credentials or refresh token.")
+          for key in ("client_secret", "refresh_token"):
+              value = credentials[key].replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              print("::add-mask::" + value)
+          
+          def request_json(url, data=None, token=None):
+              headers = {"Accept": "application/json"}
+              if token:
+                  headers["Authorization"] = "Bearer " + token
+              if data is not None:
+                  headers["Content-Type"] = "application/x-www-form-urlencoded"
+                  data = urllib.parse.urlencode(data).encode()
+              req = urllib.request.Request(url, data=data, headers=headers)
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as response:
+                      return json.load(response)
+              except urllib.error.HTTPError as error:
+                  # Never echo Google response bodies or credential-bearing requests.
+                  fail("Google API returned HTTP " + str(error.code) +
+                       ". Check OAuth authorization, the Apps Script API setting, and project access.")
+              except (urllib.error.URLError, ValueError, TimeoutError):
+                  fail("Google API connection or JSON response failed. No source changes were made.")
+          
+          auth = request_json("https://oauth2.googleapis.com/token",
+                              dict((key, credentials[key]) for key in fields) |
+                              {"grant_type": "refresh_token"})
+          token = auth.get("access_token")
+          if not token:
+              fail("Google did not return an access token.")
+          print("::add-mask::" + token)
+          base = "https://script.googleapis.com/v1/projects/" + os.environ["GAS_SCRIPT_ID"]
+          content = request_json(base + "/content", token=token)
+          files = content.get("files")
+          if not isinstance(files, list) or not files:
+              fail("The script source response contains no files.")
+          print("Script source read: OK (" + str(len(files)) + " files)")
+          deployment = request_json(base + "/deployments/" + os.environ["GAS_DEPLOYMENT_ID"], token=token)
+          if deployment.get("deploymentId") != os.environ["GAS_DEPLOYMENT_ID"]:
+              fail("The deployment ID does not match this script project.")
+          print("Deployment match: OK")
+          print("Connection check passed. No Apps Script source or deployment was changed.")
