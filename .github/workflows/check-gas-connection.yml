@@ -14,7 +14,7 @@ jobs:
       GAS_SCRIPT_ID: 1WwqTZuH36L3sYdwmz8POXLmW-1Xw4oC4AGkFPSeueaEVBMB31ua_CkYL
       GAS_DEPLOYMENT_ID: AKfycbxySfUKUai418Ar7C8RI6gwBJpjSZXH4y8EX2JhJZG9nGz7RVB0WCZGl3H1wHxOWGVd
     steps:
-      - name: Verify Google authorization, source access, and deployment
+      - name: Verify Google authorization, project metadata, and deployment
         shell: python
         run: |
           import json
@@ -73,11 +73,11 @@ jobs:
               fail("Google did not return an access token.")
           print("::add-mask::" + token)
           base = "https://script.googleapis.com/v1/projects/" + os.environ["GAS_SCRIPT_ID"]
-          content = request_json(base + "/content", token=token)
-          files = content.get("files")
-          if not isinstance(files, list) or not files:
-              fail("The script source response contains no files.")
-          print("Script source read: OK (" + str(len(files)) + " files)")
+          # Metadata only: never request /content or retrieve script source.
+          project = request_json(base, token=token)
+          if project.get("scriptId") != os.environ["GAS_SCRIPT_ID"]:
+              fail("The project metadata does not match the script ID.")
+          print("Project metadata access: OK")
           deployment = request_json(base + "/deployments/" + os.environ["GAS_DEPLOYMENT_ID"], token=token)
           if deployment.get("deploymentId") != os.environ["GAS_DEPLOYMENT_ID"]:
               fail("The deployment ID does not match this script project.")
