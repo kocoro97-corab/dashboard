@@ -189,16 +189,17 @@ function renderCards(){
 function manIn(id){const v=prompt('값을 입력하세요',MAN[id]||'');if(v===null)return;MAN[id]=v;LS('invest_man',MAN);renderCards()}
 
 function renderHoldings(){
+  if(!$('af')||!$('hd')||!$('ps'))return;
   const f=$('af').value,rows=H.filter(r=>f==='all'||r[0]===f);
   const calc=r=>{const q=Q[r[7]];if(!q)return{cur:r[4],pl:r[5],rt:r[6],live:0};return{cur:q.p,pl:(q.p-r[3])*r[2],rt:(q.p/r[3]-1)*100,live:1}};
   $('hd').innerHTML=rows.map(r=>{
     const k=calc(r),cl=v=>v==null?'':v>=0?'up':'down';
-    return `<tr><td>${r[0]}</td><td class="name" ${r[7]?`onclick="showH(${H.indexOf(r)})"`:''}>${r[1]}</td><td>${nf(r[2])}</td><td>${nf(r[3])}</td><td>${nf(k.cur)}${k.live?' <span class="up">●</span> <span class="mini" style="font-size:8px;opacity:.7">'+srcTag(r[7])+'</span>':' <span class="mini" style="font-size:8px;opacity:.7">기준</span>'}</td><td class="${cl(k.pl)}">${nf(k.pl,0)}</td><td class="${cl(k.rt)}">${k.rt==null?'—':k.rt.toFixed(2)+'%'}</td></tr>`
+    return `<tr><td>${esc(r[0])}</td><td class="name" ${r[7]?`onclick="showH(${H.indexOf(r)})"`:''}>${esc(r[1])}</td><td>${nf(r[2])}</td><td>${nf(r[3])}</td><td>${nf(k.cur)}${k.live?' <span class="up">●</span> <span class="mini" style="font-size:8px;opacity:.7">'+srcTag(r[7])+'</span>':' <span class="mini" style="font-size:8px;opacity:.7">기준</span>'}</td><td class="${cl(k.pl)}">${nf(k.pl,0)}</td><td class="${cl(k.rt)}">${k.rt==null?'—':k.rt.toFixed(2)+'%'}</td></tr>`
   }).join('');
   const accs=[...new Set(rows.map(r=>r[0]))];
   $('ps').innerHTML=accs.map(a=>{
     const rs=H.filter(r=>r[0]===a),tot=rs.reduce((s,r)=>s+(calc(r).pl||0),0),us=a==='해외주식';
-    return `<div class="card"><div class="cl"><span>${a}</span><span>${rs.length}개 종목</span></div><div class="value ${tot>=0?'up':'down'}" style="font-size:14px">${nf(tot,us?2:0)}${us?' $':' 원'}</div><div class="mini">평가손익 합계</div></div>`
+    return `<div class="card"><div class="cl"><span>${esc(a)}</span><span>${rs.length}개 종목</span></div><div class="value ${tot>=0?'up':'down'}" style="font-size:14px">${nf(tot,us?2:0)}${us?' $':' 원'}</div><div class="mini">평가손익 합계</div></div>`
   }).join('')
 }
 
@@ -251,7 +252,7 @@ async function loadNews(){
   const renderN=(list,el,stEl)=>{
     const m={};list.forEach(a=>{const k=a.t.replace(/\s-\s[^-]+$/,'');if(!m[k]||a.d>m[k].d)m[k]={t:k,l:a.l,s:a.s,d:a.d}});
     const arr=Object.values(m).sort((a,b)=>b.d-a.d).slice(0,6);
-    $(el).innerHTML=arr.length?arr.map(a=>`<div class="news"><strong><a href="${a.l}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${esc(a.t)}</a></strong><span class="mini">${esc(a.s)} · ${ago(a.d)}</span></div>`).join(''):'<div class="mini">기사 없음</div>';
+    $(el).innerHTML=arr.length?arr.map(a=>`<div class="news"><strong><a href="${escA(/^https:\/\//i.test(String(a.l))?a.l:'#')}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${esc(a.t)}</a></strong><span class="mini">${esc(a.s)} · ${ago(a.d)}</span></div>`).join(''):'<div class="mini">기사 없음</div>';
     $(stEl).textContent=arr.length?arr.length+'건':'없음';
   };
   renderN(mks,'nl_mk','nst_mk');renderN(hds,'nl_hd','nst_hd');
@@ -278,10 +279,11 @@ function saveSettings(){LS('invest_cfg_v4',CFG);renderCards();closeModal();refre
 // ----- NH 나무 일반계좌 잔고 조회(조회 전용) -----
 let NH_ACCOUNTS = [];
 let NH_ACCOUNT_BUSY = false;
+let NH_ACCOUNT_RUN=0;
 const nhMoney = v => v==null ? '—' : Number(v).toLocaleString('ko-KR',{maximumFractionDigits:2});
 const nhSafe = v => String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function loadNHAccounts(){
-  if(NH_ACCOUNT_BUSY)return;NH_ACCOUNT_BUSY=true;
+  if(NH_ACCOUNT_BUSY)return;NH_ACCOUNT_BUSY=true;const run=++NH_ACCOUNT_RUN;
   const btn=$('nhAccountBtn'),st=$('nhAccountStatus');
   if(btn){btn.disabled=true;btn.textContent='조회 중...'}
   if(st)st.textContent='NH 일반계좌 및 국내·해외 잔고 조회 중...';
@@ -290,6 +292,7 @@ async function loadNHAccounts(){
     if(!tk)throw new Error('로그인이 필요합니다.');
     const res=await fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'nhAccounts',token:tk})});
     const data=JSON.parse(await res.text());
+    if(run!==NH_ACCOUNT_RUN||tk!==LS('invest_session_token'))return;
     if(!data.success){
       const msg=String(data.message||'계좌 조회 실패');
       if(/잘못된 요청/.test(msg))throw new Error('GAS 배포 버전 불일치 가능성: Apps Script Code.gs·Nhplug.gs를 확인하고 새 버전 배포 후 접속 URL을 확인하세요.');
@@ -303,8 +306,8 @@ async function loadNHAccounts(){
     if(typeof extSyncWithNH==='function')extSyncWithNH();
     const count=NH_ACCOUNTS.length;
     if(st)st.textContent='조회 '+(NH_ACCOUNT_UPDATED||hms(new Date()))+' · 일반계좌 '+count+'개 · 모의계좌 제외';
-  }catch(e){if(st)st.textContent='조회 실패(기존 조회값 유지) · '+String(e.message||e).slice(0,240);if(typeof renderExternalAssets==='function')renderExternalAssets()}
-  finally{NH_ACCOUNT_BUSY=false;if(btn){btn.disabled=false;btn.textContent='↻ 계좌 잔고 조회'}}
+  }catch(e){if(run!==NH_ACCOUNT_RUN)return;if(st)st.textContent='조회 실패(기존 조회값 유지) · '+String(e.message||e).slice(0,240);if(typeof renderExternalAssets==='function')renderExternalAssets()}
+  finally{if(run===NH_ACCOUNT_RUN){NH_ACCOUNT_BUSY=false;if(btn){btn.disabled=false;btn.textContent='↻ 계좌 잔고 조회'}}}
 }
 let NH_ACCOUNT_UPDATED='';
 let NH_ACCOUNT_FETCHED_AT=0;

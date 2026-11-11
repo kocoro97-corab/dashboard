@@ -127,7 +127,7 @@ test('NH completion during a quote request queues one refresh and reuses its res
   assert.equal(f.run("EXT_PRICES['035720'].price"),100);
   assert.equal(f.run('EXT_PRICE_BUSY'),false);
 });
-test('only the former default endpoint is migrated; custom URLs remain',()=>{
+test('legacy and untrusted endpoints migrate; valid Google web app URLs remain',()=>{
   const storage={};const ctx=vm.createContext({document:{readyState:'loading',addEventListener(){}},localStorage:{getItem:k=>storage[k]||null}});
   vm.runInContext(source('js/auth.js'),ctx);
   const target=vm.runInContext('DEFAULT_GAS_URL',ctx);
@@ -136,5 +136,7 @@ test('only the former default endpoint is migrated; custom URLs remain',()=>{
   storage.invest_myproxy=JSON.stringify(vm.runInContext('LEGACY_GAS_URL',ctx));
   assert.equal(vm.runInContext('MYP()',ctx),target);
   storage.invest_myproxy=JSON.stringify('https://example.com/custom');
-  assert.equal(vm.runInContext('MYP()',ctx),'https://example.com/custom');
+  assert.equal(vm.runInContext('MYP()',ctx),target);
+  storage.invest_myproxy=JSON.stringify('https://script.google.com/macros/s/test-custom/exec');
+  assert.equal(vm.runInContext('MYP()',ctx),'https://script.google.com/macros/s/test-custom/exec');
 });

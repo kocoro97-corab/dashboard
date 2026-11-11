@@ -7,6 +7,7 @@ let EXT_PRICES={};
 let EXT_AUTO_TIMER=null;
 let EXT_PRICE_BUSY=false;
 let EXT_PRICE_PENDING=false;
+let EXT_RUN_ID=0;
 const EXT_NH_QUOTE_TTL_MS=5*60*1000;
 function extPositivePrice(v){
   const text=String(v==null?'':v).replace(/[,\s]/g,'');
@@ -31,13 +32,13 @@ const extEsc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 async function extPost(action,extra={}){
   const token=LS('invest_session_token');if(!token)throw new Error('로그인이 필요합니다.');
   const r=await fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,token,...extra})});
-  const j=JSON.parse(await r.text());if(!j.success)throw new Error(j.message||'요청 실패');return j;
+  const j=JSON.parse(await r.text());if(token!==LS('invest_session_token')){const error=new Error('세션이 변경됐습니다.');error.name='StaleSession';throw error}if(!j.success)throw new Error(j.message||'요청 실패');return j;
 }
 async function loadExternalAssets(){
   const st=$('externalStatus');try{const j=await extPost('externalHoldings');EXT_ASSETS=Array.isArray(j.holdings)?j.holdings:[];extResolveCodes();renderExternalAssets();
     const cfg=LS('invest_external_settings')||{auto:false,minutes:10};$('externalDriveFolder').value=LS('invest_external_drive_folder')||'';$('externalAutoRefresh').checked=!!cfg.auto;$('externalAutoMinutes').value=String(cfg.minutes||10);applyExternalAutoRefresh();
     if(EXT_ASSETS.length){await refreshExternalPrices(true)}else if(st)st.textContent='외부계좌 종목 없음 · 이미지 업로드 또는 Drive 가져오기로 등록하세요.';
-  }catch(e){if(st)st.textContent='외부계좌 자료 조회 실패 · '+e.message}
+  }catch(e){if(e.name==='StaleSession')return;if(st)st.textContent='외부계좌 자료 조회 실패 · '+e.message}
 }
 function saveExternalSettings(){LS('invest_external_drive_folder',$('externalDriveFolder').value.trim());const cfg={auto:$('externalAutoRefresh').checked,minutes:Number($('externalAutoMinutes').value)||10};LS('invest_external_settings',cfg);applyExternalAutoRefresh();$('externalStatus').textContent=cfg.auto?'자동갱신 사용 · '+cfg.minutes+'분 간격':'자동갱신 꺼짐 · 접속 및 수동 새로고침';}
 function applyExternalAutoRefresh(){if(EXT_AUTO_TIMER)clearInterval(EXT_AUTO_TIMER);EXT_AUTO_TIMER=null;const cfg=LS('invest_external_settings')||{};if(cfg.auto)EXT_AUTO_TIMER=setInterval(()=>refreshExternalPrices(true),Math.max(5,Number(cfg.minutes)||10)*60000)}
@@ -128,10 +129,11 @@ function showOcrReview(texts){
 }
 
 async function processExternalUploads(){
+  const session=LS('invest_session_token');
   const files=Array.from(($('externalImageFiles').files||[]));if(!files.length){alert('캡처 이미지를 선택하세요.');return}
   if(files.some(f=>!/^image\//.test(f.type))){alert('이미지 파일만 업로드할 수 있습니다.');return}
   const btn=$('externalUploadBtn');btn.disabled=true;let all=[],texts=[];
-  try{for(let i=0;i<files.length;i++){ $('externalOcrProgress').textContent=(i+1)+'/'+files.length+' 이미지 분석 중...';const data=await ocrImage(files[i]);texts.push(data.text||'');all=all.concat(parseExternalOcr(data,$('externalAccountType').value));}
+  try{for(let i=0;i<files.length;i++){ $('externalOcrProgress').textContent=(i+1)+'/'+files.length+' 이미지 분석 중...';const data=await ocrImage(files[i]);if(session!==LS('invest_session_token'))return;texts.push(data.text||'');all=all.concat(parseExternalOcr(data,$('externalAccountType').value));}
     showOcrReview(texts);if(!all.length){$('externalOcrProgress').textContent='종목을 인식하지 못했습니다. 아래 OCR 원문을 확인하고 직접 등록하세요.';return}
     EXT_ASSETS=mergeExternalRows(EXT_ASSETS,all);extResolveCodes();renderExternalAssets();$('externalOcrProgress').textContent='인식 후보 '+all.length+'개 · 수량·평균매입가를 확인·수정하고 [인식자료 저장]을 누르세요. 종목코드는 비워도 저장됩니다.';showExternalSaveButton();
   }catch(e){$('externalOcrProgress').textContent='이미지 인식 실패 · '+e.message}finally{btn.disabled=false}
@@ -140,10 +142,11 @@ function mergeExternalRows(base,add){const map=new Map();const norm=x=>({...x,na
 function addExternalManual(){const accountType=$('externalAccountType').value,code=$('externalManualCode').value.trim(),name=$('externalManualName').value.trim(),quantity=extNum($('externalManualQty').value),avgPrice=extNum($('externalManualAvg').value);if((code&&!/^\d{6}$/.test(code))||!name){alert('종목명을 입력하고, 종목코드는 비워두거나 6자리로 입력하세요.');return}EXT_ASSETS=mergeExternalRows(EXT_ASSETS,[{accountType,code,name,quantity,avgPrice,source:'manual'}]);renderExternalAssets();showExternalSaveButton();$('externalManualCode').value='';$('externalManualName').value='';$('externalManualQty').value='';$('externalManualAvg').value=''}
 function showExternalSaveButton(){let b=$('externalSaveBtn');if(!b){b=document.createElement('button');b.id='externalSaveBtn';b.textContent='인식자료 저장';b.onclick=saveExternalAssets;$('externalOcrProgress').after(b)}b.style.display='inline-block'}
 async function importExternalDriveImages(){
+  const session=LS('invest_session_token');
   const folderId=$('externalDriveFolder').value.trim();if(!folderId){alert('Google Drive 폴더 ID를 입력하세요.');return}LS('invest_external_drive_folder',folderId);
   $('externalOcrProgress').textContent='Google Drive 폴더에서 이미지 목록을 불러오는 중...';
   try{const j=await extPost('externalDriveImages',{folderId});if(!j.images||!j.images.length)throw new Error('폴더에 이미지 파일이 없습니다.');let all=[],texts=[];
-    for(let i=0;i<j.images.length;i++){const im=j.images[i];$('externalOcrProgress').textContent='Drive 이미지 OCR '+(i+1)+'/'+j.images.length+' · '+im.name;const blob=await fetch('data:'+im.mimeType+';base64,'+im.base64).then(r=>r.blob());const f=new File([blob],im.name,{type:im.mimeType});const data=await ocrImage(f);texts.push(data.text||'');all=all.concat(parseExternalOcr(data,$('externalAccountType').value));}
+    for(let i=0;i<j.images.length;i++){const im=j.images[i];$('externalOcrProgress').textContent='Drive 이미지 OCR '+(i+1)+'/'+j.images.length+' · '+im.name;const blob=await fetch('data:'+im.mimeType+';base64,'+im.base64).then(r=>r.blob());const f=new File([blob],im.name,{type:im.mimeType});const data=await ocrImage(f);if(session!==LS('invest_session_token'))return;texts.push(data.text||'');all=all.concat(parseExternalOcr(data,$('externalAccountType').value));}
     showOcrReview(texts);if(!all.length)throw new Error('종목을 인식하지 못했습니다. 아래 OCR 원문을 보고 직접 등록하세요.');EXT_ASSETS=mergeExternalRows(EXT_ASSETS,all);extResolveCodes();renderExternalAssets();$('externalOcrProgress').textContent='Drive 이미지 '+j.images.length+'개 · 인식 후보 '+all.length+'개. 수량·평단가를 확인하고 저장하세요.';showExternalSaveButton();
   }catch(e){$('externalOcrProgress').textContent='Drive 가져오기 실패 · '+e.message}
 }
@@ -173,7 +176,7 @@ async function saveExternalAssets(){
 }
 async function refreshExternalPrices(silent){
   extResolveCodes();if(EXT_PRICE_BUSY)return;EXT_PRICE_BUSY=true;
-  const st=$('externalStatus');
+  const st=$('externalStatus'),run=++EXT_RUN_ID;
   try{
     window.EXT_LAST_QUOTE_ERRORS={};
     if(!EXT_ASSETS.length){renderExternalAssets();if(!silent&&st)st.textContent='조회할 외부계좌 종목이 없습니다.';return}
@@ -189,12 +192,13 @@ async function refreshExternalPrices(silent){
       const batch=pending.slice(i,i+40);
       try{
         const j=await extPost('nhExternalQuotes',{codes:batch});
+        if(run!==EXT_RUN_ID)return;
         batch.forEach(code=>{
           const quote=j.prices&&j.prices[code],price=extPositivePrice(quote&&quote.price);
           if(price!=null&&!(j.errors&&j.errors[code]))EXT_PRICES[code]={...quote,price,source:'NH 현재가'};
           else window.EXT_LAST_QUOTE_ERRORS[code]=(j.errors&&j.errors[code])||'현재가 응답 없음';
         });
-      }catch(e){batch.forEach(code=>{window.EXT_LAST_QUOTE_ERRORS[code]=e.message||'연결 실패'})}
+      }catch(e){if(run!==EXT_RUN_ID||e.name==='StaleSession')return;batch.forEach(code=>{window.EXT_LAST_QUOTE_ERRORS[code]=e.message||'연결 실패'})}
     }
     renderExternalAssets();
     const got=codes.filter(code=>EXT_PRICES[code]).length,errors=Object.keys(window.EXT_LAST_QUOTE_ERRORS).length;
@@ -206,6 +210,7 @@ async function refreshExternalPrices(silent){
       ' · '+new Date().toLocaleString('ko-KR');
   }catch(e){if(st)st.textContent='현재가 조회 실패 · '+e.message}
   finally{
+    if(run!==EXT_RUN_ID)return;
     EXT_PRICE_BUSY=false;
     if(EXT_PRICE_PENDING){EXT_PRICE_PENDING=false;refreshExternalPrices(true)}
   }
