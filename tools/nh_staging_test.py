@@ -23,9 +23,26 @@ class Blocked(Exception):
 
 
 class ApiFailure(Exception):
-    def __init__(self, code, http=None):
+    def __init__(self, code, http=None, action=None):
         self.code = code if re.fullmatch(r"[A-Z0-9_]{1,50}", str(code)) else "API_FAILURE"
         self.http = http
+        self.action = action
+
+
+def rejection_code(result, action):
+    # Only classify exact messages from our checked-in GAS. Never echo server text.
+    if not isinstance(result, dict):
+        return "GAS_RESPONSE_INVALID"
+    if result.get("code"):
+        return result["code"]
+    known = {
+        "아이디와 비밀번호를 확인하세요.": "LOGIN_INPUT_INVALID",
+        "로그인 정보 또는 계정 승인 상태를 확인하세요.": "LOGIN_CREDENTIALS_OR_APPROVAL",
+        "로그인 시도가 많습니다. 15분 후 다시 시도하세요.": "LOGIN_RATE_LIMITED",
+        "요청을 처리하지 못했습니다. 입력값과 연결 상태를 확인하세요.": "GAS_HANDLER_EXCEPTION",
+        "로그인이 필요합니다. 다시 로그인하세요.": "AUTH_REQUIRED",
+    }
+    return known.get(result.get("message"), "GAS_REJECTED")
 
 
 def fingerprint(text):
@@ -68,11 +85,11 @@ class WebApp:
             with self.opener.open(request, timeout=120) as response:
                 result = json.load(response)
         except urllib.error.HTTPError as error:
-            raise ApiFailure("HTTP_FAILURE", error.code) from None
+            raise ApiFailure("HTTP_FAILURE", error.code, action) from None
         except (urllib.error.URLError, TimeoutError, ValueError):
-            raise ApiFailure("NETWORK_OR_JSON_FAILURE") from None
+            raise ApiFailure("NETWORK_OR_JSON_FAILURE", action=action) from None
         if not isinstance(result, dict) or result.get("success") is not True:
-            raise ApiFailure(result.get("code", "GAS_REJECTED") if isinstance(result, dict) else "GAS_REJECTED")
+            raise ApiFailure(rejection_code(result, action), action=action)
         return result
 
 
@@ -102,6 +119,29 @@ def account_state(result):
     return sorted(json.dumps(item, sort_keys=True) for item in signature)
 
 
+def authenticate_staging(client, script_id, sheet_id, expected_digest, username, password):
+    validate_target(client.url, script_id, sheet_id)
+    metadata = client.call("appVersion")
+    if metadata.get("testEnvironment") != "nh-staging" or metadata.get("scriptHash") != fingerprint(script_id) or metadata.get("sheetHash") != fingerprint(sheet_id) or metadata.get("sourceDigest") != expected_digest or metadata.get("storeVersion") != 2:
+        raise Blocked("STAGING_BINDING_OR_SOURCE_MISMATCH")
+    if not metadata.get("nhTestCredentialsDeclared"):
+        raise Blocked("NH_TEST_CREDENTIAL_SETTINGS_REQUIRED")
+    client.binding = metadata["sheetHash"]
+    login = client.call("login", **{"user": username, "pass": password})
+    client.token = login.get("token")
+    if not client.token or not login.get("isAdmin") or login.get("mustChangePassword"):
+        raise Blocked("STRONG_STAGING_ADMIN_REQUIRED")
+
+
+def auth_check(client, script_id, sheet_id, expected_digest, username, password):
+    try:
+        authenticate_staging(client, script_id, sheet_id, expected_digest, username, password)
+        return {"mode": "STAGING_AUTH_ONLY", "status": "PASS", "checks": [{"name": "staging_identity_source_and_login", "status": "PASS"}], "rawFinancialDataIncluded": False, "liveNhRequested": False}
+    finally:
+        if client.token:
+            client.call("logout")
+
+
 def live_checks(client, fixture, script_id, sheet_id, expected_digest, username, password):
     validate_target(client.url, script_id, sheet_id)
     report = {"mode": "LIVE_NH_STAGING", "status": "BLOCKED", "checks": [], "cleanup": "NOT_NEEDED", "rawFinancialDataIncluded": False, "liveNhRequested": False}
@@ -121,17 +161,8 @@ def live_checks(client, fixture, script_id, sheet_id, expected_digest, username,
     stage_rows = [dict(row, accountType="ISA", source=run_source) for row in fixture["expected"]]
     if len(stage_rows) != 7 or any(not re.fullmatch(r"[A-Z0-9]{6}", row["code"]) for row in stage_rows):
         raise Blocked("SEVEN_VERIFIED_ISA_FIXTURES_REQUIRED")
-    metadata = client.call("appVersion")
-    if metadata.get("testEnvironment") != "nh-staging" or metadata.get("scriptHash") != fingerprint(script_id) or metadata.get("sheetHash") != fingerprint(sheet_id) or metadata.get("sourceDigest") != expected_digest or metadata.get("storeVersion") != 2:
-        raise Blocked("STAGING_BINDING_OR_SOURCE_MISMATCH")
-    if not metadata.get("nhTestCredentialsDeclared"):
-        raise Blocked("SEPARATE_NH_TEST_CREDENTIALS_REQUIRED")
-    client.binding = metadata["sheetHash"]
+    authenticate_staging(client, script_id, sheet_id, expected_digest, username, password)
     record("isolated_staging_identity_and_source")
-    login = client.call("login", **{"user": username, "pass": password})
-    if not login.get("token") or not login.get("isAdmin") or login.get("mustChangePassword"):
-        raise Blocked("STRONG_STAGING_ADMIN_REQUIRED")
-    client.token = login["token"]
     wrote = False
     known = [canonical([]), canonical(stage_rows), canonical(stage_rows[1:])]
     try:
@@ -215,13 +246,16 @@ def main():
     parser.add_argument("--script-id", default=os.environ.get("NH_STAGING_SCRIPT_ID"))
     parser.add_argument("--sheet-id", default=os.environ.get("NH_STAGING_SHEET_ID"))
     parser.add_argument("--allow-staging-write", action="store_true")
+    parser.add_argument("--auth-only", action="store_true", help="Check staging identity and login only; no NH requests or holdings writes")
     parser.add_argument("--report", type=Path, default=Path("nh-staging-report.json"))
     args = parser.parse_args()
     report = {"mode": "LIVE_NH_STAGING", "status": "BLOCKED", "checks": [], "rawFinancialDataIncluded": False, "liveNhRequested": False}
+    if args.auth_only:
+        report["mode"] = "STAGING_AUTH_ONLY"
     try:
         if not all((args.url, args.script_id, args.sheet_id)):
             raise Blocked("STAGING_URL_SCRIPT_AND_SHEET_REQUIRED")
-        if not args.allow_staging_write:
+        if not args.auth_only and not args.allow_staging_write:
             raise Blocked("EXPLICIT_STAGING_WRITE_FLAG_REQUIRED")
         validate_target(args.url, args.script_id, args.sheet_id)
         if not sys.stdin.isatty() and not all(os.environ.get(name) for name in ("NH_STAGING_USER", "NH_STAGING_PASSWORD")):
@@ -230,6 +264,11 @@ def main():
         password = os.environ.get("NH_STAGING_PASSWORD") or getpass.getpass("Staging test password: ")
         if not username or len(password) < 16:
             raise Blocked("STRONG_STAGING_TEST_CREDENTIALS_REQUIRED")
+        if args.auth_only:
+            report = auth_check(WebApp(args.url), args.script_id, args.sheet_id, source_digest(), username, password)
+            args.report.write_text(json.dumps(report, indent=2) + "\n")
+            print(json.dumps(report))
+            return 0
         fixture = json.loads((ROOT / "tests/fixtures/isa-ocr.json").read_text())
         master = json.loads((ROOT / "data/krx-instruments.json").read_text())
         age = datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(master["source"]["fetchedAt"])
@@ -243,6 +282,10 @@ def main():
         report["reason"] = str(error)
     except ApiFailure as error:
         report["status"], report["reason"] = "FAIL", error.code
+        if error.action:
+            report["failedAction"] = error.action
+        if error.http:
+            report["http"] = error.http
     except Exception:
         report["status"], report["reason"] = "FAIL", "UNEXPECTED_TEST_FAILURE"
     args.report.write_text(json.dumps(report, indent=2) + "\n")

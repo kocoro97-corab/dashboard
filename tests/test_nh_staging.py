@@ -1,10 +1,12 @@
 import copy
 import importlib.util
 import json
+import io
 from pathlib import Path
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
@@ -70,6 +72,48 @@ class FakeApp:
 
 
 class StagingTests(unittest.TestCase):
+    def test_gas_login_rejections_are_classified_without_server_text(self):
+        for message, expected in [
+            ("로그인 정보 또는 계정 승인 상태를 확인하세요.", "LOGIN_CREDENTIALS_OR_APPROVAL"),
+            ("로그인 시도가 많습니다. 15분 후 다시 시도하세요.", "LOGIN_RATE_LIMITED"),
+            ("요청을 처리하지 못했습니다. 입력값과 연결 상태를 확인하세요.", "GAS_HANDLER_EXCEPTION"),
+            ("SYNTHETIC_PRIVATE_PASSWORD_AND_TOKEN", "GAS_REJECTED"),
+        ]:
+            app = runner.WebApp(URL)
+            app.opener = SimpleNamespace(open=lambda *a, **kw: io.BytesIO(json.dumps({"success": False, "message": message}).encode()))
+            with self.assertRaises(runner.ApiFailure) as caught:
+                app.call("login", user="SYNTHETIC", **{"pass": "SYNTHETIC_PRIVATE_PASSWORD"})
+            self.assertEqual(caught.exception.code, expected)
+            self.assertEqual(caught.exception.action, "login")
+            self.assertNotIn("PRIVATE", str(caught.exception))
+
+    def test_auth_only_checks_identity_login_logout_without_nh_or_store(self):
+        app = FakeApp()
+        report = runner.auth_check(app, SCRIPT, SHEET, DIGEST, "SYNTHETIC_USER", "SYNTHETIC_PRIVATE_PASSWORD")
+        self.assertEqual(app.calls, ["appVersion", "login", "logout"])
+        self.assertEqual(report["status"], "PASS")
+        self.assertFalse(report["liveNhRequested"])
+        self.assertNotIn("PRIVATE", json.dumps(report))
+
+    def test_auth_only_refuses_wrong_environment_before_login(self):
+        app = FakeApp(bad_marker=True)
+        with self.assertRaises(runner.Blocked):
+            runner.auth_check(app, SCRIPT, SHEET, DIGEST, "SYNTHETIC_USER", "SYNTHETIC_PRIVATE_PASSWORD")
+        self.assertEqual(app.calls, ["appVersion"])
+
+    def test_auth_only_failed_login_never_queries_nh_or_writes(self):
+        app = FakeApp()
+        original = app.call
+        def call(action, **fields):
+            if action == "login":
+                app.calls.append(action)
+                raise runner.ApiFailure("LOGIN_CREDENTIALS_OR_APPROVAL", action=action)
+            return original(action, **fields)
+        app.call = call
+        with self.assertRaises(runner.ApiFailure):
+            runner.auth_check(app, SCRIPT, SHEET, DIGEST, "SYNTHETIC_USER", "SYNTHETIC_PRIVATE_PASSWORD")
+        self.assertEqual(app.calls, ["appVersion", "login"])
+
     def fixture(self):
         return json.loads((ROOT / "tests/fixtures/isa-ocr.json").read_text())
 
