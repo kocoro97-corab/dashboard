@@ -24,6 +24,8 @@ class FakeGoogle:
         self.fail_deploy = False
         self.edit_during_read = False
         self.head_reads = 0
+        self.stale_deployment_reads = 0
+        self.previous_config = None
 
     def api(self, url, method="GET", payload=None):
         path = url.removeprefix(self.base)
@@ -46,7 +48,12 @@ class FakeGoogle:
             if method == "PUT":
                 if self.fail_deploy:
                     raise module.DeployError("Simulated deployment API failure")
+                self.previous_config = copy.deepcopy(self.config)
                 self.config = copy.deepcopy(payload["deploymentConfig"])
+            if method == "GET" and self.previous_config and self.stale_deployment_reads:
+                self.stale_deployment_reads -= 1
+                return {"deploymentId": "test-deployment", "deploymentConfig": copy.deepcopy(self.previous_config),
+                        "entryPoints": [{"entryPointType": "WEB_APP", "webApp": {"url": "https://example.test/exec"}}]}
             return {"deploymentId": "test-deployment", "deploymentConfig": copy.deepcopy(self.config),
                     "entryPoints": [{"entryPointType": "WEB_APP", "webApp": {"url": "https://example.test/exec"}}]}
         raise AssertionError((method, path))
@@ -80,6 +87,15 @@ class DeploymentTests(unittest.TestCase):
         with self.assertRaisesRegex(module.DeployError, "unpublished"):
             self.run_deploy(fake)
         self.assertFalse(any(method != "GET" for method, path in fake.calls))
+
+    def test_stale_deployment_get_is_retried_until_new_version_is_visible(self):
+        fake = FakeGoogle()
+        fake.stale_deployment_reads = 2
+        with patch.object(module.time, "sleep") as sleep:
+            result = self.run_deploy(fake)
+        self.assertEqual(result["new_version"], 3)
+        self.assertEqual(sleep.call_count, 2)
+        self.assertEqual(fake.config["versionNumber"], 3)
 
     def test_concurrent_editor_is_never_overwritten(self):
         fake = FakeGoogle()

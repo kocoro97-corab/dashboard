@@ -101,6 +101,7 @@ def deploy(api, script_id, deployment_id, source, revision, probe):
     print("Previous deployed version: " + str(old_version))
     touched = False
     new_version = None
+    deployment_requested = False
     try:
         if fingerprint(clean_files(api(base + "/content"))) != fingerprint(original):
             raise DeployError("GAS source changed during preparation; stopped without overwriting it")
@@ -110,16 +111,27 @@ def deploy(api, script_id, deployment_id, source, revision, probe):
             raise DeployError("Uploaded source did not match the expected files")
         created = api(base + "/versions", "POST", {"description": "Nhplug from GitHub " + revision[:12]})
         new_version = created["versionNumber"]
+        print("Created source version: " + str(new_version))
         immutable = clean_files(api(base + "/content?versionNumber=" + str(new_version)))
         if fingerprint(immutable) != fingerprint(desired):
             raise DeployError("Immutable version does not match the verified source")
         if api(endpoint)["deploymentConfig"] != previous_config:
             raise DeployError("Deployment changed concurrently; it was not overwritten")
         new_config = dict(previous_config, versionNumber=new_version)
+        deployment_requested = True
         result = api(endpoint, "PUT", {"deploymentConfig": new_config})
-        confirmed = api(endpoint)
-        if result.get("deploymentId") != deployment_id or confirmed["deploymentConfig"].get("versionNumber") != new_version:
-            raise DeployError("Deployment version verification failed")
+        print("Update response version: " + str(result.get("deploymentConfig", {}).get("versionNumber")))
+        if result.get("deploymentId") != deployment_id:
+            raise DeployError("Deployment ID in the update response did not match")
+        # Google may briefly return the former deployment after accepting an update.
+        for attempt in range(10):
+            confirmed = api(endpoint)
+            observed_version = confirmed["deploymentConfig"].get("versionNumber")
+            if str(observed_version) == str(new_version):
+                break
+            if attempt == 9:
+                raise DeployError("Deployment version verification failed: expected " + str(new_version) + ", observed " + str(observed_version))
+            time.sleep(3)
         before_urls = [p.get("webApp", {}).get("url") for p in previous.get("entryPoints", []) if p.get("entryPointType") == "WEB_APP"]
         after_urls = [p.get("webApp", {}).get("url") for p in confirmed.get("entryPoints", []) if p.get("entryPointType") == "WEB_APP"]
         if before_urls != after_urls:
@@ -143,7 +155,7 @@ def deploy(api, script_id, deployment_id, source, revision, probe):
         if new_version is not None:
             try:
                 current = api(endpoint)["deploymentConfig"]
-                if current.get("versionNumber") == new_version:
+                if str(current.get("versionNumber")) == str(new_version) or (deployment_requested and current == previous_config):
                     api(endpoint, "PUT", {"deploymentConfig": previous_config})
                 elif current != previous_config:
                     recovery_ok = False
