@@ -23,10 +23,13 @@ jobs:
       - name: Test quote handling and deployment safeguards
         run: |
           node tests/external-quotes.test.cjs
-          python3 -m unittest discover -s tests -p 'test_deploy_gas.py'
+          node tests/security.test.cjs
+          python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Preserve private GAS files, replace Nhplug, and update the existing deployment
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
           GAS_SCRIPT_ID: 1WwqTZuH36L3sYdwmz8POXLmW-1Xw4oC4AGkFPSeueaEVBMB31ua_CkYL
           GAS_DEPLOYMENT_ID: AKfycbxySfUKUai418Ar7C8RI6gwBJpjSZXH4y8EX2JhJZG9nGz7RVB0WCZGl3H1wHxOWGVd
+          GAS_DEPLOY_SECURITY: 'true'
+          GAS_PROTECT_STATIC_HOLDINGS: 'true'
         run: python3 tools/deploy_gas.py

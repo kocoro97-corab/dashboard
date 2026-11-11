@@ -1,4 +1,6 @@
 import copy
+import contextlib
+import io
 import importlib.util
 from pathlib import Path
 import unittest
@@ -67,7 +69,8 @@ class DeploymentTests(unittest.TestCase):
         return {"success": True, "version": "v7", "features": ["nhExternalQuotes"]}
 
     def run_deploy(self, fake, probe=None):
-        return module.deploy(fake.api, "test-script", "test-deployment", self.replacement, "a" * 40, probe or self.good_probe)
+        with contextlib.redirect_stdout(io.StringIO()):
+            return module.deploy(fake.api, "test-script", "test-deployment", self.replacement, "a" * 40, probe or self.good_probe)
 
     def test_only_nhplug_changes_and_deployment_settings_are_preserved(self):
         fake = FakeGoogle()

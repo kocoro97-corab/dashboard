@@ -75,7 +75,7 @@ def check_version_response(response):
         raise DeployError("The web app version endpoint did not report the required API feature")
 
 
-def deploy(api, script_id, deployment_id, source, revision, probe):
+def deploy(api, script_id, deployment_id, source, revision, probe, transform=None):
     base = "https://script.googleapis.com/v1/projects/" + script_id
     endpoint = base + "/deployments/" + deployment_id
     previous = api(endpoint)
@@ -95,6 +95,8 @@ def deploy(api, script_id, deployment_id, source, revision, probe):
     check_version_response(probe())
     desired = copy.deepcopy(original)
     next(f for f in desired if f["name"] == "Nhplug")["source"] = source
+    if transform is not None:
+        desired = transform(original, source)
     backup = api(base + "/versions", "POST", {"description": "Before Nhplug update " + revision[:12]})
     backup_version = backup["versionNumber"]
     print("Recovery source version: " + str(backup_version))
@@ -138,13 +140,16 @@ def deploy(api, script_id, deployment_id, source, revision, probe):
             raise DeployError("Web app URL changed unexpectedly")
         for attempt in range(3):
             try:
-                check_version_response(probe())
+                response = probe()
+                check_version_response(response)
+                if transform and response.get("securityVersion") != 1:
+                    raise DeployError("The security entry point is not active on the web app")
                 break
             except DeployError:
                 if attempt == 2:
                     raise
                 time.sleep(3)
-        print("Nhplug source replacement verified; all other files preserved.")
+        print("Security source update verified." if transform else "Nhplug source replacement verified; all other files preserved.")
         print("New deployed version: " + str(new_version))
         print("Existing web app URL preserved; appVersion response verified.")
         summary = {"backup_version": backup_version, "previous_version": old_version, "new_version": new_version}
@@ -185,9 +190,13 @@ def main():
         def probe():
             url = "https://script.google.com/macros/s/" + deployment_id + "/exec"
             return request_json(url, "POST", {"action": "appVersion"})
-        result = deploy(api, script_id, deployment_id, source, os.environ["GITHUB_SHA"], probe)
+        transform = None
+        if os.environ.get("GAS_DEPLOY_SECURITY") == "true":
+            from security_patch import apply_security
+            transform = apply_security
+        result = deploy(api, script_id, deployment_id, source, os.environ["GITHUB_SHA"], probe, transform=transform)
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
-            summary.write("GAS deployment verified. Only Nhplug was replaced.\n\n")
+            summary.write("GAS security deployment verified.\n\n" if transform else "GAS deployment verified. Only Nhplug was replaced.\n\n")
             summary.write("Recovery version: {backup_version}; previous deployment: {previous_version}; new deployment: {new_version}.\n".format(**result))
             summary.write("The existing web app URL was retained. No source or credentials were logged or uploaded as artifacts.\n")
     except DeployError as error:
