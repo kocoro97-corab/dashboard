@@ -1,5 +1,10 @@
 # MY INVEST NH Integration V2
 
+**Current follow-up:** [V2_LIVE_OWNER.md](V2_LIVE_OWNER.md) supersedes the fixed-test
+application commands below. Existing test GAS/Sheets must now remain unchanged;
+use a newly created project/Sheet. Native real-account snapshots are opt-in,
+fresh-development-only; the original 6e23b3b source did not support this flow.
+
 Baseline: `d99b9a06c52ffd43b644b306d8c8b96bb1da3188`.
 One development PR. No main merge, production publish, operational data migration,
 or real NH execution is performed by this change.

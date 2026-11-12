@@ -19,10 +19,10 @@ function app(){
       else throw Error('unexpected synthetic endpoint');
       return {getResponseCode:()=>200,getContentText:()=>JSON.stringify({...body,rsp_cd:'00000'}),getHeaders:()=>({})};
     }}});
-  for(const file of ['NhGatewayV2','NhAccountsV2','Nhplug','AccountStoreV2','ExternalHoldings','Security'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../gas/'+file+'.gs'),'utf8'),c);
+  for(const file of ['NhGatewayV2','NhAccountsV2','Nhplug','AccountStoreV2','ExternalHoldings','NhSnapshotV2','Security'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../gas/'+file+'.gs'),'utf8'),c);
   c.securitySession_=token=>['alice','bob'].includes(token)?{u:token,p:false}:null;c.sessionUser_=token=>c.securitySession_(token)?.u;c.verifyAdmin=token=>token==='alice';c.securityWithLock_=fn=>fn();
   c.securityLegacyDoPost_=e=>{const b=JSON.parse(e.postData.contents);if(b.action==='nhAccounts')return c.handleNhAccounts(b.token);if(b.action==='nhExternalQuotes')return c.handleNhExternalQuotes(b.token,b.codes);return {success:false}};
-  return {c,sheets,calls,call:(action,extra={},token='alice')=>c.doPost({postData:{contents:JSON.stringify({action,token,...extra})}})};
+  return {c,sheets,calls,props,call:(action,extra={},token='alice')=>c.doPost({postData:{contents:JSON.stringify({action,token,...extra})}})};
 }
 const row={accountType:'ISA',code:'000001',name:'Synthetic instrument',quantity:2,avgPrice:10,source:'manual'};
 test('existing API actions complete store/edit/restore/quotes through actual V2 modules',()=>{
@@ -50,4 +50,43 @@ test('stale revision and invalid input preserve the committed snapshot through e
   assert.equal(a.call('saveExternalHoldings',{holdings:[],expectedRevision:before.revision,confirmReplace:true}).code,'STORE_CONFLICT');
   assert.equal(a.call('saveExternalHoldings',{holdings:[{...row,quantity:-1}],expectedRevision:a.call('externalHoldings').revision,confirmReplace:true}).success,false);
   assert.equal(a.call('externalHoldings').holdings.length,1);
+});
+
+function freshApp(){
+  const a=app();a.c.ScriptApp={getScriptId:()=> 'SYNTHETIC_FRESH_SCRIPT_123456789'};
+  a.props.APP_ENV='nh-staging';a.props.NH_V2_FRESH_TEST='true';a.props.STAGING_SHEET_ID='SYNTHETIC_FRESH_SHEET_123456789';
+  a.c.stagingProjectGuard_=()=>{};a.c.stagingSheet_=()=>{};return a;
+}
+test('fresh NH snapshots preserve native markets and reread the captured result exactly',()=>{
+  const a=freshApp(),before=a.call('nhSnapshotRead');assert.equal(before.success,true);
+  const result=a.call('nhSnapshotCapture',{expectedRevision:before.revision,confirmReplace:true});assert.equal(result.success,true);
+  const after=a.call('nhSnapshotRead');assert.equal(JSON.stringify(after.accounts),JSON.stringify(result.accounts));
+  assert.equal(after.accounts[0].domestic.holdings[0].quantity,9);assert.equal(after.accounts[0].overseas.holdings[0].currency,'USD');
+  assert.ok(JSON.stringify(a.sheets.get('NhReadSnapshotsV2').rows).includes('SYNTHETIC_FINANCIAL_CANARY'));
+  assert.equal(a.sheets.has('ExternalHoldings'),false);
+});
+test('snapshot persistence rejects old test project, old Sheet and production context before storage/NH',()=>{
+  for(const mode of ['old-script','old-sheet','no-bridge','not-fresh','non-admin']){
+    const a=freshApp();if(mode==='old-script')a.c.ScriptApp.getScriptId=()=> '1Yt2DM0m4wObHnH0ZqgMh0KMzXnK_O3YH7beDGkEcUCN5gOY832AjSzmw';
+    if(mode==='old-sheet')a.props.STAGING_SHEET_ID='1oQA2wD_0jtGVOezLclzUyejsYA2Z-3X_kkD7-by0tsY';
+    if(mode==='no-bridge')a.c.stagingProjectGuard_=undefined;if(mode==='not-fresh')a.props.NH_V2_FRESH_TEST='false';
+    const r=a.call('nhSnapshotRead',{},mode==='non-admin'?'bob':'alice');assert.equal(r.success,false);assert.equal(a.sheets.size,0);assert.equal(a.calls.length,0);
+  }
+});
+test('snapshot capture requires confirmation/current revision before any NH call',()=>{
+  const a=freshApp(),initial=a.call('nhSnapshotRead');
+  assert.equal(a.call('nhSnapshotCapture',{expectedRevision:'wrong',confirmReplace:true}).code,'STORE_CONFLICT');
+  assert.equal(a.call('nhSnapshotCapture',{expectedRevision:initial.revision,confirmReplace:false}).code,'STORE_CONFIRM');assert.equal(a.calls.length,0);
+});
+test('partial NH inquiry never replaces previously committed native snapshot',()=>{
+  const a=freshApp(),initial=a.call('nhSnapshotRead');const saved=a.call('nhSnapshotCapture',{expectedRevision:initial.revision,confirmReplace:true});
+  const original=a.c.nhCall_;a.c.nhCall_=(p,input,opt)=>{if(p.includes('/gbstock/'))throw Error('SYNTHETIC_PRIVATE_TOKEN_CANARY');return original(p,input,opt)};
+  const result=a.call('nhSnapshotCapture',{expectedRevision:saved.revision,confirmReplace:true});assert.equal(result.code,'NH_INCOMPLETE');
+  assert.equal(a.call('nhSnapshotRead').revision,saved.revision);assert.ok(!JSON.stringify(result).includes('SYNTHETIC_PRIVATE_TOKEN_CANARY'));
+});
+test('native snapshot restore uses AccountStoreV2 revision protection',()=>{
+  const a=freshApp(),initial=a.call('nhSnapshotRead');a.call('nhSnapshotCapture',{expectedRevision:initial.revision,confirmReplace:true});
+  const saved=a.call('nhSnapshotRead'),id=saved.history[0].snapshotId;
+  assert.equal(a.call('nhSnapshotRestore',{snapshotId:id,expectedRevision:saved.revision,confirmReplace:true}).success,true);
+  const result=a.call('nhSnapshotRead');assert.equal(result.accounts.length,0);assert.notEqual(result.revision,initial.revision);
 });

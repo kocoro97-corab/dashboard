@@ -152,6 +152,7 @@ function doPost(e) {
     if(!session)return jsonResponse({success:false,message:'로그인이 필요합니다. 다시 로그인하세요.'});
     if(action==='sessionInfo')return jsonResponse({success:true,isAdmin:verifyAdmin(body.token),mustChangePassword:!!session.p});
     if(session.p)return jsonResponse({success:false,message:'12자 이상 비밀번호로 변경한 후 이용하세요.',mustChangePassword:true});
+    if(['nhSnapshotRead','nhSnapshotCapture','nhSnapshotRestore'].includes(action))return handleNhSnapshotV2_(body.token,action,body);
     if(action==='nhStockQuotes')return handleNhStockQuotesV2(body.token,body.items);
     if(action==='externalHoldings')return handleExternalHoldingsV2(body.token);
     if(action==='externalHistory')return handleExternalHistory(body.token);

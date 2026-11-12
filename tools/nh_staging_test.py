@@ -22,7 +22,7 @@ class Blocked(Exception):
     pass
 
 
-SAFE_REPORT_CODES = frozenset('''API_FAILURE HTTP_FAILURE NETWORK_OR_JSON_FAILURE UNEXPECTED_REDIRECT
+SAFE_REPORT_CODES = frozenset('''NH_INCOMPLETE NH_STORE_DEV_ONLY NH_SNAPSHOT_INVALID API_FAILURE HTTP_FAILURE NETWORK_OR_JSON_FAILURE UNEXPECTED_REDIRECT
 GAS_RESPONSE_INVALID GAS_REJECTED GAS_HANDLER_EXCEPTION AUTH_REQUIRED LOGIN_INPUT_INVALID
 LOGIN_CREDENTIALS_OR_APPROVAL LOGIN_RATE_LIMITED NH_HTTP NH_RSP NH_NO_BLOCK NH_NO_PRICE
 NH_SYMBOL_MISMATCH NH_TOKEN NH_CONFIG NH_NETWORK NH_JSON NH_UPSTREAM GAS_TOKEN GAS_UPSTREAM
@@ -41,7 +41,7 @@ class ApiFailure(Exception):
     def __init__(self, code, http=None, action=None):
         self.code = code if isinstance(code, str) and code in SAFE_REPORT_CODES else "API_FAILURE"
         self.http = http if type(http) is int and 100 <= http <= 599 else None
-        self.action = action if action in ('appVersion', 'login', 'logout', 'externalHoldings', 'nhAccounts', 'saveExternalHoldings', 'externalHistory', 'restoreExternalHoldings', 'nhExternalQuotes') else None
+        self.action = action if action in ('nhSnapshotRead','nhSnapshotCapture','nhSnapshotRestore','nhStockQuotes','appVersion', 'login', 'logout', 'externalHoldings', 'nhAccounts', 'saveExternalHoldings', 'externalHistory', 'restoreExternalHoldings', 'nhExternalQuotes') else None
 
 
 def rejection_code(result, action):
