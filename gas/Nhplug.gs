@@ -22,7 +22,30 @@ function nhHeader_(headers, name) {
 }
 
 // 접근토큰: 24시간 유효. 스크립트 속성에 만료시각과 함께 캐시해 재사용한다(재발급은 보안 알림을 유발).
+// Only locally defined codes and validated HTTP statuses may cross diagnostic boundaries.
+const NH_DIAGNOSTIC_CODES=['NH_OK','NH_TOKEN','NH_CONFIG','NH_NETWORK','NH_JSON','NH_HTTP','NH_RSP','NH_PATH','NH_NO_PRICE','NH_CONTRACT','NH_UNSUPPORTED','NH_UPSTREAM','NH_SPEC_OK','NH_SPEC_FAILED','NH_ACCOUNTS_OK','NH_DOMESTIC_OK','NH_OVERSEAS_OK','NH_FUTURE_OK'];
+function nhSafeDiagnostic_(error) {
+  const code=error&&NH_DIAGNOSTIC_CODES.indexOf(error.safeCode)>=0?error.safeCode:'NH_UPSTREAM';
+  const http=error&&Number.isInteger(error.safeHttp)&&error.safeHttp>=100&&error.safeHttp<=599?error.safeHttp:null;
+  return {code:code,http:http};
+}
+function nhFailure_(code,http) {
+  const safe=nhSafeDiagnostic_({safeCode:code,safeHttp:http});
+  const error=new Error(safe.code+(safe.http?' / HTTP '+safe.http:''));
+  error.safeCode=safe.code;error.safeHttp=safe.http;return error;
+}
+function nhSafeErrorText_(error){const d=nhSafeDiagnostic_(error);return d.code+(d.http?' / HTTP '+d.http:'')}
+function nhLog_(code,http){Logger.log('NH_DIAGNOSTIC / '+nhSafeErrorText_({safeCode:code,safeHttp:http}))}
+function nhRspCode_(value){return ['0','0000','00000','00166','00218','PARSE'].indexOf(value)>=0?value:value?'UNRECOGNIZED':null}
+function nhAssertResponse_(r){
+  if(!r||r.http!==200)throw nhFailure_('NH_HTTP',r&&r.http);
+  const b=r.body;if(!b||typeof b!=='object'||Array.isArray(b)||b.rsp_cd==='PARSE')throw nhFailure_('NH_JSON',r.http);
+  const code=String(b.rsp_cd||'');if(code&&!/^0+$/.test(code)&&code!=='00166'&&code!=='00218')throw nhFailure_('NH_RSP',r.http);
+}
 function nhToken_(force) {
+  try{return nhLoadToken_(force)}catch(error){const d=nhSafeDiagnostic_(error);throw nhFailure_(d.code==='NH_UPSTREAM'?'NH_TOKEN':d.code,d.http)}
+}
+function nhLoadToken_(force) {
   const props = PropertiesService.getScriptProperties();
   const cached = function () {
     const tok = props.getProperty('NHPLUG_TOKEN');
@@ -37,7 +60,7 @@ function nhToken_(force) {
     if (!force) { const t = cached(); if (t) return t; }   // 기다리는 사이 다른 실행이 발급했을 수 있음
     const key = props.getProperty('NHPLUG_APP_KEY');
     const secret = props.getProperty('NHPLUG_APP_SECRET');
-    if (!key || !secret) throw new Error('스크립트 속성에 NHPLUG_APP_KEY / NHPLUG_APP_SECRET 이 없습니다.');
+    if (!key || !secret) throw nhFailure_('NH_CONFIG');
     const url = NH_BASE + '/oauth2/token?appkey=' + encodeURIComponent(key) +
       '&appsecretkey=' + encodeURIComponent(secret) + '&grant_type=client_credentials&scope=oob';
     const res = UrlFetchApp.fetch(url, {
@@ -48,7 +71,7 @@ function nhToken_(force) {
     try { body = JSON.parse(res.getContentText()); } catch (e) { /* 아래에서 처리 */ }
     if (code !== 200 || !body.access_token) {
       // 주소(키 포함)와 응답 본문 전체는 남기지 않는다
-      throw new Error('토큰 발급 실패 HTTP ' + code + (body.rsp_msg ? ' ' + String(body.rsp_msg).slice(0, 60) : ''));
+      throw nhFailure_('NH_TOKEN',code);
     }
     props.setProperty('NHPLUG_TOKEN', body.access_token);
     props.setProperty('NHPLUG_TOKEN_EXP', String(Date.now() + Number(body.expires_in || 86400) * 1000));
@@ -59,9 +82,10 @@ function nhToken_(force) {
 }
 
 // 공통 호출. 반환: { http, body, cts, cts_flag }
-function nhCall_(path, input, opt) {
+function nhCall_(path,input,opt){try{return nhReadCall_(path,input,opt)}catch(error){const d=nhSafeDiagnostic_(error);throw nhFailure_(d.code==='NH_UPSTREAM'?'NH_NETWORK':d.code,d.http)}}
+function nhReadCall_(path, input, opt) {
   const okPath = NH_ALLOWED_PATHS.some(function (p) { return path.indexOf(p) === 0; });
-  if (!okPath || path.indexOf('/order/') >= 0) throw new Error('허용되지 않는 경로입니다: ' + path);
+  if (!okPath || path.indexOf('/order/') >= 0) throw nhFailure_('NH_PATH');
 
   let token = nhToken_(false);
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -76,7 +100,8 @@ function nhCall_(path, input, opt) {
     Utilities.sleep(220);   // REST 초당 5건 제한 보호
     let body;
     try { body = JSON.parse(res.getContentText()); }
-    catch (e) { body = { rsp_cd: 'PARSE', rsp_msg: String(res.getContentText()).slice(0, 200) }; }
+    catch (e) { body = { rsp_cd: 'PARSE' }; }
+    if(!body||typeof body!=='object'||Array.isArray(body))body={rsp_cd:'PARSE'};
     const h = res.getHeaders();
     return { http: http, body: body, cts: nhHeader_(h, 'cts'), cts_flag: nhHeader_(h, 'cts_flag') };
   }
@@ -86,23 +111,16 @@ function nhCall_(path, input, opt) {
 
 // 1) 토큰 발급 확인 (토큰 값은 출력하지 않음)
 function nhTestToken() {
-  const t = nhToken_(false);
-  const exp = Number(PropertiesService.getScriptProperties().getProperty('NHPLUG_TOKEN_EXP'));
-  Logger.log('토큰 OK (길이 ' + t.length + '), 만료까지 약 ' + Math.round((exp - Date.now()) / 3600000) + '시간');
+  try{nhToken_(false);nhLog_('NH_OK')}catch(error){const d=nhSafeDiagnostic_(error);nhLog_(d.code,d.http)}
 }
 
-// 2) 계좌 목록 확인 (계좌번호는 끝 4자리만 출력)
+// 2) 계좌 목록 호출 상태만 확인 (식별값·수량·원문 메시지 출력 금지)
 function nhTestAccounts() {
-  const r = nhCall_('/n2/acctinfo', {});
-  const list = (r.body && r.body.Output_0) || [];
-  Logger.log('HTTP ' + r.http + ' / rsp_cd ' + r.body.rsp_cd + ' / rsp_msg ' + r.body.rsp_msg);
-  list.forEach(function (a) {
-    Logger.log('acct_type=' + a.acct_type + ' / 계좌 끝 4자리 ' + String(a.acct_no).slice(-4));
-  });
+  try{const r=nhCall_('/n2/acctinfo',{});nhAssertResponse_(r);nhLog_('NH_ACCOUNTS_OK',r.http)}catch(error){const d=nhSafeDiagnostic_(error);nhLog_(d.code,d.http)}
 }
 
 // 3) 선물 시세(주간) 호출 형식 탐색: 코스피200(대조군)과 코스닥150 월물 코드 후보를 하나씩 시험한다.
-//    결과 로그를 그대로 보내 주세요(키·토큰·계좌 정보는 들어 있지 않습니다).
+//    결과에는 안전한 상태 코드만 남긴다.
 function nhProbeFutQuote() {
   const candidates = [
     ['코스피200 대조', 'KR4A016C0004'],
@@ -111,13 +129,7 @@ function nhProbeFutQuote() {
     ['코스닥150 후보', 'A066C000']
   ];
   candidates.forEach(function (c) {
-    const r = nhCall_('/krfuture/quote/v1/day', { iem_cd: c[1] });
-    Logger.log('[' + c[0] + '] iem_cd=' + c[1] + ' → HTTP ' + r.http +
-      ' / rsp_cd ' + r.body.rsp_cd + ' / rsp_msg ' + r.body.rsp_msg);
-    const keys = Object.keys(r.body || {}).filter(function (k) { return k.indexOf('Output_') === 0; });
-    keys.forEach(function (k) {
-      Logger.log('   ' + k + ': ' + JSON.stringify(r.body[k]).slice(0, 600));
-    });
+    try{const r=nhCall_('/krfuture/quote/v1/day',{iem_cd:c[1]});nhAssertResponse_(r);nhLog_('NH_FUTURE_OK',r.http)}catch(error){const d=nhSafeDiagnostic_(error);nhLog_(d.code,d.http)}
   });
 }
 
@@ -130,7 +142,7 @@ function nhFetchSpec_(g) {
       const res = UrlFetchApp.fetch('https://www.nhplug.com/openapi-docs/' + g + '/openapi.json', { muteHttpExceptions: true });
       return JSON.parse(res.getContentText());
     } catch (e) {
-      Logger.log('[' + g + '] 명세 로드 실패 ' + i + '/4: ' + e);
+      nhLog_('NH_SPEC_FAILED');
       if (i < 4) Utilities.sleep(2500 * i);
     }
   }
@@ -138,30 +150,13 @@ function nhFetchSpec_(g) {
 }
 
 // groups = { 그룹명: [경로 정규식, ...] } — 그룹별로 시세·조회 경로 목록을 찍고,
-// 정규식에 맞는 API의 입력(*=필수)·응답 필드 이름을 요약해서 로그에 남긴다.
+// 원문 명세 대신 로드 상태만 기록한다.
 function nhDumpGroups_(groups) {
   Object.keys(groups).forEach(function (g) {
     const spec = nhFetchSpec_(g);
     if (!spec) return;
-    const paths = Object.keys(spec.paths || {});
-    Logger.log('[' + g + '] 시세·조회 경로: ' + paths.filter(function (p) { return /\/(quote|inquiry)\//.test(p); }).join(' , '));
-    paths.forEach(function (p) {
-      if (!groups[g].some(function (re) { return re.test(p); })) return;
-      const op = spec.paths[p].post || {};
-      Logger.log('=== ' + p + ' (' + (op.summary || '') + ')');
-      const inp = (((((op.requestBody || {}).content || {})['application/json'] || {}).schema || {}).properties || {}).Input_0 || {};
-      const req = inp.required || [];
-      Logger.log('입력: ' + Object.keys(inp.properties || {}).map(function (k) {
-        return k + (req.indexOf(k) >= 0 ? '*' : '') + '=' + String(inp.properties[k].description || '').slice(0, 160);
-      }).join(' | '));
-      const out = ((((((op.responses || {})['200'] || {}).content || {})['application/json'] || {}).schema || {}).properties) || {};
-      Object.keys(out).filter(function (k) { return k.indexOf('Output_') === 0; }).forEach(function (k) {
-        const o = out[k];
-        const props = o.type === 'array' ? ((o.items || {}).properties || {}) : (o.properties || {});
-        const line = Object.keys(props).map(function (f) { return f + '=' + String(props[f].description || '').split(' / ')[0]; }).join(', ');
-        Logger.log(k + ' (' + (o.type === 'array' ? '배열' : '객체') + '): ' + line.slice(0, 1800));
-      });
-    });
+    // The specification is upstream content too: never dump descriptions or field names.
+    nhLog_('NH_SPEC_OK');
   });
 }
 
@@ -214,7 +209,7 @@ function nhFutCode_(prefix, now) {
       if (valid) return prefix + (y % 10) + '123456789ABC'.charAt(m - 1) + '000';
     }
   }
-  throw new Error('선물 월물 계산 실패');
+  throw nhFailure_('NH_CONTRACT');
 }
 
 function nhNum_(v) {
@@ -255,10 +250,10 @@ function nhFutQuote_(prefix) {
   const r = nhCall_('/krfuture/quote/v1/day', { iem_cd: code });
   const o0 = r.body && r.body.Output_0;
   if (r.http !== 200 || !o0 || typeof o0 !== 'object' || o0.prpr == null) {
-    throw new Error((r.body && r.body.rsp_msg) || ('HTTP ' + r.http));
+    throw nhFailure_('NH_HTTP',r.http);
   }
   const nd = nhFutNorm_(o0, r.body.Output_1);
-  if (!nd) throw new Error('시세 해석 실패');
+  if (!nd) throw nhFailure_('NH_NO_PRICE');
   cache.put('nhq_' + code, JSON.stringify(nd), 5);
   return nd;
 }
@@ -275,22 +270,21 @@ function handleNhQuotes(token, items) {
     if (!k) return;
     try {
       if (it.t === 'fut' && /^A0[0-9]$/.test(String(it.c))) data[k] = nhFutQuote_(String(it.c));
-      else throw new Error('지원하지 않는 항목');
+      else throw nhFailure_('NH_UNSUPPORTED');
     } catch (e) {
-      errors[k] = String((e && e.message) || e).slice(0, 120);
+      errors[k] = nhSafeErrorText_(e);
     }
   });
   return jsonResponse({ success: true, data: data, errors: errors });
 }
 
-// 편집기에서 실행하는 시험: 월물 코드·시세·등락 판정 근거를 로그로 확인 (키·토큰은 출력 안 됨)
+// 편집기 시험은 조회 성공/실패 코드만 기록한다.
 function nhTestFutures() {
   ['A01', 'A06'].forEach(function (pf) {
     try {
       const q = nhFutQuote_(pf);
-      Logger.log(pf + ' → ' + q.code + ' ' + q.name + ' / 현재가 ' + q.p + ' / 전일 기준 ' + q.prev +
-        ' / 베이시스 ' + (q.basis == null ? '없음' : q.basis.toFixed(2)) + ' / 시각 ' + q.t + ' / 등락 판정 ' + q.dir);
-    } catch (e) { Logger.log(pf + ' 실패: ' + e); }
+      nhLog_('NH_FUTURE_OK');
+    } catch (e) {const d=nhSafeDiagnostic_(e);nhLog_(d.code,d.http)}
   });
 }
 
@@ -305,10 +299,10 @@ function nhReadPaged_(path, input, maxPages) {
     const opt = cts ? { cts: cts, cts_flag: 'Y' } : null;
     last = nhCall_(path, input, opt); pages++;
     const b = last.body || {}, code = String(b.rsp_cd || '');
-    if (last.http !== 200) throw new Error('HTTP ' + last.http + ' · ' + String(b.rsp_msg || '조회 실패').slice(0, 90));
+    nhAssertResponse_(last);
     // 00218: 연속조회 안내. 이미 수신한 잔고 블록을 버리지 않는다.
     if (code && !/^0+$/.test(code) && code !== '00218' && code !== '00166') {
-      throw new Error('응답 ' + code + ' · ' + String(b.rsp_msg || '조회 실패').slice(0, 90));
+      throw nhFailure_('NH_RSP');
     }
     if (code === '00218') notice = '연속조회 안내(00218)';
     if (code === '00166') notice = '조회 완료(00166)';
@@ -328,8 +322,7 @@ function nhReadPaged_(path, input, maxPages) {
     break;
   }
   if (pages === limit && cts) { partial = true; notice = '최대 연속조회 횟수 도달'; }
-  return { summary: summary, rows: rows, pages: pages, notice: notice, partial: partial,
-    rsp_msg: last && last.body && last.body.rsp_msg || '' };
+  return { summary: summary, rows: rows, pages: pages, notice: notice, partial: partial };
 }
 
 function nhAccountBalance_(acctNo, acctType) {
@@ -354,7 +347,7 @@ function nhAccountBalance_(acctNo, acctType) {
         evalAmount: nhNum_(x.eal_amt), profit: nhNum_(x.eal_pls_amt), returnRate: nhNum_(x.pft_rt), currency: 'KRW'
       }; })
     };
-  } catch (e) { result.errors.push('국내주식: ' + String(e.message || e).slice(0, 110)); }
+  } catch (e) { result.errors.push('국내주식: ' + nhSafeErrorText_(e)); }
 
   // 해외주식: 전체 시장·전체 통화(원화 환산값 포함)
   try {
@@ -375,7 +368,7 @@ function nhAccountBalance_(acctNo, acctType) {
         returnRate: nhNum_(x.eal_pft_rt), currency: String(x.cur_cd || '')
       }; })
     };
-  } catch (e) { result.errors.push('해외주식: ' + String(e.message || e).slice(0, 110)); }
+  } catch (e) { result.errors.push('해외주식: ' + nhSafeErrorText_(e)); }
   return result;
 }
 
@@ -383,7 +376,7 @@ function handleNhAccounts(token) {
   if (!sessionUser_(token)) return jsonResponse({ success: false, message: '로그인이 필요합니다. 다시 로그인하세요.' });
   try {
     const r = nhCall_('/n2/acctinfo', {});
-    if (r.http !== 200) throw new Error('계좌목록 HTTP ' + r.http);
+    nhAssertResponse_(r);
     const all = Array.isArray(r.body && r.body.Output_0) ? r.body.Output_0 : [];
     // acct_type 01/02만 운영 일반계좌. 03 모의투자는 이번 화면에서 제외.
     const seen = {};
@@ -400,20 +393,21 @@ function handleNhAccounts(token) {
     return jsonResponse({ success: true, accounts: accounts, excludedMockCount: all.filter(function (a) { return String(a.acct_type) === '03'; }).length,
       updatedAt: Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') });
   } catch (e) {
-    return jsonResponse({ success: false, message: String(e.message || e).slice(0, 160) });
+    return jsonResponse({success:false,code:nhSafeDiagnostic_(e).code,message:nhSafeErrorText_(e)});
   }
 }
 
-// 편집기 진단: 계좌번호 전체와 보유종목 원문은 로그에 남기지 않는다.
+// 편집기 진단: 계좌 식별값(끝자리 포함), 종목, 금액, 원문 오류를 기록하지 않는다.
 function nhTestAccountBalances() {
+  try{
   const r = nhCall_('/n2/acctinfo', {});
+  nhAssertResponse_(r);
   const all = Array.isArray(r.body && r.body.Output_0) ? r.body.Output_0 : [];
   all.filter(function (a) { return /^(01|02)$/.test(String(a.acct_type)); }).forEach(function (a) {
     const x = nhAccountBalance_(String(a.acct_no), String(a.acct_type));
-    Logger.log('계좌 끝 ' + String(a.acct_no).slice(-4) + ' / 국내 ' + (x.domestic ? x.domestic.holdings.length + '종목, 평가 ' + x.domestic.summary.evalAmount + ', 손익 ' + x.domestic.summary.profit : '조회 실패') +
-      ' / 해외 ' + (x.overseas ? x.overseas.holdings.length + '종목, 평가 ' + x.overseas.summary.evalAmount + ', 손익 ' + x.overseas.summary.profit : '조회 실패') +
-      (x.errors.length ? ' / 오류 ' + x.errors.join(' | ') : ''));
+    nhLog_(x.domestic?'NH_DOMESTIC_OK':'NH_UPSTREAM');nhLog_(x.overseas?'NH_OVERSEAS_OK':'NH_UPSTREAM');
   });
+  }catch(error){const d=nhSafeDiagnostic_(error);nhLog_(d.code,d.http)}
 }
 
 
@@ -432,12 +426,14 @@ function handleNhExternalQuotes(token, codes) {
   if(!sessionUser_(token))return jsonResponse({success:false,code:'AUTH_REQUIRED',layer:'gas',message:'로그인이 필요합니다.'});
   if(!Array.isArray(codes)||!codes.length||codes.length>40)return jsonResponse({success:false,code:'INVALID_CODES',layer:'gas',message:'종목코드는 1~40개까지 요청할 수 있습니다.'});
   const prices=Object.create(null),errors=Object.create(null),diagnostics=Object.create(null),seen=Object.create(null);
-  codes.forEach(function(raw){
+  codes.forEach(function(raw,index){
     const code=String(raw==null?'':raw).trim();
+    const diagnosticKey=/^[A-Z0-9]{6}$/.test(code)?code:'invalid_'+(index+1);
     function reject(reason,layer,http,rsp,fields){
+      http=Number.isInteger(http)&&http>=100&&http<=599?http:null;
       const diagnostic={layer:layer,code:reason,http:http==null?null:http,rspCode:rsp||null,fields:fields||[]};
-      diagnostics[code.slice(0,24)]=diagnostic;
-      errors[code.slice(0,24)]=layer+' / '+reason+(http?' / HTTP '+http:'')+(rsp?' / rsp_cd '+rsp:'');
+      diagnostics[diagnosticKey]=diagnostic;
+      errors[diagnosticKey]=layer+' / '+reason+(http?' / HTTP '+http:'')+(rsp?' / rsp_cd '+rsp:'');
     }
     if(!/^[A-Z0-9]{6}$/.test(code)){reject('INVALID_SYMBOL','gas');return}
     if(seen[code])return;seen[code]=true;
@@ -445,9 +441,9 @@ function handleNhExternalQuotes(token, codes) {
       const r=nhCall_('/krstock/quote/v1/currentPrice',{market_cd:'UNT',iem_cd:code});
       const body=r.body||{},block=body.Output_0;
       const o=Array.isArray(block)?(block.find(x=>x&&String(x.iem_cd||'').trim()===code)||block[0]||{}):(block||{});
-      const fields=Object.keys(o).filter(k=>/^[A-Za-z0-9_]{1,40}$/.test(k)).slice(0,8);
+      const fields=Object.keys(o).filter(k=>['stck_prpr','now_pr','cur_pr','prpr','trd_pr','iem_cd','iem_nm'].indexOf(k)>=0);
       const rawRsp=String(body.rsp_cd==null?'':body.rsp_cd).trim();
-      const rsp=/^[A-Za-z0-9_-]{1,20}$/.test(rawRsp)?rawRsp:(rawRsp?'INVALID_RSP_CODE':'');
+      const rsp=nhRspCode_(rawRsp);
       if(r.http!==200){reject('NH_HTTP','nh',r.http,rsp,fields);return}
       if(rsp==='PARSE'){reject('GAS_UPSTREAM_JSON','gas',r.http,rsp,fields);return}
       if(rsp&&!/^0+$/.test(rsp)&&rsp!=='00166'){reject('NH_RSP','nh',r.http,rsp,fields);return}

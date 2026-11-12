@@ -20,6 +20,7 @@ function frontend(){
     NH_ACCOUNT_FETCHED_AT:Date.now(),NH_ACCOUNT_SESSION:'test-session',
     fetch:async()=>{throw Error('unexpected request')},
   });
+  ctx.SafeDiagnostics=require('../js/diagnostics.js');
   ctx.ExternalCore=require('../js/external_core.js');
   vm.runInContext(source('js/external_accounts.js'),ctx);
   ctx.testMaster=ctx.ExternalCore.master({schema:1,source:{},instruments:[{code:'035720',name:'카카오',type:'STOCK'},{code:'344820',name:'KCC글라스',type:'STOCK'},{code:'123456',name:'다른종목',type:'STOCK'}]});
@@ -40,7 +41,7 @@ test('GAS authentication and code validation reject requests before NH access',(
   const b=backend({});
   assert.equal(b.ctx.handleNhExternalQuotes('', ['035720']).success,false);
   assert.equal(b.quote(Array(41).fill('035720')).success,false);
-  assert.ok(b.quote(['A035720','35720']).errors.A035720);
+  assert.ok(b.quote(['A035720','35720']).errors.invalid_1);
   assert.equal(b.requests.length,0);
 });
 test('GAS reads official and legacy prices, including array blocks and comma formatting',()=>{
@@ -98,7 +99,7 @@ test('NH price reuse expires after five minutes and is isolated to the session',
 });
 test('failed quotes discard the previous price and show partial totals',async()=>{
   const f=frontend();
-  f.ctx.fetch=async()=>({text:async()=>JSON.stringify({success:true,prices:{'123456':{price:200}},errors:{'035720':'HTTP 500'}})});
+  f.ctx.fetch=async()=>({text:async()=>JSON.stringify({success:true,prices:{'123456':{price:200}},errors:{'035720':'untrusted upstream message'},diagnostics:{'035720':{layer:'nh',code:'NH_HTTP',http:500}}})});
   f.run("EXT_ASSETS=[{name:'카카오',code:'035720',quantity:2,avgPrice:80,accountType:'ISA'},{name:'다른종목',code:'123456',quantity:1,avgPrice:150,accountType:'ISA'}];EXT_PRICES={'035720':{price:9999}}");
   await f.run('refreshExternalPrices(true)');
   assert.equal(f.run("EXT_PRICES['035720']"),undefined);
@@ -123,7 +124,7 @@ test('network failure clears stale prices and the next successful refresh clears
   f.ctx.fetch=async()=>{throw Error('offline')};
   await f.run('refreshExternalPrices(true)');
   assert.equal(f.run('Object.keys(EXT_PRICES).length'),0);
-  assert.match(f.element('externalStatus').textContent,/프런트엔드 연결 실패/);
+  assert.match(f.element('externalStatus').textContent,/FRONTEND_NETWORK/);
   assert.equal(f.ctx.window.EXT_LAST_QUOTE_DIAGNOSTICS['035720'].code,'FRONTEND_NETWORK');
   f.ctx.fetch=async()=>({text:async()=>JSON.stringify({success:true,prices:{'035720':{price:100}}})});
   await f.run('refreshExternalPrices(true)');

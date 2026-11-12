@@ -97,7 +97,7 @@ with sync_playwright() as playwright:
                 first = fixture["expected"][0]
                 overseas = {"summary": {"evalAmount": 50, "profit": 10}, "holdings": [{"name": "Synthetic overseas", "code": "SYNTHETIC", "quantity": 5, "avgPrice": 8, "currentPrice": 10, "evalAmount": 50, "profit": 10, "returnRate": 25, "currency": "USD"}]}
                 partial = state["general_mode"] == "partial"
-                fulfill(route, {"success": True, "updatedAt": "fixture timestamp", "accounts": [{"acctType": "01", "domestic": {"summary": {"evalAmount": 1500, "profit": 0}, "holdings": [{"name": first["name"], "code": first["code"], "quantity": 5, "avgPrice": 300, "currentPrice": 300, "evalAmount": 1500, "profit": 0, "currency": "KRW"}]}, "overseas": None if partial else overseas, "errors": ["Synthetic overseas HTTP 503"] if partial else []}]})
+                fulfill(route, {"success": True, "updatedAt": "fixture timestamp", "accounts": [{"acctType": "01", "domestic": {"summary": {"evalAmount": 1500, "profit": 0}, "holdings": [{"name": first["name"], "code": first["code"], "quantity": 5, "avgPrice": 300, "currentPrice": 300, "evalAmount": 1500, "profit": 0, "currency": "KRW"}]}, "overseas": None if partial else overseas, "errors": ["해외주식: NH_HTTP / HTTP 503"] if partial else []}]})
             else:
                 fulfill(route, {"success": True})
 

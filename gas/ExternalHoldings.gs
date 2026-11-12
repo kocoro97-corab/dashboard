@@ -52,8 +52,8 @@ function externalStoreTrim_(user){
   own.slice(0,Math.max(0,own.length-5)).reverse().forEach(index=>sheet.deleteRow(index));
 }
 function externalStoreError_(error){
-  const code=String(error&&error.message||'').startsWith('STORE_')?String(error.message):'STORE_WRITE_FAILED';
   const messages={STORE_CONFLICT:'다른 화면에서 자료가 변경됐습니다. 다시 불러온 뒤 비교하세요.',STORE_CONFIRM:'기존 자료 교체 확인이 필요합니다.',STORE_INVALID:'종목 입력값이 올바르지 않습니다.',STORE_DUPLICATE:'같은 계좌에 중복 종목이 있습니다.',STORE_NOT_FOUND:'복구할 내역이 없거나 접근할 수 없습니다.',STORE_SCHEMA:'저장소 형식 확인이 필요합니다.',STORE_SNAPSHOT_TOO_LARGE:'복구용 자료가 너무 큽니다.'};
+  const raw=String(error&&error.message||''),code=Object.prototype.hasOwnProperty.call(messages,raw)?raw:'STORE_WRITE_FAILED';
   return jsonResponse({success:false,code:code,layer:'storage',message:messages[code]||'저장 실패. 기존 자료와 복구 기록을 확인하세요.'});
 }
 function handleExternalHoldingsV2(token){

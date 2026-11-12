@@ -44,10 +44,10 @@ async function doAuth(retried){
     step='응답(HTTP '+res.status+')';
     const txt=await res.text();
     let data;
-    try{data=JSON.parse(txt)}catch(e){throw new Error('JSON 아님: '+txt.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,80))}
+    try{data=JSON.parse(txt)}catch(e){throw Object.assign(new Error(''),{code:'GAS_NON_JSON'})}
     if(run!==AUTH_LOGIN_RUN)return;
     if(data.success){
-      if(isRegisterMode){alert(data.message);toggleAuthMode()}
+      if(isRegisterMode){alert(SafeDiagnostics.message(data));toggleAuthMode()}
       else{
         LS('invest_session_token',data.token);
         LS('invest_is_admin',data.isAdmin?'true':'false');
@@ -57,13 +57,13 @@ async function doAuth(retried){
         startSessionTimer(true);
         enterDashboard(data.isAdmin);
       }
-    }else{$('authMsg').textContent=data.message||"처리에 실패했습니다."}
+    }else{$('authMsg').textContent=SafeDiagnostics.message(data)}
   }catch(e){
     if(!retried&&LS('invest_myproxy')&&base!==DEFAULT_GAS_URL){
       localStorage.removeItem('invest_myproxy');
       return doAuth(true);
     }
-    $('authMsg').textContent='서버 통신 오류 ['+step+'] '+(e.message||'')+' · 주소 …'+base.slice(-8);
+    $('authMsg').textContent='서버 통신 오류 · '+SafeDiagnostics.message(e,'FRONTEND_NETWORK');
   }
 }
 
@@ -95,7 +95,7 @@ async function approveUser(targetId){
   try{
     const res=await post({action:'approveUser',token,target:targetId});
     const data=await res.json();
-    alert(data.message);
+    alert(SafeDiagnostics.message(data));
     if(data.success)openAdminModal();
   }catch(e){alert('승인 처리 중 오류 발생')}
 }
@@ -212,9 +212,9 @@ function showPasswordChange(){
     try{
       const response=await post({action:'changePassword',token,currentPass,newPass});const result=await response.json();
       if(LS('invest_session_token')!==token)return;
-      if(!result.success)throw new Error(result.message||'변경 실패');
+      if(!result.success){message.textContent=SafeDiagnostics.message(result);return}
       LS('invest_session_token',result.token);LS('invest_is_admin',result.isAdmin?'true':'false');LS('invest_password_change',false);
       panel.remove();startSessionTimer(true);enterDashboard(result.isAdmin);
-    }catch(error){message.textContent=error.message}finally{button.disabled=false}
+    }catch(error){message.textContent=SafeDiagnostics.message(error,'FRONTEND_NETWORK')}finally{button.disabled=false}
   });
 }
