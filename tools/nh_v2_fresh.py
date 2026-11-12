@@ -16,6 +16,29 @@ class Stop(Exception):
     pass
 
 
+SAFE_OWNER_CODES = frozenset('''PRIVATE_LOCATION_REQUIRED EXISTING_TEST_TARGET_REFUSED
+NEW_STANDALONE_ONLY TARGET_CONFIG_MISMATCH COMMAND_REFUSED OWNER_CLASP_AUTH_OR_COMMAND_FAILED
+CLASP_PROJECT_PATH_INVALID OWNER_GOOGLE_LOGIN_REQUIRED OWNER_GOOGLE_SCOPE_REQUIRED
+OWNER_APPS_SCRIPT_API_REQUIRED CLEAN_REVIEWED_SOURCE_REQUIRED CREATED_PROJECT_IDENTITY_FAILED
+SOURCE_LAYOUT_REFUSED BACKUP_INVALID SOURCE_READBACK_FAILED PLAN_OR_SOURCE_CHANGED
+EXISTING_DEPLOYMENT_REFUSED IMMUTABLE_VERSION_FAILED IMMUTABLE_SOURCE_FAILED
+DEPLOYMENT_IDENTITY_FAILED FRESH_ENVIRONMENT_NOT_CONFIRMED'''.split())
+
+
+def clasp_failure_code(stdout, stderr):
+    # Examine privately, emit only fixed categories. Never forward a URL/path or CLI text.
+    text = (stdout + '\n' + stderr).lower()
+    if 'invalid --project path:' in text:
+        return 'CLASP_PROJECT_PATH_INVALID'
+    if any(s in text for s in ('invalid_grant', 'not logged in', 'not authenticated', 'clasp login', 'invalid credentials')):
+        return 'OWNER_GOOGLE_LOGIN_REQUIRED'
+    if 'insufficient authentication scopes' in text or 'insufficient scope' in text:
+        return 'OWNER_GOOGLE_SCOPE_REQUIRED'
+    if 'script.google.com/home/usersettings' in text or 'apps script api' in text and any(s in text for s in ('disabled', 'enable')):
+        return 'OWNER_APPS_SCRIPT_API_REQUIRED'
+    return 'OWNER_CLASP_AUTH_OR_COMMAND_FAILED'
+
+
 def private_path(value, new):
     raw = Path(value).absolute()
     if any(p.is_symlink() for p in [raw, *raw.parents]):
@@ -47,10 +70,14 @@ def invoke(args, folder, script=None):
                  or args == ['list-deployments', script])
         if not valid:
             raise Stop('COMMAND_REFUSED')
-    r = subprocess.run(['npx', '--yes', '@google/clasp@3.4.1', '--json', '--project', str(folder / '.clasp.json'), *args],
+    # For create, the config does not exist yet. clasp 3.4.1 rejects an explicit
+    # missing file before running the command; an existing directory selects the
+    # intended new config location without searching parent projects.
+    project = folder if script is None else folder / '.clasp.json'
+    r = subprocess.run(['npx', '--yes', '@google/clasp@3.4.1', '--json', '--project', str(project), *args],
                        cwd=folder, capture_output=True, text=True, timeout=180)
     if r.returncode:
-        raise Stop('OWNER_CLASP_AUTH_OR_COMMAND_FAILED')
+        raise Stop(clasp_failure_code(r.stdout, r.stderr))
     return r.stdout
 
 
@@ -146,8 +173,9 @@ def main():
     a = p.parse_args()
     try:
         result = create(a.output) if a.mode == 'create' else publish(a.output)
-    except Exception:
-        result = {'status': 'FAIL', 'code': 'FRESH_OWNER_STEP_FAILED_STOP', 'existingResourcesChanged': False, 'nhRequested': False}
+    except Exception as error:
+        code = str(error) if isinstance(error, Stop) and str(error) in SAFE_OWNER_CODES else 'FRESH_OWNER_STEP_FAILED_STOP'
+        result = {'status': 'FAIL', 'code': code, 'existingResourcesChanged': False, 'nhRequested': False}
     print(json.dumps(result))
     return 0 if result['status'] == 'PASS' else 1
 

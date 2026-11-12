@@ -78,6 +78,38 @@ class FreshTests(unittest.TestCase):
             for args in [['update-deployment','anything'],['create-deployment','--deploymentId','anything'],['list-deployments',fresh.OLD_SCRIPT]]:
                 with self.assertRaises(fresh.Stop):fresh.invoke(args,folder,SCRIPT)
             subprocess.assert_not_called()
+    def test_create_selects_existing_directory_not_missing_config_file(self):
+        with tempfile.TemporaryDirectory() as t:
+            folder=Path(t)
+            def command(args,**kwargs):
+                selected=Path(args[args.index('--project')+1])
+                self.assertEqual(selected,folder)
+                self.assertTrue(selected.is_dir())
+                self.assertFalse((selected/'.clasp.json').exists())
+                return type('R',(),{'returncode':0,'stdout':'{}','stderr':''})()
+            with patch.object(fresh.subprocess,'run',side_effect=command):
+                fresh.invoke(['create','--type','standalone','--title','synthetic'],folder)
+
+    def test_existing_project_operations_keep_exact_config_file_target(self):
+        with tempfile.TemporaryDirectory() as t:
+            folder=Path(t);config=folder/'.clasp.json'
+            config.write_text(json.dumps({'scriptId':SCRIPT,'rootDir':'.'}))
+            def command(args,**kwargs):
+                self.assertEqual(Path(args[args.index('--project')+1]),config)
+                self.assertTrue(config.is_file())
+                return type('R',(),{'returncode':0,'stdout':'{}','stderr':''})()
+            with patch.object(fresh.subprocess,'run',side_effect=command):fresh.invoke(['push','--force'],folder,SCRIPT)
+
+    def test_cli_failure_categories_never_echo_private_paths_or_credentials(self):
+        for message,expected in [
+            ('Invalid --project path: /SYNTHETIC_PRIVATE_CANARY/.clasp.json','CLASP_PROJECT_PATH_INVALID'),
+            ('invalid_grant SYNTHETIC_PRIVATE_CANARY','OWNER_GOOGLE_LOGIN_REQUIRED'),
+            ('insufficient authentication scopes SYNTHETIC_PRIVATE_CANARY','OWNER_GOOGLE_SCOPE_REQUIRED'),
+            ('Apps Script API disabled SYNTHETIC_PRIVATE_CANARY','OWNER_APPS_SCRIPT_API_REQUIRED'),
+            ('SYNTHETIC_PRIVATE_CANARY unknown vendor error','OWNER_CLASP_AUTH_OR_COMMAND_FAILED')]:
+            self.assertEqual(fresh.clasp_failure_code('',message),expected)
+            self.assertIn(expected,fresh.SAFE_OWNER_CODES)
+
     def test_google_auth_failure_does_not_echo_private_cli_output(self):
         with tempfile.TemporaryDirectory() as t,patch.object(fresh.subprocess,'run',return_value=type('R',(),{'returncode':1,'stdout':'SYNTHETIC_SECRET','stderr':'SYNTHETIC_SECRET'})()):
             with self.assertRaisesRegex(fresh.Stop,'OWNER_CLASP_AUTH_OR_COMMAND_FAILED'):fresh.invoke(['create','--type','standalone','--title','synthetic'],Path(t))

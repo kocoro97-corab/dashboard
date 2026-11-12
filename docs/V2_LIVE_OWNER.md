@@ -184,3 +184,18 @@ Results have PASS/FAIL/NOT_RUN plus scope. CI/local mock PASS and old live PASS 
 not satisfy this version's real-NH completion condition. Until actual owner-run
 results arrive, NH reads, native integrity, real-data display and cleanup are
 NOT_RUN, and PR #7 remains unmerged/unpublished.
+
+## Recovery from the initial --project-path failure
+
+The initial 16d643b helper passed a nonexistent `.clasp.json` file as `--project`
+to clasp 3.4.1's create command. clasp rejects that path during CLI initialization.
+The corrected helper selects the existing isolated directory for create; all
+subsequent project operations still use the exact existing config file.
+This was reproduced offline against clasp's actual initialization code, with no
+network calls. New regression tests cover both argument forms and redacted errors.
+
+Preserve the failed output directory. Update to the newly verified PR commit and
+use a different **new** private output directory, for example
+`$HOME/myinvest-v2-fresh-private-r2`. Never delete or reuse the failed directory to
+force creation. Safe CLI categories now distinguish path, owner login, OAuth scope,
+and Apps Script API enablement failures without revealing raw output.
