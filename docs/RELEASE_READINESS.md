@@ -60,13 +60,18 @@ Debian 13 / Chromium 156.0.8078.79 / Tesseract.js 5.1.1, 실제 파일 선택/�
 - 과거 소유자 Cloud Shell 실행: LIVE_NH_STAGING / PASS, 합성 fixture 7종목 가격, 저장/삭제/복원,
   일반계좌 국내·해외 전후 비교, cleanup PASS_BASELINE_EMPTY. 결과는 PR #2의 이전 실행 댓글과 사용자 제공 화면에 근거한다.
 - 이번 appVersion 재확인: nh-staging, 스크립트/시트 지문, GAS 소스 digest 일치, storeVersion=2. NH 호출/로그인/저장은 하지 않았다.
-- 이번 실제 NH/GAS 재실행: **BLOCKED / STAGING_TEST_CREDENTIALS_REQUIRED**, liveNhRequested=false.
-  현재 Codex 환경에 로그인 Secrets가 없어 반복 로그인·토큰 추측·운영 대체 테스트를 하지 않았다.
-- 따라서 최신 실제 이미지 → 사용자 확인 → 실제 GAS 저장/재조회 → 실제 NH 시세 → 평가/수익률이라는
-  **하나의 최신 live E2E 흐름은 아직 미검증**이다. 이미지/브라우저 저장은 mock, 이전 실제 API 증거는 별도다.
-- 실제 일반계좌의 최신 값 정확성 역시 이번 작업에서 재확인하지 못했다. mock은 전체 통과, 이전 실제 전후 비교는 통과다.
+- 최종 소유자 Cloud Shell 재실행: **LIVE_NH_STAGING / PASS**, holdingsInput=PRIVATE_LOCAL,
+  liveNhRequested=true, rawFinancialDataIncluded=false, cleanup=PASS_BASELINE_EMPTY.
+  2026-11-12 사용자가 제공한 안전한 실행 결과 화면에 근거한다. 실행 프로그램은 `eb5af358a088c0cf16a81c86728bf3301fed81d3`다.
+- 실제 캡처에서 확인한 정확한 7종목으로 저장/재조회, 7개 실제 NH 현재가/평가 계산,
+  수량 수정/재조회/정확한 복원, 삭제/복원, 일반계좌 국내·해외 전후 조회와 코드·수량·통화 일치까지 **24개 검사 전부 PASS**다.
+- 이전 합성 fixture와 실제 캡처의 1종목 구성 차이는 이번 PRIVATE_LOCAL 검사로 해소했다.
+  실제 가격/금융값/계좌정보/기대값/로그인 정보는 이 문서에 쓰지 않는다. 사용자의 원본 화면도 GitHub에 올리지 않는다.
+- 실제 OCR 브라우저 검사와 실제 NH/GAS CLI 검사는 동일 비공개 기대값으로 연결한 **별도 검사**다.
+  브라우저에서 실제 GAS에 저장하는 하나의 연속 UI 흐름을 직접 실행한 것으로 표시하지 않는다.
+- 일반계좌는 두 실제 조회의 코드·수량·통화가 일치했다. 시장 변동 가능한 가격/평가액이 불변이라는 뜻은 아니다.
 
-완료 방법: 소유자가 테스트 로그인 정보만 작업 환경 Secrets에 넣거나 Cloud Shell에서 숨김 입력으로 재실행한다.
+Codex 환경 자체에는 로그인 Secrets가 없어 직접 실행은 BLOCKED였으나, 이후 소유자의 숨김 입력 실행으로 최종 검증을 완료했다.
 비밀번호/키/토큰을 채팅에 보내지 않는다. NH 앱 키는 테스트 GAS 속성에만 둔다. 기존 운영 키 사용 시 예약/자동 조회를 겹치지 않게 하고
 토큰 오류/유량 초과가 발생하면 반복 발급하지 않고 중단한다. 같은 키 장기 동시 사용의 독립성은 이 테스트로 보장하지 않는다.
 Cloud Shell: https://shell.cloud.google.com
@@ -79,7 +84,7 @@ Cloud Shell: https://shell.cloud.google.com
 
 **아래는 모두 계획이며 아직 실행하지 않았다.** 각 승인에는 대상 SHA와 환경을 명시한다.
 
-1. 위 live E2E/실제 7종목 재검증을 끝내고 사용자가 최종 head/변경 파일/결과를 검수한다.
+1. 완료된 실제 7종목 PRIVATE_LOCAL 결과와 사용자가 제공한 실행 근거, 최종 head/변경 파일/CI를 사용자가 검수한다.
 2. 사용자 승인 후 PR #3을 PR #2 브랜치에 먼저 병합한다. PR #2의 새 통합 head CI를 다시 통과시킨다.
    squash/rebase를 쓰면 SHA가 바뀌므로 최종 배포 대상으로 새 SHA를 고정한다.
 3. **GitHub Pages 게이트를 먼저 확인한다.** 현재 읽기 확인 결과 build_type=legacy, source=main:/, status=built다. main 병합은 Pages 게시를 유발할 수 있다.
@@ -136,9 +141,8 @@ Cloud Shell: https://shell.cloud.google.com
 
 ## 10. 현재 판단
 
-**조건부 가능 — 현재 운영 배포 실행은 금지.** 자동/실제 이미지 검증은 통과했지만 다음 운영 게이트가 남아 있다.
+**조건부 배포 가능 — 사용자 승인 전 운영 실행은 금지.** 자동 회귀·실제 이미지·정확한 실제 7종목 NH/GAS CLI 검증은 통과했다. 다음 운영 게이트가 남아 있다.
 
-- 최신 실제 이미지 7종목의 격리 live NH/GAS E2E 재검증(인증정보 대기).
 - 최종 통합 SHA CI 성공 확인 및 사용자 재검수/명시적 병합·운영 배포 승인.
 - 소유자의 운영 백업 완료와 GitHub Pages 게시 순서/게이트 확인.
 
@@ -149,7 +153,7 @@ Cloud Shell: https://shell.cloud.google.com
 정확한 실제 7종목 비공개 기대값은 마스터 이름/코드와 일치함을 로컬에서 재확인했다. 파일 내용은 공개하지 않았다.
 도구의 순서를 저장 → 재조회 → NH 현재가 → 평가금액/손익/수익률 유한값 계산 검증 → 수량 수정/재조회 → 정확한 원상 복원 →
 1종목 삭제/복원 → 일반계좌 전후 비교 → 초기 빈 보유목록 복구로 보완했다. 실제 금융 계산값은 메모리에서만 사용한다.
-현재 이 실행은 인증정보가 없어 BLOCKED이며 실제 NH/GAS 성공으로 표시하지 않는다.
+준비 시점에는 인증정보가 없어 BLOCKED였지만 이후 소유자의 PRIVATE_LOCAL 실행이 PASS로 완료됐다. 위 최종 실행 증거와 구분한다.
 
 도구 회귀 2개 추가 후 전체 Node 68개/Python 30개=98개 통과. GAS 소스나 배포는 바꾸지 않았으므로 테스트 GAS 재배포는 필요 없다.
 정리 대상은 이번 실행의 활성 보유목록뿐이며, 복구 History는 유지한다. 기존 History/Users/다른 사용자 자료를 일괄 삭제하지 않는다.
