@@ -72,6 +72,31 @@ class FakeApp:
 
 
 class StagingTests(unittest.TestCase):
+    def test_every_external_account_type_is_isolated_and_cleaned(self):
+        for account_type in ['ISA', 'PENSION', 'IRP']:
+            app = FakeApp()
+            report = runner.live_checks(app, self.fixture(), SCRIPT, SHEET, DIGEST, 'SYNTHETIC_USER', 'SYNTHETIC_PRIVATE_PASSWORD', account_type=account_type)
+            self.assertEqual(report['status'], 'PASS')
+            self.assertEqual(report['accountType'], account_type)
+            self.assertEqual(len(report['checks']), 24)
+            self.assertEqual(report['cleanup'], 'PASS_BASELINE_EMPTY')
+            self.assertEqual(app.rows, [])
+            saved_types = {row['accountType'] for snapshot in app.history for row in snapshot['holdings']}
+            self.assertEqual(saved_types, {account_type})
+
+    def test_invalid_external_account_type_stops_before_requests(self):
+        app = FakeApp()
+        with self.assertRaises(runner.Blocked):
+            runner.live_checks(app, self.fixture(), SCRIPT, SHEET, DIGEST, 'SYNTHETIC_USER', 'SYNTHETIC_PRIVATE_PASSWORD', account_type='SYNTHETIC_INVALID')
+        self.assertEqual(app.calls, [])
+
+    def test_report_codes_do_not_echo_even_uppercase_private_canaries(self):
+        for value in ['SYNTHETIC_PRIVATE_CANARY', {'private': 'SYNTHETIC_PRIVATE_CANARY'}]:
+            error = runner.ApiFailure(value, http='SYNTHETIC_PRIVATE_CANARY', action='SYNTHETIC_PRIVATE_CANARY')
+            self.assertEqual(error.code, 'API_FAILURE')
+            self.assertIsNone(error.http)
+            self.assertIsNone(error.action)
+
     def test_live_flow_saves_before_quotes_checks_valuation_and_restores_edits(self):
         app = FakeApp()
         report = self.run_checks(app)

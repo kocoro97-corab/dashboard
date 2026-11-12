@@ -29,8 +29,8 @@ jobs:
           .venv-browser/bin/python tests/browser_external.py
           .venv-browser/bin/python tests/browser_diagnostics.py
   nh-staging-live:
-    # Issue #4 verification is synthetic-only, independent of repository live-test settings.
-    if: github.event_name == 'pull_request' && github.head_ref != 'fix/issue-4-safe-diagnostics' && github.event.pull_request.head.repo.full_name == github.repository && vars.NH_STAGING_ENABLED == 'true'
+    # Security/preflight preparation branches never consume live credentials in CI.
+    if: github.event_name == 'pull_request' && github.head_ref != 'fix/issue-4-safe-diagnostics' && github.head_ref != 'fix/4b1-safety-checks' && github.event.pull_request.head.repo.full_name == github.repository && vars.NH_STAGING_ENABLED == 'true'
     needs: regression
     runs-on: ubuntu-24.04
     timeout-minutes: 15
