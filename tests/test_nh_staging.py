@@ -72,6 +72,28 @@ class FakeApp:
 
 
 class StagingTests(unittest.TestCase):
+    def test_private_holdings_reports_do_not_identify_the_real_portfolio(self):
+        fixture = self.fixture()
+        report = runner.live_checks(FakeApp(), fixture, SCRIPT, SHEET, DIGEST, 'SYNTHETIC_USER', 'SYNTHETIC_PRIVATE_PASSWORD', redact_symbols=True)
+        text = json.dumps(report)
+        self.assertEqual(report['status'], 'PASS')
+        for row in fixture['expected']:
+            self.assertNotIn(row['code'], text)
+            self.assertNotIn(row['name'], text)
+
+    def test_private_holdings_require_external_path_and_valid_unique_rows(self):
+        with self.assertRaises(runner.Blocked):
+            runner.load_holdings_fixture(ROOT / 'tests/fixtures/isa-ocr.json')
+        rows = self.fixture()['expected']
+        with tempfile.TemporaryDirectory() as directory:
+            file = Path(directory) / 'private.json'
+            file.write_text(json.dumps(rows))
+            self.assertEqual(runner.load_holdings_fixture(file)['expected'], rows)
+            for invalid in [rows[:6], rows[:6] + [rows[0]], [dict(row, quantity=True) for row in rows]]:
+                file.write_text(json.dumps(invalid))
+                with self.assertRaises(runner.Blocked):
+                    runner.load_holdings_fixture(file)
+
     def test_gas_login_rejections_are_classified_without_server_text(self):
         for message, expected in [
             ("로그인 정보 또는 계정 승인 상태를 확인하세요.", "LOGIN_CREDENTIALS_OR_APPROVAL"),

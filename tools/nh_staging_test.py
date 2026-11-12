@@ -100,6 +100,29 @@ def canonical(rows):
     return sorted(json.dumps([row.get(key) for key in fields], sort_keys=True) for row in rows)
 
 
+def load_holdings_fixture(private_path=None):
+    if private_path is None:
+        return json.loads((ROOT / "tests/fixtures/isa-ocr.json").read_text())
+    path = Path(private_path).resolve()
+    if path.is_relative_to(ROOT.resolve()):
+        raise Blocked("PRIVATE_HOLDINGS_MUST_STAY_OUTSIDE_REPOSITORY")
+    rows = json.loads(path.read_text())
+    if not isinstance(rows, list) or len(rows) != 7:
+        raise Blocked("SEVEN_PRIVATE_HOLDINGS_REQUIRED")
+    codes = set()
+    for row in rows:
+        if not isinstance(row, dict) or not re.fullmatch(r"[A-Z0-9]{6}", str(row.get("code", ""))) or not isinstance(row.get("name"), str) or not row["name"] or len(row["name"]) > 60:
+            raise Blocked("PRIVATE_HOLDINGS_INVALID")
+        if row["code"] in codes:
+            raise Blocked("PRIVATE_HOLDINGS_DUPLICATE")
+        codes.add(row["code"])
+        for key in ("quantity", "avgPrice"):
+            value = row.get(key)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+                raise Blocked("PRIVATE_HOLDINGS_INVALID")
+    return {"expected": [{key: row[key] for key in ("name", "code", "quantity", "avgPrice")} for row in rows]}
+
+
 def account_state(result):
     accounts = result.get("accounts")
     if not isinstance(accounts, list) or not accounts:
@@ -142,7 +165,7 @@ def auth_check(client, script_id, sheet_id, expected_digest, username, password)
             client.call("logout")
 
 
-def live_checks(client, fixture, script_id, sheet_id, expected_digest, username, password):
+def live_checks(client, fixture, script_id, sheet_id, expected_digest, username, password, redact_symbols=False):
     validate_target(client.url, script_id, sheet_id)
     report = {"mode": "LIVE_NH_STAGING", "status": "BLOCKED", "checks": [], "cleanup": "NOT_NEEDED", "rawFinancialDataIncluded": False, "liveNhRequested": False}
     def record(name, status="PASS", code=None, diagnostic=None):
@@ -179,13 +202,13 @@ def live_checks(client, fixture, script_id, sheet_id, expected_digest, username,
             record("general_domestic_overseas_before", "FAIL", error.code)
         try:
             quote = client.call("nhExternalQuotes", codes=[row["code"] for row in stage_rows])
-            for row in stage_rows:
+            for position, row in enumerate(stage_rows, 1):
                 price = quote.get("prices", {}).get(row["code"], {}).get("price")
                 valid = isinstance(price, (int, float)) and not isinstance(price, bool) and math.isfinite(price) and price > 0
                 diagnosis = quote.get("diagnostics", {}).get(row["code"], {})
                 code = diagnosis.get("code", "PRICE_UNAVAILABLE")
                 code = code if re.fullmatch(r"[A-Z0-9_]{1,50}", str(code)) else "PRICE_UNAVAILABLE"
-                record("isa_quote_" + row["code"], "PASS" if valid else "FAIL", None if valid else code, None if valid else diagnosis)
+                record("isa_quote_" + (str(position) if redact_symbols else row["code"]), "PASS" if valid else "FAIL", None if valid else code, None if valid else diagnosis)
         except ApiFailure as error:
             record("isa_quote_batch", "FAIL", error.code)
         wrote = True
@@ -247,6 +270,7 @@ def main():
     parser.add_argument("--sheet-id", default=os.environ.get("NH_STAGING_SHEET_ID"))
     parser.add_argument("--allow-staging-write", action="store_true")
     parser.add_argument("--auth-only", action="store_true", help="Check staging identity and login only; no NH requests or holdings writes")
+    parser.add_argument("--private-holdings", type=Path, help="Opt-in private OCR expectations outside Git, for staging only")
     parser.add_argument("--report", type=Path, default=Path("nh-staging-report.json"))
     args = parser.parse_args()
     report = {"mode": "LIVE_NH_STAGING", "status": "BLOCKED", "checks": [], "rawFinancialDataIncluded": False, "liveNhRequested": False}
@@ -269,7 +293,7 @@ def main():
             args.report.write_text(json.dumps(report, indent=2) + "\n")
             print(json.dumps(report))
             return 0
-        fixture = json.loads((ROOT / "tests/fixtures/isa-ocr.json").read_text())
+        fixture = load_holdings_fixture(args.private_holdings)
         master = json.loads((ROOT / "data/krx-instruments.json").read_text())
         age = datetime.datetime.now(datetime.timezone.utc) - datetime.datetime.fromisoformat(master["source"]["fetchedAt"])
         if age > datetime.timedelta(days=30):
@@ -277,7 +301,8 @@ def main():
         by_code = {row["code"]: row for row in master["instruments"]}
         if any(by_code.get(row["code"], {}).get("name") != row["name"] for row in fixture["expected"]):
             raise Blocked("FIXTURE_MASTER_MISMATCH")
-        report = live_checks(WebApp(args.url), fixture, args.script_id, args.sheet_id, source_digest(), username, password)
+        report = live_checks(WebApp(args.url), fixture, args.script_id, args.sheet_id, source_digest(), username, password, redact_symbols=bool(args.private_holdings))
+        report["holdingsInput"] = "PRIVATE_LOCAL" if args.private_holdings else "SYNTHETIC_FIXTURE"
     except Blocked as error:
         report["reason"] = str(error)
     except ApiFailure as error:

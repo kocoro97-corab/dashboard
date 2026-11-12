@@ -107,6 +107,16 @@ test('failed quotes discard the previous price and show partial totals',async()=
   assert.match(f.element('externalAssetRows').innerHTML,/시세 미확인/);
   assert.match(f.element('externalStatus').textContent,/HTTP 500/);
 });
+test('external valuation displays computed return only with confirmed price and positive cost',()=>{
+  const f=frontend();
+  f.run("EXT_ASSETS=[{name:'카카오',code:'035720',quantity:2,avgPrice:80,accountType:'ISA'}];EXT_PRICES={'035720':{price:100}};renderExternalAssets()");
+  assert.match(f.element('externalAssetRows').innerHTML,/수익률 25%/);
+  f.run("EXT_ASSETS[0].avgPrice=0;renderExternalAssets()");
+  assert.match(f.element('externalAssetRows').innerHTML,/수익률 —/);
+  f.run("EXT_ASSETS[0].avgPrice=80;EXT_PRICES={};renderExternalAssets()");
+  assert.match(f.element('externalAssetRows').innerHTML,/수익률 —/);
+  assert.doesNotMatch(f.element('externalAssetRows').innerHTML,/NaN|Infinity/);
+});
 test('network failure clears stale prices and the next successful refresh clears errors',async()=>{
   const f=frontend();
   f.run("EXT_ASSETS=[{name:'카카오',code:'035720',quantity:2,avgPrice:80,accountType:'ISA'}];EXT_PRICES={'035720':{price:9999}}");
