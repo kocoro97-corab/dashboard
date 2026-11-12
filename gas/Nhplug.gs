@@ -429,27 +429,38 @@ function nhExternalPrice_(o) {
   return null;
 }
 function handleNhExternalQuotes(token, codes) {
-  if (!sessionUser_(token)) return jsonResponse({success:false,message:'로그인이 필요합니다.'});
-  if (!Array.isArray(codes) || !codes.length || codes.length > 40) return jsonResponse({success:false,message:'종목코드는 1~40개까지 요청할 수 있습니다.'});
-  const prices=Object.create(null),errors=Object.create(null),seen=Object.create(null);
+  if(!sessionUser_(token))return jsonResponse({success:false,code:'AUTH_REQUIRED',layer:'gas',message:'로그인이 필요합니다.'});
+  if(!Array.isArray(codes)||!codes.length||codes.length>40)return jsonResponse({success:false,code:'INVALID_CODES',layer:'gas',message:'종목코드는 1~40개까지 요청할 수 있습니다.'});
+  const prices=Object.create(null),errors=Object.create(null),diagnostics=Object.create(null),seen=Object.create(null);
   codes.forEach(function(raw){
     const code=String(raw==null?'':raw).trim();
-    // 숫자를 임의로 제거하거나 앞자리를 자르지 않는다. 코드가 바뀌면 다른 종목이 될 수 있다.
-    if(!/^\d{6}$/.test(code)){errors[code.slice(0,24)]='종목코드는 숫자 6자리여야 합니다.';return}
+    function reject(reason,layer,http,rsp,fields){
+      const diagnostic={layer:layer,code:reason,http:http==null?null:http,rspCode:rsp||null,fields:fields||[]};
+      diagnostics[code.slice(0,24)]=diagnostic;
+      errors[code.slice(0,24)]=layer+' / '+reason+(http?' / HTTP '+http:'')+(rsp?' / rsp_cd '+rsp:'');
+    }
+    if(!/^[A-Z0-9]{6}$/.test(code)){reject('INVALID_SYMBOL','gas');return}
     if(seen[code])return;seen[code]=true;
     try{
       const r=nhCall_('/krstock/quote/v1/currentPrice',{market_cd:'UNT',iem_cd:code});
       const body=r.body||{},block=body.Output_0;
-      const o=Array.isArray(block)?(block.find(function(x){return x&&String(x.iem_cd||'').trim()===code})||block[0]||{}):(block||{});
-      const price=nhExternalPrice_(o),rsp=String(body.rsp_cd==null?'':body.rsp_cd).trim();
-      const responseCode=String(o.iem_cd||'').trim();
-      const apiError=rsp&&!/^0+$/.test(rsp)&&rsp!=='00166';
-      if(r.http!==200||apiError||price==null||(responseCode&&responseCode!==code)) {
-        throw new Error('HTTP '+r.http+' / rsp_cd '+(rsp||'없음')+' / '+
-          String(body.rsp_msg||'현재가 또는 종목코드 확인 필요').slice(0,65)+' / 필드 '+Object.keys(o).slice(0,6).join(','));
-      }
+      const o=Array.isArray(block)?(block.find(x=>x&&String(x.iem_cd||'').trim()===code)||block[0]||{}):(block||{});
+      const fields=Object.keys(o).filter(k=>/^[A-Za-z0-9_]{1,40}$/.test(k)).slice(0,8);
+      const rawRsp=String(body.rsp_cd==null?'':body.rsp_cd).trim();
+      const rsp=/^[A-Za-z0-9_-]{1,20}$/.test(rawRsp)?rawRsp:(rawRsp?'INVALID_RSP_CODE':'');
+      if(r.http!==200){reject('NH_HTTP','nh',r.http,rsp,fields);return}
+      if(rsp==='PARSE'){reject('GAS_UPSTREAM_JSON','gas',r.http,rsp,fields);return}
+      if(rsp&&!/^0+$/.test(rsp)&&rsp!=='00166'){reject('NH_RSP','nh',r.http,rsp,fields);return}
+      if(!block||Array.isArray(block)&&!block.length){reject('NH_NO_BLOCK','nh',r.http,rsp,fields);return}
+      if(o.iem_cd&&String(o.iem_cd).trim()!==code){reject('NH_SYMBOL_MISMATCH','nh',r.http,rsp,fields);return}
+      const price=nhExternalPrice_(o);
+      if(price==null){reject('NH_NO_PRICE','nh',r.http,rsp,fields);return}
       prices[code]={price:price,name:String(o.iem_nm||''),updatedAt:Utilities.formatDate(new Date(),'Asia/Seoul','yyyy-MM-dd HH:mm:ss')};
-    }catch(e){errors[code]=String(e.message||e).slice(0,200)}
+    }catch(error){
+      // Upstream exceptions can contain URLs with credentials. Classify; never echo them.
+      const tokenFailure=/토큰|TOKEN|APP_KEY|APP_SECRET|oauth/i.test(String(error&&error.message||''));
+      reject(tokenFailure?'GAS_TOKEN':'GAS_UPSTREAM','gas');
+    }
   });
-  return jsonResponse({success:true,prices:prices,errors:errors,updatedAt:Utilities.formatDate(new Date(),'Asia/Seoul','yyyy-MM-dd HH:mm:ss')});
+  return jsonResponse({success:true,prices:prices,errors:errors,diagnostics:diagnostics,updatedAt:Utilities.formatDate(new Date(),'Asia/Seoul','yyyy-MM-dd HH:mm:ss')});
 }

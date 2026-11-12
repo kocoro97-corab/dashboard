@@ -18,7 +18,7 @@ function backend(){
     Utilities:{getUuid:()=>crypto.randomUUID(),newBlob:s=>({getBytes:()=>[...Buffer.from(s)]}),DigestAlgorithm:{SHA_256:'sha256'},computeDigest:(algorithm,s)=>[...crypto.createHash('sha256').update(s).digest()]},
     securityLegacyDoPost_:()=>{legacyCalls++;return {success:true}},securityLegacyDoGet_:()=>({allowed:true}),
     PROXY_ALLOWED_HOSTS:['finance.daum.net'],
-    handleSaveExternalHoldings:()=>{legacyCalls++;return {success:true}}
+    handleSaveExternalHoldingsV2:()=>{legacyCalls++;return {success:true}}
   });
   vm.runInContext(fs.readFileSync(path.join(root,'gas/SecurityKdf.gs'),'utf8'),ctx);
   vm.runInContext(fs.readFileSync(path.join(root,'gas/Security.gs'),'utf8'),ctx);
@@ -103,4 +103,9 @@ test('proxy rejects untrusted hosts, userinfo, ports, backslashes, and control c
   const b=fastBackend();
   for(const url of ['http://finance.daum.net/x','https://finance.daum.net.evil.test/x','https://finance.daum.net@evil.test/x','https://finance.daum.net:8443/x','https://finance.daum.net/\\evil','https://finance.daum.net/\nx'])assert.ok(b.ctx.doGet({parameter:{url}}).error);
   assert.equal(b.ctx.doGet({parameter:{url:'https://finance.daum.net/quotes'}}).allowed,true);
+});
+test('optional staging hooks leave default production metadata intact and can fail closed before login',()=>{
+  const b=fastBackend();assert.equal(b.post({action:'appVersion'}).testEnvironment,undefined);
+  b.ctx.securityEnvironmentGuard_=()=>{throw Error('staging binding failed')};
+  assert.equal(b.post({action:'login',user:'owner',pass:'old-pass'}).success,false);assert.equal(b.rows[1][1],'old-pass');
 });

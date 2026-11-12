@@ -79,7 +79,11 @@
     <section class="card" id="externalAssetSection">
       <div class="sh"><div><h2>외부계좌 통합 자산관리 · ISA / 연금저축 / IRP</h2><p>캡처 이미지 인식 → 종목·수량 확인 → NH 현재가 조회 · 주문 기능 없음</p><div class="mini" id="externalStatus">외부계좌 자료를 불러오는 중...</div></div>
         <div class="hr"><button onclick="refreshExternalPrices()">↻ 현재가 새로고침</button></div></div>
+      <div class="mini" id="externalMasterStatus">종목 마스터 확인 중...</div>
+      <div class="hr" style="margin:6px 0"><button onclick="applyExternalMatchedCodes()">마스터 코드 적용 확인</button><button id="externalUndoBtn" onclick="undoExternalChange()" disabled>삭제·편집 취소</button><button onclick="showExternalHistory()">저장 복구 기록</button></div>
       <div class="grid three" id="externalSummaryCards"></div>
+      <details><summary>시세 실패 진단</summary><div id="externalQuoteDiagnostics" class="mini"></div></details>
+      <details><summary>저장 복구 미리보기</summary><div id="externalHistory"></div></details>
       <div class="hr" style="margin:8px 0;align-items:flex-end">
         <label>계좌 구분<br><select id="externalAccountType"><option value="ISA">ISA</option><option value="PENSION">연금저축</option><option value="IRP">IRP</option></select></label>
         <label>캡처 이미지 직접 업로드<br><input type="file" id="externalImageFiles" accept="image/*" multiple></label>
@@ -90,8 +94,8 @@
         <button onclick="importExternalDriveImages()">Drive 이미지 가져오기</button>
       </div>
       <div class="hr" style="margin:6px 0;align-items:flex-end">
-        <label>종목코드(선택·6자리)<br><input id="externalManualCode" maxlength="6" placeholder="예: 360750"></label>
-        <label>종목명<br><input id="externalManualName" placeholder="ETF/주식명"></label>
+        <label>종목코드(선택·6자리)<br><input id="externalManualCode" maxlength="20" placeholder="예: 360750"></label>
+        <label>종목명<br><input id="externalManualName" placeholder="ETF/주식명 또는 코드 검색" list="externalMasterNames" oninput="suggestExternalNames(this.value)"><datalist id="externalMasterNames"></datalist></label>
         <label>수량<br><input id="externalManualQty" type="number" min="0" step="any" placeholder="0"></label>
         <label>평균매입가<br><input id="externalManualAvg" type="number" min="0" step="any" placeholder="0"></label>
         <button onclick="addExternalManual()">종목 직접 추가</button>
@@ -132,13 +136,14 @@
 
 <!-- 스크립트: 순서를 바꾸지 마세요. 코드 수정 후 반영이 안 되면 ?v= 숫자를 올리세요. -->
 <script src="js/debug.js?v=2"></script>
-<script src="js/auth.js?v=10-security"></script>
+<script src="js/auth.js?v=11-issue1"></script>
 <script src="js/data.js?v=10-security"></script>
 <script src="js/market.js?v=10-security"></script>
 <script src="js/chart.js?v=4"></script>
 <script src="js/themes.js?v=4"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script src="js/external_accounts.js?v=10-security"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="js/external_core.js?v=12-real-ocr"></script>
+<script src="js/external_accounts.js?v=12-real-ocr"></script>
 <script src="js/init.js?v=10-security"></script>
 
 </body>
