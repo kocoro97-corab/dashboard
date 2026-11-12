@@ -2,7 +2,7 @@ name: PR regression tests
 on:
   pull_request:
   push:
-    branches: ['fix/**']
+    branches: ['fix/**', 'main']
 permissions:
   contents: read
 jobs:
