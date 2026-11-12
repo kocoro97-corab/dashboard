@@ -28,12 +28,12 @@ with sync_playwright() as playwright:
     if os.environ.get("CHROMIUM_EXECUTABLE"):
         launch["executable_path"] = os.environ["CHROMIUM_EXECUTABLE"]
     browser = playwright.chromium.launch(**launch)
-    for kind, width in [("isa", 344), ("pension", 690), ("irp", 344)]:
+    for kind, width in [("isa", 344), ("pension", 690), ("irp", 344), ("isa", 1440), ("pension", 1440), ("irp", 1440)]:
         fixture = json.loads((ROOT / "tests/fixtures" / (kind + "-ocr.json")).read_text())
         initial = dict(fixture["expected"][0], accountType=fixture["accountType"], source="saved", quantity=777, avgPrice=888)
         state = {"rows": [initial], "revision": 1, "history": [], "save_calls": 0,
-                 "quote_mode": "nh" if kind == "isa" else "http" if kind == "pension" else "network"}
-        page = browser.new_page(viewport={"width": width, "height": 882}, is_mobile=True)
+                 "quote_mode": "nh" if kind == "isa" else "http" if kind == "pension" else "network", "store_mode": "success", "general_mode": "success"}
+        page = browser.new_page(viewport={"width": width, "height": 882}, is_mobile=width < 1000)
         master_date=json.loads((ROOT / "data/krx-instruments.json").read_text())["source"]["fetchedAt"]
         page.clock.install(time=datetime.datetime.fromisoformat(master_date))
         errors = []
@@ -75,6 +75,10 @@ with sync_playwright() as playwright:
                         diagnostics[code] = {"layer": "nh", "code": "NH_RSP", "http": 200, "rspCode": "00999"}
                     fulfill(route, {"success": True, "prices": prices, "errors": errors, "diagnostics": diagnostics})
             elif action in ("saveExternalHoldings", "restoreExternalHoldings"):
+                if state["store_mode"] != "success":
+                    code = "STORE_CONFLICT" if state["store_mode"] == "conflict" else "STORE_WRITE_FAILED"
+                    fulfill(route, {"success": False, "code": code, "layer": "storage", "message": "저장 충돌: 다시 불러와 비교하세요." if code == "STORE_CONFLICT" else "저장 실패: 기존 자료는 유지됩니다."})
+                    return
                 assert body["confirmReplace"] is True
                 assert body["expectedRevision"] == "r" + str(state["revision"])
                 before = copy.deepcopy(state["rows"])
@@ -91,7 +95,9 @@ with sync_playwright() as playwright:
                 fulfill(route, {"success": True, "history": state["history"]})
             elif action == "nhAccounts":
                 first = fixture["expected"][0]
-                fulfill(route, {"success": True, "updatedAt": "fixture timestamp", "accounts": [{"acctType": "01", "domestic": {"summary": {"evalAmount": 1500, "profit": 0}, "holdings": [{"name": first["name"], "code": first["code"], "quantity": 5, "avgPrice": 300, "currentPrice": 300, "evalAmount": 1500, "profit": 0, "currency": "KRW"}]}}]})
+                overseas = {"summary": {"evalAmount": 50, "profit": 10}, "holdings": [{"name": "Synthetic overseas", "code": "SYNTHETIC", "quantity": 5, "avgPrice": 8, "currentPrice": 10, "evalAmount": 50, "profit": 10, "returnRate": 25, "currency": "USD"}]}
+                partial = state["general_mode"] == "partial"
+                fulfill(route, {"success": True, "updatedAt": "fixture timestamp", "accounts": [{"acctType": "01", "domestic": {"summary": {"evalAmount": 1500, "profit": 0}, "holdings": [{"name": first["name"], "code": first["code"], "quantity": 5, "avgPrice": 300, "currentPrice": 300, "evalAmount": 1500, "profit": 0, "currency": "KRW"}]}, "overseas": None if partial else overseas, "errors": ["Synthetic overseas HTTP 503"] if partial else []}]})
             else:
                 fulfill(route, {"success": True})
 
@@ -141,14 +147,42 @@ with sync_playwright() as playwright:
         page.locator("#externalHistory button").first.click()
         page.wait_for_function("$('externalStatus').textContent.includes('복원 완료')")
         assert page.evaluate("EXT_ASSETS.length") == expected_count
+        page.evaluate("loadExternalAssets()")
+        assert page.evaluate("extRows(EXT_ASSETS)") == state["rows"]
+        for failure in ("conflict", "write_failure"):
+            baseline = copy.deepcopy(state["rows"])
+            revision = page.evaluate("EXT_SAVED_REV")
+            state["store_mode"] = failure
+            page.evaluate("editExternal(0,'quantity','303')")
+            page.click("#externalSaveBtn")
+            page.wait_for_function("$('externalStatus').textContent.includes('저장 실패')")
+            assert state["rows"] == baseline
+            assert page.evaluate("EXT_SAVED_REV") == revision
+            assert page.evaluate("EXT_ASSETS[0].quantity") == 303
+            assert page.locator("#externalSaveBtn").is_visible()
+            page.evaluate("undoExternalChange()")
+        state["store_mode"] = "success"
         state["quote_mode"] = "success"
         page.evaluate("refreshExternalPrices(true)")
         assert page.locator("#externalQuoteDiagnostics").inner_text() == ""
         assert page.locator("#externalAssetRows tr").first.locator("td").nth(5).inner_text() == "300"
+        assert page.locator("#externalAssetRows tr").first.locator("td").nth(6).inner_text() == page.evaluate("extFmt(EXT_ASSETS[0].quantity*300)")
+        assert "수익률" in page.locator("#externalAssetRows tr").first.locator("td").nth(7).inner_text()
         page.evaluate("loadNHAccounts()")
         page.wait_for_function("!EXT_PRICE_BUSY")
         assert page.evaluate("NH_ACCOUNTS.length") == 1
+        assert page.locator("#nhAccountRows tr").count() == 2
+        overseas_row = page.locator("#nhAccountRows tr").nth(1)
+        assert overseas_row.locator("td").nth(3).inner_text() == "SYNTHETIC"
+        assert overseas_row.locator("td").nth(4).inner_text() == "5"
+        assert overseas_row.locator("td").nth(6).inner_text() == "10 USD"
+        assert overseas_row.locator("td").nth(8).inner_text() == "10"
+        assert overseas_row.locator("td").nth(9).inner_text() == "25.00%"
+        state["general_mode"] = "partial"
+        page.evaluate("loadNHAccounts()")
         assert page.locator("#nhAccountRows tr").count() == 1
+        assert page.locator("#nhAccountRows tr td").nth(3).inner_text() == fixture["expected"][0]["code"]
+        assert "503" in page.locator("#nhAccountCards").inner_text()
         page.clock.set_system_time(datetime.datetime.fromisoformat(master_date)+datetime.timedelta(days=31))
         page.evaluate("loadExternalMaster()")
         assert page.evaluate("EXT_MASTER===null")
@@ -162,6 +196,6 @@ with sync_playwright() as playwright:
         assert page.locator("#externalHistory").inner_text() == ""
         assert not errors, errors
         page.close()
-        print("PASS:", kind.upper(), "mobile import confirmation, duplicate prevention, undo, confirmed save/restore, classified quote failure, NH general query, and logout isolation")
+        print("PASS:", kind.upper(), "mobile" if width < 1000 else "desktop", "confirmed import/save/reload/restore, failed-save/conflict protection, classified quotes, NH query, logout isolation")
     browser.close()
 server.shutdown()

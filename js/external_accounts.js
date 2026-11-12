@@ -88,7 +88,31 @@ function applyExternalAutoRefresh(){if(EXT_AUTO_TIMER)clearInterval(EXT_AUTO_TIM
 async function ocrImage(file){
   if(!window.Tesseract)throw new Error('OCR 엔진을 불러오지 못했습니다. 인터넷 연결을 확인하세요.');
   const result=await Tesseract.recognize(file,'kor+eng',{logger:m=>{if(m.status==='recognizing text')$('externalOcrProgress').textContent='이미지 인식 중 '+Math.round((m.progress||0)*100)+'%'}});
-  return result.data||{text:''};
+  let data=result.data||{text:''};
+  const regions=ExternalCore.parse(data,$('externalAccountType').value,EXT_MASTER).regions||[];
+  if(!regions.length||!EXT_MASTER||typeof Tesseract.createWorker!=='function')return data;
+  const bitmap=await createImageBitmap(file);
+  try{
+    const crops=regions.slice(0,12).map(region=>{
+      const canvas=document.createElement('canvas'),scale=2;
+      const width=Math.min(bitmap.width,region.x1)-region.x0,height=Math.min(bitmap.height,region.y1)-region.y0;
+      canvas.width=Math.ceil(width*scale);canvas.height=Math.ceil(height*scale);
+      const ctx=canvas.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.drawImage(bitmap,region.x0,region.y0,width,height,0,0,canvas.width,canvas.height);
+      return canvas;
+    });
+    const readings={};
+    for(const language of ['kor','eng']){
+      const worker=await Tesseract.createWorker(language);
+      try{await worker.setParameters({tessedit_pageseg_mode:'7'});readings[language]=[];
+        for(const canvas of crops){const reading=await worker.recognize(canvas.toDataURL());readings[language].push(reading.data)}
+      }finally{await worker.terminate()}
+    }
+    regions.slice(0,12).forEach((region,i)=>{const name=ExternalCore.mixedName(readings.kor[i],readings.eng[i],EXT_MASTER);if(name)data=ExternalCore.replaceName(data,region,name)});
+  }catch(error){
+    // Optional refinement must preserve the original candidates for user review.
+  }finally{bitmap.close()}
+  return data;
 }
 // No guessed names, hardcoded symbol mappings, or destructive saved-row normalization.
 function extNormalizeOcrName(v){return String(v||'').trim()}
@@ -139,8 +163,8 @@ function renderExternalAssets(){
   const tb=$('externalAssetRows'),cards=$('externalSummaryCards');if(!tb||!cards)return;
   if(!EXT_ASSETS.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center">등록된 외부계좌 종목이 없습니다.</td></tr>';cards.innerHTML='';extStoreControls();return}
   const totals={ISA:{eval:0,cost:0,count:0,priced:0},PENSION:{eval:0,cost:0,count:0,priced:0},IRP:{eval:0,cost:0,count:0,priced:0}};
-  tb.innerHTML=EXT_ASSETS.map((x,i)=>{const q=ExternalCore.number(x.quantity),a=ExternalCore.number(x.avgPrice),raw=x.match.status==='matched'&&EXT_PRICES[x.code]?EXT_PRICES[x.code].price:null,p=extPositivePrice(raw),evalAmt=p==null||q==null?null:p*q,cost=q==null||a==null?null:q*a,pl=evalAmt==null||cost==null?null:evalAmt-cost;const t=Object.prototype.hasOwnProperty.call(totals,x.accountType)?totals[x.accountType]:null;if(t&&evalAmt!=null&&cost!=null){t.eval+=evalAmt;t.cost+=cost;t.priced++}if(t)t.count++;
-    return `<tr><td>${Object.prototype.hasOwnProperty.call(EXT_TYPES,x.accountType)?EXT_TYPES[x.accountType]:extEsc(x.accountType)}</td><td><input class="external-edit" style="min-width:100px" value="${extEsc(x.name)}" list="externalMasterNames" oninput="suggestExternalNames(this.value)" onchange="editExternalText(${i},'name',this.value)"></td><td><input class="external-edit" style="width:92px" maxlength="20" value="${extEsc(x.code)}" placeholder="코드 확인" onchange="editExternalText(${i},'code',this.value)"><div class="mini">${extEsc(x.match.reason)}</div></td><td><input class="external-edit" type="number" min="0" step="any" value="${q==null?'':q}" onchange="editExternal(${i},'quantity',this.value)"></td><td><input class="external-edit" type="number" min="0" step="any" value="${a==null?'':a}" onchange="editExternal(${i},'avgPrice',this.value)"></td><td>${p==null?'<span class="external-pending">시세 미확인</span>':extFmt(p)}</td><td>${evalAmt==null?'—':extFmt(evalAmt)}</td><td class="${pl==null?'neutral':pl>=0?'up':'down'}">${pl==null?'—':extFmt(pl)}</td><td><button onclick="removeExternal(${i})">삭제</button></td></tr>`;
+  tb.innerHTML=EXT_ASSETS.map((x,i)=>{const q=ExternalCore.number(x.quantity),a=ExternalCore.number(x.avgPrice),raw=x.match.status==='matched'&&EXT_PRICES[x.code]?EXT_PRICES[x.code].price:null,p=extPositivePrice(raw),evalAmt=p==null||q==null?null:p*q,cost=q==null||a==null?null:q*a,pl=evalAmt==null||cost==null?null:evalAmt-cost,returnRate=pl!=null&&cost>0?pl/cost*100:null;const t=Object.prototype.hasOwnProperty.call(totals,x.accountType)?totals[x.accountType]:null;if(t&&evalAmt!=null&&cost!=null){t.eval+=evalAmt;t.cost+=cost;t.priced++}if(t)t.count++;
+    return `<tr><td>${Object.prototype.hasOwnProperty.call(EXT_TYPES,x.accountType)?EXT_TYPES[x.accountType]:extEsc(x.accountType)}</td><td><input class="external-edit" style="min-width:100px" value="${extEsc(x.name)}" list="externalMasterNames" oninput="suggestExternalNames(this.value)" onchange="editExternalText(${i},'name',this.value)"></td><td><input class="external-edit" style="width:92px" maxlength="20" value="${extEsc(x.code)}" placeholder="코드 확인" onchange="editExternalText(${i},'code',this.value)"><div class="mini">${extEsc(x.match.reason)}</div></td><td><input class="external-edit" type="number" min="0" step="any" value="${q==null?'':q}" onchange="editExternal(${i},'quantity',this.value)"></td><td><input class="external-edit" type="number" min="0" step="any" value="${a==null?'':a}" onchange="editExternal(${i},'avgPrice',this.value)"></td><td>${p==null?'<span class="external-pending">시세 미확인</span>':extFmt(p)}</td><td>${evalAmt==null?'—':extFmt(evalAmt)}</td><td class="${pl==null?'neutral':pl>=0?'up':'down'}">${pl==null?'—':extFmt(pl)}<div class="mini">수익률 ${returnRate==null?'—':extFmt(returnRate)+'%'}</div></td><td><button onclick="removeExternal(${i})">삭제</button></td></tr>`;
   }).join('');
   let html=Object.keys(totals).map(k=>{const t=totals[k],pl=t.eval-t.cost;return `<div class="card"><div class="cl"><b>${EXT_TYPES[k]}</b><span>${t.count}종목 · 시세 ${t.priced}/${t.count}</span></div><div class="value">${t.priced?extFmt(t.eval):'—'}<span class="mini">원 평가금액</span></div><div class="change ${pl>=0?'up':'down'}">평가손익 ${t.priced?extFmt(pl)+'원':'시세 미확인'}</div>${t.priced<t.count?'<div class="mini">부분 합계 · 미조회 종목 제외</div>':''}</div>`}).join('');
   const nh={eval:0,profit:0,count:0};

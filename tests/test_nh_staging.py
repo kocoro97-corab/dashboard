@@ -72,6 +72,52 @@ class FakeApp:
 
 
 class StagingTests(unittest.TestCase):
+    def test_live_flow_saves_before_quotes_checks_valuation_and_restores_edits(self):
+        app = FakeApp()
+        report = self.run_checks(app)
+        self.assertEqual(report['status'], 'PASS')
+        self.assertLess(app.calls.index('saveExternalHoldings'), app.calls.index('nhExternalQuotes'))
+        self.assertEqual(len([c for c in report['checks'] if c['name'].startswith('isa_valuation_') and c['status'] == 'PASS']), 7)
+        self.assertTrue(any(c['name'] == 'isa_edit_restore_exact_seven' and c['status'] == 'PASS' for c in report['checks']))
+        self.assertEqual(report['cleanup'], 'PASS_BASELINE_EMPTY')
+
+    def test_unrepresentable_valuation_is_never_reported_as_success(self):
+        app = FakeApp()
+        original = app.call
+        def call(action, **fields):
+            result = original(action, **fields)
+            if action == 'nhExternalQuotes':
+                for quote in result['prices'].values():
+                    quote['price'] = 1e308
+            return result
+        app.call = call
+        report = self.run_checks(app)
+        self.assertEqual(report['status'], 'FAIL_OR_INCONCLUSIVE')
+        self.assertTrue(any(c['name'].startswith('isa_valuation_') and c['status'] == 'FAIL' for c in report['checks']))
+        self.assertEqual(report['cleanup'], 'PASS_BASELINE_EMPTY')
+
+    def test_private_holdings_reports_do_not_identify_the_real_portfolio(self):
+        fixture = self.fixture()
+        report = runner.live_checks(FakeApp(), fixture, SCRIPT, SHEET, DIGEST, 'SYNTHETIC_USER', 'SYNTHETIC_PRIVATE_PASSWORD', redact_symbols=True)
+        text = json.dumps(report)
+        self.assertEqual(report['status'], 'PASS')
+        for row in fixture['expected']:
+            self.assertNotIn(row['code'], text)
+            self.assertNotIn(row['name'], text)
+
+    def test_private_holdings_require_external_path_and_valid_unique_rows(self):
+        with self.assertRaises(runner.Blocked):
+            runner.load_holdings_fixture(ROOT / 'tests/fixtures/isa-ocr.json')
+        rows = self.fixture()['expected']
+        with tempfile.TemporaryDirectory() as directory:
+            file = Path(directory) / 'private.json'
+            file.write_text(json.dumps(rows))
+            self.assertEqual(runner.load_holdings_fixture(file)['expected'], rows)
+            for invalid in [rows[:6], rows[:6] + [rows[0]], [dict(row, quantity=True) for row in rows]]:
+                file.write_text(json.dumps(invalid))
+                with self.assertRaises(runner.Blocked):
+                    runner.load_holdings_fixture(file)
+
     def test_gas_login_rejections_are_classified_without_server_text(self):
         for message, expected in [
             ("로그인 정보 또는 계정 승인 상태를 확인하세요.", "LOGIN_CREDENTIALS_OR_APPROVAL"),
