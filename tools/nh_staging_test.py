@@ -22,11 +22,26 @@ class Blocked(Exception):
     pass
 
 
+SAFE_REPORT_CODES = frozenset('''API_FAILURE HTTP_FAILURE NETWORK_OR_JSON_FAILURE UNEXPECTED_REDIRECT
+GAS_RESPONSE_INVALID GAS_REJECTED GAS_HANDLER_EXCEPTION AUTH_REQUIRED LOGIN_INPUT_INVALID
+LOGIN_CREDENTIALS_OR_APPROVAL LOGIN_RATE_LIMITED NH_HTTP NH_RSP NH_NO_BLOCK NH_NO_PRICE
+NH_SYMBOL_MISMATCH NH_TOKEN NH_CONFIG NH_NETWORK NH_JSON NH_UPSTREAM GAS_TOKEN GAS_UPSTREAM
+GAS_UPSTREAM_JSON GAS_NON_JSON GAS_HTTP FRONTEND_NETWORK NH_PATH NH_CONTRACT NH_UNSUPPORTED
+INVALID_CODES INVALID_SYMBOL STORE_CONFLICT STORE_CONFIRM STORE_INVALID STORE_SNAPSHOT_TOO_LARGE
+STORE_DUPLICATE STORE_NOT_FOUND STORE_SCHEMA STORE_WRITE_FAILED STORE_RECOVERY_REQUIRED
+HOLDINGS_SCHEMA_INVALID NO_GENERAL_ACCOUNTS GENERAL_DOMESTIC_QUERY_FAILED GENERAL_OVERSEAS_QUERY_FAILED
+GENERAL_ACCOUNT_PARTIAL_ERROR SAVE_READBACK_MISMATCH EDIT_READBACK_MISMATCH EDIT_RESTORE_READBACK_MISMATCH
+DELETE_READBACK_MISMATCH RESTORE_READBACK_MISMATCH RECOVERY_SNAPSHOT_NOT_FOUND
+STAGING_EDIT_NOT_REPRESENTABLE CONCURRENT_NON_FIXTURE_DATA CLEANUP_READBACK_FAILED
+PRICE_UNAVAILABLE VALUATION_UNAVAILABLE POSITIONS_CHANGED_OR_BASELINE_FAILED LOGOUT_FAILED
+EMPTY_DEDICATED_TEST_USER_REQUIRED'''.split())
+
+
 class ApiFailure(Exception):
     def __init__(self, code, http=None, action=None):
-        self.code = code if re.fullmatch(r"[A-Z0-9_]{1,50}", str(code)) else "API_FAILURE"
-        self.http = http
-        self.action = action
+        self.code = code if isinstance(code, str) and code in SAFE_REPORT_CODES else "API_FAILURE"
+        self.http = http if type(http) is int and 100 <= http <= 599 else None
+        self.action = action if action in ('appVersion', 'login', 'logout', 'externalHoldings', 'nhAccounts', 'saveExternalHoldings', 'externalHistory', 'restoreExternalHoldings', 'nhExternalQuotes') else None
 
 
 def rejection_code(result, action):
@@ -165,23 +180,25 @@ def auth_check(client, script_id, sheet_id, expected_digest, username, password)
             client.call("logout")
 
 
-def live_checks(client, fixture, script_id, sheet_id, expected_digest, username, password, redact_symbols=False):
+def live_checks(client, fixture, script_id, sheet_id, expected_digest, username, password, redact_symbols=False, account_type='ISA'):
+    if account_type not in ('ISA', 'PENSION', 'IRP'):
+        raise Blocked('EXTERNAL_ACCOUNT_TYPE_REQUIRED')
     validate_target(client.url, script_id, sheet_id)
-    report = {"mode": "LIVE_NH_STAGING", "status": "BLOCKED", "checks": [], "cleanup": "NOT_NEEDED", "rawFinancialDataIncluded": False, "liveNhRequested": False}
+    report = {"mode": "LIVE_NH_STAGING", "accountType": account_type, "status": "BLOCKED", "checks": [], "cleanup": "NOT_NEEDED", "rawFinancialDataIncluded": False, "liveNhRequested": False}
     def record(name, status="PASS", code=None, diagnostic=None):
         item = {"name": name, "status": status}
         if code:
-            item["code"] = code
+            item["code"] = code if isinstance(code, str) and code in SAFE_REPORT_CODES else 'API_FAILURE'
         if diagnostic:
             if diagnostic.get("layer") in ("frontend", "gas", "nh", "storage", "staging"):
                 item["layer"] = diagnostic["layer"]
             if isinstance(diagnostic.get("http"), int) and 100 <= diagnostic["http"] <= 599:
                 item["http"] = diagnostic["http"]
-            if re.fullmatch(r"[A-Za-z0-9_-]{1,20}", str(diagnostic.get("rspCode", ""))):
+            if diagnostic.get('rspCode') in ('0', '0000', '00000', '00166', '00218', 'PARSE', 'UNRECOGNIZED'):
                 item["rspCode"] = diagnostic["rspCode"]
         report["checks"].append(item)
     run_source = 'nh-test-' + uuid.uuid4().hex[:8]
-    stage_rows = [dict(row, accountType="ISA", source=run_source) for row in fixture["expected"]]
+    stage_rows = [dict(row, accountType=account_type, source=run_source) for row in fixture["expected"]]
     if len(stage_rows) != 7 or any(not re.fullmatch(r"[A-Z0-9]{6}", row["code"]) for row in stage_rows):
         raise Blocked("SEVEN_VERIFIED_ISA_FIXTURES_REQUIRED")
     authenticate_staging(client, script_id, sheet_id, expected_digest, username, password)
@@ -207,7 +224,7 @@ def live_checks(client, fixture, script_id, sheet_id, expected_digest, username,
         saved = client.call("externalHoldings")
         if canonical(saved.get("holdings", [])) != canonical(stage_rows):
             raise ApiFailure("SAVE_READBACK_MISMATCH")
-        record("isa_seven_save_and_readback")
+        record(account_type.lower() + "_seven_save_and_readback")
         try:
             quote = client.call("nhExternalQuotes", codes=[row["code"] for row in stage_rows])
             for position, row in enumerate(stage_rows, 1):
@@ -216,7 +233,7 @@ def live_checks(client, fixture, script_id, sheet_id, expected_digest, username,
                 diagnosis = quote.get("diagnostics", {}).get(row["code"], {})
                 code = diagnosis.get("code", "PRICE_UNAVAILABLE")
                 code = code if re.fullmatch(r"[A-Z0-9_]{1,50}", str(code)) else "PRICE_UNAVAILABLE"
-                record("isa_quote_" + (str(position) if redact_symbols else row["code"]), "PASS" if valid else "FAIL", None if valid else code, None if valid else diagnosis)
+                record(account_type.lower() + "_quote_" + (str(position) if redact_symbols else row["code"]), "PASS" if valid else "FAIL", None if valid else code, None if valid else diagnosis)
                 value = price * row["quantity"] if valid else None
                 cost = row["avgPrice"] * row["quantity"]
                 valuation_ok = value is not None and math.isfinite(value) and math.isfinite(cost) and value >= 0 and cost >= 0
@@ -224,16 +241,16 @@ def live_checks(client, fixture, script_id, sheet_id, expected_digest, username,
                     profit = value - cost
                     rate = profit / cost * 100 if cost > 0 else None
                     valuation_ok = math.isfinite(profit) and (rate is None or math.isfinite(rate))
-                record("isa_valuation_" + (str(position) if redact_symbols else row["code"]), "PASS" if valuation_ok else "FAIL", None if valuation_ok else "VALUATION_UNAVAILABLE")
+                record(account_type.lower() + "_valuation_" + (str(position) if redact_symbols else row["code"]), "PASS" if valuation_ok else "FAIL", None if valuation_ok else "VALUATION_UNAVAILABLE")
         except ApiFailure as error:
-            record("isa_quote_batch", "FAIL", error.code)
+            record(account_type.lower() + "_quote_batch", "FAIL", error.code)
         if edited_rows[0]["quantity"] == stage_rows[0]["quantity"]:
             raise ApiFailure("STAGING_EDIT_NOT_REPRESENTABLE")
         client.call("saveExternalHoldings", holdings=edited_rows, expectedRevision=saved["revision"], confirmReplace=True)
         edited = client.call("externalHoldings")
         if canonical(edited.get("holdings", [])) != canonical(edited_rows):
             raise ApiFailure("EDIT_READBACK_MISMATCH")
-        record("isa_edit_and_readback")
+        record(account_type.lower() + "_edit_and_readback")
         edit_history = client.call("externalHistory")
         edit_backup = next((item for item in edit_history.get("history", []) if canonical(item.get("holdings", [])) == canonical(stage_rows)), None)
         if not edit_backup:
@@ -242,12 +259,12 @@ def live_checks(client, fixture, script_id, sheet_id, expected_digest, username,
         saved = client.call("externalHoldings")
         if canonical(saved.get("holdings", [])) != canonical(stage_rows):
             raise ApiFailure("EDIT_RESTORE_READBACK_MISMATCH")
-        record("isa_edit_restore_exact_seven")
+        record(account_type.lower() + "_edit_restore_exact_seven")
         client.call("saveExternalHoldings", holdings=stage_rows[1:], expectedRevision=saved["revision"], confirmReplace=True)
         deleted = client.call("externalHoldings")
         if canonical(deleted.get("holdings", [])) != canonical(stage_rows[1:]):
             raise ApiFailure("DELETE_READBACK_MISMATCH")
-        record("isa_delete_one")
+        record(account_type.lower() + "_delete_one")
         history = client.call("externalHistory")
         backup = next((item for item in history.get("history", []) if canonical(item.get("holdings", [])) == canonical(stage_rows)), None)
         if not backup:
@@ -256,7 +273,7 @@ def live_checks(client, fixture, script_id, sheet_id, expected_digest, username,
         restored = client.call("externalHoldings")
         if canonical(restored.get("holdings", [])) != canonical(stage_rows):
             raise ApiFailure("RESTORE_READBACK_MISMATCH")
-        record("isa_restore_exact_seven")
+        record(account_type.lower() + "_restore_exact_seven")
         try:
             after = account_state(client.call("nhAccounts"))
             record("general_domestic_overseas_after")
@@ -296,6 +313,7 @@ def main():
     parser.add_argument("--sheet-id", default=os.environ.get("NH_STAGING_SHEET_ID"))
     parser.add_argument("--allow-staging-write", action="store_true")
     parser.add_argument("--auth-only", action="store_true", help="Check staging identity and login only; no NH requests or holdings writes")
+    parser.add_argument('--account-type', choices=['ISA', 'PENSION', 'IRP'], default='ISA', help='Use the same seven synthetic rows to validate each external store type separately')
     parser.add_argument("--private-holdings", type=Path, help="Opt-in private OCR expectations outside Git, for staging only")
     parser.add_argument("--report", type=Path, default=Path("nh-staging-report.json"))
     args = parser.parse_args()
@@ -327,7 +345,7 @@ def main():
         by_code = {row["code"]: row for row in master["instruments"]}
         if any(by_code.get(row["code"], {}).get("name") != row["name"] for row in fixture["expected"]):
             raise Blocked("FIXTURE_MASTER_MISMATCH")
-        report = live_checks(WebApp(args.url), fixture, args.script_id, args.sheet_id, source_digest(), username, password, redact_symbols=bool(args.private_holdings))
+        report = live_checks(WebApp(args.url), fixture, args.script_id, args.sheet_id, source_digest(), username, password, redact_symbols=bool(args.private_holdings), account_type=args.account_type)
         report["holdingsInput"] = "PRIVATE_LOCAL" if args.private_holdings else "SYNTHETIC_FIXTURE"
     except Blocked as error:
         report["reason"] = str(error)
