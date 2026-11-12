@@ -21,7 +21,7 @@ async function loadExternalMaster(){
     if(!Number.isFinite(date)||Date.now()-date>30*86400000||date>Date.now()+86400000)throw Error('종목 마스터 갱신 필요');
     EXT_MASTER=ExternalCore.master(document);EXT_MASTER_ERROR='';
     const el=$('externalMasterStatus');if(el)el.textContent=document.source.provider+' · 기준 '+new Date(date).toLocaleDateString('ko-KR')+' · '+document.instruments.length+'종목';
-  }catch(error){EXT_MASTER=null;EXT_MASTER_ERROR=error.message;const el=$('externalMasterStatus');if(el)el.textContent='마스터 확인 실패 · '+error.message+' · 코드 추측 안 함'}
+  }catch(error){EXT_MASTER=null;EXT_MASTER_ERROR=SafeDiagnostics.message(error);const el=$('externalMasterStatus');if(el)el.textContent='마스터 확인 실패 · '+SafeDiagnostics.message(error)+' · 코드 추측 안 함'}
 }
 function extStoreControls(){const undo=$('externalUndoBtn');if(undo)undo.disabled=!EXT_UNDO.length}
 function extImport(rows){
@@ -67,7 +67,7 @@ async function extPost(action,extra={}){
   if(response.ok===false)throw failure('GAS HTTP '+response.status,{layer:'gas',code:'GAS_HTTP',http:response.status});
   let data;try{data=JSON.parse(await response.text())}catch(error){throw failure('GAS JSON 응답 아님 — 배포 주소·접근권한 확인',{layer:'gas',code:'GAS_NON_JSON',http:response.status})}
   if(token!==LS('invest_session_token')){const error=new Error('세션이 변경됐습니다.');error.name='StaleSession';throw error}
-  if(!data||data.success!==true)throw failure(data&&data.message||'GAS 요청 거부',{layer:data&&data.layer||'gas',code:data&&data.code||'GAS_REJECTED',http:response.status});return data;
+  if(!data||data.success!==true){const diagnostic=SafeDiagnostics.diagnostic({...data,http:response.status});throw failure(SafeDiagnostics.message(data),diagnostic)}return data;
 }
 async function loadExternalAssets(){
   const st=$('externalStatus'),loadRun=++EXT_LOAD_RUN,draftVersion=EXT_DRAFT_VERSION;try{
@@ -80,7 +80,7 @@ async function loadExternalAssets(){
     if(EXT_ASSETS.length)await refreshExternalPrices(true);else if(st)st.textContent='외부계좌 종목 없음 · 이미지 업로드 또는 Drive 가져오기로 등록하세요.';
     if(draftVersion!==EXT_DRAFT_VERSION&&st)st.textContent+=' · 불러오기 중 편집한 임시 목록을 보존했습니다. 저장 전 전체 비교가 필요합니다.';
     if(!EXT_SAVED_REV&&st)st.textContent+=' · 저장/복구용 GAS v2 승인 배포가 필요합니다.';
-  }catch(error){if(error.name==='StaleSession')return;if(st)st.textContent='외부계좌 자료 조회 실패 · '+error.message}
+  }catch(error){if(error.name==='StaleSession')return;if(st)st.textContent='외부계좌 자료 조회 실패 · '+SafeDiagnostics.message(error)}
 }
 
 function saveExternalSettings(){LS('invest_external_drive_folder',$('externalDriveFolder').value.trim());const cfg={auto:$('externalAutoRefresh').checked,minutes:Number($('externalAutoMinutes').value)||10};LS('invest_external_settings',cfg);applyExternalAutoRefresh();$('externalStatus').textContent=cfg.auto?'자동갱신 사용 · '+cfg.minutes+'분 간격':'자동갱신 꺼짐 · 접속 및 수동 새로고침';}
@@ -141,12 +141,12 @@ async function processExternalUploads(){
   try{for(let i=0;i<files.length;i++){ $('externalOcrProgress').textContent=(i+1)+'/'+files.length+' 이미지 분석 중...';const data=await ocrImage(files[i]);if(session!==LS('invest_session_token'))return;texts.push(data.text||'');all=all.concat(parseExternalOcr(data,$('externalAccountType').value));}
     showOcrReview(texts);if((window.EXT_OCR_WARNINGS||[]).length)$('externalOcrProgress').textContent=window.EXT_OCR_WARNINGS.join(' · ');if(!all.length){$('externalOcrProgress').textContent=(window.EXT_OCR_WARNINGS||[]).join(' · ')||'종목을 인식하지 못했습니다. 머리글과 동일 행의 수량·평균매입가를 확인하세요.';return}
     if(!extImport(all))return;extResolveCodes();renderExternalAssets();$('externalOcrProgress').textContent='인식 후보 '+all.length+'개 · 수량·평균매입가를 확인·수정하고 [인식자료 저장]을 누르세요. 종목코드는 비워도 저장됩니다.'+(window.EXT_OCR_WARNINGS||[]).join(' · ');showExternalSaveButton();
-  }catch(e){$('externalOcrProgress').textContent='이미지 인식 실패 · '+e.message}finally{btn.disabled=false}
+  }catch(e){$('externalOcrProgress').textContent='이미지 인식 실패 · '+SafeDiagnostics.message(e)}finally{btn.disabled=false}
 }
 function mergeExternalRows(base,add){return ExternalCore.merge(base,add).rows}
 function addExternalManual(){
   const row={accountType:$('externalAccountType').value,code:$('externalManualCode').value.trim(),name:$('externalManualName').value.trim(),quantity:ExternalCore.number($('externalManualQty').value),avgPrice:ExternalCore.number($('externalManualAvg').value),source:'manual'};
-  try{ExternalCore.validate([row]);if(!extImport([row]))return;renderExternalAssets();showExternalSaveButton();['externalManualCode','externalManualName','externalManualQty','externalManualAvg'].forEach(id=>$(id).value='')}catch(error){alert(error.message)}
+  try{ExternalCore.validate([row]);if(!extImport([row]))return;renderExternalAssets();showExternalSaveButton();['externalManualCode','externalManualName','externalManualQty','externalManualAvg'].forEach(id=>$(id).value='')}catch(error){alert(SafeDiagnostics.message(error))}
 }
 function showExternalSaveButton(){let b=$('externalSaveBtn');if(!b){b=document.createElement('button');b.id='externalSaveBtn';b.textContent='인식자료 저장';b.onclick=saveExternalAssets;$('externalOcrProgress').after(b)}b.style.display='inline-block'}
 async function importExternalDriveImages(){
@@ -156,7 +156,7 @@ async function importExternalDriveImages(){
   try{const j=await extPost('externalDriveImages',{folderId});if(!j.images||!j.images.length)throw new Error('폴더에 이미지 파일이 없습니다.');let all=[],texts=[];
     for(let i=0;i<j.images.length;i++){const im=j.images[i];$('externalOcrProgress').textContent='Drive 이미지 OCR '+(i+1)+'/'+j.images.length+' · '+im.name;const blob=await fetch('data:'+im.mimeType+';base64,'+im.base64).then(r=>r.blob());const f=new File([blob],im.name,{type:im.mimeType});const data=await ocrImage(f);if(session!==LS('invest_session_token'))return;texts.push(data.text||'');all=all.concat(parseExternalOcr(data,$('externalAccountType').value));}
     showOcrReview(texts);if((window.EXT_OCR_WARNINGS||[]).length)$('externalOcrProgress').textContent=window.EXT_OCR_WARNINGS.join(' · ');if(!all.length)throw new Error('종목을 인식하지 못했습니다. 아래 OCR 원문을 보고 직접 등록하세요.');if(!extImport(all))return;extResolveCodes();renderExternalAssets();$('externalOcrProgress').textContent='Drive 이미지 '+j.images.length+'개 · 인식 후보 '+all.length+'개. 수량·평단가를 확인하고 저장하세요.';showExternalSaveButton();
-  }catch(e){$('externalOcrProgress').textContent='Drive 가져오기 실패 · '+e.message}
+  }catch(e){$('externalOcrProgress').textContent='Drive 가져오기 실패 · '+SafeDiagnostics.message(e)}
 }
 function renderExternalAssets(){
   extResolveCodes();
@@ -193,7 +193,7 @@ async function saveExternalAssets(){
     const data=await extPost('saveExternalHoldings',{holdings:rows,expectedRevision:EXT_SAVED_REV,confirmReplace:true});
     EXT_SAVED_REV=data.revision;EXT_SAVED_ROWS=extRows(rows);if(version===EXT_DRAFT_VERSION)EXT_UNDO=[];extStoreControls();
     $('externalStatus').textContent='저장 완료 · '+data.count+'종목 · 이전 자료는 저장 복구에서 복원 가능';const button=$('externalSaveBtn');if(button)button.style.display=version===EXT_DRAFT_VERSION?'none':'inline-block';if(version!==EXT_DRAFT_VERSION)$('externalStatus').textContent+=' · 요청 중 편집한 값은 아직 미저장입니다.';
-  }catch(error){if(error.name!=='StaleSession')$('externalStatus').textContent='저장 실패 · '+error.message}
+  }catch(error){if(error.name!=='StaleSession')$('externalStatus').textContent='저장 실패 · '+SafeDiagnostics.message(error)}
 }
 async function showExternalHistory(){
   try{
@@ -206,12 +206,12 @@ async function showExternalHistory(){
       const button=document.createElement('button');button.textContent='이 내역으로 복원';button.addEventListener('click',()=>restoreExternalSnapshot(item.snapshotId));
       card.append(title,details,button);el.appendChild(card);
     });if(!EXT_HISTORY.length)el.textContent='저장된 복구 기록이 없습니다.';
-  }catch(error){if(error.name!=='StaleSession')$('externalStatus').textContent='복구 기록 조회 실패 · '+error.message}
+  }catch(error){if(error.name!=='StaleSession')$('externalStatus').textContent='복구 기록 조회 실패 · '+SafeDiagnostics.message(error)}
 }
 async function restoreExternalSnapshot(snapshotId){
   const item=EXT_HISTORY.find(x=>x.snapshotId===snapshotId);if(!item)return;
   if(!EXT_SAVED_REV||!window.confirm(item.createdAt+'의 '+item.holdings.length+'종목으로 복원할까요? 임시 편집값도 바뀝니다. 현재 저장 자료는 새 복구 기록으로 보존합니다.'))return;
-  try{await extPost('restoreExternalHoldings',{snapshotId,expectedRevision:EXT_SAVED_REV,confirmReplace:true});await loadExternalAssets();$('externalStatus').textContent='복원 완료 · 복원 전 자료도 복구 기록에 보존했습니다.'}catch(error){if(error.name!=='StaleSession')$('externalStatus').textContent='복원 실패 · '+error.message}
+  try{await extPost('restoreExternalHoldings',{snapshotId,expectedRevision:EXT_SAVED_REV,confirmReplace:true});await loadExternalAssets();$('externalStatus').textContent='복원 완료 · 복원 전 자료도 복구 기록에 보존했습니다.'}catch(error){if(error.name!=='StaleSession')$('externalStatus').textContent='복원 실패 · '+SafeDiagnostics.message(error)}
 }
 
 async function refreshExternalPrices(silent){
@@ -236,9 +236,9 @@ async function refreshExternalPrices(silent){
         batch.forEach(code=>{
           const quote=j.prices&&j.prices[code],price=extPositivePrice(quote&&quote.price);
           if(price!=null&&!(j.errors&&j.errors[code]))EXT_PRICES[code]={...quote,price,source:'NH 현재가'};
-          else {window.EXT_LAST_QUOTE_ERRORS[code]=(j.errors&&j.errors[code])||'현재가 응답 없음';window.EXT_LAST_QUOTE_DIAGNOSTICS[code]=(j.diagnostics&&j.diagnostics[code])||{layer:'gas',code:'MISSING_QUOTE'}}
+          else {const diagnostic=SafeDiagnostics.diagnostic(j.diagnostics&&j.diagnostics[code]||{layer:'gas',code:'MISSING_QUOTE'});window.EXT_LAST_QUOTE_ERRORS[code]=SafeDiagnostics.text(diagnostic);window.EXT_LAST_QUOTE_DIAGNOSTICS[code]=diagnostic}
         });
-      }catch(e){if(run!==EXT_RUN_ID||e.name==='StaleSession')return;batch.forEach(code=>{window.EXT_LAST_QUOTE_ERRORS[code]=e.message||'연결 실패';window.EXT_LAST_QUOTE_DIAGNOSTICS[code]=e.diagnostic||{layer:'frontend',code:'UNEXPECTED'}})}
+      }catch(e){if(run!==EXT_RUN_ID||e.name==='StaleSession')return;batch.forEach(code=>{const diagnostic=SafeDiagnostics.diagnostic(e.diagnostic||{layer:'frontend',code:'UNEXPECTED'});window.EXT_LAST_QUOTE_ERRORS[code]=SafeDiagnostics.text(diagnostic);window.EXT_LAST_QUOTE_DIAGNOSTICS[code]=diagnostic})}
     }
     renderExternalAssets();renderExternalDiagnostics();
     const got=codes.filter(code=>EXT_PRICES[code]).length,errors=Object.keys(window.EXT_LAST_QUOTE_ERRORS).length;
@@ -248,7 +248,7 @@ async function refreshExternalPrices(silent){
       (missing?' · 코드 미확인 '+missing+'행':'')+
       (errors?' · 조회 실패 '+errors+'종목 · '+String(Object.values(window.EXT_LAST_QUOTE_ERRORS)[0]).slice(0,160):'')+
       ' · '+new Date().toLocaleString('ko-KR');
-  }catch(e){if(st)st.textContent='현재가 조회 실패 · '+e.message}
+  }catch(e){if(st)st.textContent='현재가 조회 실패 · '+SafeDiagnostics.message(e)}
   finally{
     if(run!==EXT_RUN_ID)return;
     EXT_PRICE_BUSY=false;
@@ -258,5 +258,5 @@ async function refreshExternalPrices(silent){
 
 function renderExternalDiagnostics(){
   const el=$('externalQuoteDiagnostics');if(!el)return;el.replaceChildren();
-  Object.entries(window.EXT_LAST_QUOTE_DIAGNOSTICS||{}).forEach(([code,value])=>{const line=document.createElement('div');line.textContent=code+' · '+value.layer+' / '+value.code+(value.http?' / HTTP '+value.http:'')+(value.rspCode?' / rsp_cd '+value.rspCode:'');el.appendChild(line)});
+  Object.entries(window.EXT_LAST_QUOTE_DIAGNOSTICS||{}).forEach(([code,value])=>{const line=document.createElement('div');line.textContent=(/^[A-Z0-9]{6}$/.test(code)?code:'INVALID_SYMBOL')+' · '+SafeDiagnostics.text(value);el.appendChild(line)});
 }

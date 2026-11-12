@@ -6,7 +6,7 @@ let THM=[],THM_MSG='',THM_BUSY=false,THM_AT=0;
 
 const sm=a=>a.reduce((s,x)=>s+(x||0),0);
 const escA=v=>esc(v).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-const dbg=(l,o)=>{NET.log.push(l+' 필드: '+(o?Object.keys(o).join(','):'(없음)'));if(NET.log.length>30)NET.log.shift()};
+const dbg=(l,o)=>{NET.log.push('테마 응답 필드 수: '+(o&&typeof o==='object'?Object.keys(o).length:0));if(NET.log.length>30)NET.log.shift()};
 const fv=(o,names,re)=>{
   if(!o)return null;
   for(const n of names){const v=o[n];if(v!=null&&typeof v!=='object')return v}

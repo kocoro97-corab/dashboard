@@ -125,6 +125,16 @@ function securitySafeHolding_(x) {
     typeof x.avgPrice==='number'&&Number.isFinite(x.avgPrice)&&x.avgPrice>=0&&
     (!x.source||(typeof x.source==='string'&&x.source.length<=20&&!/^[\s]*[=+@\-\t\r\n]/.test(x.source)));
 }
+// Legacy private code is not copied here. Failures crossing its response boundary
+// must not forward exception text, upstream HTML, or credential-bearing URLs.
+function securityDiagnosticResponse_(result,allowText){
+  let data=result;
+  if(result&&typeof result.getContent==='function'){
+    try{data=JSON.parse(result.getContent())}catch(error){if(allowText)return result;return jsonResponse({success:false,code:'GAS_NON_JSON',message:'요청을 처리하지 못했습니다. 입력값과 연결 상태를 확인하세요.'})}
+  }
+  if(data&&typeof data==='object'&&(data.success===false||data.error))return jsonResponse({success:false,code:'GAS_REJECTED',message:'요청을 처리하지 못했습니다. 입력값과 연결 상태를 확인하세요.'});
+  return result;
+}
 function doPost(e) {
   try{
     const text=(e&&e.postData&&e.postData.contents)||'{}';
@@ -154,12 +164,12 @@ function doPost(e) {
       if(!Array.isArray(body.holdings)||body.holdings.length>150||!body.holdings.every(securitySafeHolding_)||/^[\s]*[=+@\-\t\r\n]/.test(session.u))return jsonResponse({success:false,message:'저장할 종목 형식이 올바르지 않습니다. 기존 자료는 유지됩니다.'});
       return handleSaveExternalHoldingsV2(body.token,body.holdings,body.expectedRevision,body.confirmReplace);
     }
-    return securityLegacyDoPost_(e);
+    return securityDiagnosticResponse_(securityLegacyDoPost_(e),false);
   }catch(error){return jsonResponse({success:false,message:'요청을 처리하지 못했습니다. 입력값과 연결 상태를 확인하세요.'})}
 }
 function doGet(e) {
   const url=String((e&&e.parameter&&e.parameter.url)||'');
   const match=/^https:\/\/([a-z0-9.-]+)(?::443)?(?:\/|\?|$)/i.exec(url);
   if(!match||/[\u0000-\u0020\\]/.test(url)||PROXY_ALLOWED_HOSTS.indexOf(match[1].toLowerCase())<0)return jsonResponse({error:'허용되지 않은 주소입니다.'});
-  return securityLegacyDoGet_(e);
+  try{return securityDiagnosticResponse_(securityLegacyDoGet_(e),true)}catch(error){return jsonResponse({error:'GAS_UPSTREAM'})}
 }

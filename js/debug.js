@@ -8,8 +8,8 @@
       document.body.appendChild(b)}
     b.textContent=m;
   }
-  window.addEventListener('error',function(e){show('⚠ 스크립트 오류: '+e.message+(e.lineno?' (줄 '+e.lineno+')':''))});
-  window.addEventListener('unhandledrejection',function(e){show('⚠ 비동기 오류: '+(e.reason&&e.reason.message||e.reason))});
+  window.addEventListener('error',function(e){e.preventDefault();show('⚠ 스크립트 오류 [SCRIPT_ERROR]')});
+  window.addEventListener('unhandledrejection',function(e){e.preventDefault();show('⚠ 비동기 오류 [ASYNC_ERROR]')});
   window.addEventListener('load',function(){
     if(typeof handleAuthSubmit!=='function')show('⚠ 로그인 스크립트(auth.js)가 실행되지 않았습니다.');
     else if(typeof fetchTopThemes!=='function')show('⚠ themes.js 등 나머지 스크립트가 없거나 오류가 있습니다.');

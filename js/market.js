@@ -15,8 +15,9 @@ async function nhFetch(items){
     const r=await fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'nhQuotes',token:tk,items:items}),signal:c.signal});
     clearTimeout(t);
     const j=JSON.parse(await r.text());
-    if(!j.success)return{ok:false,msg:j.message||'서버 거부'};
-    return{ok:true,data:j.data||{},errors:j.errors||{}};
+    if(!j.success)return{ok:false,msg:SafeDiagnostics.message(j)};
+    const errors={};Object.keys(j.errors||{}).filter(k=>items.some(x=>x.k===k)).forEach(k=>{errors[k]=SafeDiagnostics.message(j.errors[k],'NH_UPSTREAM')});
+    return{ok:true,data:j.data||{},errors};
   }catch(e){return{ok:false,msg:'통신 실패('+(e&&e.name==='AbortError'?'시간 초과':'서버 주소·배포 확인')+')'}}
 }
 async function fillNH(){
@@ -294,11 +295,9 @@ async function loadNHAccounts(){
     const data=JSON.parse(await res.text());
     if(run!==NH_ACCOUNT_RUN||tk!==LS('invest_session_token'))return;
     if(!data.success){
-      const msg=String(data.message||'계좌 조회 실패');
-      if(/잘못된 요청/.test(msg))throw new Error('GAS 배포 버전 불일치 가능성: Apps Script Code.gs·Nhplug.gs를 확인하고 새 버전 배포 후 접속 URL을 확인하세요.');
-      throw new Error(msg);
+      throw Object.assign(new Error(''),{diagnostic:SafeDiagnostics.diagnostic(data)});
     }
-    NH_ACCOUNTS=(Array.isArray(data.accounts)?data.accounts:[]).filter(a=>['domestic','overseas'].some(k=>Array.isArray(a[k]&&a[k].holdings)&&a[k].holdings.length>0));
+    NH_ACCOUNTS=(Array.isArray(data.accounts)?data.accounts:[]).filter(a=>['domestic','overseas'].some(k=>Array.isArray(a[k]&&a[k].holdings)&&a[k].holdings.length>0)).map(a=>({...a,errors:(Array.isArray(a.errors)?a.errors:[]).map(x=>SafeDiagnostics.message(x,'NH_UPSTREAM'))}));
     NH_ACCOUNT_UPDATED=data.updatedAt||'';
     NH_ACCOUNT_FETCHED_AT=Date.now();
     NH_ACCOUNT_SESSION=tk;
@@ -306,7 +305,7 @@ async function loadNHAccounts(){
     if(typeof extSyncWithNH==='function')extSyncWithNH();
     const count=NH_ACCOUNTS.length;
     if(st)st.textContent='조회 '+(NH_ACCOUNT_UPDATED||hms(new Date()))+' · 일반계좌 '+count+'개 · 모의계좌 제외';
-  }catch(e){if(run!==NH_ACCOUNT_RUN)return;if(st)st.textContent='조회 실패(기존 조회값 유지) · '+String(e.message||e).slice(0,240);if(typeof renderExternalAssets==='function')renderExternalAssets()}
+  }catch(e){if(run!==NH_ACCOUNT_RUN)return;if(st)st.textContent='조회 실패(기존 조회값 유지) · '+SafeDiagnostics.message(e,'FRONTEND_NETWORK');if(typeof renderExternalAssets==='function')renderExternalAssets()}
   finally{if(run===NH_ACCOUNT_RUN){NH_ACCOUNT_BUSY=false;if(btn){btn.disabled=false;btn.textContent='↻ 계좌 잔고 조회'}}}
 }
 let NH_ACCOUNT_UPDATED='';
@@ -325,7 +324,7 @@ function renderNHAccounts(){
       cardHtml+=`<div class="card"><div class="cl"><span>일반계좌 · ${label}</span><span>${hs.length}종목</span></div><div class="value">${nhMoney(money)}<span class="mini"> 원 평가금액</span></div><div class="change ${profit>0?'up':profit<0?'down':'neutral'}">손익 ${nhMoney(profit)}원${sm.returnRate!=null?' · '+Number(sm.returnRate).toFixed(2)+'%':''}</div><div class="mini">예수금 ${nhMoney(dep)}원 · 계좌유형 ${a.acctType==='02'?'주문대리인':'일반'}</div></div>`;
       if(filter==='all'||filter===key)hs.forEach(h=>rows.push({a:'일반계좌',market:label,h:h}));
     });
-    if(a.errors&&a.errors.length)cardHtml+=`<div class="mini" style="grid-column:1/-1;color:var(--amber)">일반계좌 조회 안내: ${nhSafe(a.errors.join(' / '))}</div>`;
+    if(a.errors&&a.errors.length)cardHtml+=`<div class="mini" style="grid-column:1/-1;color:var(--amber)">일반계좌 조회 안내: ${nhSafe(a.errors.map(x=>SafeDiagnostics.message(x,'NH_UPSTREAM')).join(' / '))}</div>`;
   });
   cards.innerHTML=cardHtml||'<div class="mini">표시할 계좌 요약이 없습니다.</div>';
   tbody.innerHTML=rows.length?rows.map(x=>{const h=x.h,cl=v=>v>0?'up':v<0?'down':'neutral';return `<tr><td>${nhSafe(x.a)}</td><td>${x.market}</td><td class="name">${nhSafe(h.name)}</td><td>${nhSafe(h.code)}</td><td>${nhMoney(h.quantity)}</td><td>${nhMoney(h.avgPrice)} ${nhSafe(h.currency||'')}</td><td>${nhMoney(h.currentPrice)} ${nhSafe(h.currency||'')}</td><td>${nhMoney(h.evalAmount)}</td><td class="${cl(h.profit)}">${nhMoney(h.profit)}</td><td class="${cl(h.returnRate)}">${h.returnRate==null?'—':Number(h.returnRate).toFixed(2)+'%'}</td></tr>`}).join(''):'<tr><td colspan="10" style="text-align:center">해당 구분의 보유종목이 없습니다.</td></tr>';

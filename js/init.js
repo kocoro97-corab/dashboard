@@ -25,7 +25,7 @@ async function loadProtectedHoldings(){
   try{
     const response=await post({action:'protectedHoldings',token});const data=await response.json();
     if(token!==LS('invest_session_token'))return;
-    if(!data.success){if($('hd'))$('hd').textContent=data.message||'보유목록을 불러오지 못했습니다.';return}
+    if(!data.success){if($('hd'))$('hd').textContent=SafeDiagnostics.message(data);return}
     const rows=(Array.isArray(data.holdings)?data.holdings:[]).filter(row=>Array.isArray(row)&&row.length===9&&row.slice(0,2).every(v=>typeof v==='string')&&row.slice(2,7).every(v=>typeof v==='number'&&Number.isFinite(v)));
     H.push(...rows);renderHoldings();
   }catch(error){if(token===LS('invest_session_token')&&$('hd'))$('hd').textContent='보유목록을 불러오지 못했습니다.'}
