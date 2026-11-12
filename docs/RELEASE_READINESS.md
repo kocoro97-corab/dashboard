@@ -18,7 +18,7 @@
 - PR #2 최초 최신 CI는 failure였으나 regression job은 cancelled, 단계 로그는 보존되지 않아 HTTP 404였다. 코드 오류라고 단정하지 않았다.
 - 해당 SHA의 PR run 43109085075와 push run 43109076781을 재실행했고 attempt 2에서 둘 다 success로 확인했다. 코드 수정으로 CI 취소 원인을 해결했다고 과장하지 않는다.
 - PR #3 시작 SHA의 PR run 43113340688 / push run 43113212295는 success.
-- 통합 로컬 Node 68개 + Python 28개 = **96개 통과**. GAS/JS 문법과 diff 공백 검사 통과.
+- 통합 로컬 Node 68개 + Python 30개 = **98개 통과**. GAS/JS 문법과 diff 공백 검사 통과.
 - 합성 브라우저 **6개 통과**: ISA/연금저축/IRP × 모바일/PC. OCR 결과, GAS, NH는 mock.
 - 저장·재조회·복원·편집 취소·교체 확인, 저장 실패/revision 충돌 시 저장 자료·revision 보존, 미저장 draft 보존을 확인했다.
 - 일반계좌 국내/해외 코드·수량·USD 현재가·평가손익·수익률 및 해외 일부 실패 시 국내 자료 보존을 UI와 backend mock 회귀로 확인했다.
@@ -143,3 +143,16 @@ Cloud Shell: https://shell.cloud.google.com
 - 소유자의 운영 백업 완료와 GitHub Pages 게시 순서/게이트 확인.
 
 실제 Fold6/다른 캡처 배치/지속 부하/동일 NH 키 장기 동시 사용은 미검증이다.
+
+## 최종 private-holdings 실행 준비 보완
+
+정확한 실제 7종목 비공개 기대값은 마스터 이름/코드와 일치함을 로컬에서 재확인했다. 파일 내용은 공개하지 않았다.
+도구의 순서를 저장 → 재조회 → NH 현재가 → 평가금액/손익/수익률 유한값 계산 검증 → 수량 수정/재조회 → 정확한 원상 복원 →
+1종목 삭제/복원 → 일반계좌 전후 비교 → 초기 빈 보유목록 복구로 보완했다. 실제 금융 계산값은 메모리에서만 사용한다.
+현재 이 실행은 인증정보가 없어 BLOCKED이며 실제 NH/GAS 성공으로 표시하지 않는다.
+
+도구 회귀 2개 추가 후 전체 Node 68개/Python 30개=98개 통과. GAS 소스나 배포는 바꾸지 않았으므로 테스트 GAS 재배포는 필요 없다.
+정리 대상은 이번 실행의 활성 보유목록뿐이며, 복구 History는 유지한다. 기존 History/Users/다른 사용자 자료를 일괄 삭제하지 않는다.
+private 기대값은 사용자 전용 다운로드/Cloud Shell 업로드로만 옮기고 공개 저장소·공개 링크·채팅 본문·로그에 붙이지 않는다.
+Cloud Shell 홈 폴더 등 Git 밖의 경로에 두고 chmod 600을 적용한다.
+실행 결과의 holdingsInput=PRIVATE_LOCAL을 확인해야 합성 fixture와의 구성 차이를 해소한 실제 검사로 인정한다.

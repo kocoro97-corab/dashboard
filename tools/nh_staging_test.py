@@ -187,7 +187,9 @@ def live_checks(client, fixture, script_id, sheet_id, expected_digest, username,
     authenticate_staging(client, script_id, sheet_id, expected_digest, username, password)
     record("isolated_staging_identity_and_source")
     wrote = False
-    known = [canonical([]), canonical(stage_rows), canonical(stage_rows[1:])]
+    edited_rows = copy.deepcopy(stage_rows)
+    edited_rows[0]["quantity"] += 1
+    known = [canonical([]), canonical(stage_rows), canonical(stage_rows[1:]), canonical(edited_rows)]
     try:
         baseline = client.call("externalHoldings")
         if baseline.get("storeVersion") != 2 or not baseline.get("revision") or baseline.get("holdings"):
@@ -200,6 +202,12 @@ def live_checks(client, fixture, script_id, sheet_id, expected_digest, username,
             record("general_domestic_overseas_before")
         except ApiFailure as error:
             record("general_domestic_overseas_before", "FAIL", error.code)
+        wrote = True
+        client.call("saveExternalHoldings", holdings=stage_rows, expectedRevision=baseline["revision"], confirmReplace=True)
+        saved = client.call("externalHoldings")
+        if canonical(saved.get("holdings", [])) != canonical(stage_rows):
+            raise ApiFailure("SAVE_READBACK_MISMATCH")
+        record("isa_seven_save_and_readback")
         try:
             quote = client.call("nhExternalQuotes", codes=[row["code"] for row in stage_rows])
             for position, row in enumerate(stage_rows, 1):
@@ -209,14 +217,32 @@ def live_checks(client, fixture, script_id, sheet_id, expected_digest, username,
                 code = diagnosis.get("code", "PRICE_UNAVAILABLE")
                 code = code if re.fullmatch(r"[A-Z0-9_]{1,50}", str(code)) else "PRICE_UNAVAILABLE"
                 record("isa_quote_" + (str(position) if redact_symbols else row["code"]), "PASS" if valid else "FAIL", None if valid else code, None if valid else diagnosis)
+                value = price * row["quantity"] if valid else None
+                cost = row["avgPrice"] * row["quantity"]
+                valuation_ok = value is not None and math.isfinite(value) and math.isfinite(cost) and value >= 0 and cost >= 0
+                if valuation_ok:
+                    profit = value - cost
+                    rate = profit / cost * 100 if cost > 0 else None
+                    valuation_ok = math.isfinite(profit) and (rate is None or math.isfinite(rate))
+                record("isa_valuation_" + (str(position) if redact_symbols else row["code"]), "PASS" if valuation_ok else "FAIL", None if valuation_ok else "VALUATION_UNAVAILABLE")
         except ApiFailure as error:
             record("isa_quote_batch", "FAIL", error.code)
-        wrote = True
-        client.call("saveExternalHoldings", holdings=stage_rows, expectedRevision=baseline["revision"], confirmReplace=True)
+        if edited_rows[0]["quantity"] == stage_rows[0]["quantity"]:
+            raise ApiFailure("STAGING_EDIT_NOT_REPRESENTABLE")
+        client.call("saveExternalHoldings", holdings=edited_rows, expectedRevision=saved["revision"], confirmReplace=True)
+        edited = client.call("externalHoldings")
+        if canonical(edited.get("holdings", [])) != canonical(edited_rows):
+            raise ApiFailure("EDIT_READBACK_MISMATCH")
+        record("isa_edit_and_readback")
+        edit_history = client.call("externalHistory")
+        edit_backup = next((item for item in edit_history.get("history", []) if canonical(item.get("holdings", [])) == canonical(stage_rows)), None)
+        if not edit_backup:
+            raise ApiFailure("RECOVERY_SNAPSHOT_NOT_FOUND")
+        client.call("restoreExternalHoldings", snapshotId=edit_backup["snapshotId"], expectedRevision=edited["revision"], confirmReplace=True)
         saved = client.call("externalHoldings")
         if canonical(saved.get("holdings", [])) != canonical(stage_rows):
-            raise ApiFailure("SAVE_READBACK_MISMATCH")
-        record("isa_seven_save_and_readback")
+            raise ApiFailure("EDIT_RESTORE_READBACK_MISMATCH")
+        record("isa_edit_restore_exact_seven")
         client.call("saveExternalHoldings", holdings=stage_rows[1:], expectedRevision=saved["revision"], confirmReplace=True)
         deleted = client.call("externalHoldings")
         if canonical(deleted.get("holdings", [])) != canonical(stage_rows[1:]):
