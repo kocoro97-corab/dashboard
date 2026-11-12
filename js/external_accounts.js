@@ -48,7 +48,7 @@ function extNHPrices(){
   if(typeof NH_ACCOUNT_SESSION==='undefined'||NH_ACCOUNT_SESSION!==LS('invest_session_token'))return prices;
   if(typeof NH_ACCOUNT_FETCHED_AT==='undefined'||!NH_ACCOUNT_FETCHED_AT||Date.now()-NH_ACCOUNT_FETCHED_AT>EXT_NH_QUOTE_TTL_MS)return prices;
   if(typeof NH_ACCOUNTS==='undefined'||!Array.isArray(NH_ACCOUNTS))return prices;
-  NH_ACCOUNTS.forEach(a=>((a.domestic&&a.domestic.holdings)||[]).forEach(h=>{
+  NH_ACCOUNTS.forEach(a=>((a.domestic&&!a.domestic.stale&&!a.domestic.partial&&a.domestic.holdings)||[]).forEach(h=>{
     const code=String(h.code||'').trim(),price=extPositivePrice(h.currentPrice);
     if(/^[A-Z0-9]{6}$/.test(code)&&price!=null)prices[code]={price,name:h.name,source:'NH 일반계좌',updatedAt:NH_ACCOUNT_UPDATED};
   }));
@@ -167,11 +167,18 @@ function renderExternalAssets(){
     return `<tr><td>${Object.prototype.hasOwnProperty.call(EXT_TYPES,x.accountType)?EXT_TYPES[x.accountType]:extEsc(x.accountType)}</td><td><input class="external-edit" style="min-width:100px" value="${extEsc(x.name)}" list="externalMasterNames" oninput="suggestExternalNames(this.value)" onchange="editExternalText(${i},'name',this.value)"></td><td><input class="external-edit" style="width:92px" maxlength="20" value="${extEsc(x.code)}" placeholder="코드 확인" onchange="editExternalText(${i},'code',this.value)"><div class="mini">${extEsc(x.match.reason)}</div></td><td><input class="external-edit" type="number" min="0" step="any" value="${q==null?'':q}" onchange="editExternal(${i},'quantity',this.value)"></td><td><input class="external-edit" type="number" min="0" step="any" value="${a==null?'':a}" onchange="editExternal(${i},'avgPrice',this.value)"></td><td>${p==null?'<span class="external-pending">시세 미확인</span>':extFmt(p)}</td><td>${evalAmt==null?'—':extFmt(evalAmt)}</td><td class="${pl==null?'neutral':pl>=0?'up':'down'}">${pl==null?'—':extFmt(pl)}<div class="mini">수익률 ${returnRate==null?'—':extFmt(returnRate)+'%'}</div></td><td><button onclick="removeExternal(${i})">삭제</button></td></tr>`;
   }).join('');
   let html=Object.keys(totals).map(k=>{const t=totals[k],pl=t.eval-t.cost;return `<div class="card"><div class="cl"><b>${EXT_TYPES[k]}</b><span>${t.count}종목 · 시세 ${t.priced}/${t.count}</span></div><div class="value">${t.priced?extFmt(t.eval):'—'}<span class="mini">원 평가금액</span></div><div class="change ${pl>=0?'up':'down'}">평가손익 ${t.priced?extFmt(pl)+'원':'시세 미확인'}</div>${t.priced<t.count?'<div class="mini">부분 합계 · 미조회 종목 제외</div>':''}</div>`}).join('');
-  const nh={eval:0,profit:0,count:0};
-  (typeof NH_ACCOUNTS!=='undefined' && Array.isArray(NH_ACCOUNTS)?NH_ACCOUNTS:[]).forEach(a=>['domestic','overseas'].forEach(k=>{const d=a[k];if(!d)return;const sm=d.summary||{},hs=d.holdings||[];const holdingEval=hs.reduce((v,h)=>v+extNum(h.evalAmount),0),holdingProfit=hs.reduce((v,h)=>v+extNum(h.profit),0);nh.eval+=extNum(sm.evalAmount)>0?extNum(sm.evalAmount):holdingEval;nh.profit+=extNum(sm.profit)!==0?extNum(sm.profit):holdingProfit;nh.count+=hs.length}));
+  const nh={eval:0,profit:0,count:0,incomplete:false,priced:0};
+  (typeof NH_ACCOUNTS!=='undefined'&&Array.isArray(NH_ACCOUNTS)?NH_ACCOUNTS:[]).forEach(a=>['domestic','overseas'].forEach(k=>{
+    const d=a[k];if(!d){nh.incomplete=true;return}const sm=d.summary||{},hs=d.holdings||[];
+    const sum=key=>{const values=hs.map(h=>ExternalCore.number(h[key]));return values.some(v=>v===null)?null:values.reduce((v,n)=>v+n,0)};
+    const evaluation=ExternalCore.number(sm.evalAmount)??sum('evalAmount'),profit=ExternalCore.number(sm.profit)??sum('profit');
+    nh.count+=hs.length;
+    if(d.stale||d.partial||evaluation===null||profit===null){nh.incomplete=true;return}
+    nh.eval+=evaluation;nh.profit+=profit;nh.priced+=hs.length;
+  }));
   const extEval=Object.values(totals).reduce((v,t)=>v+t.eval,0),extProfit=Object.values(totals).reduce((v,t)=>v+t.eval-t.cost,0),extCount=EXT_ASSETS.length,extPriced=Object.values(totals).reduce((v,t)=>v+t.priced,0);
-  const allEval=nh.eval+extEval,allProfit=nh.profit+extProfit;const incomplete=extPriced<extCount;
-  html=`<div class="card"><div class="cl"><b>NH 일반계좌</b><span>${nh.count}종목</span></div><div class="value">${(typeof NH_ACCOUNT_UPDATED!=='undefined'&&NH_ACCOUNT_UPDATED)?extFmt(nh.eval):'—'}<span class="mini">원 평가금액</span></div><div class="change ${nh.profit>=0?'up':'down'}">평가손익 ${extFmt(nh.profit)}원</div></div>`+html+`<div class="card" style="border-color:var(--blue)"><div class="cl"><b>전체 통합 합계</b><span>NH + 외부계좌</span></div><div class="value">${(nh.count||extPriced)?extFmt(allEval):'—'}<span class="mini">원 평가금액</span></div><div class="change ${allProfit>=0?'up':'down'}">평가손익 ${(nh.count||extPriced)?extFmt(allProfit)+'원':'시세 미확인'}</div><div class="mini">${incomplete?'부분 합계 · 미조회 종목 제외 · ':''}외부계좌 시세 확인 ${extPriced}/${extCount}종목</div></div>`;
+  const allEval=nh.eval+extEval,allProfit=nh.profit+extProfit;const incomplete=extPriced<extCount||nh.incomplete;
+  html=`<div class="card"><div class="cl"><b>NH 일반계좌</b><span>${nh.count}종목</span></div><div class="value">${(typeof NH_ACCOUNT_UPDATED!=='undefined'&&NH_ACCOUNT_UPDATED)&&!nh.incomplete?extFmt(nh.eval):'—'}<span class="mini">원 평가금액</span></div><div class="change ${nh.profit>=0?'up':'down'}">평가손익 ${nh.incomplete?'미확인':extFmt(nh.profit)+'원'}</div></div>`+html+`<div class="card" style="border-color:var(--blue)"><div class="cl"><b>전체 통합 합계</b><span>NH + 외부계좌</span></div><div class="value">${(nh.priced||extPriced)?extFmt(allEval):'—'}<span class="mini">원 평가금액</span></div><div class="change ${allProfit>=0?'up':'down'}">평가손익 ${(nh.priced||extPriced)?extFmt(allProfit)+'원':'시세 미확인'}</div><div class="mini">${incomplete?'부분 합계 · 미조회 종목 제외 · ':''}외부계좌 시세 확인 ${extPriced}/${extCount}종목</div></div>`;
   cards.innerHTML=html;extStoreControls();
 }
 function editExternalText(i,k,v){if(!EXT_ASSETS[i])return;extCheckpoint();EXT_ASSETS[i][k]=String(v).trim();EXT_ASSETS[i].needsReview=false;showExternalSaveButton();renderExternalAssets()}

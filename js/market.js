@@ -283,6 +283,22 @@ let NH_ACCOUNT_BUSY = false;
 let NH_ACCOUNT_RUN=0;
 const nhMoney = v => v==null ? '—' : Number(v).toLocaleString('ko-KR',{maximumFractionDigits:2});
 const nhSafe = v => String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function mergeNhAccountResultsV2(previous,incoming){
+  if(!Array.isArray(incoming))throw Error('NH_CONTRACT');
+  const old=new Map((previous||[]).filter(a=>typeof a.accountKey==='string'&&a.accountKey).map(a=>[a.accountKey,a]));
+  return incoming.map(a=>{
+    const result={...a},before=old.get(a.accountKey);
+    if(before)for(const market of ['domestic','overseas']){
+      if(!result[market]&&before[market])result[market]={...before[market],stale:true};
+      else if(result[market]&&result[market].partial&&before[market]){
+        const rows=new Map((before[market].holdings||[]).map(h=>[h.code+'|'+h.currency,h]));
+        (result[market].holdings||[]).forEach(h=>rows.set(h.code+'|'+h.currency,h));
+        result[market]={...result[market],holdings:[...rows.values()],stale:true};
+      }
+    }
+    return result;
+  });
+}
 async function loadNHAccounts(){
   if(NH_ACCOUNT_BUSY)return;NH_ACCOUNT_BUSY=true;const run=++NH_ACCOUNT_RUN;
   const btn=$('nhAccountBtn'),st=$('nhAccountStatus');
@@ -297,14 +313,14 @@ async function loadNHAccounts(){
     if(!data.success){
       throw Object.assign(new Error(''),{diagnostic:SafeDiagnostics.diagnostic(data)});
     }
-    NH_ACCOUNTS=(Array.isArray(data.accounts)?data.accounts:[]).filter(a=>['domestic','overseas'].some(k=>Array.isArray(a[k]&&a[k].holdings)&&a[k].holdings.length>0)).map(a=>({...a,errors:(Array.isArray(a.errors)?a.errors:[]).map(x=>SafeDiagnostics.message(x,'NH_UPSTREAM'))}));
+    NH_ACCOUNTS=mergeNhAccountResultsV2(NH_ACCOUNT_SESSION===tk?NH_ACCOUNTS:[],data.accounts).filter(a=>['domestic','overseas'].some(k=>Array.isArray(a[k]&&a[k].holdings)&&a[k].holdings.length>0)).map(a=>({...a,errors:(Array.isArray(a.errors)?a.errors:[]).map(x=>SafeDiagnostics.message(x,'NH_UPSTREAM'))}));
     NH_ACCOUNT_UPDATED=data.updatedAt||'';
     NH_ACCOUNT_FETCHED_AT=Date.now();
     NH_ACCOUNT_SESSION=tk;
     renderNHAccounts();
     if(typeof extSyncWithNH==='function')extSyncWithNH();
     const count=NH_ACCOUNTS.length;
-    if(st)st.textContent='조회 '+(NH_ACCOUNT_UPDATED||hms(new Date()))+' · 일반계좌 '+count+'개 · 모의계좌 제외';
+    if(st)st.textContent='조회 '+(NH_ACCOUNT_UPDATED||hms(new Date()))+' · 일반계좌 '+count+'개 · 모의계좌 제외'+(NH_ACCOUNTS.some(a=>['domestic','overseas'].some(k=>a[k]&&(a[k].stale||a[k].partial)))?' · 일부 이전 조회값 유지':'')+(data.gatewayVersion===2?' · ISA·연금저축·IRP: OCR·수동 관리(직접조회 미검증)':'');
   }catch(e){if(run!==NH_ACCOUNT_RUN)return;if(st)st.textContent='조회 실패(기존 조회값 유지) · '+SafeDiagnostics.message(e,'FRONTEND_NETWORK');if(typeof renderExternalAssets==='function')renderExternalAssets()}
   finally{if(run===NH_ACCOUNT_RUN){NH_ACCOUNT_BUSY=false;if(btn){btn.disabled=false;btn.textContent='↻ 계좌 잔고 조회'}}}
 }
@@ -321,7 +337,7 @@ function renderNHAccounts(){
       if(!d||!Array.isArray(d.holdings)||!d.holdings.length)return;
       const sm=d.summary||{},hs=Array.isArray(d.holdings)?d.holdings:[];
       const money=sm.evalAmount,profit=sm.profit,dep=sm.deposit;
-      cardHtml+=`<div class="card"><div class="cl"><span>일반계좌 · ${label}</span><span>${hs.length}종목</span></div><div class="value">${nhMoney(money)}<span class="mini"> 원 평가금액</span></div><div class="change ${profit>0?'up':profit<0?'down':'neutral'}">손익 ${nhMoney(profit)}원${sm.returnRate!=null?' · '+Number(sm.returnRate).toFixed(2)+'%':''}</div><div class="mini">예수금 ${nhMoney(dep)}원 · 계좌유형 ${a.acctType==='02'?'주문대리인':'일반'}</div></div>`;
+      cardHtml+=`<div class="card"><div class="cl"><span>일반계좌 · ${label}</span><span>${hs.length}종목${d.stale?' · 이전 조회값':d.partial?' · 부분 조회':''}</span></div><div class="value">${nhMoney(money)}<span class="mini"> 원 평가금액</span></div><div class="change ${profit>0?'up':profit<0?'down':'neutral'}">손익 ${nhMoney(profit)}원${sm.returnRate!=null?' · '+Number(sm.returnRate).toFixed(2)+'%':''}</div><div class="mini">예수금 ${nhMoney(dep)}원 · 계좌유형 ${a.acctType==='02'?'주문대리인':'일반'}</div></div>`;
       if(filter==='all'||filter===key)hs.forEach(h=>rows.push({a:'일반계좌',market:label,h:h}));
     });
     if(a.errors&&a.errors.length)cardHtml+=`<div class="mini" style="grid-column:1/-1;color:var(--amber)">일반계좌 조회 안내: ${nhSafe(a.errors.map(x=>SafeDiagnostics.message(x,'NH_UPSTREAM')).join(' / '))}</div>`;

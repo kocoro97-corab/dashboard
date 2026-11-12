@@ -22,7 +22,7 @@ function securityEnvironmentGuard_(body){
 }
 function securityEnvironmentMetadata_(){
   const props=PropertiesService.getScriptProperties();const sheet=stagingSheet_();
-  return {testEnvironment:'nh-staging',scriptHash:stagingHash_(ScriptApp.getScriptId()),sheetHash:stagingHash_(sheet.getId()),sourceDigest:NH_STAGING_SOURCE_DIGEST,revision:NH_STAGING_REVISION,storeVersion:2,nhTestCredentialsDeclared:props.getProperty('NHPLUG_KEY_USAGE')==='staging-readonly'&&!!props.getProperty('NHPLUG_APP_KEY')&&!!props.getProperty('NHPLUG_APP_SECRET')};
+  return {gatewayVersion:2,storeEngine:'account-store-v2',testEnvironment:'nh-staging',scriptHash:stagingHash_(ScriptApp.getScriptId()),sheetHash:stagingHash_(sheet.getId()),sourceDigest:NH_STAGING_SOURCE_DIGEST,revision:NH_STAGING_REVISION,storeVersion:2,nhTestCredentialsDeclared:props.getProperty('NHPLUG_KEY_USAGE')==='staging-readonly'&&!!props.getProperty('NHPLUG_APP_KEY')&&!!props.getProperty('NHPLUG_APP_SECRET')};
 }
 function getSheet(name){const ss=stagingSheet_();let sheet=ss.getSheetByName(name);if(!sheet){sheet=ss.insertSheet(name);if(name==='Users')sheet.appendRow(['userId','password','status','isAdmin','createdAt'])}return sheet}
 function jsonResponse(value){return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON)}

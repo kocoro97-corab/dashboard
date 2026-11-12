@@ -76,6 +76,8 @@ def check_version_response(response):
 
 
 def deploy(api, script_id, deployment_id, source, revision, probe, transform=None):
+    if 'nhGatewayV2_' in source and transform is None:
+        raise DeployError('V2 requires the complete reviewed module bundle; single-file deployment refused')
     base = "https://script.googleapis.com/v1/projects/" + script_id
     endpoint = base + "/deployments/" + deployment_id
     previous = api(endpoint)
@@ -181,6 +183,8 @@ def deploy(api, script_id, deployment_id, source, revision, probe, transform=Non
 
 def main():
     try:
+        if Path("gas/NhGatewayV2.gs").exists() and os.environ.get("GAS_DEPLOY_SECURITY") != "true":
+            raise DeployError("V2 requires the complete reviewed module bundle; single-file deployment refused")
         token = google_token()
         script_id = os.environ["GAS_SCRIPT_ID"]
         deployment_id = os.environ["GAS_DEPLOYMENT_ID"]

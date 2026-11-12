@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PRODUCTION_SCRIPT_ID = "1WwqTZuH36L3sYdwmz8POXLmW-1Xw4oC4AGkFPSeueaEVBMB31ua_CkYL"
 PRODUCTION_DEPLOYMENT_ID = "AKfycbxySfUKUai418Ar7C8RI6gwBJpjSZXH4y8EX2JhJZG9nGz7RVB0WCZGl3H1wHxOWGVd"
 PRODUCTION_SHEET_HASH = "a151f7f6339a9f699aa24cc0d8b968e7c11777c374942250dda33bed11a52c95"
-SOURCES = ["gas/Security.gs", "gas/SecurityKdf.gs", "gas/ExternalHoldings.gs", "gas/Nhplug.gs", "tests/staging/StagingBridge.gs"]
+SOURCES = ["gas/Security.gs", "gas/SecurityKdf.gs", "gas/ExternalHoldings.gs", "gas/Nhplug.gs", "gas/NhGatewayV2.gs", "gas/NhAccountsV2.gs", "gas/AccountStoreV2.gs", "tests/staging/StagingBridge.gs"]
 MANIFEST = {"timeZone": "Asia/Seoul", "runtimeVersion": "V8", "exceptionLogging": "NONE", "oauthScopes": ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/script.external_request", "https://www.googleapis.com/auth/script.scriptapp"], "webapp": {"executeAs": "USER_DEPLOYING", "access": "ANYONE_ANONYMOUS"}}
 
 
