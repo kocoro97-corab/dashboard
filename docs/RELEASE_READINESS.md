@@ -82,19 +82,13 @@ Cloud Shell: https://shell.cloud.google.com
 
 ## 6. 승인 후 병합/배포 순서
 
-**아래는 모두 계획이며 아직 실행하지 않았다.** 각 승인에는 대상 SHA와 환경을 명시한다.
+**계획만 수립했으며 아직 실행하지 않았다.** 최종 단계별 영향/확인/중단/rollback과 소유자 체크리스트는
+[PRODUCTION_EXECUTION_PLAN.md](PRODUCTION_EXECUTION_PLAN.md)를 기준으로 한다.
 
-1. 완료된 실제 7종목 PRIVATE_LOCAL 결과와 사용자가 제공한 실행 근거, 최종 head/변경 파일/CI를 사용자가 검수한다.
-2. 사용자 승인 후 PR #3을 PR #2 브랜치에 먼저 병합한다. PR #2의 새 통합 head CI를 다시 통과시킨다.
-   squash/rebase를 쓰면 SHA가 바뀌므로 최종 배포 대상으로 새 SHA를 고정한다.
-3. **GitHub Pages 게이트를 먼저 확인한다.** 현재 읽기 확인 결과 build_type=legacy, source=main:/, status=built다. main 병합은 Pages 게시를 유발할 수 있다.
-   권장안은 기존 게시물을 유지한 채 frontend 배포를 수동 승인/보류하는 것이다. legacy 흐름에 환경 승인 게이트가 이미 있다고 가정하지 않는다. 필요하면 별도 승인 후 Actions 게시 방식/수동 workflow로 전환하고 기존 사이트 유지 여부를 검증한다. 현재 Pages 설정을 이 작업에서 변경하지 않았다.
-   게이트 불가 시 신형 frontend가 구형 GAS에 대해 저장을 차단하는 호환 창을 허용할지 유지보수 계획으로 별도 승인받는다.
-4. 사용자 승인 후 PR #2 → main 병합. 실제 승인된 통합 SHA의 CI 통과/작업 트리 고정 확인.
-5. 소유자가 아래 운영 백업을 완료하고 쓰기 작업/자동 재조회/동시 편집을 중지한다.
-6. 운영 GAS 수동 workflow를 **승인된 main SHA**에서 실행한다. 이 workflow는 main에서만 실행되며 이 검증 작업에서는 호출하지 않았다.
-7. 인증된 소유자로 externalHoldings storeVersion=2/revision/기존 데이터 비변경을 확인한 뒤 GitHub Pages 게이트를 해제한다.
-8. Pages의 실제 배포 SHA와 OCR cache query 버전을 확인하고 desktop/mobile smoke 검사를 수행한다. 유지보수 종료 후 자동 조회를 재개한다.
+권장 순서: PR #3 → PR #2 통합/CI → 유지보수 저장 중지와 최종 운영 백업 → 현재 게시 SHA에 고정한 별도 Pages 게시 브랜치 구성/정상 확인 →
+PR #2 → main 병합 → main의 승인된 SHA로 GAS 수동 배포 → 인증된 소유자의 읽기 smoke → 게시 브랜치를 승인 SHA로 전진 → PC/Fold6 검수.
+Pages source 변경·게시 브랜치 생성도 별도 승인 전에는 실행하지 않는다.
+현재 Pages는 legacy/main:/이므로 게이트 확인 없이 main부터 병합하지 않는다. 운영 백업 역시 main 병합보다 먼저 확인한다.
 
 ## 7. 버전 호환성/운영 백업
 
@@ -160,3 +154,10 @@ Cloud Shell: https://shell.cloud.google.com
 private 기대값은 사용자 전용 다운로드/Cloud Shell 업로드로만 옮기고 공개 저장소·공개 링크·채팅 본문·로그에 붙이지 않는다.
 Cloud Shell 홈 폴더 등 Git 밖의 경로에 두고 chmod 600을 적용한다.
 실행 결과의 holdingsInput=PRIVATE_LOCAL을 확인해야 합성 fixture와의 구성 차이를 해소한 실제 검사로 인정한다.
+
+## 운영 배포 최종 준비 보완
+
+운영 공개 appVersion은 v10-security/securityVersion=1을 확인했으나, 현재 불변 배포 버전과 private source는 인증정보가 없어 미확인이다.
+소유자용 prepare_gas_backup.py는 list-deployments/pull만 사용해 HEAD/활성 버전을 비교하고 Git 밖 비공개 ZIP을 만든다.
+운영 소스/배포/Sheets를 쓰지 않고 소스/CLI 본문을 출력하지 않는다. 소스 백업 성공과 Sheet/설정 백업 완료를 구분한다.
+새 백업 도구 mock 회귀 4개를 추가했고 전체 Node 68/Python 34=102개를 확인한다. 운영 실제 백업은 수행하지 않았다.
