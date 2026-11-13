@@ -21,11 +21,31 @@ from relay.app import Config, RelayApp
 from relay.public_dev import PublicDevelopment
 from nh_v2_relay_check import ThreadedWSGI, QuietWSGI, deployment_settings
 from nh_v2_live_check import preflight
-from nh_v2_fresh import private_path
+from nh_v2_fresh import private_path, SAFE_OWNER_CODES
 from nh_staging_test import fingerprint
 from build_dev_pages import PAGE
 from install_dev_tunnel import SHA256
 import hashlib
+
+SAFE_STARTUP_CODES = SAFE_OWNER_CODES | frozenset('''
+HTTPS_CONNECTOR_MISSING HTTPS_CONNECTOR_NOT_EXECUTABLE HTTPS_CONNECTOR_CHECKSUM
+HTTPS_OWNER_TTY_REQUIRED HTTPS_EXISTING_TUNNEL_CONFIG_STOP HTTPS_PRIVATE_PLAN_REQUIRED
+DEPLOYMENT_SETTINGS_NOT_VERIFIED FRESH_REVIEWED_PLAN_REQUIRED FRESH_TARGET_REQUIRED
+SOURCE_IDENTITY_FAILED FRESH_BINDING_FAILED HTTPS_TUNNEL_API_DENIED
+HTTPS_TUNNEL_UNAVAILABLE HTTPS_EDGE_NOT_CONFIRMED DEV_HTTPS_CONFIG_INVALID
+RELAY_TARGET_MISMATCH RELAY_GAS_ACCESS_REQUIRED RELAY_UPSTREAM_HTTP
+RELAY_UPSTREAM_NETWORK RELAY_NON_JSON RELAY_RESPONSE_INVALID
+RELAY_GOOGLE_CONTENT_400 RELAY_REDIRECT_DENIED RELAY_REDIRECT_METHOD_DENIED
+'''.split())
+
+
+def validate_runtime(binary, needs_tty=True):
+    if not binary.is_file():raise ValueError('HTTPS_CONNECTOR_MISSING')
+    if not os.access(binary, os.X_OK):raise ValueError('HTTPS_CONNECTOR_NOT_EXECUTABLE')
+    if needs_tty and not sys.stdin.isatty():raise ValueError('HTTPS_OWNER_TTY_REQUIRED')
+    if hashlib.sha256(binary.read_bytes()).hexdigest() != SHA256:raise ValueError('HTTPS_CONNECTOR_CHECKSUM')
+    if any((Path.home() / '.cloudflared' / name).exists() for name in ('config.yml', 'config.yaml')):
+        raise ValueError('HTTPS_EXISTING_TUNNEL_CONFIG_STOP')
 
 
 @contextmanager
@@ -102,22 +122,26 @@ def main():
     parser.add_argument('--cloudflared', type=Path, required=True)
     parser.add_argument('--minutes', type=int, default=30, choices=range(1, 61))
     parser.add_argument('--verify-browser', action='store_true', help='Verify only the new public HTTPS/Pages path, then keep it open for Fold6')
+    parser.add_argument('--diagnose-preflight', action='store_true', help='Read-only checks only: no tunnel, password prompt, login, browser or account writes')
     args = parser.parse_args()
-    report = {'status': 'NOT_RUN', 'actualNhCalls': 0, 'orderCalls': 0, 'accountStoreWrites': False}
+    report = {'status': 'NOT_RUN', 'phase': 'LOCAL_RUNTIME', 'actualNhCalls': 0, 'orderCalls': 0, 'accountStoreWrites': False}
     try:
-        if not args.cloudflared.is_file() or not os.access(args.cloudflared, os.X_OK) or not sys.stdin.isatty():
-            raise ValueError()
-        if hashlib.sha256(args.cloudflared.read_bytes()).hexdigest() != SHA256:
-            raise ValueError()
-        if any((Path.home() / '.cloudflared' / name).exists() for name in ('config.yml', 'config.yaml')):
-            raise ValueError()
+        validate_runtime(args.cloudflared, needs_tty=not args.diagnose_preflight)
+        report['phase'] = 'PRIVATE_ENVIRONMENT'
         env = private_path(args.environment, False)
-        plan = json.loads((env / 'fresh-plan.json').read_text())
+        try:plan = json.loads((env / 'fresh-plan.json').read_text())
+        except Exception:raise ValueError('HTTPS_PRIVATE_PLAN_REQUIRED') from None
+        report['phase'] = 'GAS_SOURCE_PREFLIGHT'
         web = preflight(env, allow_same_source_tools=True)
+        report['phase'] = 'DEPLOYMENT_SETTINGS'
         settings = deployment_settings(plan)
         if settings.get('status') != 'PASS':
             report['deploymentSettings'] = settings
-            raise ValueError()
+            raise ValueError('DEPLOYMENT_SETTINGS_NOT_VERIFIED')
+        if args.diagnose_preflight:
+            report.update(status='PASS', phase='PREFLIGHT_COMPLETE', scope='HTTPS_PREFLIGHT_ONLY', sourceDigest='PASS', isolation='PASS', deploymentSettings=settings)
+            print(json.dumps(report));return 0
+        report['phase'] = 'DEVELOPMENT_CODE'
         access_code = getpass.getpass('Separate development access code (16-128 ASCII letters/digits/_/-; hidden): ')
         expected = {'freshTestEnvironment': True, 'testEnvironment': 'nh-staging',
                     'scriptHash': fingerprint(plan['scriptId']), 'sheetHash': web.binding,
@@ -125,14 +149,18 @@ def main():
         relay = RelayApp(Config(upstream=plan['url'], origins=frozenset({'https://kocoro97-corab.github.io'}), expected=expected))
         public = PublicDevelopment(relay, PAGE, access_code, lifetime=args.minutes * 60)
         # Verify the fixed target privately before exposing login traffic.
+        report['phase'] = 'TARGET_METADATA'
         relay.gateway.verify()
+        report['phase'] = 'HTTPS_TUNNEL'
         with serve(public, args.cloudflared.resolve(), args.minutes * 60) as (endpoint, process):
             from nh_v2_https_browser import probe, verify
+            report['phase'] = 'PUBLIC_HTTPS_PROBE'
             probe(endpoint, access_code)
             print(json.dumps({'status': 'HTTPS_DEV_READY', 'page': PAGE, 'endpoint': endpoint,
                               'expiresInMinutes': args.minutes, 'sourceDigest': 'PASS', 'isolation': 'PASS',
                               'authOnly': True, 'orderCalls': 0, 'secretsIncluded': False}), flush=True)
             if args.verify_browser:
+                report['phase'] = 'PAGES_BROWSER'
                 username = input('Staging user (visible): ').strip()
                 password = getpass.getpass('Staging password (hidden): ')
                 result = verify(endpoint, access_code, username, password)
@@ -142,6 +170,7 @@ def main():
                     report.update(status='FAIL', code='HTTPS_BROWSER_NOT_CONFIRMED')
                     return 2
             print('Keep this terminal open. Ctrl+C closes external access. Enter the same private development code on the development page.', flush=True)
+            report['phase'] = 'SERVING'
             while process.poll() is None and time.monotonic() < public.deadline:
                 time.sleep(.5)
             if process.poll() is not None:
@@ -152,7 +181,7 @@ def main():
         report.update(status='PASS', code='HTTPS_DEV_OWNER_CLOSED')
     except Exception as error:
         code = str(error)
-        report.update(code=code if code in ('HTTPS_TUNNEL_API_DENIED', 'HTTPS_TUNNEL_UNAVAILABLE', 'HTTPS_EDGE_NOT_CONFIRMED') else 'HTTPS_DEV_PREFLIGHT_OR_TUNNEL_REQUIRED')
+        report.update(code=code if code in SAFE_STARTUP_CODES else 'HTTPS_DEV_PREFLIGHT_OR_TUNNEL_REQUIRED')
     print(json.dumps(report))
     return 0 if report['status'] == 'PASS' else 2
 

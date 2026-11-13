@@ -65,6 +65,14 @@ Official sources: [Quick Tunnels](https://developers.cloudflare.com/tunnel/get-s
 
 ## Owner setup and actual verification
 
+If startup stops with a generic result, use the same environment/binary arguments
+with `--diagnose-preflight`. This reports only a fixed phase and allowlisted reason
+for local connector, private plan, read-only GAS source identity and deployment
+checks. It does not prompt for a code/password, open a tunnel, run a browser,
+log in, or write account data. A successful `HTTPS_PREFLIGHT_ONLY` result is not
+an actual HTTPS/login PASS. Normal startup also includes phase/reason diagnostics;
+raw exceptions, source, credential values and private paths remain suppressed.
+
 Codex's current GitHub integration received HTTP 403 when attempting to create
 the separate development repository. The connector's issuance attempt also
 failed in Codex; a subsequent diagnostic GET to the public issuance API returned
