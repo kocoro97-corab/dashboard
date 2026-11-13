@@ -1,6 +1,13 @@
 /* ===== auth.js: 로그인 / 회원가입 / 세션 ===== */
 const $=id=>document.getElementById(id);
-const LS=(k,v)=>{try{if(v===undefined){const r=localStorage.getItem(k);return r?JSON.parse(r):null}localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}};
+// Development Pages shares an origin with production Pages: never read its
+// localStorage. Only the explicit development build selects per-tab storage.
+const AUTH_STORAGE=typeof window!=='undefined'&&window.MYINVEST_TRANSPORT_CONFIG&&window.MYINVEST_TRANSPORT_CONFIG.devSession===true?{
+  getItem:k=>sessionStorage.getItem('myinvest_v2_dev:'+k),
+  setItem:(k,v)=>sessionStorage.setItem('myinvest_v2_dev:'+k,v),
+  removeItem:k=>sessionStorage.removeItem('myinvest_v2_dev:'+k)
+}:localStorage;
+const LS=(k,v)=>{try{if(v===undefined){const r=AUTH_STORAGE.getItem(k);return r?JSON.parse(r):null}AUTH_STORAGE.setItem(k,JSON.stringify(v))}catch(e){return null}};
 
 // ★ 여기에 정상 동작이 확인된 Apps Script 웹 앱 주소(/exec)를 넣으세요
 const DEFAULT_GAS_URL="https://script.google.com/macros/s/AKfycbxySfUKUai418Ar7C8RI6gwBJpjSZXH4y8EX2JhJZG9nGz7RVB0WCZGl3H1wHxOWGVd/exec";
@@ -103,10 +110,10 @@ async function approveUser(targetId){
 
 const SESSION_MS=300000;   // 5분. 절대 시각 기준이라 화면 꺼짐·백그라운드에서도 정확히 만료
 let sessionInterval=null,sessionBound=false,lastWrite=0;
-const lastActive=()=>Number(localStorage.getItem('invest_last_active'))||0;
+const lastActive=()=>Number(AUTH_STORAGE.getItem('invest_last_active'))||0;
 function touchActive(force){
   const n=Date.now();
-  if(force||n-lastWrite>1000){lastWrite=n;try{localStorage.setItem('invest_last_active',String(n))}catch(e){}}
+  if(force||n-lastWrite>1000){lastWrite=n;try{AUTH_STORAGE.setItem('invest_last_active',String(n))}catch(e){}}
 }
 function sessionLeftMs(){return SESSION_MS-(Date.now()-lastActive())}
 
@@ -147,10 +154,10 @@ function logout(){
   if(tk){try{post({action:'logout',token:tk}).catch(()=>{})}catch(e){}}   // 서버 세션도 즉시 폐기
   if(typeof clearAccountState==='function')clearAccountState();
   if(typeof stopTimers==='function')stopTimers();   // 자동 갱신 종료
-  localStorage.removeItem('invest_session_token');
-  localStorage.removeItem('invest_is_admin');
-  localStorage.removeItem('invest_last_active');
-  localStorage.removeItem('invest_password_change');
+  AUTH_STORAGE.removeItem('invest_session_token');
+  AUTH_STORAGE.removeItem('invest_is_admin');
+  AUTH_STORAGE.removeItem('invest_last_active');
+  AUTH_STORAGE.removeItem('invest_password_change');
   const change=$('passwordChangeGuard');if(change)change.remove();
   if($('adminBtn'))$('adminBtn').style.display='none';
   if($('adminMo'))$('adminMo').classList.remove('on');
@@ -193,7 +200,7 @@ function clearAccountState(){
   ['nhAccountCards','nhAccountRows','externalSummaryCards','externalAssetRows','externalOcrReview'].forEach(id=>{const el=$(id);if(el)el.replaceChildren()});
   if(typeof H!=='undefined')H.splice(0,H.length);
   ['hd','ps'].forEach(id=>{const el=$(id);if(el)el.replaceChildren()});
-  localStorage.removeItem('invest_external_drive_folder');
+  AUTH_STORAGE.removeItem('invest_external_drive_folder');
   if(typeof EXT_UNDO!=='undefined'){EXT_DRAFT_VERSION++;EXT_LOAD_RUN++;EXT_UNDO=[];EXT_SAVED_ROWS=[];EXT_SAVED_REV=null;EXT_HISTORY=[]}
   ['externalHistory','externalQuoteDiagnostics'].forEach(id=>{const el=$(id);if(el)el.replaceChildren()});
   window.EXT_LAST_QUOTE_DIAGNOSTICS={};

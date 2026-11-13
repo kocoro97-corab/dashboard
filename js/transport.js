@@ -17,11 +17,15 @@
     const c=config();options=options||{};
     if(c.mode==='direct')return root.fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),signal:options.signal});
     const data={...payload},headers={'Content-Type':'application/json'};
+    if(c.devAccessCode!=null){
+      if(!/^[A-Za-z0-9_-]{16,128}$/.test(c.devAccessCode))throw failure('DEV_ACCESS_REQUIRED');
+      headers['X-MyInvest-Dev-Key']=c.devAccessCode;
+    }
     if(data.token!=null){
       if(typeof data.token!=='string'||!/^[a-fA-F0-9]{64}$/.test(data.token))throw failure('AUTH_REQUIRED');
       headers.Authorization='Bearer '+data.token;delete data.token;
     }
-    return root.fetch(c.endpoint,{method:'POST',headers,body:JSON.stringify(data),credentials:'omit',redirect:'error',cache:'no-store',signal:options.signal}).catch(error=>{
+    return root.fetch(c.endpoint,{method:'POST',headers,body:JSON.stringify(data),credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:c.devAccessCode?'unsafe-url':'strict-origin-when-cross-origin',signal:options.signal}).catch(error=>{
       if(['register','changePassword','approveUser','saveExternalHoldings','restoreExternalHoldings'].includes(data.action))throw failure('RELAY_WRITE_OUTCOME_UNKNOWN');
       throw error;
     });
