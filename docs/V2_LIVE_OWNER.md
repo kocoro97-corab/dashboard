@@ -572,3 +572,33 @@ reports communication separately. Any unexpected private response or destination
 stops. Share only the safe JSON. Do not rerun full capture or change GAS while the
 cause remains unresolved. Fold6 remains NOT_RUN and special-product support remains
 unconfirmed; neither is replaced by synthetic evidence.
+
+## Resume native login after anonymous CORS probes PASS
+
+Owner-reported anonymous evidence at 0792882: all three cases PASS. Metadata and
+both auth-probe body styles were JSON-readable, exec/content responses had wildcard
+allow-origin, no preflight was observed, and missing-token requests were rejected
+at the session check with no private fields. This does not reproduce the earlier
+CORS failure or establish its root cause. Do not change working application/auth
+code or claim the first failure was definitively transient. Native login and
+session must still be tested separately.
+
+The explicit native-only mode reuses that same native checker and strict fresh
+preflight, without calling the full runner, capture, restore or backup rewrite.
+From the exact reviewed helper commit run:
+
+```bash
+"$HOME/myinvest-v2-live-venv/bin/python" tools/nh_v2_live_check.py \
+  --environment "$HOME/myinvest-v2-fresh-private-r2" \
+  --native-browser-only --representative-quotes
+```
+
+Enter existing fresh credentials locally once. This makes actual read-only NH
+inquiries through the native browser, verifies login/response/display/session, and
+waits for natural five-minute inactivity. On native PASS it performs the already
+prepared three-public-instrument read-only quote batch. On FAIL it stops before
+that batch. Existing snapshots and journal history are not captured/restored by
+this mode, and mixing it with full/repeat capture options is rejected before auth.
+Routine test-session authentication is unchanged. No GAS reapplication or frontend
+publish is needed. Prior latest-build full-flow PASS remains separate evidence;
+this command does not pretend to repeat it. Share only the sanitized final JSON.

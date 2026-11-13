@@ -134,3 +134,24 @@ class CorsEvidenceTests(unittest.TestCase):
         import contextlib,io
         with patch.object(sys,'argv',['nh_v2_live_check.py','--environment','synthetic','--diagnose-browser-cors','--repeat-empty-baseline']),patch.object(live,'preflight') as preflight,contextlib.redirect_stdout(io.StringIO()):self.assertEqual(live.main(),2)
         preflight.assert_not_called()
+
+class NativeOnlyTests(unittest.TestCase):
+    def test_native_only_can_continue_quotes_without_capture_restore_or_new_full_run(self):
+        import contextlib,io
+        from types import SimpleNamespace
+        web=SimpleNamespace(url=TARGET,binding='f'*64)
+        with patch.object(sys,'argv',['nh_v2_live_check.py','--environment','synthetic','--native-browser-only','--representative-quotes']),patch.object(live,'preflight',return_value=web) as preflight,patch.object(sys.stdin,'isatty',return_value=True),patch('builtins.input',return_value=' synthetic ') as credentials,patch.object(live.getpass,'getpass',return_value='SYNTHETIC_PRIVATE_PASSWORD'),patch.object(browser,'native_browser_check',return_value={'status':'PASS'}) as native,patch.object(live,'checks') as full,patch.object(live,'representative_quotes',return_value={'status':'PASS'}) as quotes,contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(live.main(),0)
+        preflight.assert_called_once_with(Path('synthetic'),allow_same_source_tools=True)
+        native.assert_called_once_with(TARGET,'synthetic','SYNTHETIC_PRIVATE_PASSWORD','f'*64);full.assert_not_called();quotes.assert_called_once_with(web,'synthetic','SYNTHETIC_PRIVATE_PASSWORD')
+        self.assertEqual(credentials.call_count,1);self.assertNotIn('SYNTHETIC_PRIVATE_PASSWORD',output.getvalue())
+    def test_native_only_failure_stops_before_representative_queries_and_full_store(self):
+        import contextlib,io
+        from types import SimpleNamespace
+        with patch.object(sys,'argv',['nh_v2_live_check.py','--environment','synthetic','--native-browser-only','--representative-quotes']),patch.object(live,'preflight',return_value=SimpleNamespace(url=TARGET,binding='f'*64)),patch.object(sys.stdin,'isatty',return_value=True),patch('builtins.input',return_value='synthetic'),patch.object(live.getpass,'getpass',return_value='SYNTHETIC_PRIVATE_PASSWORD'),patch.object(browser,'native_browser_check',return_value={'status':'FAIL'}),patch.object(live,'checks') as full,patch.object(live,'representative_quotes') as quotes,contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(live.main(),2)
+        quotes.assert_not_called();full.assert_not_called()
+    def test_native_only_cannot_select_repeat_capture(self):
+        import contextlib,io
+        with patch.object(sys,'argv',['nh_v2_live_check.py','--environment','synthetic','--native-browser-only','--repeat-empty-baseline']),patch.object(live,'preflight') as preflight,contextlib.redirect_stdout(io.StringIO()):self.assertEqual(live.main(),2)
+        preflight.assert_not_called()

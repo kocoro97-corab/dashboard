@@ -364,6 +364,7 @@ def main():
     p.add_argument('--real-browser', action='store_true', help='After full-flow PASS, test native browser login/GAS and natural five-minute inactivity logout')
     p.add_argument('--representative-quotes', action='store_true', help='After full-flow/browser PASS, check three public representative overseas instruments')
     modes = p.add_mutually_exclusive_group()
+    modes.add_argument('--native-browser-only', action='store_true', help='Run native browser login/session only; skip capture/storage/restore, optionally then public representative quotes')
     modes.add_argument('--diagnose-browser-cors', action='store_true', help='Anonymous browser header/redirect evidence only; no credentials, NH or storage writes')
     modes.add_argument('--verify-existing-snapshot-ui', action='store_true', help='Display existing saved snapshot on desktop/mobile; no NH, capture or restore')
     modes.add_argument('--diagnose-overseas-quote', action='store_true', help='Read existing snapshot and request one overseas quote; no capture, restore or storage writes')
@@ -371,12 +372,14 @@ def main():
     try:
         if (a.repeat_empty_baseline or a.real_browser or a.representative_quotes) and (a.diagnose_overseas_quote or a.verify_existing_snapshot_ui or a.diagnose_browser_cors):
             raise Stop('INCOMPATIBLE_CHECK_MODES')
-        web = preflight(a.environment, allow_same_source_tools=a.diagnose_overseas_quote or a.verify_existing_snapshot_ui or a.repeat_empty_baseline or a.diagnose_browser_cors)
+        if a.native_browser_only and (a.repeat_empty_baseline or a.real_browser or a.browser):
+            raise Stop('INCOMPATIBLE_CHECK_MODES')
+        web = preflight(a.environment, allow_same_source_tools=a.diagnose_overseas_quote or a.verify_existing_snapshot_ui or a.repeat_empty_baseline or a.diagnose_browser_cors or a.native_browser_only)
         if a.diagnose_browser_cors:
             from nh_v2_browser_check import diagnose_browser_cors
             result = diagnose_browser_cors(web.url, web.binding)
             print(json.dumps(result));return 0 if result['status']=='PASS' else 2
-        if not a.approve_nh_read_and_private_snapshot and not a.diagnose_overseas_quote and not a.verify_existing_snapshot_ui:
+        if not a.approve_nh_read_and_private_snapshot and not a.diagnose_overseas_quote and not a.verify_existing_snapshot_ui and not a.native_browser_only:
             print(json.dumps({'status': 'NOT_RUN', 'code': 'OWNER_NH_APPROVAL_REQUIRED', 'nhRequested': False}));return 2
         if not sys.stdin.isatty():
             raise Stop('OWNER_PRIVATE_TERMINAL_REQUIRED')
@@ -384,7 +387,15 @@ def main():
         password = getpass.getpass('Fresh staging password (hidden): ')
         if not username or len(password) < 16:
             raise Stop('STRONG_PRIVATE_CREDENTIALS_REQUIRED')
-        if a.verify_existing_snapshot_ui:
+        if a.native_browser_only:
+            from nh_v2_browser_check import native_browser_check
+            print(json.dumps({'progress':'NATIVE_BROWSER_ONLY_NO_CAPTURE_OR_RESTORE'}),flush=True)
+            result = native_browser_check(web.url, username, password, web.binding)
+            result['mode'] = 'NATIVE_BROWSER_ONLY'
+            if result['status'] == 'PASS' and a.representative_quotes:
+                print(json.dumps({'progress':'READ_ONLY_PUBLIC_REPRESENTATIVE_QUOTES'}),flush=True)
+                result['representativeQuotes'] = representative_quotes(web, username, password)
+        elif a.verify_existing_snapshot_ui:
             result = verify_existing_snapshot_ui(web, username, password)
         elif a.diagnose_overseas_quote:
             result = diagnose_overseas_quote(web, username, password)
