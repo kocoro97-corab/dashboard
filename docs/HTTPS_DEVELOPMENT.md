@@ -109,6 +109,13 @@ Fold6 until Ctrl+C, tunnel exit, or its maximum lifetime. Browser failure closes
 
 ## Fold6
 
+Connection failures show only a local allowlisted code and HTTP status, never a
+raw response, exception or entered value. `DEV_ACCESS_REQUIRED` means the separate
+code was rejected; `DEV_PAGE_REQUIRED` means the browser did not supply the
+approved development-page referrer; `DEV_NETWORK` means no readable response
+arrived and does not establish a wrong code. Report only that code before changing
+credentials or retrying. The development inputs disable mobile autocapitalization.
+
 After Pages publication and `HTTPS_DEV_READY`, open
 `https://kocoro97-corab.github.io/dashboard-v2-dev/` in Chrome on the phone. Enter
 the endpoint printed by Cloud Shell and the separate access code privately; then
