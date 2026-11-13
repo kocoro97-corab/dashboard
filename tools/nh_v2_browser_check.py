@@ -182,3 +182,124 @@ def native_browser_check(target, username, password, binding=None):
     finally:
         server.shutdown();server.server_close()
     return report
+
+
+def cors_role(url,target):
+    if url==target:return 'FRESH_EXEC'
+    host=urlsplit(url).hostname
+    if host=='script.googleusercontent.com':return 'GOOGLE_CONTENT'
+    if host=='accounts.google.com':return 'GOOGLE_AUTH'
+    if host=='script.google.com':return 'OTHER_GOOGLE_SCRIPT'
+    return 'OTHER'
+
+
+def safe_cors_response(status,headers,origin,target):
+    h={str(k).lower():str(v) for k,v in headers.items()}
+    value=h.get('access-control-allow-origin','')
+    kind=h.get('content-type','').split(';')[0].lower()
+    return {'http':status if type(status) is int and 100<=status<=599 else None,
+            'contentType':'JSON' if kind=='application/json' else 'HTML' if kind=='text/html' else 'OTHER_OR_MISSING',
+            'allowOrigin':'WILDCARD' if value=='*' else 'REQUEST_ORIGIN' if value==origin else 'OTHER' if value else 'MISSING',
+            'allowsCredentials':h.get('access-control-allow-credentials','').lower()=='true',
+            'redirect':300<=status<400,
+            'locationRole':cors_role(h['location'],target) if 'location' in h else 'MISSING'}
+
+
+def cors_error_category(message):
+    text=message.lower()
+    if 'cors' not in text:return None
+    if 'preflight' in text and 'redirect' in text:return 'PREFLIGHT_REDIRECT'
+    if 'preflight' in text:return 'PREFLIGHT_REJECTED'
+    if 'access-control-allow-origin' in text and ('no ' in text or 'missing' in text):return 'ALLOW_ORIGIN_MISSING'
+    if 'credentials' in text:return 'CREDENTIALS_POLICY'
+    if 'private' in text and 'address' in text:return 'PRIVATE_NETWORK_POLICY'
+    return 'OTHER_CORS_POLICY'
+
+
+def diagnose_browser_cors(target,binding):
+    """Three anonymous native browser requests. Header categories only, no NH or login."""
+    report={'mode':'ANONYMOUS_BROWSER_CORS_DIAGNOSTIC','status':'FAIL','cases':[],
+            'credentialsRequested':False,'nhRequested':False,'storageWrites':False,'orderCalls':0,
+            'rawFinancialDataIncluded':False,'rawHeadersOrUrlsIncluded':False}
+    if not valid_target(target) or not isinstance(binding,str) or not re.fullmatch(r'[a-f0-9]{64}',binding):
+        report['code']='FRESH_BROWSER_TARGET_AND_BINDING_REQUIRED';return report
+    from playwright.sync_api import sync_playwright
+    class Handler(SimpleHTTPRequestHandler):
+        def __init__(self,*args,**kwargs):super().__init__(*args,directory=str(ROOT),**kwargs)
+        def log_message(self,*args):pass
+        def do_GET(self):
+            if not public_asset(urlsplit(self.path).path):self.send_error(404);return
+            super().do_GET()
+    server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
+    threading.Thread(target=server.serve_forever,daemon=True).start()
+    origin='http://127.0.0.1:'+str(server.server_port)
+    state={'case':None,'mutate':False,'violation':False}
+    try:
+        with sync_playwright() as p:
+            options={'headless':True}
+            if os.environ.get('CHROMIUM_EXECUTABLE'):options['executable_path']=os.environ['CHROMIUM_EXECUTABLE']
+            browser=p.chromium.launch(**options)
+            try:
+                context=browser.new_context(service_workers='block')
+                context.add_init_script('localStorage.setItem("invest_myproxy",'+json.dumps(json.dumps(target))+');')
+                def route(route):
+                    r=route.request;root=rooted_request(r)
+                    if r.url==target and r.method=='POST':
+                        try:body=json.loads(r.post_data or '{}')
+                        except Exception:state['violation']=True;route.abort();return
+                        if body.get('action') not in ('appVersion','nhAccounts') or set(body)-{'action','stagingBinding'}:
+                            state['violation']=True;route.abort();return
+                        if state['mutate']:
+                            body['stagingBinding']=binding;route.continue_(post_data=json.dumps(body))
+                        else:route.continue_()
+                        return
+                    choice=request_decision(r.url,r.method,r.post_data,root.url,root.method,target,origin)
+                    if choice=='ALLOW':route.continue_()
+                    else:
+                        if choice=='VIOLATION':state['violation']=True
+                        route.abort()
+                context.route('**/*',route);page=context.new_page()
+                def request(r):
+                    case=state['case']
+                    if case is None or 'requests' not in case or cors_role(r.url,target)=='OTHER':return
+                    kind=r.headers.get('content-type','').split(';')[0].lower()
+                    case['requests'].append({'role':cors_role(r.url,target),'method':r.method if r.method in ('GET','POST','OPTIONS') else 'OTHER',
+                                             'contentType':'TEXT_PLAIN' if kind=='text/plain' else 'JSON' if kind=='application/json' else 'OTHER_OR_MISSING'})
+                def response(r):
+                    case=state['case']
+                    if case is None or cors_role(r.url,target)=='OTHER':return
+                    item=safe_cors_response(r.status,r.headers,origin,target);item['role']=cors_role(r.url,target)
+                    if len(case['responses'])<12:case['responses'].append(item)
+                def console(message):
+                    case=state['case'];code=cors_error_category(message.text)
+                    if case is not None and code and code not in case['corsCodes']:case['corsCodes'].append(code)
+                page.on('request',request);page.on('response',response);page.on('console',console)
+                page.goto(origin,wait_until='domcontentloaded')
+                for name,action,mutate in [('METADATA_NATIVE_BODY','appVersion',False),('AUTH_PROBE_ROUTE_MUTATION','nhAccounts',True),('AUTH_PROBE_NATIVE_BODY','nhAccounts',False)]:
+                    case={'case':name,'requests':[],'responses':[],'corsCodes':[]};state.update(case=case,mutate=mutate)
+                    result=page.evaluate("""async x=>{
+                      try{const payload={action:x.action};if(!x.mutate)payload.stagingBinding=x.binding;
+                        const r=await post(payload);const d=await r.json();
+                        const privateFields=['accounts','holdings','token','access_token'].some(k=>k in d);
+                        const denied=d.success===false&&!privateFields;
+                        const authCode=d.code==='AUTH_REQUIRED'||d.message==='로그인이 필요합니다. 다시 로그인하세요.';
+                        return {jsonReadable:true,http:r.status,metadataValid:x.action==='appVersion'&&d.success===true&&d.freshTestEnvironment===true,
+                          denied:denied,authBlockedAtSessionCheck:denied&&authCode,privateFieldsPresent:privateFields};
+                      }catch(e){return {jsonReadable:false,errorType:['TypeError','SyntaxError'].includes(e.name)?e.name:'OTHER'}}
+                    }""",{'action':action,'binding':binding,'mutate':mutate})
+                    case.update(result)
+                    requests=case.pop('requests')
+                    case['requestContentTypes']=sorted(set(r['contentType'] for r in requests if r['role']=='FRESH_EXEC' and r['method']=='POST'))
+                    case['preflightObserved']=any(r['method']=='OPTIONS' for r in requests)
+                    case['googleContentGetObserved']=any(r['role']=='GOOGLE_CONTENT' and r['method']=='GET' for r in requests)
+                    case['responses']=[{k:r[k] for k in ('role','http','contentType','allowOrigin','locationRole')} for r in case['responses']]
+                    case['status']='PASS' if result.get('metadataValid') or result.get('authBlockedAtSessionCheck') else 'FAIL'
+                    report['cases'].append(case)
+                    if result.get('privateFieldsPresent') or state['violation']:
+                        report['code']='UNEXPECTED_ANONYMOUS_RESPONSE_OR_DESTINATION';return report
+                report.update(status='PASS',code='CORS_DIAGNOSTIC_COMPLETED')
+            finally:browser.close()
+    except Exception:
+        report['code']='ANONYMOUS_CORS_DIAGNOSTIC_FAILED'
+    finally:server.shutdown();server.server_close()
+    return report

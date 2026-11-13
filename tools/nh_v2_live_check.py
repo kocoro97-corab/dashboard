@@ -364,13 +364,18 @@ def main():
     p.add_argument('--real-browser', action='store_true', help='After full-flow PASS, test native browser login/GAS and natural five-minute inactivity logout')
     p.add_argument('--representative-quotes', action='store_true', help='After full-flow/browser PASS, check three public representative overseas instruments')
     modes = p.add_mutually_exclusive_group()
+    modes.add_argument('--diagnose-browser-cors', action='store_true', help='Anonymous browser header/redirect evidence only; no credentials, NH or storage writes')
     modes.add_argument('--verify-existing-snapshot-ui', action='store_true', help='Display existing saved snapshot on desktop/mobile; no NH, capture or restore')
     modes.add_argument('--diagnose-overseas-quote', action='store_true', help='Read existing snapshot and request one overseas quote; no capture, restore or storage writes')
     a = p.parse_args()
     try:
-        if (a.repeat_empty_baseline or a.real_browser or a.representative_quotes) and (a.diagnose_overseas_quote or a.verify_existing_snapshot_ui):
+        if (a.repeat_empty_baseline or a.real_browser or a.representative_quotes) and (a.diagnose_overseas_quote or a.verify_existing_snapshot_ui or a.diagnose_browser_cors):
             raise Stop('INCOMPATIBLE_CHECK_MODES')
-        web = preflight(a.environment, allow_same_source_tools=a.diagnose_overseas_quote or a.verify_existing_snapshot_ui or a.repeat_empty_baseline)
+        web = preflight(a.environment, allow_same_source_tools=a.diagnose_overseas_quote or a.verify_existing_snapshot_ui or a.repeat_empty_baseline or a.diagnose_browser_cors)
+        if a.diagnose_browser_cors:
+            from nh_v2_browser_check import diagnose_browser_cors
+            result = diagnose_browser_cors(web.url, web.binding)
+            print(json.dumps(result));return 0 if result['status']=='PASS' else 2
         if not a.approve_nh_read_and_private_snapshot and not a.diagnose_overseas_quote and not a.verify_existing_snapshot_ui:
             print(json.dumps({'status': 'NOT_RUN', 'code': 'OWNER_NH_APPROVAL_REQUIRED', 'nhRequested': False}));return 2
         if not sys.stdin.isatty():

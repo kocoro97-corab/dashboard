@@ -109,3 +109,28 @@ class DispatchTests(unittest.TestCase):
         with patch.object(sys,'argv',['nh_v2_live_check.py','--environment','synthetic','--repeat-empty-baseline','--diagnose-overseas-quote']),patch.object(live,'preflight') as preflight,contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(live.main(),2)
         preflight.assert_not_called()
+
+class CorsEvidenceTests(unittest.TestCase):
+    def test_header_evidence_drops_private_values_urls_and_unknown_headers(self):
+        result=browser.safe_cors_response(302,{'Content-Type':'text/html;charset=UTF-8','Access-Control-Allow-Origin':'https://SYNTHETIC_PRIVATE_ORIGIN','Location':'https://script.googleusercontent.com/macros/echo?key=SYNTHETIC_PRIVATE_KEY','Authorization':'SYNTHETIC_PRIVATE_TOKEN'},ORIGIN,TARGET)
+        self.assertEqual(result['http'],302);self.assertEqual(result['allowOrigin'],'OTHER');self.assertEqual(result['locationRole'],'GOOGLE_CONTENT')
+        self.assertNotIn('SYNTHETIC_PRIVATE',json.dumps(result));self.assertNotIn('https:',json.dumps(result))
+    def test_allow_origin_categories_are_fixed_and_do_not_claim_missing_headers_pass(self):
+        for value,expected in [('*','WILDCARD'),(ORIGIN,'REQUEST_ORIGIN'),('other','OTHER'),('','MISSING')]:
+            r=browser.safe_cors_response(200,{'Access-Control-Allow-Origin':value,'Content-Type':'application/json'},ORIGIN,TARGET)
+            self.assertEqual(r['allowOrigin'],expected);self.assertEqual(r['contentType'],'JSON')
+    def test_console_errors_become_fixed_categories_without_copying_text(self):
+        for text,code in [('CORS: preflight redirect SYNTHETIC_PRIVATE_KEY','PREFLIGHT_REDIRECT'),('CORS No Access-Control-Allow-Origin header SYNTHETIC_PRIVATE_KEY','ALLOW_ORIGIN_MISSING'),('CORS preflight rejected','PREFLIGHT_REJECTED'),('CORS credentials rejected','CREDENTIALS_POLICY')]:
+            self.assertEqual(browser.cors_error_category(text),code)
+        self.assertIsNone(browser.cors_error_category('unrelated SYNTHETIC_PRIVATE_KEY'))
+    def test_diagnostic_cli_never_prompts_for_login_or_selects_full_capture(self):
+        import contextlib,io
+        from types import SimpleNamespace
+        web=SimpleNamespace(url=TARGET,binding='f'*64)
+        with patch.object(sys,'argv',['nh_v2_live_check.py','--environment','synthetic','--diagnose-browser-cors']),patch.object(live,'preflight',return_value=web) as preflight,patch.object(browser,'diagnose_browser_cors',return_value={'status':'PASS'}) as diagnostic,patch('builtins.input') as credentials,patch.object(live,'checks') as full,contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(live.main(),0)
+        preflight.assert_called_once_with(Path('synthetic'),allow_same_source_tools=True);diagnostic.assert_called_once_with(TARGET,'f'*64);credentials.assert_not_called();full.assert_not_called()
+    def test_diagnostic_cannot_be_combined_with_repeat_or_write_flow(self):
+        import contextlib,io
+        with patch.object(sys,'argv',['nh_v2_live_check.py','--environment','synthetic','--diagnose-browser-cors','--repeat-empty-baseline']),patch.object(live,'preflight') as preflight,contextlib.redirect_stdout(io.StringIO()):self.assertEqual(live.main(),2)
+        preflight.assert_not_called()

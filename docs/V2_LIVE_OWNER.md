@@ -530,3 +530,45 @@ Share only the final sanitized JSON. `checks` records core evidence,
 records the separate public sample batch. Inspect each sub-result; prior build
 success is not reused for this final pass. No deployment, merge, production Sheet
 or Properties operation is part of this command. Preserve all private backups.
+
+## Native browser CORS failure: anonymous evidence only
+
+Owner-reported final execution at f59b8ac: latest-build dashboard/NH authentication,
+domestic/overseas inquiry, exact native store readback, identity/currency, both
+quotes, desktop/mobile adapter, original/new history retention and baseline restore
+all PASS. Thus priority 1 is PASS for that continuous run. Native browser stopped
+at UNAUTHENTICATED_PROBE with observed CORS/network failure before login; priority
+2 is FAIL. The foreign representative batch did not run. Order calls 0; existing
+resources unchanged. Do not repeat the full flow: its successful run left four
+history entries, which the deliberate preservation limit will refuse.
+
+A local synthetic three-origin HTTP reproduction confirmed that both native
+text/plain POST and Playwright body-injected POST can follow a CORS-enabled 302
+successfully. This does not establish the Google deployment's CORS headers or
+identify a backend/auth bug. No app source or authentication behavior is changed
+on that evidence alone.
+
+After checking out the reviewed diagnostic helper commit, run only:
+
+```bash
+"$HOME/myinvest-v2-live-venv/bin/python" tools/nh_v2_live_check.py \
+  --environment "$HOME/myinvest-v2-fresh-private-r2" \
+  --diagnose-browser-cors
+```
+
+This mode requires no dashboard credential prompt, does not login/capture/restore,
+and makes at most three anonymous browser requests: public appVersion, missing-token
+nhAccounts with the previous route injection, and missing-token nhAccounts with the
+binding already present before fetch. The verified GAS source rejects missing
+sessions before any NH/account inquiry. Source/deployment/binding preflight stays
+strict. It never uses no-cors, a relay, response rewriting or disabled web security.
+
+Only fixed role/method/content-type/allow-origin/error categories and HTTP codes are
+reported. Redirect URLs, signed query strings, header values, response text, tokens
+and data are omitted. Header categories show whether denial occurred at preflight,
+exec or content redirect as observable. Diagnostic status PASS means evidence
+collection completed; each case's status/jsonReadable/authBlockedAtSessionCheck
+reports communication separately. Any unexpected private response or destination
+stops. Share only the safe JSON. Do not rerun full capture or change GAS while the
+cause remains unresolved. Fold6 remains NOT_RUN and special-product support remains
+unconfirmed; neither is replaced by synthetic evidence.
