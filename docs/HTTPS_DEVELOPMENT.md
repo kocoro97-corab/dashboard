@@ -72,6 +72,10 @@ checks. It does not prompt for a code/password, open a tunnel, run a browser,
 log in, or write account data. A successful `HTTPS_PREFLIGHT_ONLY` result is not
 an actual HTTPS/login PASS. Normal startup also includes phase/reason diagnostics;
 raw exceptions, source, credential values and private paths remain suppressed.
+If startup reaches `PUBLIC_HTTPS_PROBE`, failures include a sanitized `probe`
+summary: HTTP status, JSON/HTML/OTHER, approved/missing/other CORS, a known relay
+reason if present, or a TLS/DNS/timeout/network category. Response bodies, Location
+URLs and exception text are never reported, and this check does not retry requests.
 
 Codex's current GitHub integration received HTTP 403 when attempting to create
 the separate development repository. The connector's issuance attempt also

@@ -25,6 +25,7 @@ from nh_v2_fresh import private_path, SAFE_OWNER_CODES
 from nh_staging_test import fingerprint
 from build_dev_pages import PAGE
 from install_dev_tunnel import SHA256
+from nh_v2_https_browser import HttpsProbeFailure
 import hashlib
 
 SAFE_STARTUP_CODES = SAFE_OWNER_CODES | frozenset('''
@@ -181,7 +182,8 @@ def main():
         report.update(status='PASS', code='HTTPS_DEV_OWNER_CLOSED')
     except Exception as error:
         code = str(error)
-        report.update(code=code if code in SAFE_STARTUP_CODES else 'HTTPS_DEV_PREFLIGHT_OR_TUNNEL_REQUIRED')
+        if isinstance(error,HttpsProbeFailure):report.update(code=error.code,probe=error.evidence)
+        else:report.update(code=code if code in SAFE_STARTUP_CODES else 'HTTPS_DEV_PREFLIGHT_OR_TUNNEL_REQUIRED')
     print(json.dumps(report))
     return 0 if report['status'] == 'PASS' else 2
 

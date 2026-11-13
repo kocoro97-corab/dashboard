@@ -1,10 +1,42 @@
 """Public HTTPS/Pages verification; no local-flow or five-minute test replay."""
 import json
 import os
+import re
+import socket
+import ssl
 import subprocess
 import urllib.error
 import urllib.request
 from build_dev_pages import PAGE
+
+PROBE_RELAY_CODES=frozenset('''DEV_ACCESS_REQUIRED DEV_ACCESS_CLOSED DEV_PAGE_REQUIRED
+DEV_HTTPS_REQUIRED DEV_RATE_LIMIT DEV_BUSY RELAY_ORIGIN_DENIED RELAY_PATH_DENIED
+RELAY_BAD_REQUEST RELAY_REQUEST_SIZE RELAY_TARGET_MISMATCH RELAY_GAS_ACCESS_REQUIRED
+RELAY_UPSTREAM_HTTP RELAY_UPSTREAM_NETWORK RELAY_GOOGLE_CONTENT_400 RELAY_NON_JSON
+RELAY_RESPONSE_INVALID RELAY_SCOPE_BLOCKED'''.split())
+
+
+class HttpsProbeFailure(Exception):
+    """Only constructed with local codes and sanitized evidence below."""
+    def __init__(self,code,evidence):
+        self.code=code;self.evidence=evidence;super().__init__(code)
+
+
+def probe_evidence(status,headers,raw=b''):
+    headers=headers or {}
+    content=str(headers.get('Content-Type','')).split(';')[0].lower().strip()
+    origin=headers.get('Access-Control-Allow-Origin')
+    result={'http':status if isinstance(status,int) and 100<=status<=599 else None,
+            'contentType':'JSON' if content=='application/json' else 'HTML' if content=='text/html' else 'OTHER',
+            'allowOrigin':'APPROVED' if origin=='https://kocoro97-corab.github.io' else 'MISSING' if not origin else 'OTHER',
+            'redirectBlocked':isinstance(status,int) and 300<=status<=399}
+    # Parse privately; report only exact local codes, never an upstream message.
+    try:
+        data=json.loads(raw)
+        if isinstance(data,dict) and isinstance(data.get('code'),str) and data['code'] in PROBE_RELAY_CODES:
+            result['relayCode']=data['code']
+    except Exception:pass
+    return result
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -24,12 +56,36 @@ def probe(endpoint, access_code):
     request = urllib.request.Request(endpoint, data=b'{"action":"appVersion"}', method='POST', headers={
         'Origin': 'https://kocoro97-corab.github.io', 'Referer': PAGE,
         'Content-Type': 'application/json', 'X-MyInvest-Dev-Key': access_code})
-    with opener.open(request, timeout=30) as response:
-        if response.status != 200 or response.headers.get('Access-Control-Allow-Origin') != 'https://kocoro97-corab.github.io':
-            raise ValueError('HTTPS_EDGE_NOT_CONFIRMED')
-        data = json.load(response)
-        if data.get('success') is not True or data.get('freshTestEnvironment') is not True:
-            raise ValueError('HTTPS_EDGE_NOT_CONFIRMED')
+    try:
+        with opener.open(request, timeout=30) as response:
+            raw=response.read(65537)
+            evidence=probe_evidence(response.status,response.headers,raw[:65536])
+            if len(raw)>65536:raise HttpsProbeFailure('HTTPS_PROBE_RESPONSE_TOO_LARGE',evidence)
+            if response.status!=200:raise HttpsProbeFailure('HTTPS_PROBE_HTTP_ERROR',evidence)
+            if evidence['allowOrigin']!='APPROVED':raise HttpsProbeFailure('HTTPS_PROBE_CORS_INVALID',evidence)
+            try:data=json.loads(raw)
+            except Exception:raise HttpsProbeFailure('HTTPS_PROBE_JSON_INVALID',evidence) from None
+            if not isinstance(data,dict) or data.get('success') is not True or data.get('freshTestEnvironment') is not True:
+                raise HttpsProbeFailure('HTTPS_PROBE_METADATA_MISMATCH',evidence)
+    except HttpsProbeFailure:raise
+    except urllib.error.HTTPError as error:
+        try:
+            try:raw=error.read(65536)
+            except Exception:raw=b''
+            evidence=probe_evidence(error.code,error.headers,raw)
+        finally:error.close()
+        raise HttpsProbeFailure('HTTPS_PROBE_REDIRECT_BLOCKED' if evidence['redirectBlocked'] else 'HTTPS_PROBE_HTTP_ERROR',evidence) from None
+    except (urllib.error.URLError, OSError, TimeoutError) as error:
+        reason=error.reason if isinstance(error,urllib.error.URLError) else error
+        kind=('TLS_CERTIFICATE' if isinstance(reason,ssl.SSLCertVerificationError) else
+              'TLS' if isinstance(reason,ssl.SSLError) else
+              'TIMEOUT' if isinstance(reason,(TimeoutError,socket.timeout)) else
+              'DNS' if isinstance(reason,socket.gaierror) else 'NETWORK')
+        evidence={'transport':kind}
+        if isinstance(getattr(reason,'errno',None),int):evidence['errno']=reason.errno
+        proxy=re.match(r'^Tunnel connection failed: ([1-5][0-9]{2})(?:\s|$)',str(reason))
+        if proxy:evidence.update(transport='PROXY_CONNECT',proxyHttp=int(proxy[1]))
+        raise HttpsProbeFailure('HTTPS_PROBE_TRANSPORT_ERROR',evidence) from None
 
 
 def verify(endpoint, access_code, username, password, synthetic=False, route=None, width=1440):
