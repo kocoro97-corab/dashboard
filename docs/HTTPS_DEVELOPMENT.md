@@ -76,6 +76,16 @@ If startup reaches `PUBLIC_HTTPS_PROBE`, failures include a sanitized `probe`
 summary: HTTP status, JSON/HTML/OTHER, approved/missing/other CORS, a known relay
 reason if present, or a TLS/DNS/timeout/network category. Response bodies, Location
 URLs and exception text are never reported, and this check does not retry requests.
+For a new tunnel, the required local DNS lookup is now checked before constructing
+the authenticated metadata request: up to 8 DNS checks within a 30-second budget.
+Only EAI_NONAME/EAI_AGAIN are retried; a hung lookup stops within the budget.
+An active HTTPS proxy/NO_PROXY route is preserved, so proxy-resolved public names
+are not incorrectly required to resolve locally. IP results are never used as a
+fallback endpoint. System DNS, proxies and TLS settings are not modified.
+On exhaustion, `HTTPS_DNS_NOT_READY` reports the target role, attempt count and
+DNS-only control results, without hostname/IP/proxy credentials. This does not
+establish whether the cause is temporary propagation or a persistent resolver
+policy. HTTP metadata is still sent once, only after the required name resolves.
 
 Codex's current GitHub integration received HTTP 403 when attempting to create
 the separate development repository. The connector's issuance attempt also

@@ -1,12 +1,16 @@
 """Public HTTPS/Pages verification; no local-flow or five-minute test replay."""
 import json
 import os
+import queue
 import re
 import socket
 import ssl
 import subprocess
+import threading
+import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 from build_dev_pages import PAGE
 
 PROBE_RELAY_CODES=frozenset('''DEV_ACCESS_REQUIRED DEV_ACCESS_CLOSED DEV_PAGE_REQUIRED
@@ -20,6 +24,71 @@ class HttpsProbeFailure(Exception):
     """Only constructed with local codes and sanitized evidence below."""
     def __init__(self,code,evidence):
         self.code=code;self.evidence=evidence;super().__init__(code)
+
+
+def _dns_lookup(host, timeout):
+    """Bound the system resolver without altering DNS, proxies, TLS or routing."""
+    result=queue.Queue(maxsize=1)
+    def run():
+        try:result.put((True,socket.getaddrinfo(host,443,type=socket.SOCK_STREAM)))
+        except Exception as error:result.put((False,error))
+    threading.Thread(target=run,daemon=True).start()
+    try:ok,value=result.get(timeout=max(.001,timeout))
+    except queue.Empty:raise TimeoutError() from None
+    if not ok:raise value
+    if not value:raise socket.gaierror(socket.EAI_NONAME,'')
+
+
+def _dns_target(endpoint):
+    try:
+        parsed=urlsplit(endpoint)
+        if (parsed.scheme!='https' or not re.fullmatch(r'[a-z0-9-]+\.trycloudflare\.com',parsed.hostname or '') or
+                parsed.port not in (None,443) or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path!='/api'):
+            raise ValueError()
+    except ValueError:raise HttpsProbeFailure('HTTPS_PROBE_ENDPOINT_INVALID',{'transport':'CONFIG'}) from None
+    # urllib resolves the proxy locally when an HTTPS proxy is active; it need
+    # not resolve the public target locally. Preserve inherited proxy/NO_PROXY.
+    proxy=urllib.request.getproxies().get('https')
+    if proxy and not urllib.request.proxy_bypass(parsed.hostname):
+        try:
+            route=urlsplit(proxy if '://' in proxy else '//'+proxy)
+            if not route.hostname or route.port==0:raise ValueError()
+        except ValueError:raise HttpsProbeFailure('HTTPS_PROBE_PROXY_CONFIG',{'dnsTarget':'HTTPS_PROXY'}) from None
+        return route.hostname,'HTTPS_PROXY'
+    return parsed.hostname,'PUBLIC_RELAY'
+
+
+def wait_for_dns(endpoint, timeout=30, interval=3, max_attempts=8, on_wait=None):
+    """Retry DNS only; no HTTP, credentials, fallback IP, or resolver changes."""
+    host,role=_dns_target(endpoint)
+    deadline=time.monotonic()+timeout
+    attempts=0;last_errno=None;timed_out=False
+    while attempts<max_attempts and time.monotonic()<deadline:
+        attempts+=1
+        try:
+            _dns_lookup(host,deadline-time.monotonic())
+            return {'dnsTarget':role,'attempts':attempts}
+        except socket.gaierror as error:
+            last_errno=error.errno
+            if error.errno not in (socket.EAI_NONAME,socket.EAI_AGAIN):break
+        except TimeoutError:
+            timed_out=True;break  # Do not spawn more workers after a hung resolver.
+        except OSError:break
+        if on_wait and attempts==1:on_wait({'dnsTarget':role,'attempts':attempts})
+        if attempts<max_attempts:
+            remaining=deadline-time.monotonic()
+            if remaining>0:time.sleep(min(interval,remaining))
+    evidence={'transport':'DNS','dnsTarget':role,'attempts':attempts}
+    if isinstance(last_errno,int):evidence['errno']=last_errno
+    # One DNS-only control lookup per known service helps distinguish a new
+    # hostname problem from a broader resolver issue. No response/IP is logged.
+    for field,control in (('tunnelApiDns','api.trycloudflare.com'),('pagesDns','kocoro97-corab.github.io')):
+        evidence[field]=None
+        remaining=deadline-time.monotonic()
+        if timed_out or remaining<=0:continue
+        try:_dns_lookup(control,min(3,remaining));evidence[field]=True
+        except (OSError,TimeoutError):evidence[field]=False
+    raise HttpsProbeFailure('HTTPS_DNS_NOT_READY',evidence)
 
 
 def probe_evidence(status,headers,raw=b''):
@@ -50,8 +119,9 @@ def network_failure(request, endpoint, phase):
     return 'RELOAD_CANCELLED' if phase == 'SESSION_RELOAD' and request.failure == 'net::ERR_ABORTED' else 'HTTPS_API_FAILURE'
 
 
-def probe(endpoint, access_code):
+def probe(endpoint, access_code, on_dns_wait=None):
     """TLS verified, no redirects; no password or session, only metadata."""
+    dns=wait_for_dns(endpoint,on_wait=on_dns_wait)
     opener = urllib.request.build_opener(NoRedirect())
     request = urllib.request.Request(endpoint, data=b'{"action":"appVersion"}', method='POST', headers={
         'Origin': 'https://kocoro97-corab.github.io', 'Referer': PAGE,
@@ -67,6 +137,7 @@ def probe(endpoint, access_code):
             except Exception:raise HttpsProbeFailure('HTTPS_PROBE_JSON_INVALID',evidence) from None
             if not isinstance(data,dict) or data.get('success') is not True or data.get('freshTestEnvironment') is not True:
                 raise HttpsProbeFailure('HTTPS_PROBE_METADATA_MISMATCH',evidence)
+            return dns
     except HttpsProbeFailure:raise
     except urllib.error.HTTPError as error:
         try:
@@ -82,6 +153,7 @@ def probe(endpoint, access_code):
               'TIMEOUT' if isinstance(reason,(TimeoutError,socket.timeout)) else
               'DNS' if isinstance(reason,socket.gaierror) else 'NETWORK')
         evidence={'transport':kind}
+        if kind=='DNS':evidence['dnsTarget']=dns['dnsTarget']
         if isinstance(getattr(reason,'errno',None),int):evidence['errno']=reason.errno
         proxy=re.match(r'^Tunnel connection failed: ([1-5][0-9]{2})(?:\s|$)',str(reason))
         if proxy:evidence.update(transport='PROXY_CONNECT',proxyHttp=int(proxy[1]))
