@@ -62,9 +62,17 @@ async function extPost(action,extra={}){
   const token=LS('invest_session_token');if(!token)throw new Error('로그인이 필요합니다.');
   function failure(message,diagnostic){const error=new Error(message);error.diagnostic=diagnostic;return error}
   let response;
-  try{response=await fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,token,...extra})})}
-  catch(error){throw failure('프런트엔드 연결 실패',{layer:'frontend',code:'FRONTEND_NETWORK'})}
-  if(response.ok===false)throw failure('GAS HTTP '+response.status,{layer:'gas',code:'GAS_HTTP',http:response.status});
+  try{response=await (typeof post==='function'?post({action,token,...extra}):fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,token,...extra})}))}
+  catch(error){if(error.code==='RELAY_WRITE_OUTCOME_UNKNOWN')throw error;throw failure('프런트엔드 연결 실패',{layer:'frontend',code:'FRONTEND_NETWORK'})}
+  if(response.ok===false){
+    // A lost mutation response does not prove the write failed. Do not retry it.
+    let rejected;try{rejected=JSON.parse(await response.text())}catch(error){}
+    if(rejected&&rejected.layer==='relay'){
+      const diagnostic=SafeDiagnostics.diagnostic({...rejected,http:response.status});
+      throw failure(SafeDiagnostics.message({diagnostic}),diagnostic);
+    }
+    throw failure('GAS HTTP '+response.status,{layer:'gas',code:'GAS_HTTP',http:response.status});
+  }
   let data;try{data=JSON.parse(await response.text())}catch(error){throw failure('GAS JSON 응답 아님 — 배포 주소·접근권한 확인',{layer:'gas',code:'GAS_NON_JSON',http:response.status})}
   if(token!==LS('invest_session_token')){const error=new Error('세션이 변경됐습니다.');error.name='StaleSession';throw error}
   if(!data||data.success!==true){const diagnostic=SafeDiagnostics.diagnostic({...data,http:response.status});throw failure(SafeDiagnostics.message(data),diagnostic)}return data;

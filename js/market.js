@@ -12,7 +12,7 @@ async function nhFetch(items){
   if(!tk)return{ok:false,msg:'로그인 토큰 없음'};
   try{
     const c=new AbortController(),t=setTimeout(()=>c.abort(),25000);
-    const r=await fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'nhQuotes',token:tk,items:items}),signal:c.signal});
+    const r=await post({action:'nhQuotes',token:tk,items:items},{signal:c.signal});
     clearTimeout(t);
     const j=JSON.parse(await r.text());
     if(!j.success)return{ok:false,msg:SafeDiagnostics.message(j)};
@@ -60,7 +60,7 @@ async function getTxt(targetUrl){
   const fullUrl=proxy+(proxy.includes('?')?'&':'?')+'url='+encodeURIComponent(targetUrl);
   try{
     const c=new AbortController(),t=setTimeout(()=>c.abort(),9000);
-    const r=await fetch(fullUrl,{signal:c.signal});
+    const r=await (typeof DashboardTransport!=='undefined'?DashboardTransport.publicRead(targetUrl,{signal:c.signal}):fetch(fullUrl,{signal:c.signal}));
     clearTimeout(t);
     if(r.ok){const x=await r.text();if(x&&x.length>10){NET.ok++;return x}}
     NET.fail++;
@@ -69,9 +69,9 @@ async function getTxt(targetUrl){
 }
 async function getJSON(u){const x=await getTxt(u);try{return JSON.parse(x)}catch(e){return null}}
 
-function openDg(){$('dgs').textContent='성공 '+NET.ok+'회 · 실패 '+NET.fail+'회';$('dgl').textContent=['NH 나무증권: '+NH_STATUS,'출처별 수신: '+srcSummary(Object.keys(Q)),'--- 통신 기록'].concat(NET.log.length?NET.log:['기록 없음']).join('\n');$('dgp').value=MYP();$('dg').classList.add('on')}
+function openDg(){const relay=typeof DashboardTransport!=='undefined'&&DashboardTransport.isRelay();$('dgs').textContent='성공 '+NET.ok+'회 · 실패 '+NET.fail+'회'+(relay?' · 중계 연결':'');$('dgl').textContent=['NH 나무증권: '+NH_STATUS,'출처별 수신: '+srcSummary(Object.keys(Q)),'--- 통신 기록'].concat(NET.log.length?NET.log:['기록 없음']).join('\n');$('dgp').value=relay?window.MYINVEST_TRANSPORT_CONFIG.endpoint:MYP();$('dgp').readOnly=relay;const save=$('saveProxyBtn');if(save)save.disabled=relay;$('dg').classList.add('on')}
 function closeDg(){$('dg').classList.remove('on')}
-function saveProxy(){LS('invest_myproxy',$('dgp').value.trim());NET.ok=0;NET.fail=0;closeDg();refresh();loadNews();THM_AT=0;fetchTopThemes()}
+function saveProxy(){if(typeof DashboardTransport!=='undefined'&&DashboardTransport.isRelay())return;LS('invest_myproxy',$('dgp').value.trim());NET.ok=0;NET.fail=0;closeDg();refresh();loadNews();THM_AT=0;fetchTopThemes()}
 
 const nnum=v=>{const n=parseFloat(String(v==null?'':v).replace(/[,+\s]/g,''));return isFinite(n)?n:null};
 function nsgn(o,ch){if(ch==null)return ch;const c=(o&&(o.compareToPreviousPrice||o.fluctuationsType))||{},cd=String(c.code||''),tx=String(c.name||'')+String(c.text||'');
@@ -307,7 +307,7 @@ async function loadNHAccounts(){
   try{
     const tk=LS('invest_session_token');
     if(!tk)throw new Error('로그인이 필요합니다.');
-    const res=await fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'nhAccounts',token:tk})});
+    const res=await post({action:'nhAccounts',token:tk});
     const data=JSON.parse(await res.text());
     if(run!==NH_ACCOUNT_RUN||tk!==LS('invest_session_token'))return;
     if(!data.success){

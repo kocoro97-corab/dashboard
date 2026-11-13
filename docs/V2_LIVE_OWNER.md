@@ -1,5 +1,13 @@
 # V2 follow-up: fresh-environment live verification
 
+**Current login/transport task:** use [TRANSPORT_V2.md](TRANSPORT_V2.md) and
+`tools/nh_v2_relay_check.py --environment <existing-private-environment>`.
+This auth-only check reuses the existing isolated version 2 deployment and private
+history. Do not rerun the historical creation, capture/restore, representative NH
+quote, or direct native-browser commands below for the current task. Actual NH
+queries and new cloud infrastructure are outside the current validation scope.
+The following sections are retained as the earlier owner setup record.
+
 This procedure supersedes the earlier fixed-test-target instructions in
 NH_INTEGRATION_V2.md. Do **not** run `nh_v2_stage.py --apply`, the old Home updater,
 or any production tool for this follow-up. Main, release/pages, production GAS,

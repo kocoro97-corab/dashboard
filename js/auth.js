@@ -7,8 +7,12 @@ const DEFAULT_GAS_URL="https://script.google.com/macros/s/AKfycbxySfUKUai418Ar7C
 const LEGACY_GAS_URL="https://script.google.com/macros/s/AKfycbyXiFgORGm3hHKulInKXUGkAgmhvM0H9WbDp9eClLpTdAFRMkuYH14D2ERQpgMVVHBc/exec";
 // 이전 기본 주소만 전환하고 사용자가 지정한 다른 주소는 유지한다.
 const MYP=()=>{const saved=String(LS('invest_myproxy')||'').trim();return saved!==LEGACY_GAS_URL&&/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(saved)?saved:DEFAULT_GAS_URL};
-// 로그인·가입·관리자 요청은 POST 본문으로 전송 (비밀번호·토큰이 주소·브라우저 기록·콘솔 오류에 남지 않게). text/plain이라 CORS 사전 요청 없음
-const post=payload=>fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)});
+// 인증정보는 주소에 넣지 않는다. 직접 연결은 text/plain, 중계 연결은 JSON/Authorization을 사용한다.
+const post=(payload,options)=>{
+  if(typeof DashboardTransport!=='undefined')return DashboardTransport.post(payload,options);
+  if(window.MYINVEST_TRANSPORT_CONFIG&&window.MYINVEST_TRANSPORT_CONFIG.mode==='relay')throw Object.assign(new Error('RELAY_CONFIG_INVALID'),{code:'RELAY_CONFIG_INVALID'});
+  return fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),signal:options&&options.signal});
+};
 
 let isRegisterMode=false;
 let AUTH_LOGIN_RUN=0;
