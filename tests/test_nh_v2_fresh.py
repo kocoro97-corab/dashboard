@@ -205,4 +205,24 @@ class QuoteDiagnosticTests(unittest.TestCase):
         w=FakeWeb();report=live.diagnose_overseas_quote(w,'synthetic','SYNTHETIC_PASSWORD')
         self.assertEqual(report['status'],'NOT_RUN');self.assertEqual(report['code'],'NO_ELIGIBLE_OVERSEAS_SYMBOL');self.assertNotIn('nhStockQuotes',w.calls);self.assertTrue(report['storedSnapshotUnchanged'])
 
+class PrivatePromptTests(unittest.TestCase):
+    def test_username_is_visible_and_trimmed_while_password_remains_hidden(self):
+        import contextlib
+        import io
+        output=io.StringIO()
+        password='SYNTHETIC_PRIVATE_PASSWORD'
+        with patch.object(sys,'argv',['nh_v2_live_check.py','--environment','synthetic','--diagnose-overseas-quote']), \
+             patch.object(live,'preflight',return_value=object()), \
+             patch.object(sys.stdin,'isatty',return_value=True), \
+             patch('builtins.input',return_value='  synthetic-user  ') as username_prompt, \
+             patch.object(live.getpass,'getpass',return_value=password) as password_prompt, \
+             patch.object(live,'diagnose_overseas_quote',return_value={'status':'PASS'}) as diagnose, \
+             contextlib.redirect_stdout(output):
+            self.assertEqual(live.main(),0)
+        username_prompt.assert_called_once_with('Fresh staging user (visible): ')
+        password_prompt.assert_called_once_with('Fresh staging password (hidden): ')
+        self.assertEqual(diagnose.call_args.args[1:],('synthetic-user',password))
+        self.assertNotIn(password,output.getvalue())
+        self.assertNotIn('synthetic-user',output.getvalue())
+
 if __name__=='__main__':unittest.main()

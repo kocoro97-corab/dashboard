@@ -253,7 +253,7 @@ def main():
             print(json.dumps({'status': 'NOT_RUN', 'code': 'OWNER_NH_APPROVAL_REQUIRED', 'nhRequested': False}));return 2
         if not sys.stdin.isatty():
             raise Stop('OWNER_PRIVATE_TERMINAL_REQUIRED')
-        username = getpass.getpass('Fresh staging user (hidden): ')
+        username = input('Fresh staging user (visible): ').strip()
         password = getpass.getpass('Fresh staging password (hidden): ')
         if not username or len(password) < 16:
             raise Stop('STRONG_PRIVATE_CREDENTIALS_REQUIRED')

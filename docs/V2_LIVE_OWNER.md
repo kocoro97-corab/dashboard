@@ -110,7 +110,9 @@ python3 tools/nh_v2_live_check.py \
   --approve-nh-read-and-private-snapshot --browser
 ```
 
-Enter the new **dashboard test user/password** at the hidden local prompts. The NH
+Enter the new **dashboard test user/password** at the local prompts. The username
+is visible and trimmed so typing errors can be checked; the password stays hidden.
+Neither value is included in the final JSON report. The NH
 key/secret already reside privately in the new project's Properties. Neither login
 is entered into chat, CI or command-line arguments. Missing Google/NH access is
 NOT_RUN, never an authentication PASS.
@@ -222,7 +224,9 @@ private environment unchanged, then execute:
   --diagnose-overseas-quote
 ```
 
-Enter the existing fresh test dashboard credentials at the hidden local prompts.
+Enter the existing fresh test dashboard username at the visible prompt and check
+its spelling. The password prompt remains hidden. Credentials are not included
+in the JSON report.
 This mode permits only login/logout, snapshot reads, and one overseas quote action
 (the existing gateway may naturally refresh once on HTTP 401). No capture, restore,
 write, deletion or automatic retry loop is performed. It reports only booleans,
