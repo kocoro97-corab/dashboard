@@ -13,9 +13,20 @@ sys.path[:0] = [str(ROOT), str(ROOT / 'tools')]
 import publish_dev_pages as publish
 from install_dev_tunnel import install
 from nh_v2_https import tunnel
+from nh_v2_https_browser import network_failure
+from types import SimpleNamespace
 
 
 class HttpsToolTests(unittest.TestCase):
+    def test_only_reload_abort_is_exempt_but_cors_and_other_network_errors_remain_fatal(self):
+        endpoint = 'https://synthetic.trycloudflare.com/api'
+        aborted = SimpleNamespace(url=endpoint, failure='net::ERR_ABORTED')
+        self.assertEqual(network_failure(aborted, endpoint, 'SESSION_RELOAD'), 'RELOAD_CANCELLED')
+        self.assertEqual(network_failure(aborted, endpoint, 'LOGIN'), 'HTTPS_API_FAILURE')
+        cors = SimpleNamespace(url=endpoint, failure='net::ERR_FAILED')
+        self.assertEqual(network_failure(cors, endpoint, 'SESSION_RELOAD'), 'HTTPS_API_FAILURE')
+        self.assertEqual(network_failure(cors, endpoint, 'LOGIN'), 'HTTPS_API_FAILURE')
+
     def blocked_publish(self, user, repo, marker=None, pages=None):
         calls = []
         def api(path, method='GET', data=None, optional=False):

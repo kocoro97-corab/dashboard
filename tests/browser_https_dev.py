@@ -68,7 +68,7 @@ with tempfile.TemporaryDirectory() as tmp:
             unexpected.append('UNEXPECTED_HOST_OR_PATH')
             r.abort()
         result = verify(ENDPOINT, CODE, 'synthetic-user', PASSWORD, synthetic=True, route=route, width=width)
-        assert result['status'] == 'PASS', {k: v for k, v in result.items() if k in ('scope', 'code', 'login', 'sessionReload', 'developmentGate')}
+        assert result['status'] == 'PASS', {k: v for k, v in result.items() if k in ('scope', 'code', 'phase', 'login', 'logout', 'sessionReload', 'developmentGate', 'networkEvidence')}
         assert not unexpected
         assert set(gas.calls) <= {'appVersion', 'login', 'sessionInfo', 'logout'}
         assert set(browser_actions) <= {'appVersion', 'login', 'sessionInfo', 'logout'}
