@@ -10,6 +10,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'tools'))
 import nh_v2_fresh as fresh
 import nh_v2_live_check as live
+import nh_v2_owner_probe as probe
 from nh_staging_test import ApiFailure
 
 SCRIPT='SYNTHETIC_FRESH_SCRIPT_123456789'
@@ -79,6 +80,46 @@ class FreshTests(unittest.TestCase):
             class Web:
                 def call(self,action):raise AssertionError('must not authenticate or query')
             with self.assertRaisesRegex(live.Stop,'SOURCE_IDENTITY_FAILED'):live.preflight(folder,c,Web(),allow_same_source_tools=True)
+
+    def prepared_environment(self,directory):
+        c=NewClient();folder=Path(directory)/'private';fresh.create(folder,c);fresh.publish(folder,c,lambda url:metadata());return folder,c
+
+    def test_owner_probe_install_remove_preserves_original_deployment_and_source(self):
+        with tempfile.TemporaryDirectory() as t:
+            folder,c=self.prepared_environment(t);before=copy.deepcopy(c.head);deps=copy.deepcopy(c.deps);start=len(c.calls)
+            result=probe.install(folder,c,lambda env:None)
+            self.assertEqual(result['phase'],'OWNER_EDITOR_PROBE_READY');self.assertIn('OwnerOverseasProbe',c.head);self.assertEqual(c.deps,deps)
+            restored=probe.remove(folder,c);self.assertEqual(restored['phase'],'ORIGINAL_TEST_HEAD_RESTORED');self.assertEqual(c.head,before);self.assertEqual(c.deps,deps)
+            self.assertTrue(all(a[0] in ('push','pull','list-deployments') for a in c.calls[start:]))
+
+    def test_owner_probe_removes_only_its_own_known_file_after_interrupted_install(self):
+        with tempfile.TemporaryDirectory() as t:
+            folder,c=self.prepared_environment(t);before=copy.deepcopy(c.head)
+            def interrupted(args,path,script):
+                result=c(args,path,script)
+                if args[0]=='push' and 'OwnerOverseasProbe' in c.head:raise RuntimeError('synthetic transport interruption')
+                return result
+            with self.assertRaises(RuntimeError):probe.install(folder,interrupted,lambda env:None)
+            self.assertEqual(probe.remove(folder,c)['status'],'PASS');self.assertEqual(c.head,before)
+
+    def test_owner_probe_does_not_overwrite_concurrent_source_edits(self):
+        with tempfile.TemporaryDirectory() as t:
+            folder,c=self.prepared_environment(t);probe.install(folder,c,lambda env:None);c.head['OtherPrivateEdit']='// synthetic edit';before=copy.deepcopy(c.head);start=len(c.calls)
+            with self.assertRaisesRegex(probe.Stop,'CONCURRENT_SOURCE_CHANGE'):probe.remove(folder,c)
+            self.assertEqual(c.head,before);self.assertNotIn('push',[a[0] for a in c.calls[start:]])
+
+    def test_owner_probe_backup_tampering_stops_before_writes(self):
+        with tempfile.TemporaryDirectory() as t:
+            folder,c=self.prepared_environment(t);probe.install(folder,c,lambda env:None)
+            (folder/'owner-overseas-probe/original/NhGatewayV2.gs').write_text('unexpected source');start=len(c.calls)
+            with self.assertRaisesRegex(probe.Stop,'SOURCE_BACKUP_CHANGED'):probe.remove(folder,c)
+            self.assertNotIn('push',[a[0] for a in c.calls[start:]])
+
+    def test_owner_probe_rejects_old_project_before_remote_operations(self):
+        with tempfile.TemporaryDirectory() as t:
+            folder,c=self.prepared_environment(t);path=folder/'fresh-plan.json';plan=json.loads(path.read_text());plan['scriptId']=fresh.OLD_SCRIPT;path.write_text(json.dumps(plan));start=len(c.calls)
+            with self.assertRaises(Exception):probe.install(folder,c,lambda env:None)
+            self.assertEqual(len(c.calls),start)
 
     def test_existing_project_targets_and_deployments_are_refused(self):
         with self.assertRaises(Exception):fresh.target(fresh.OLD_SCRIPT)

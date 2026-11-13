@@ -243,3 +243,64 @@ files, using the deployed revision marker. Public metadata must retain the exact
 plan revision, project and Sheet fingerprints. The full capture mode still requires
 the original strict revision match. A changed GAS digest or private bundle edit
 blocks before authentication/NH.
+
+## Owner-editor probe for the combined NH_NO_PRICE category
+
+The owner read-only diagnostic subsequently reported `NH_NO_PRICE`, no returned
+quote, confirmed balance currency, and unchanged stored snapshot. This does not
+prove the vendor omitted a price: the deployed V2 handler combines missing output,
+symbol mismatch, invalid price and absent/invalid currency into that one category.
+Do not change currencies, strip symbol prefixes, substitute closing prices or mark
+this as a resolved quote failure without evidence.
+
+To inspect the original vendor response **inside the existing fresh GAS only**,
+`tests/staging/OwnerOverseasProbe.gs` is an optional owner-editor function. It is
+excluded from all build/deployment bundles and from sourceDigest. It reads the
+configured fresh admin's existing native snapshot, requests the same single
+approved overseas quote through the existing gateway, and logs only presence/type/
+validation booleans and a safe HTTP/error code. It never logs original values,
+symbols, currencies, amounts, accounts, password hashes, raw bodies or tokens.
+It checks positive held-quantity/price, exact and trimmed symbol match, exact and
+trimmed/case-normalized currency validation, and whether the documented previous/
+regular close fields are positive. Those closing values are **not** used as current
+prices and nothing is guessed or corrected. It verifies the saved state is unchanged.
+
+The owner-only installer temporarily adds that single file to the **fresh test
+project HEAD**. The existing immutable web-app version and URL stay unchanged.
+It never creates/updates a deployment, exports/changes property values, writes Sheets, or
+calls NH. It backs up the verified original source in a private ZIP first. Removal
+restores the exact original HEAD only when the current source is the original or
+the installer's exact known source; concurrent edits block rather than being lost.
+This is not an operation on production GAS or on the earlier fixed test project.
+
+From the checked-out verified helper commit, execute once in owner Cloud Shell:
+
+```bash
+"$HOME/myinvest-v2-live-venv/bin/python" tools/nh_v2_owner_probe.py install \
+  --environment "$HOME/myinvest-v2-fresh-private-r2"
+```
+
+Expected safe JSON: `status: PASS`, `phase: OWNER_EDITOR_PROBE_READY`, backup PASS,
+`existingDeploymentChanged: false`, `storageWrites: false`, `nhRequested: false`.
+If any failure occurs, do not repeat install or overwrite the private backup;
+preserve it and inspect the reported ownerSourceReviewRequired state.
+
+Then open only the fresh `NH-STAGING V2 FRESH …` project at
+https://script.google.com/home, select **ownerProbeOverseasQuote** in the editor's
+function list and run it once as owner. Do not press Deploy. Share only its final
+JSON. `status: PASS` here means the diagnostic completed, not that the quote or
+whole integration passed; `quoteAcceptedByCurrentRules` separately reports that.
+
+After collecting the diagnostic, remove the temporary file using the **same helper
+commit** before any other source updates or regular CLI tests:
+
+```bash
+"$HOME/myinvest-v2-live-venv/bin/python" tools/nh_v2_owner_probe.py remove \
+  --environment "$HOME/myinvest-v2-fresh-private-r2"
+```
+
+Expected: `ORIGINAL_TEST_HEAD_RESTORED`, original deployment unchanged and no Sheet
+writes/NH calls. Backups remain private. During installation the ordinary CLI's
+strict HEAD check intentionally rejects the extra file; do not reset data, recreate
+the environment or redeploy to bypass it. Snapshot recovery is still a separate
+verified operation; this probe does not restore/delete private financial history.
