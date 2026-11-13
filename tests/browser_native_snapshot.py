@@ -29,7 +29,7 @@ def synthetic_transport(route,*args,**kwargs):
     body=json.loads(kwargs.get('post_data') or route.request.post_data or '{}');action=body.get('action')
     assert body.get('stagingBinding')=='f'*64
     if action=='nhAccounts':data={'success':True,'accounts':fixture.accounts,'gatewayVersion':2} if body.get('token') else {'success':False,'code':'AUTH_REQUIRED'}
-    elif action=='appVersion':data={'success':True,'freshTestEnvironment':True}
+    elif action=='appVersion':data={'success':True,'freshTestEnvironment':True,'sheetHash':'f'*64}
     elif action=='login':data={'success':True,'token':'SYNTHETIC_PRIVATE_TOKEN','isAdmin':True,'mustChangePassword':False}
     elif action=='sessionInfo':data={'success':not revoked,'isAdmin':True,'mustChangePassword':False}
     elif action=='logout':revoked=True;data={'success':True}
@@ -45,8 +45,9 @@ def synthetic_expiry(page,expression,*args,**kwargs):
 with patch.object(Route,'continue_',synthetic_transport),patch.object(Page,'wait_for_function',synthetic_expiry):
     report=native_browser_check(TARGET,'synthetic','SYNTHETIC_PRIVATE_PASSWORD','f'*64)
 assert report['status']=='PASS', {k:v for k,v in report.items() if k in ('phase','code','status')}
-assert report['unauthenticatedBlocked']=='PASS' and report['reloadSession']=='PASS'
+assert report['browserMetadata']=='PASS' and report['unauthenticatedBlocked']=='PASS' and report['reloadSession']=='PASS'
 assert report['displayMatchesResponse']=='PASS' and not report['storageWrites']
+assert not any(value in json.dumps(report) for value in ('SYNTHETIC_PRIVATE_PASSWORD','SYNTHETIC_PRIVATE_TOKEN','SYNTHETIC_PRIVATE_HOLDING',TARGET))
 print('PASS: synthetic native browser login, real DOM/render/session orchestration with simulated GAS and inactivity; zero external network')
 
 

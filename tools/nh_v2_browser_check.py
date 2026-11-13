@@ -13,7 +13,7 @@ from build_nh_staging import ROOT, PRODUCTION_DEPLOYMENT_ID
 from nh_v2_fresh import OLD_DEPLOYMENT
 from nh_staging_test import rejection_code, SAFE_REPORT_CODES
 
-ACTIONS = {'login', 'logout', 'sessionInfo', 'nhAccounts', 'protectedHoldings', 'externalHoldings', 'externalHistory'}
+ACTIONS = {'appVersion', 'login', 'logout', 'sessionInfo', 'nhAccounts', 'protectedHoldings', 'externalHoldings', 'externalHistory'}
 BACKGROUND = {'nhQuotes', 'nhExternalQuotes'}
 
 
@@ -58,7 +58,7 @@ def native_browser_check(target, username, password, binding=None):
     report={'status':'FAIL','scope':'LOCAL_DEVELOPMENT_ORIGIN_TO_LIVE_GAS','login':'NOT_RUN',
             'gasCommunication':'NOT_RUN','unauthenticatedBlocked':'NOT_RUN','displayMatchesResponse':'NOT_RUN',
             'reloadSession':'NOT_RUN','naturalInactivityLogout':'NOT_RUN','expiredOrRevokedTokenBlocked':'NOT_RUN',
-            'serverIdleExpiryInIsolation':'NOT_RUN','storageWrites':False,'orderCalls':0,
+            'serverIdleExpiryInIsolation':'NOT_RUN','browserMetadata':'NOT_RUN','storageWrites':False,'orderCalls':0,
             'rawFinancialDataIncluded':False,'productionRequests':0}
     if not valid_target(target) or not isinstance(binding,str) or not re.fullmatch(r'[a-f0-9]{64}',binding):report['code']='FRESH_BROWSER_TARGET_AND_BINDING_REQUIRED';return report
     report['stagingBindingInjected']=True
@@ -93,8 +93,10 @@ def native_browser_check(target, username, password, binding=None):
                             payload=json.loads(req.post_data or '{}')
                             if payload.get('stagingBinding',binding)!=binding:
                                 state['violation']=True;route.abort();return
-                            payload['stagingBinding']=binding
-                            route.continue_(post_data=json.dumps(payload))
+                            if 'stagingBinding' not in payload:
+                                payload['stagingBinding']=binding
+                                route.continue_(post_data=json.dumps(payload))
+                            else:route.continue_()
                         else:route.continue_()
                     else:
                         if choice=='VIOLATION':state['violation']=True;report['outOfBoundaryAttemptBlocked']=True
@@ -104,7 +106,13 @@ def native_browser_check(target, username, password, binding=None):
                 def response(response):
                     try:
                         root=rooted_request(response.request)
-                        if root.url!=target or root.method!='POST' or response.status!=200:return
+                        if root.url!=target or root.method!='POST':return
+                        evidence=safe_cors_response(response.status,response.headers,origin,target)
+                        evidence['role']=cors_role(response.url,target)
+                        evidence={k:evidence[k] for k in ('role','http','contentType','allowOrigin','locationRole')}
+                        report.setdefault('networkEvidence',[]).append(evidence)
+                        report['networkEvidence']=report['networkEvidence'][-8:]
+                        if response.status!=200:return
                         action=json.loads(root.post_data or '{}').get('action')
                         if action not in ('nhAccounts','logout','login'):return
                         data=response.json()
@@ -116,13 +124,22 @@ def native_browser_check(target, username, password, binding=None):
                     except Exception:pass
                 page.on('response',response)
                 def console(message):
-                    if message.type == 'error' and 'cors' in message.text.lower():report['corsFailureObserved']=True
+                    if message.type == 'error' and 'cors' in message.text.lower():
+                        report['corsFailureObserved']=True
+                        code=cors_error_category(message.text)
+                        if code and code not in report.setdefault('corsCodes',[]):report['corsCodes'].append(code)
                 page.on('console',console)
                 def failed(request):
                     root=rooted_request(request)
                     if root.url==target and root.method=='POST':report['networkFailureObserved']=True
                 page.on('requestfailed',failed)
                 page.goto(origin,wait_until='domcontentloaded')
+                # Match the passing anonymous diagnostic's browser-side metadata first.
+                # This is a visible identity/transport check, not a CORS bypass or retry.
+                report['phase']='BROWSER_METADATA'
+                metadata=page.evaluate("""async binding=>{const r=await post({action:'appVersion',stagingBinding:binding});const d=await r.json();return d.success===true&&d.freshTestEnvironment===true&&d.sheetHash===binding}""",binding)
+                if not metadata:raise RuntimeError('metadata')
+                report['browserMetadata']='PASS'
                 report['phase']='UNAUTHENTICATED_PROBE'
                 denied=page.evaluate("""async()=>{const r=await post({action:'nhAccounts'});const d=await r.json();return d.success===false&&!('accounts' in d)&&!('holdings' in d)}""")
                 if not denied:raise RuntimeError('boundary')
@@ -177,10 +194,12 @@ def native_browser_check(target, username, password, binding=None):
                     try:browser.close()
                     except Exception:pass
                     browser=None
-    except Exception:
+    except Exception as error:
         report['code']='LIVE_BROWSER_AUTH_COMMUNICATION_OR_SESSION_FAILED'
+        report['errorType']='TypeError' if 'TypeError:' in str(error) else 'SyntaxError' if 'SyntaxError:' in str(error) else 'TimeoutError' if type(error).__name__=='TimeoutError' else 'OTHER'
     finally:
         server.shutdown();server.server_close()
+    if report['status']=='PASS':report.pop('networkEvidence',None)
     return report
 
 

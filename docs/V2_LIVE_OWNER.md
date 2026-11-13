@@ -602,3 +602,32 @@ this mode, and mixing it with full/repeat capture options is rejected before aut
 Routine test-session authentication is unchanged. No GAS reapplication or frontend
 publish is needed. Prior latest-build full-flow PASS remains separate evidence;
 this command does not pretend to repeat it. Share only the sanitized final JSON.
+
+## Native startup sequence and failure-only evidence
+
+Owner's native-only execution at e21dc7e again stopped before login at
+UNAUTHENTICATED_PROBE with observed CORS/network failure. Store/NH core-flow PASS
+is retained; no capture/restore/full rerun is justified. The earlier successful
+anonymous diagnostic starts with browser-side appVersion, whereas the native
+checker previously started directly with missing-token nhAccounts. This is an
+observed setup difference, not a proven explanation of Google's earlier failure.
+
+The checker now follows the same browser metadata-first sequence: native text/plain
+appVersion with the existing binding already in its body, verify freshTestEnvironment
+and exact sheetHash, then the original unauthenticated probe/login/session checks.
+Already-bound bodies are not needlessly rewritten by the route handler. There is
+no response replacement, auth bypass, security disablement, server/header patch,
+automatic retry or application-source change. This normalizes the checker setup
+and verifies the browser endpoint before submitting credentials; it must not be
+reported as a proven CORS fix without actual execution evidence.
+
+Failure reports add only fixed HTTP/content-type/allow-origin/destination-role
+categories (at most the last eight responses), fixed CORS categories and error type.
+No original header values, signed URLs, exception text, body, password, token or
+financial data are output. Success omits this extra network evidence. Existing
+synthetic browser login now asserts metadata/Sheet verification and report privacy.
+
+Use the same --native-browser-only --representative-quotes command from the exact
+reviewed commit; no GAS deployment or Sheet operation is needed. If metadata,
+unauthenticated probe or login fails, stop and preserve the safe final JSON. The
+previous full run must not be repeated.
