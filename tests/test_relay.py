@@ -75,7 +75,7 @@ class RelayTests(unittest.TestCase):
         for _ in range(2):request(app,{'action':'externalHoldings'},authorization='Bearer '+TOKEN)
         self.assertEqual(len(self.g.calls),2)
     def test_production_target_and_wildcard_origins_are_not_silently_accepted(self):
-        for changes in ({'upstream':'https://script.google.com/macros/s/'+PRODUCTION_DEPLOYMENT+'/exec'}, {'origins':frozenset({'*'})},{'isolated':False}):
+        for changes in ({'upstream':'https://script.google.com/macros/s/'+PRODUCTION_DEPLOYMENT+'/exec'}, {'origins':frozenset({'*'})},{'origins':frozenset({ORIGIN+'\n'})},{'origins':frozenset({' '+ORIGIN})},{'isolated':False}):
             with self.assertRaises(RelayFault):configuration(**changes)
     def test_public_fetch_cannot_call_nh_or_private_hosts(self):
         for url in ('http://stock.naver.com/','https://api.nhplug.com:8443/order','https://127.0.0.1/','https://stock.naver.com.evil.example/','https://user:pass@stock.naver.com/'):

@@ -30,7 +30,7 @@ class RelayFault(Exception):
 
 
 def valid_origin(value,development=False):
-    if not isinstance(value,str):return False
+    if not isinstance(value,str) or re.search(r'[\x00-\x20\\]',value):return False
     try:p=urllib.parse.urlsplit(value);port=p.port
     except ValueError:return False
     return bool(p.hostname and not p.username and not p.password and not p.query and not p.fragment and p.path==''
