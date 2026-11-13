@@ -400,3 +400,51 @@ Expected safe result: READ_ONLY_EXISTING_SNAPSHOT_UI, status PASS, desktop/mobil
 PASS, storedSnapshotUnchanged true, storageWrites false, nhRequested false and
 orderCalls 0. Baseline restoration is separate and is **not** performed by this mode.
 Keep the active snapshot and journal until its result is reviewed.
+
+## Restore only the original fresh-test active baseline, preserving recovery
+
+Owner reported existing-snapshot UI PASS for desktop/mobile with
+LIVE_SNAPSHOT_UI_ADAPTER scope, no NH or storage writes and unchanged snapshot.
+This is actual saved-data rendering at 1440/344px, not a physical-device test.
+
+The original full capture flow stopped before restoration. Do not rerun capture
+or clear the Sheet to clean up. The following separate command restores **only the
+fresh test user's initial empty active snapshot**, as an append-only store commit:
+
+```bash
+"$HOME/myinvest-v2-live-venv/bin/python" tools/nh_v2_restore.py \
+  --environment "$HOME/myinvest-v2-fresh-private-r2" \
+  --restore-initial-empty-baseline
+```
+
+Use the exact reviewed helper commit. No GAS reapplication is necessary; strict
+same-source preflight verifies existing fresh project/deployment/Sheet and immutable
+source before login. The explicit restore flag is required. The tool requires one
+and only one original `nh-read-snapshot` history record with an empty before-state,
+and the active revision must be the revision of that same capture. Unknown history,
+a subsequent commit or an empty active state blocks; it never guesses a baseline.
+
+Before the write, it creates a new mode-700 private backup directory under the
+existing private environment, writes the current snapshot/revision/history to a
+mode-600 file, flushes/fsyncs it, and verifies JSON and a separate SHA-256 file by
+readback. Existing backups are never overwritten. These files **contain actual
+financial information**: do not paste, upload or publish them or their contents.
+They exclude login passwords and session tokens. This is a normalized snapshot
+backup, not a replacement for a whole-Sheet/settings backup.
+
+It rereads the unchanged state, then calls `nhSnapshotRestore` once with that
+snapshot ID, current revision and explicit confirmation. The server revision guard
+blocks intervening writes. Success requires empty active accounts, a new revision,
+an exact history copy of the pre-restore actual snapshot and retention of the
+original capture history. It deletes no rows or journal history. It never calls NH,
+changes source/deployments/Properties, accesses old/production Sheets, or performs
+orders. The active snapshot is intentionally empty afterward; actual captured data
+remains privately recoverable in both journal history and local backup.
+
+Expected safe JSON: FRESH_TEST_INITIAL_BASELINE_RESTORE, PASS, backup PASS,
+activeEmptyBaselineRestored/realSnapshotRetainedInHistory/originalHistoryRetained
+true, storageWrites true (this fresh test journal only), nhRequested false, orderCalls
+0 and ownerRecoveryRequired false. A lost acknowledgement or readback failure is
+FAIL even when readback suggests a completed restore. **Never repeat on FAIL**;
+preserve the private backup/history and review the safe state flags. No automatic
+second restore, deletion or corrective overwrite is performed.
