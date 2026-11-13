@@ -60,6 +60,26 @@ class FreshTests(unittest.TestCase):
                 def call(self,action):
                     assert action=='appVersion';return metadata()
             web=live.preflight(folder,c,Web());self.assertEqual(web.binding,fresh.fingerprint(SHEET))
+    def test_readonly_tools_can_inspect_older_deployment_only_when_full_gas_source_matches(self):
+        with tempfile.TemporaryDirectory() as t:
+            c=NewClient();folder=Path(t)/'private';fresh.create(folder,c);fresh.publish(folder,c,lambda url:metadata())
+            class Web:
+                binding=None
+                def call(self,action):return metadata()
+            with patch.object(live,'revision',return_value='c'*40):
+                with self.assertRaisesRegex(live.Stop,'FRESH_REVIEWED_PLAN_REQUIRED'):live.preflight(folder,c,Web())
+                self.assertIsNotNone(live.preflight(folder,c,Web(),allow_same_source_tools=True))
+            with patch.object(live,'source_digest',return_value='d'*64):
+                with self.assertRaisesRegex(live.Stop,'FRESH_REVIEWED_PLAN_REQUIRED'):live.preflight(folder,c,Web(),allow_same_source_tools=True)
+
+    def test_private_bundle_tampering_is_rejected_before_metadata_or_authentication(self):
+        with tempfile.TemporaryDirectory() as t:
+            c=NewClient();folder=Path(t)/'private';fresh.create(folder,c);fresh.publish(folder,c,lambda url:metadata())
+            with (folder/'bundle/NhGatewayV2.gs').open('a') as f:f.write('\n// unexpected edit')
+            class Web:
+                def call(self,action):raise AssertionError('must not authenticate or query')
+            with self.assertRaisesRegex(live.Stop,'SOURCE_IDENTITY_FAILED'):live.preflight(folder,c,Web(),allow_same_source_tools=True)
+
     def test_existing_project_targets_and_deployments_are_refused(self):
         with self.assertRaises(Exception):fresh.target(fresh.OLD_SCRIPT)
         with self.assertRaises(Exception):fresh.target(fresh.PRODUCTION_SCRIPT_ID)
@@ -156,5 +176,33 @@ class LiveRunnerTests(unittest.TestCase):
             return original(action,**fields)
         w.call=call;report=live.checks(w,'synthetic','SYNTHETIC_PRIVATE_PASSWORD')
         self.assertTrue(report['ownerRecoveryRequired']);self.assertEqual(report['privateHistoryRetained'],'NOT_CONFIRMED')
+
+class QuoteDiagnosticTests(unittest.TestCase):
+    def ready(self,currency='USD'):
+        w=FakeWeb();w.call('nhSnapshotCapture');w.accounts[0]['overseas']['holdings'][0]['currency']=currency;w.calls=[];return w
+    def test_diagnostic_performs_one_quote_and_no_storage_changes(self):
+        w=self.ready();before=copy.deepcopy(w.accounts);report=live.diagnose_overseas_quote(w,'synthetic','SYNTHETIC_PASSWORD')
+        self.assertEqual(report['status'],'PASS');self.assertTrue(report['storedSnapshotUnchanged']);self.assertEqual(w.accounts,before)
+        self.assertEqual(w.calls.count('nhStockQuotes'),1);self.assertEqual(w.calls,['login','nhSnapshotRead','nhStockQuotes','nhSnapshotRead','logout'])
+        self.assertTrue(report['emptyBaselineRecoverable']);self.assertFalse(report['storageWrites'])
+    def test_currency_mismatch_is_distinguished_from_missing_balance_currency(self):
+        for currency,expected in [(None,'BALANCE_CURRENCY_NOT_CONFIRMED'),('KRW','QUOTE_CURRENCY_MISMATCH')]:
+            report=live.diagnose_overseas_quote(self.ready(currency),'synthetic','SYNTHETIC_PASSWORD')
+            self.assertEqual(report['status'],'FAIL');self.assertEqual(report['code'],expected);self.assertTrue(report['positivePriceConfirmed']);self.assertTrue(report['storedSnapshotUnchanged'])
+    def test_vendor_failure_is_reported_only_as_allowlisted_code_and_http(self):
+        w=self.ready();original=w.call
+        def call(action,**fields):
+            if action=='nhStockQuotes':
+                w.calls.append(action);return {'success':True,'prices':{},'diagnostics':{'OVERSEAS:SYNTH':{'code':'NH_HTTP','http':503,'message':'SYNTHETIC_PRIVATE_CANARY'}}}
+            return original(action,**fields)
+        w.call=call;report=live.diagnose_overseas_quote(w,'synthetic','SYNTHETIC_PASSWORD')
+        self.assertEqual(report['code'],'PRICE_NOT_CONFIRMED');self.assertEqual(report['quoteDiagnosticCode'],'NH_HTTP');self.assertEqual(report['quoteHttp'],503)
+        self.assertNotIn('SYNTHETIC_PRIVATE_CANARY',json.dumps(report));self.assertTrue(report['storedSnapshotUnchanged'])
+    def test_diagnostic_reports_neither_symbols_amounts_names_nor_tokens(self):
+        report=live.diagnose_overseas_quote(self.ready(),'synthetic','SYNTHETIC_PASSWORD');text=json.dumps(report)
+        for value in ['OVERSEAS:SYNTH','999.125','654','SYNTHETIC_PRIVATE_HOLDING','SYNTHETIC_PRIVATE_TOKEN','SYNTHETIC_PASSWORD']:self.assertNotIn(value,text)
+    def test_no_stored_symbol_does_not_trigger_any_nh_quote(self):
+        w=FakeWeb();report=live.diagnose_overseas_quote(w,'synthetic','SYNTHETIC_PASSWORD')
+        self.assertEqual(report['status'],'NOT_RUN');self.assertEqual(report['code'],'NO_ELIGIBLE_OVERSEAS_SYMBOL');self.assertNotIn('nhStockQuotes',w.calls);self.assertTrue(report['storedSnapshotUnchanged'])
 
 if __name__=='__main__':unittest.main()

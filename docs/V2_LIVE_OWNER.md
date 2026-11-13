@@ -199,3 +199,43 @@ use a different **new** private output directory, for example
 `$HOME/myinvest-v2-fresh-private-r2`. Never delete or reuse the failed directory to
 force creation. Safe CLI categories now distinguish path, owner login, OAuth scope,
 and Apps Script API enablement failures without revealing raw output.
+
+## Read-only diagnosis after LIVE_QUOTE_NOT_CONFIRMED
+
+Owner-reported execution of the deployed 7093e64 source reached PASS for dashboard
+login, actual NH domestic/overseas balance inquiry, native snapshot exact readback,
+and domestic quotation. It stopped before UI validation/active-baseline restoration
+with LIVE_QUOTE_NOT_CONFIRMED during the overseas check. These are partial live
+results, not an overall PASS. Special account support remains NOT_RUN.
+
+Do not rerun the capture flow, recreate the environment, reset data, or republish
+GAS. Preserve the existing native snapshot and private journal. The failure can mean
+missing price, absent balance/quote currency, or a currency mismatch; no correction
+or symbol guessing is justified without classification.
+
+Update only the repository helper to the verified PR commit, keeping the existing
+private environment unchanged, then execute:
+
+```bash
+"$HOME/myinvest-v2-live-venv/bin/python" tools/nh_v2_live_check.py \
+  --environment "$HOME/myinvest-v2-fresh-private-r2" \
+  --diagnose-overseas-quote
+```
+
+Enter the existing fresh test dashboard credentials at the hidden local prompts.
+This mode permits only login/logout, snapshot reads, and one overseas quote action
+(the existing gateway may naturally refresh once on HTTP 401). No capture, restore,
+write, deletion or automatic retry loop is performed. It reports only booleans,
+allowlisted diagnostic/HTTP codes, whether the snapshot stayed unchanged, and
+whether an empty baseline is present in recoverable history. It never prints the
+symbol, currency values, quantities, prices, account keys, snapshot IDs or raw text.
+Even a diagnostic PASS does not prove that the previously failing condition was
+fixed; the response may have changed. UI validation and recovery remain separate.
+
+A helper-only revision change is accepted **only in this read-only mode**, with
+an identical GAS sourceDigest. The private bundle, actual HEAD and immutable source
+must independently equal a freshly generated bundle of the verified local GAS
+files, using the deployed revision marker. Public metadata must retain the exact
+plan revision, project and Sheet fingerprints. The full capture mode still requires
+the original strict revision match. A changed GAS digest or private bundle edit
+blocks before authentication/NH.

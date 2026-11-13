@@ -10,7 +10,7 @@ import tempfile
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import threading
 
-from build_nh_staging import ROOT, source_digest, PRODUCTION_SHEET_HASH
+from build_nh_staging import ROOT, build, source_digest, PRODUCTION_SHEET_HASH
 from nh_staging_test import WebApp, fingerprint, ApiFailure, SAFE_REPORT_CODES
 from nh_v2_fresh import private_path, target, invoke, pull, logical, revision, OLD_SHEET, OLD_DEPLOYMENT, PRODUCTION_DEPLOYMENT_ID
 
@@ -19,11 +19,12 @@ class Stop(Exception):
     pass
 
 
-def preflight(directory, client=invoke, web=None):
+def preflight(directory, client=invoke, web=None, allow_same_source_tools=False):
     directory = private_path(directory, False)
     plan = json.loads((directory / 'fresh-plan.json').read_text())
     target(plan['scriptId'])
-    if plan.get('phase') != 'NH_AUTH_APPROVAL_REQUIRED' or plan.get('revision') != revision() or plan.get('sourceDigest') != source_digest():
+    current_revision = revision()
+    if plan.get('phase') != 'NH_AUTH_APPROVAL_REQUIRED' or (plan.get('revision') != current_revision and not allow_same_source_tools) or plan.get('sourceDigest') != source_digest():
         raise Stop('FRESH_REVIEWED_PLAN_REQUIRED')
     web = web or WebApp(plan['url'])
     import re
@@ -36,7 +37,10 @@ def preflight(directory, client=invoke, web=None):
     if len(found) != 1:
         raise Stop('DEPLOYMENT_IDENTITY_FAILED')
     with tempfile.TemporaryDirectory() as t:
-        if pull(client, Path(t) / 'head', plan['scriptId']) != logical(bundle) or pull(client, Path(t) / 'immutable', plan['scriptId'], plan['activeVersion']) != logical(bundle):
+        expected = Path(t) / 'expected'
+        build(plan['scriptId'], plan['revision'], expected)
+        expected_source = logical(expected)
+        if logical(bundle) != expected_source or pull(client, Path(t) / 'head', plan['scriptId']) != expected_source or pull(client, Path(t) / 'immutable', plan['scriptId'], plan['activeVersion']) != expected_source:
             raise Stop('SOURCE_IDENTITY_FAILED')
     m = web.call('appVersion')
     if not (m.get('freshTestEnvironment') is True and m.get('testEnvironment') == 'nh-staging' and m.get('scriptHash') == fingerprint(plan['scriptId'])
@@ -46,6 +50,70 @@ def preflight(directory, client=invoke, web=None):
         raise Stop('FRESH_BINDING_FAILED')
     web.binding = m['sheetHash']
     return web
+
+
+def diagnose_overseas_quote(web, username, password):
+    """Read existing snapshot and retry exactly one quote. Never capture, restore or edit."""
+    import math
+    import re
+    report = {'mode': 'READ_ONLY_OVERSEAS_QUOTE_DIAGNOSTIC', 'status': 'NOT_RUN',
+              'storageWrites': False, 'orderCalls': 0, 'nhQuoteRequested': False,
+              'rawFinancialDataIncluded': False}
+    allowed = {'login', 'logout', 'nhSnapshotRead', 'nhStockQuotes'}
+    def call(action, **fields):
+        if action not in allowed:
+            raise Stop('READ_ONLY_DIAGNOSTIC_REQUIRED')
+        return web.call(action, **fields)
+    try:
+        login = call('login', **{'user': username, 'pass': password})
+        web.token = login.get('token')
+        if not web.token or not login.get('isAdmin') or login.get('mustChangePassword'):
+            raise Stop('DEDICATED_FRESH_ADMIN_REQUIRED')
+        before = call('nhSnapshotRead')
+        accounts = before.get('accounts', [])
+        report['activeSnapshotPresent'] = bool(accounts)
+        report['emptyBaselineRecoverable'] = any(x.get('holdings') == [] for x in before.get('history', []))
+        rows = [h for a in accounts for h in (a.get('overseas') or {}).get('holdings', [])]
+        selected = next((h for h in rows if isinstance(h.get('code'), str) and re.fullmatch(r'[A-Z0-9][A-Z0-9.-]{0,14}', h['code'])), None)
+        if selected is None:
+            report['code'] = 'NO_ELIGIBLE_OVERSEAS_SYMBOL'
+        else:
+            report['nhQuoteRequested'] = True
+            result = call('nhStockQuotes', items=[{'market': 'OVERSEAS', 'code': selected['code']}])
+            key = 'OVERSEAS:' + selected['code']
+            price = result.get('prices', {}).get(key, {})
+            diagnostic = result.get('diagnostics', {}).get(key, {})
+            positive = type(price.get('price')) in (int, float) and math.isfinite(price['price']) and price['price'] > 0
+            balance_currency = isinstance(selected.get('currency'), str) and bool(re.fullmatch(r'[A-Z]{3}', selected['currency']))
+            quote_currency = isinstance(price.get('currency'), str) and bool(re.fullmatch(r'[A-Z]{3}', price['currency']))
+            match = balance_currency and quote_currency and selected['currency'] == price['currency']
+            report.update(quoteReturned=bool(price), positivePriceConfirmed=positive,
+                          balanceCurrencyConfirmed=balance_currency, quoteCurrencyConfirmed=quote_currency,
+                          currencyMatches=match)
+            code = diagnostic.get('code')
+            if code in SAFE_REPORT_CODES:
+                report['quoteDiagnosticCode'] = code
+            http = diagnostic.get('http')
+            if type(http) is int and 100 <= http <= 599:
+                report['quoteHttp'] = http
+            report['status'] = 'PASS' if positive and match else 'FAIL'
+            if report['status'] == 'FAIL':
+                report['code'] = 'PRICE_NOT_CONFIRMED' if not positive else 'BALANCE_CURRENCY_NOT_CONFIRMED' if not balance_currency else 'QUOTE_CURRENCY_NOT_CONFIRMED' if not quote_currency else 'QUOTE_CURRENCY_MISMATCH'
+        after = call('nhSnapshotRead')
+        unchanged = after.get('revision') == before.get('revision') and after.get('accounts') == accounts
+        report['storedSnapshotUnchanged'] = unchanged
+        if not unchanged:
+            report.update(status='FAIL', code='CONCURRENT_SNAPSHOT_CHANGE')
+    except Exception as e:
+        code = e.code if isinstance(e, ApiFailure) and e.code in SAFE_REPORT_CODES else 'READ_ONLY_DIAGNOSTIC_FAILED'
+        report.update(status='FAIL', code=code)
+    finally:
+        if web.token:
+            try:
+                call('logout')
+            except Exception:
+                report.update(status='FAIL', code='LOGOUT_FAILED')
+    return report
 
 
 def browser_readback(web):
@@ -177,10 +245,11 @@ def main():
     p.add_argument('--environment', type=Path, required=True)
     p.add_argument('--approve-nh-read-and-private-snapshot', action='store_true')
     p.add_argument('--browser', action='store_true')
+    p.add_argument('--diagnose-overseas-quote', action='store_true', help='Read existing snapshot and request one overseas quote; no capture, restore or storage writes')
     a = p.parse_args()
     try:
-        web = preflight(a.environment)
-        if not a.approve_nh_read_and_private_snapshot:
+        web = preflight(a.environment, allow_same_source_tools=a.diagnose_overseas_quote)
+        if not a.approve_nh_read_and_private_snapshot and not a.diagnose_overseas_quote:
             print(json.dumps({'status': 'NOT_RUN', 'code': 'OWNER_NH_APPROVAL_REQUIRED', 'nhRequested': False}));return 2
         if not sys.stdin.isatty():
             raise Stop('OWNER_PRIVATE_TERMINAL_REQUIRED')
@@ -188,7 +257,7 @@ def main():
         password = getpass.getpass('Fresh staging password (hidden): ')
         if not username or len(password) < 16:
             raise Stop('STRONG_PRIVATE_CREDENTIALS_REQUIRED')
-        result = checks(web, username, password, a.browser)
+        result = diagnose_overseas_quote(web, username, password) if a.diagnose_overseas_quote else checks(web, username, password, a.browser)
     except Exception:
         result = {'status': 'NOT_RUN', 'code': 'FRESH_PREFLIGHT_OR_OWNER_AUTH_REQUIRED', 'orderCalls': 0, 'rawFinancialDataIncluded': False}
     print(json.dumps(result))
