@@ -224,7 +224,7 @@ def verify_existing_snapshot_ui(web, username, password):
     return report
 
 
-def checks(web, username, password, display=False):
+def checks(web, username, password, display=False, repeat_environment=None):
     report = {'status': 'NOT_RUN', 'checks': [], 'specialAccounts': {'ISA': 'NOT_RUN', 'PENSION': 'NOT_RUN', 'IRP': 'NOT_RUN'},
               'orderCalls': 0, 'existingResourcesChanged': False, 'privateHistoryRetained': False, 'rawFinancialDataIncluded': False}
     def record(name, status, scope):
@@ -238,8 +238,25 @@ def checks(web, username, password, display=False):
             raise Stop('DEDICATED_FRESH_ADMIN_REQUIRED')
         record('dashboard_authentication', 'PASS', 'LIVE_GAS')
         baseline = web.call('nhSnapshotRead')
-        if baseline.get('accounts') or baseline.get('history'):
+        if baseline.get('accounts'):
             raise Stop('NEW_EMPTY_SNAPSHOT_REQUIRED')
+        if repeat_environment is None and baseline.get('history'):
+            raise Stop('NEW_EMPTY_SNAPSHOT_REQUIRED')
+        if repeat_environment is not None:
+            # Preserve the last-five history view through capture and restore.
+            history = baseline.get('history')
+            if not isinstance(history, list) or len(history) > 3:
+                raise Stop('HISTORY_PRESERVATION_LIMIT')
+            if history:
+                latest = history[0]
+                if latest.get('reason') != 'restore' or baseline.get('revision') != 'v2:' + str(latest.get('snapshotId')):
+                    raise Stop('VERIFIED_EMPTY_BASELINE_REQUIRED')
+            from nh_v2_restore import backup_snapshot
+            backup_snapshot(repeat_environment, baseline)
+            record('private_baseline_backup', 'PASS', 'OWNER_PRIVATE_BACKUP')
+            again = web.call('nhSnapshotRead')
+            if any(again.get(k) != baseline.get(k) for k in ('revision', 'accounts', 'history')):
+                raise Stop('CONCURRENT_SNAPSHOT_CHANGE')
         # Capture performs the actual read-only NH query, then persists canonical
         # native accounts. It rejects partial responses without modifying a snapshot.
         capture_attempted = True
@@ -250,6 +267,18 @@ def checks(web, username, password, display=False):
         if current.get('accounts') != captured.get('accounts') or current.get('revision') != captured.get('revision'):
             raise Stop('NATIVE_SNAPSHOT_MISMATCH')
         record('native_store_readback_integrity', 'PASS', 'LIVE_GAS')
+        import re
+        if not current['accounts'] or not all(
+            re.fullmatch(r'[a-f0-9]{64}', a.get('accountKey', '')) and a.get('acctType') in ('01', '02')
+            and not a.get('errors') and all(
+                isinstance(a.get(market), dict) and not a[market].get('partial')
+                and all(isinstance(h.get('code'), str) and bool(h['code'])
+                        and isinstance(h.get('currency'), str) and bool(re.fullmatch(r'[A-Z]{3}', h['currency']))
+                        and (market != 'domestic' or h['currency'] == 'KRW')
+                        for h in a[market].get('holdings', []))
+                for market in ('domestic', 'overseas')) for a in current['accounts']):
+            raise Stop('NATIVE_IDENTITY_OR_CURRENCY_UNCONFIRMED')
+        record('native_identity_and_currency', 'PASS', 'LIVE_GAS')
         report['privateHistoryRetained'] = True
         for market, kind in [('domestic', 'DOMESTIC'), ('overseas', 'OVERSEAS')]:
             rows = [h for a in current['accounts'] for h in a[market]['holdings']]
@@ -273,10 +302,16 @@ def checks(web, username, password, display=False):
         restored = web.call('nhSnapshotRead')
         if restored['accounts'] or restored['revision'] != result['revision']:
             raise Stop('PRIVATE_SNAPSHOT_RESTORE_FAILED')
+        if repeat_environment is not None:
+            if not all(item in restored.get('history', []) for item in baseline.get('history', [])):
+                raise Stop('ORIGINAL_HISTORY_NOT_RETAINED')
+            if not any(h.get('holdings') == current['accounts'] and h.get('reason') == 'restore' for h in restored.get('history', [])):
+                raise Stop('CAPTURED_SNAPSHOT_NOT_RETAINED')
+            record('original_and_new_snapshot_history_retained', 'PASS', 'LIVE_GAS')
         record('restore_active_baseline', 'PASS', 'LIVE_GAS')
         report['status'] = 'PASS' if all(c['status'] == 'PASS' for c in report['checks']) else 'NOT_RUN'
     except Exception as e:
-        safe = {'DEDICATED_FRESH_ADMIN_REQUIRED','NEW_EMPTY_SNAPSHOT_REQUIRED','NATIVE_SNAPSHOT_MISMATCH','LIVE_QUOTE_NOT_CONFIRMED','PRIVATE_UI_READBACK_FAILED','PRIVATE_SNAPSHOT_RESTORE_FAILED'}
+        safe = {'HISTORY_PRESERVATION_LIMIT','VERIFIED_EMPTY_BASELINE_REQUIRED','CONCURRENT_SNAPSHOT_CHANGE','NATIVE_IDENTITY_OR_CURRENCY_UNCONFIRMED','ORIGINAL_HISTORY_NOT_RETAINED','CAPTURED_SNAPSHOT_NOT_RETAINED','DEDICATED_FRESH_ADMIN_REQUIRED','NEW_EMPTY_SNAPSHOT_REQUIRED','NATIVE_SNAPSHOT_MISMATCH','LIVE_QUOTE_NOT_CONFIRMED','PRIVATE_UI_READBACK_FAILED','PRIVATE_SNAPSHOT_RESTORE_FAILED'}
         code = e.code if isinstance(e, ApiFailure) and e.code in SAFE_REPORT_CODES else str(e) if isinstance(e, Stop) and str(e) in safe else 'PRIVATE_LIVE_CHECK_FAILED'
         report.update(status='FAIL', code=code, ownerRecoveryRequired=capture_attempted)
     finally:
@@ -288,17 +323,54 @@ def checks(web, username, password, display=False):
     return report
 
 
+def representative_quotes(web, username, password):
+    """Three public, non-portfolio samples; no storage or unknown API routes."""
+    import math
+    groups = [('NASDAQ_STOCK', 'AAPL'), ('NYSE_STOCK', 'KO'), ('ETF', 'SPY')]
+    report = {'status': 'NOT_RUN', 'scope': 'LIVE_NH_PUBLIC_REPRESENTATIVES', 'groups': [],
+              'storageWrites': False, 'orderCalls': 0, 'marketSession': 'NOT_RUN', 'quoteDelay': 'NOT_RUN',
+              'rawFinancialDataIncluded': False}
+    try:
+        login = web.call('login', **{'user': username, 'pass': password});web.token = login.get('token')
+        if not web.token or not login.get('isAdmin') or login.get('mustChangePassword'):
+            raise Stop('DEDICATED_FRESH_ADMIN_REQUIRED')
+        before = web.call('nhSnapshotRead')
+        data = web.call('nhStockQuotes', items=[{'market': 'OVERSEAS', 'code': code, 'currency': 'USD'} for _, code in groups])
+        for label, code in groups:
+            key = 'OVERSEAS:' + code;p = data.get('prices', {}).get(key, {})
+            valid = type(p.get('price')) in (int, float) and math.isfinite(p['price']) and p['price'] > 0 and p.get('currency') == 'USD' and p.get('identity', {}).get('verified') is True
+            row = {'group': label, 'status': 'PASS' if valid else 'FAIL'}
+            error = data.get('diagnostics', {}).get(key, {}).get('code')
+            if error in SAFE_REPORT_CODES:row['code'] = error
+            report['groups'].append(row)
+        after = web.call('nhSnapshotRead')
+        report['storedSnapshotUnchanged'] = all(before.get(k) == after.get(k) for k in ('accounts', 'revision', 'history'))
+        report['status'] = 'PASS' if all(g['status'] == 'PASS' for g in report['groups']) and report['storedSnapshotUnchanged'] else 'FAIL'
+    except Exception:
+        report.update(status='FAIL', code='REPRESENTATIVE_QUOTES_NOT_CONFIRMED')
+    finally:
+        if web.token:
+            try:web.call('logout')
+            except Exception:report.update(status='FAIL', code='LOGOUT_FAILED')
+    return report
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--environment', type=Path, required=True)
     p.add_argument('--approve-nh-read-and-private-snapshot', action='store_true')
     p.add_argument('--browser', action='store_true')
+    p.add_argument('--repeat-empty-baseline', action='store_true', help='Back up and reuse a verified empty fresh baseline without deleting prior history')
+    p.add_argument('--real-browser', action='store_true', help='After full-flow PASS, test native browser login/GAS and natural five-minute inactivity logout')
+    p.add_argument('--representative-quotes', action='store_true', help='After full-flow/browser PASS, check three public representative overseas instruments')
     modes = p.add_mutually_exclusive_group()
     modes.add_argument('--verify-existing-snapshot-ui', action='store_true', help='Display existing saved snapshot on desktop/mobile; no NH, capture or restore')
     modes.add_argument('--diagnose-overseas-quote', action='store_true', help='Read existing snapshot and request one overseas quote; no capture, restore or storage writes')
     a = p.parse_args()
     try:
-        web = preflight(a.environment, allow_same_source_tools=a.diagnose_overseas_quote or a.verify_existing_snapshot_ui)
+        if (a.repeat_empty_baseline or a.real_browser or a.representative_quotes) and (a.diagnose_overseas_quote or a.verify_existing_snapshot_ui):
+            raise Stop('INCOMPATIBLE_CHECK_MODES')
+        web = preflight(a.environment, allow_same_source_tools=a.diagnose_overseas_quote or a.verify_existing_snapshot_ui or a.repeat_empty_baseline)
         if not a.approve_nh_read_and_private_snapshot and not a.diagnose_overseas_quote and not a.verify_existing_snapshot_ui:
             print(json.dumps({'status': 'NOT_RUN', 'code': 'OWNER_NH_APPROVAL_REQUIRED', 'nhRequested': False}));return 2
         if not sys.stdin.isatty():
@@ -312,7 +384,17 @@ def main():
         elif a.diagnose_overseas_quote:
             result = diagnose_overseas_quote(web, username, password)
         else:
-            result = checks(web, username, password, a.browser)
+            print(json.dumps({'progress':'LATEST_BUILD_FULL_FLOW'}),flush=True)
+            result = checks(web, username, password, a.browser, a.environment if a.repeat_empty_baseline else None)
+            if result['status'] == 'PASS' and a.real_browser:
+                print(json.dumps({'progress':'NATIVE_BROWSER_LOGIN_AND_REAL_FIVE_MINUTE_INACTIVITY'}),flush=True)
+                from nh_v2_browser_check import native_browser_check
+                result['nativeBrowser'] = native_browser_check(web.url, username, password, web.binding)
+                if result['nativeBrowser']['status'] != 'PASS':
+                    result.update(status='FAIL', code='NATIVE_BROWSER_CHECK_FAILED')
+            if result['status'] == 'PASS' and a.representative_quotes:
+                print(json.dumps({'progress':'READ_ONLY_PUBLIC_REPRESENTATIVE_QUOTES'}),flush=True)
+                result['representativeQuotes'] = representative_quotes(web, username, password)
     except Exception:
         result = {'status': 'NOT_RUN', 'code': 'FRESH_PREFLIGHT_OR_OWNER_AUTH_REQUIRED', 'orderCalls': 0, 'rawFinancialDataIncluded': False}
     print(json.dumps(result))

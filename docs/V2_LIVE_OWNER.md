@@ -448,3 +448,85 @@ true, storageWrites true (this fresh test journal only), nhRequested false, orde
 FAIL even when readback suggests a completed restore. **Never repeat on FAIL**;
 preserve the private backup/history and review the safe state flags. No automatic
 second restore, deletion or corrective overwrite is performed.
+
+## Final integration pass on the unchanged GAS build
+
+The latest owner-approved task is final validation, not a redesign. GAS, auth.js,
+UI, main and release/pages are unchanged. The original full runner refuses any
+history and strict helper SHA changes; this prevented a continuous rerun after
+successful cleanup. An explicit `--repeat-empty-baseline` option now permits the
+already verified empty fresh store without deleting its recovery history. It
+backs up that baseline privately first, requires a restored revision, rereads it
+before capture, and limits existing visible history to three records so that both
+capture and restore retain all earlier entries in the five-record view. Current
+owner-reported baseline has two entries. Do not repeat this command on failure or
+after another successful run; it is one final pass, not a reset loop.
+
+After checking out the exact CI-verified helper commit, owner Cloud Shell command:
+
+```bash
+"$HOME/myinvest-v2-live-venv/bin/python" tools/nh_v2_live_check.py \
+  --environment "$HOME/myinvest-v2-fresh-private-r2" \
+  --approve-nh-read-and-private-snapshot \
+  --repeat-empty-baseline --browser --real-browser --representative-quotes
+```
+
+Enter the existing fresh dashboard username/password locally once. No new app key,
+token reset or NH authentication scheme is introduced. Existing NH token caching
+is retained; an accepted cached bearer proves authentication without forcing a
+new token issuance. The full sequence is new NH inquiry/capture, exact native
+save/readback, account/code/currency checks, domestic/overseas quote checks,
+1440/344px saved-data adapter rendering, restore of this run's empty before-state,
+original/new history retention and logout. Failures stop with safe codes and
+preserve the available snapshot/history for owner review; no blind restore or
+recapture is attempted.
+
+Only after full-flow PASS does native browser verification start. Existing auth.js
+runs unmodified from the local development origin. The existing endpoint setting
+points to the verified fresh URL; no synthetic session is inserted, API response
+is replaced or CORS/security policy disabled. The staging-only `stagingBinding`
+required by StagingBridge is injected into requests to that exact verified URL.
+This is the verified test Sheet fingerprint, not an auth token or login bypass.
+No production endpoint is used. Native text/plain browser POST and Google's normal
+ContentService redirect are exercised; third-party widgets, market proxy/futures
+background actions and mutations are blocked as outside the auth/account check.
+This test is not a claim about live public-market/news widgets or the exact
+production GitHub Pages origin. No public frontend is published for testing.
+
+The native check verifies unauthenticated account rejection, normal login, actual
+NH account response-to-DOM comparison, reload session retention, then waits for
+**real five-minute browser inactivity** (no artificial timestamp/clock changes).
+The expired/logged-out token must subsequently be rejected by actual GAS. The
+combined flow cannot distinguish server idle expiration alone from explicit
+logout revocation, so `serverIdleExpiryInIsolation` remains NOT_RUN. Expect roughly
+6–10 minutes total and sanitized progress messages. No screenshots, traces, raw
+responses, financial values or credentials are printed/saved by this browser check.
+The existing synthetic browser fixture separately accelerates inactivity and
+replaces GAS only inside tests; those results never count as actual CORS/live PASS.
+
+After core/browser PASS, one read-only batch checks three **public non-portfolio
+representatives**: NASDAQ AAPL, NYSE KO, ETF SPY. These are not disclosed holdings.
+The public official NH master confirms unique USD entries; all must independently
+pass the existing identity/positive-price/currency validation. A missing price is
+FAIL/unconfirmed, not an invented UNSUPPORTED classification. This batch does not
+write snapshots. The current frontend quote contract does not expose vendor
+market-period/trade-date/delay evidence; these remain NOT_RUN rather than claiming
+zero delay or an intraday/close classification. Representatives do not cover all
+foreign securities and are not a requirement for special-account support.
+
+Official support review (2026-11-13): https://www.nhplug.com/llms.txt and the official
+krstock/gbstock OpenAPI/overview document the generic account list and balance
+requests. `acct_type` 01/02/03 describes general/delegate/mock API environment,
+not evidence of ISA/pension/IRP product support. No explicit support mapping for
+those three product types was established from these sources. Each remains
+지원 여부 미확인 / NOT_RUN; no speculative product codes or extra API paths are
+used. Existing OCR/manual support is unchanged. This does not block core general
+account completion. Fold6 hardware requires owner access and remains NOT_RUN until
+an actual external/internal/fold/refresh/touch checklist is completed; viewport
+mock PASS must not be substituted.
+
+Share only the final sanitized JSON. `checks` records core evidence,
+`nativeBrowser` records the real browser boundary, and `representativeQuotes`
+records the separate public sample batch. Inspect each sub-result; prior build
+success is not reused for this final pass. No deployment, merge, production Sheet
+or Properties operation is part of this command. Preserve all private backups.
