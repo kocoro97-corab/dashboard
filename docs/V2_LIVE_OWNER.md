@@ -631,3 +631,42 @@ Use the same --native-browser-only --representative-quotes command from the exac
 reviewed commit; no GAS deployment or Sheet operation is needed. If metadata,
 unauthenticated probe or login fails, stop and preserve the safe final JSON. The
 previous full run must not be repeated.
+
+## Confirmed endpoint fallback defect and native login-only failure
+
+Owner's d8d2dd7 result: browserMetadata PASS, unauthenticatedBlocked PASS; native
+login did not complete. The CORS category was ALLOW_ORIGIN_MISSING, an out-of-bound
+attempt was blocked, and the checker eventually timed out. The login CORS response
+itself was not available to the page-level observer, so its underlying HTTP cause
+remains unconfirmed. Core NH/store/adapter/restore PASS is unaffected.
+
+Code review and an independently failing synthetic browser assertion confirmed a
+separate concrete error-path defect in auth.js: a custom-endpoint transport/non-JSON
+failure removed the user's saved endpoint and replayed the same credentials to the
+built-in production endpoint. The isolated test firewall prevented actual production
+requests. The minimum frontend patch removes only that automatic destination
+switch/replay; normal login/register payload, session/token behavior, server password
+validation and GAS source are unchanged. A failed chosen endpoint now reports the
+existing safe error and preserves its setting. Any endpoint change must be explicit;
+there is no silent recovery by another server. No production frontend is published.
+
+The existing privacy browser fixture now sets a synthetic custom endpoint, reproduces
+both non-JSON and aborted-network login failures, and asserts exactly one request to
+that same endpoint and preservation of the setting. It failed on the old source
+(LOGIN_ENDPOINT_CHANGED_AFTER_ERROR) and passes on the patched source at both widths.
+
+The native checker now observes Chrome Network events read-only (Network.enable,
+not request/response interception) in addition to the existing request safety gate.
+CORS-blocked replies can therefore contribute fixed method/role/HTTP/content-type/
+allow-origin/CORS/network error categories even when fetch cannot read the response.
+No raw event, postData, cookies, header values, signed URLs, failed-parameter text,
+passwords or tokens are retained/output. Unknown values become OTHER. Redirect-hop
+header state is cleared to avoid assigning the previous response to a later failure.
+Success omits this extra diagnostic evidence. Login failure is explicitly FAIL and
+ends when the existing safe UI error settles, rather than always waiting 120 seconds.
+
+Continue only with the reviewed --native-browser-only --representative-quotes mode.
+No GAS reapplication, whole-flow capture, restore, data clearing or authentication
+redesign is required. This frontend fix addresses unauthorized fallback, **not a
+claim that the original CORS problem is solved**. Actual native login and foreign
+representatives remain pending. On failure, stop and share only the sanitized JSON.

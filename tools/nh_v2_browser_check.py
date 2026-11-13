@@ -54,6 +54,24 @@ def request_decision(url, method, body, root_url, root_method, target, local_ori
     return 'BLOCK'
 
 
+def safe_network_failure(request, headers, event):
+    """Fixed Chrome categories only: never retain event payloads, headers or URLs."""
+    allowed={'MissingAllowOriginHeader','PreflightMissingAllowOriginHeader','PreflightDisallowedRedirect',
+             'InvalidAllowOriginValue','AllowOriginMismatch','WildcardOriginNotAllowed','InvalidAllowCredentials',
+             'PreflightInvalidStatus','MethodDisallowedByPreflightResponse','HeaderDisallowedByPreflightResponse',
+             'InsecurePrivateNetwork','DisallowedByMode','CorsDisabledScheme','InvalidResponse'}
+    value=event.get('corsErrorStatus',{}).get('corsError')
+    errors={'net::ERR_FAILED','net::ERR_BLOCKED_BY_CLIENT','net::ERR_ABORTED','net::ERR_TIMED_OUT',
+            'net::ERR_CONNECTION_RESET','net::ERR_NAME_NOT_RESOLVED','net::ERR_CERT_AUTHORITY_INVALID'}
+    result={'role':request['role'],'method':request['method'],
+            'requestContentType':request.get('contentType','NOT_REPORTED'),
+            'corsCode':value if value in allowed else 'OTHER' if value else 'NOT_REPORTED',
+            'networkCode':event.get('errorText') if event.get('errorText') in errors else 'OTHER'}
+    if headers:
+        result.update({k:headers[k] for k in ('http','contentType','allowOrigin','locationRole')})
+    return result
+
+
 def native_browser_check(target, username, password, binding=None):
     report={'status':'FAIL','scope':'LOCAL_DEVELOPMENT_ORIGIN_TO_LIVE_GAS','login':'NOT_RUN',
             'gasCommunication':'NOT_RUN','unauthenticatedBlocked':'NOT_RUN','displayMatchesResponse':'NOT_RUN',
@@ -103,6 +121,32 @@ def native_browser_check(target, username, password, binding=None):
                         route.abort()
                 context.route('**/*',route)
                 page=context.new_page()
+                # Observe actual Chrome headers/failures even when page JS cannot
+                # read a CORS-blocked response. Network.enable does not rewrite it.
+                cdp=context.new_cdp_session(page);known={};extra={}
+                def chrome_request(event):
+                    r=event.get('request',{});url=r.get('url','')
+                    if url.startswith(target+'?'):return
+                    role=cors_role(url,target)
+                    if url=='https://script.google.com/macros/s/'+PRODUCTION_DEPLOYMENT_ID+'/exec':role='PRODUCTION_DEFAULT'
+                    if role=='OTHER':return
+                    if event.get('redirectResponse'):extra.pop(event['requestId'],None)
+                    headers={str(k).lower():str(v) for k,v in r.get('headers',{}).items()}
+                    kind=headers.get('content-type','').split(';')[0].lower()
+                    known[event['requestId']]={'role':role,'method':r.get('method') if r.get('method') in ('POST','GET','OPTIONS') else 'OTHER',
+                                               'contentType':'TEXT_PLAIN' if kind=='text/plain' else 'JSON' if kind=='application/json' else 'OTHER_OR_MISSING'}
+                def chrome_headers(event):
+                    if event.get('requestId') in known:
+                        extra[event['requestId']]=safe_cors_response(event.get('statusCode',0),event.get('headers',{}),origin,target)
+                def chrome_failure(event):
+                    request=known.get(event.get('requestId'))
+                    if request:
+                        report.setdefault('nativeNetworkFailures',[]).append(safe_network_failure(request,extra.get(event['requestId']),event))
+                        report['nativeNetworkFailures']=report['nativeNetworkFailures'][-6:]
+                cdp.on('Network.requestWillBeSent',chrome_request)
+                cdp.on('Network.responseReceivedExtraInfo',chrome_headers)
+                cdp.on('Network.loadingFailed',chrome_failure)
+                cdp.send('Network.enable')
                 def response(response):
                     try:
                         root=rooted_request(response.request)
@@ -145,9 +189,11 @@ def native_browser_check(target, username, password, binding=None):
                 if not denied:raise RuntimeError('boundary')
                 report['unauthenticatedBlocked']='PASS'
                 report['phase']='NATIVE_LOGIN'
+                report['login']='FAIL'
                 page.locator('#authId').fill(username);page.locator('#authPw').fill(password)
                 page.locator('#authSubmitBtn').click()
-                page.wait_for_function("()=>LS('invest_session_token')&&$('appContainer').style.display==='block'",timeout=120000)
+                page.wait_for_function("()=>LS('invest_session_token')&&$('appContainer').style.display==='block'||$('authMsg').textContent&&$('authMsg').textContent!=='서버 통신 중...'",timeout=120000)
+                if not page.evaluate("()=>!!LS('invest_session_token')&&$('appContainer').style.display==='block'"):raise RuntimeError('login')
                 if not page.evaluate("()=>LS('invest_is_admin')==='true'&&!LS('invest_password_change')"):raise RuntimeError('admin')
                 report['login']='PASS'
                 report['phase']='LIVE_NH_DISPLAY'
@@ -199,7 +245,8 @@ def native_browser_check(target, username, password, binding=None):
         report['errorType']='TypeError' if 'TypeError:' in str(error) else 'SyntaxError' if 'SyntaxError:' in str(error) else 'TimeoutError' if type(error).__name__=='TimeoutError' else 'OTHER'
     finally:
         server.shutdown();server.server_close()
-    if report['status']=='PASS':report.pop('networkEvidence',None)
+    if report['status']=='PASS':
+        report.pop('networkEvidence',None);report.pop('nativeNetworkFailures',None)
     return report
 
 

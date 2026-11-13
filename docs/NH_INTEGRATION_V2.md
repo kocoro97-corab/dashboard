@@ -218,3 +218,8 @@ fully live-verified or approved for production**. The last 24 live PASS results
 predate this V2 and must not be reused. No main/release/pages modification,
 production GAS/Sheets/Properties write, actual order or actual balance-to-Sheet
 copy is authorized or performed by these development steps.
+
+Authentication transport failure now preserves the selected backend and reports
+the existing safe error. It does not replay credentials to a different default
+backend after a network/non-JSON failure. This narrow error-path correction does
+not change password validation, tokens, successful login or the GAS interface.

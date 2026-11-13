@@ -36,7 +36,7 @@ async function doAuth(retried){
   const run=++AUTH_LOGIN_RUN;
   const user=$('authId').value.trim(),pass=$('authPw').value;
   if(!user||!pass){$('authMsg').textContent="아이디와 비밀번호를 모두 입력하세요.";return}
-  const action=isRegisterMode?'register':'login',base=MYP();
+  const action=isRegisterMode?'register':'login';
   $('authMsg').textContent="서버 통신 중...";
   let step='연결';
   try{
@@ -59,10 +59,7 @@ async function doAuth(retried){
       }
     }else{$('authMsg').textContent=SafeDiagnostics.message(data)}
   }catch(e){
-    if(!retried&&LS('invest_myproxy')&&base!==DEFAULT_GAS_URL){
-      localStorage.removeItem('invest_myproxy');
-      return doAuth(true);
-    }
+    // Keep credentials and the saved setting bound to the selected endpoint.
     $('authMsg').textContent='서버 통신 오류 · '+SafeDiagnostics.message(e,'FRONTEND_NETWORK');
   }
 }

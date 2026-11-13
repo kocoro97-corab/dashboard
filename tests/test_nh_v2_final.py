@@ -155,3 +155,13 @@ class NativeOnlyTests(unittest.TestCase):
         import contextlib,io
         with patch.object(sys,'argv',['nh_v2_live_check.py','--environment','synthetic','--native-browser-only','--repeat-empty-baseline']),patch.object(live,'preflight') as preflight,contextlib.redirect_stdout(io.StringIO()):self.assertEqual(live.main(),2)
         preflight.assert_not_called()
+
+class NativeNetworkEvidenceTests(unittest.TestCase):
+    def test_cdp_cors_status_is_classified_without_signed_urls_cookie_or_payload(self):
+        headers=browser.safe_cors_response(403,{'Content-Type':'text/html','Set-Cookie':'SYNTHETIC_PRIVATE_COOKIE','Location':'https://accounts.google.com/?key=SYNTHETIC_PRIVATE_KEY'},ORIGIN,TARGET)
+        result=browser.safe_network_failure({'role':'FRESH_EXEC','method':'POST','contentType':'TEXT_PLAIN'},headers,{'errorText':'net::ERR_FAILED','corsErrorStatus':{'corsError':'MissingAllowOriginHeader','failedParameter':'SYNTHETIC_PRIVATE_TOKEN'},'requestId':'SYNTHETIC_PRIVATE_ID'})
+        self.assertEqual(result['http'],403);self.assertEqual(result['corsCode'],'MissingAllowOriginHeader');self.assertEqual(result['allowOrigin'],'MISSING');self.assertEqual(result['locationRole'],'GOOGLE_AUTH')
+        self.assertNotIn('SYNTHETIC_PRIVATE',json.dumps(result));self.assertNotIn('https:',json.dumps(result))
+    def test_unknown_browser_error_text_is_never_forwarded(self):
+        result=browser.safe_network_failure({'role':'FRESH_EXEC','method':'OPTIONS','contentType':'OTHER_OR_MISSING'},None,{'errorText':'SYNTHETIC_PRIVATE_URL','corsErrorStatus':{'corsError':'SYNTHETIC_PRIVATE_TOKEN'}})
+        self.assertEqual(result['networkCode'],'OTHER');self.assertEqual(result['corsCode'],'OTHER');self.assertNotIn('SYNTHETIC_PRIVATE',json.dumps(result))
