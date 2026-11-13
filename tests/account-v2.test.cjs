@@ -56,7 +56,7 @@ test('oversized snapshots and missing confirmation cannot write',()=>{
   assert.throws(()=>b.service.commit('alice',[row()],revision,false,'replace'),/STORE_CONFIRM/);
   assert.throws(()=>b.save([{...row(),name:'x'.repeat(45001)}]),/STORE_SNAPSHOT_TOO_LARGE/);assert.equal(b.rows.length,1);
 });
-function domain(){const c=vm.createContext({sessionUser_:t=>t==='synthetic'?'alice':null,jsonResponse:x=>x});vm.runInContext(read('gas/NhAccountsV2.gs'),c);vm.runInContext(read('gas/NhGatewayV2.gs'),c);vm.runInContext(read('gas/Nhplug.gs'),c);return c}
+function domain(){const c=vm.createContext({sessionUser_:t=>t==='synthetic'?'alice':null,jsonResponse:x=>x});vm.runInContext(read('gas/NhAccountsV2.gs'),c);vm.runInContext(read('gas/NhGatewayV2.gs'),c);vm.runInContext(read('gas/Nhplug.gs'),c);require('./nh-foreign-fixtures.cjs').install(c);return c}
 test('overseas quote uses official current path, trdprc and currency_unit',()=>{
   const c=domain(),calls=[];c.nhCall_=(p,input)=>{calls.push({p,input});return {http:200,body:{rsp_cd:'00000',Output_0:{iem_cd:'SYNTH',trdprc:22.5,currency_unit:'USD'}}}};
   const result=c.handleNhStockQuotesV2('synthetic',[{market:'OVERSEAS',code:'SYNTH'}]);
@@ -70,7 +70,7 @@ test('invalid market/symbol and unauthenticated stock quotes perform zero calls'
 });
 test('missing overseas price or currency does not become zero or KRW',()=>{
   const c=domain();for(const o of [{trdprc:0,currency_unit:'USD'},{trdprc:5},{trdprc:null,currency_unit:'USD'}]){
-    c.nhCall_=()=>({http:200,body:{rsp_cd:'00000',Output_0:o}});const r=c.handleNhStockQuotesV2('synthetic',[{market:'OVERSEAS',code:'SYNTH'}]);assert.equal(Object.keys(r.prices).length,0);assert.equal(r.diagnostics['OVERSEAS:SYNTH'].code,'NH_NO_PRICE');
+    c.nhCall_=()=>({http:200,body:{rsp_cd:'00000',Output_0:{iem_cd:'SYNTH',...o}}});const r=c.handleNhStockQuotesV2('synthetic',[{market:'OVERSEAS',code:'SYNTH'}]);assert.equal(Object.keys(r.prices).length,0);assert.equal(r.diagnostics['OVERSEAS:SYNTH'].code,o.trdprc===5?'NH_CURRENCY_MISMATCH':'NH_NO_PRICE');
   }
 });
 test('account normalizer preserves explicit zero and missing values',()=>{

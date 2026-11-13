@@ -15,6 +15,9 @@ or real NH execution is performed by this change.
   private token cache and bounded 401 refresh. All NH traffic uses this boundary.
 - `gas/NhAccountsV2.gs`: domestic/overseas pagination and normalization, null-safe
   accounting, explicit capabilities and domestic/overseas stock quotes.
+- `gas/NhForeignIdentityV2.gs`: official NH listing-master-backed foreign identity;
+  ambiguous/unmapped identifiers fail closed, with no saved-code rewriting. See the
+  current owner document for provenance, reference availability and upgrade limits.
 - `gas/AccountStoreV2.gs`: user-scoped append-only snapshot journal with optimistic
   revisions, durable prepare verification, commit markers and restore as a new commit.
 - `gas/Nhplug.gs` and `gas/ExternalHoldings.gs`: existing action/function adapters.
@@ -60,6 +63,8 @@ Source of truth: the exact tuples in `NhGatewayV2.gs`.
 | same docs origin | `/openapi-docs/gbstock/openapi.json` | GET | Public specification; no credentials |
 | same docs origin | `/openapi-docs/krfuture/openapi.json` | GET | Public specification; no credentials |
 | same docs origin | `/openapi-docs/gbfuture/openapi.json` | GET | Public specification; no credentials |
+| same docs origin | `/instruments/m_gtsstock.h` | GET | Official overseas reference layout; no credentials |
+| same docs origin | `/instruments/m_gtsstock.mst` | GET | Official overseas identifier master; no credentials |
 
 Official public krstock/gbstock OpenAPI documents were read without credentials
 during implementation. They confirm POST balance/current-price paths and the

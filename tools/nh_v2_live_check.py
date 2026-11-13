@@ -74,12 +74,12 @@ def diagnose_overseas_quote(web, username, password):
         report['activeSnapshotPresent'] = bool(accounts)
         report['emptyBaselineRecoverable'] = any(x.get('holdings') == [] for x in before.get('history', []))
         rows = [h for a in accounts for h in (a.get('overseas') or {}).get('holdings', [])]
-        selected = next((h for h in rows if isinstance(h.get('code'), str) and re.fullmatch(r'[A-Z0-9][A-Z0-9.-]{0,14}', h['code'])), None)
+        selected = next((h for h in rows if isinstance(h.get('code'), str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,14}', h['code'])), None)
         if selected is None:
             report['code'] = 'NO_ELIGIBLE_OVERSEAS_SYMBOL'
         else:
             report['nhQuoteRequested'] = True
-            result = call('nhStockQuotes', items=[{'market': 'OVERSEAS', 'code': selected['code']}])
+            result = call('nhStockQuotes', items=[{'market': 'OVERSEAS', 'code': selected['code'], 'currency': selected.get('currency')}])
             key = 'OVERSEAS:' + selected['code']
             price = result.get('prices', {}).get(key, {})
             diagnostic = result.get('diagnostics', {}).get(key, {})
@@ -87,18 +87,19 @@ def diagnose_overseas_quote(web, username, password):
             balance_currency = isinstance(selected.get('currency'), str) and bool(re.fullmatch(r'[A-Z]{3}', selected['currency']))
             quote_currency = isinstance(price.get('currency'), str) and bool(re.fullmatch(r'[A-Z]{3}', price['currency']))
             match = balance_currency and quote_currency and selected['currency'] == price['currency']
+            verified = price.get('identity', {}).get('verified') is True
             report.update(quoteReturned=bool(price), positivePriceConfirmed=positive,
                           balanceCurrencyConfirmed=balance_currency, quoteCurrencyConfirmed=quote_currency,
-                          currencyMatches=match)
+                          currencyMatches=match, referenceIdentityVerified=verified)
             code = diagnostic.get('code')
             if code in SAFE_REPORT_CODES:
                 report['quoteDiagnosticCode'] = code
             http = diagnostic.get('http')
             if type(http) is int and 100 <= http <= 599:
                 report['quoteHttp'] = http
-            report['status'] = 'PASS' if positive and match else 'FAIL'
+            report['status'] = 'PASS' if positive and match and verified else 'FAIL'
             if report['status'] == 'FAIL':
-                report['code'] = 'PRICE_NOT_CONFIRMED' if not positive else 'BALANCE_CURRENCY_NOT_CONFIRMED' if not balance_currency else 'QUOTE_CURRENCY_NOT_CONFIRMED' if not quote_currency else 'QUOTE_CURRENCY_MISMATCH'
+                report['code'] = 'PRICE_NOT_CONFIRMED' if not positive else 'BALANCE_CURRENCY_NOT_CONFIRMED' if not balance_currency else 'QUOTE_CURRENCY_NOT_CONFIRMED' if not quote_currency else 'QUOTE_CURRENCY_MISMATCH' if not match else 'QUOTE_IDENTITY_NOT_VERIFIED'
         after = call('nhSnapshotRead')
         unchanged = after.get('revision') == before.get('revision') and after.get('accounts') == accounts
         report['storedSnapshotUnchanged'] = unchanged
@@ -206,13 +207,13 @@ def checks(web, username, password, display=False):
         for market, kind in [('domestic', 'DOMESTIC'), ('overseas', 'OVERSEAS')]:
             rows = [h for a in current['accounts'] for h in a[market]['holdings']]
             import re
-            pattern = r'[A-Z0-9]{6}' if market == 'domestic' else r'[A-Z0-9][A-Z0-9.-]{0,14}'
+            pattern = r'[A-Z0-9]{6}' if market == 'domestic' else r'[A-Za-z0-9][A-Za-z0-9._-]{0,14}'
             selected = next((h for h in rows if re.fullmatch(pattern, h['code'])), None)
             if selected is None:
                 record(market + '_quote', 'NOT_RUN', 'LIVE_NH');continue
-            quote = web.call('nhStockQuotes', items=[{'market': kind, 'code': selected['code']}])
+            quote = web.call('nhStockQuotes', items=[{'market': kind, 'code': selected['code'], 'currency': selected.get('currency')}])
             price = quote.get('prices', {}).get(kind + ':' + selected['code'], {})
-            if not isinstance(price.get('price'), (float, int)) or isinstance(price.get('price'), bool) or price['price'] <= 0 or price.get('currency') != selected.get('currency'):
+            if not isinstance(price.get('price'), (float, int)) or isinstance(price.get('price'), bool) or price['price'] <= 0 or price.get('currency') != selected.get('currency') or kind=='OVERSEAS' and price.get('identity',{}).get('verified') is not True:
                 raise Stop('LIVE_QUOTE_NOT_CONFIRMED')
             record(market + '_quote', 'PASS', 'LIVE_NH')
         if display:

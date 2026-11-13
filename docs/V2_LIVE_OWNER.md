@@ -304,3 +304,67 @@ writes/NH calls. Backups remain private. During installation the ordinary CLI's
 strict HEAD check intentionally rejects the extra file; do not reset data, recreate
 the environment or redeploy to bypass it. Snapshot recovery is still a separate
 verified operation; this probe does not restore/delete private financial history.
+
+## Official overseas identity proof and code-only fresh-test upgrade
+
+Owner probe evidence classified the overseas rejection: HTTP 200, positive price,
+valid currency matching the balance, but neither exact nor trimmed symbol matched.
+This is not a reason to remove symbol validation or use closing-price substitutes.
+The owner subsequently confirmed `ORIGINAL_TEST_HEAD_RESTORED` with no deployment
+change, storage writes or NH requests. Keep the current private snapshot/history.
+
+Primary sources:
+- NH support SDK: https://github.com/PLUG-OpenAPI/nhplug-sdk/tree/main/instruments
+- Official field layout: https://www.nhplug.com/instruments/m_gtsstock.h
+- Official full public universe: https://www.nhplug.com/instruments/m_gtsstock.mst
+- Quote contract: https://www.nhplug.com/openapi-docs/gbstock/openapi.json
+
+`NhForeignIdentityV2.gs` validates the complete declared CP949/164-byte layout,
+reads byte offsets (not decoded name character offsets), and joins only aliases in
+the same official record: GIC, ticker, ISIN, country, exchange and settlement currency.
+The quote request uses that record's ticker. The returned identifier must equal an
+alias in the same record, and positive current price/currency must independently
+validate. Only documented right-space padding is removed; no prefix/case/name
+heuristic is used. Multiple listings remain unconfirmed unless exact balance currency
+leaves one unique record. Same-currency multiple listings are rejected.
+
+The full public master is downloaded once per overseas quote batch, without any
+portfolio symbol in its URL, without credentials and with redirects disabled.
+Only requested records are retained; vendor raw responses are never returned.
+The reference has header/master SHA-256 and download timestamp provenance.
+`freshness: DOWNLOAD_TIME_ONLY` explicitly does not claim a provider publication
+or market-as-of date. Invalid layout, ambiguous/missing identity or download failure
+returns safe diagnostics and no price; it never changes saved holdings. Availability,
+GAS execution limits, reference size (currently about 6 MB; capped at 8 MiB), and
+future listing changes remain live-test/operational risks.
+
+The following command is specifically for the **already created fresh environment**;
+never use the old fixed-test updater, full capture, create, publish, setup or reset.
+First fetch/check out the exact newly reviewed PR commit reported by Codex, then:
+
+```bash
+"$HOME/myinvest-v2-live-venv/bin/python" tools/nh_v2_upgrade.py \
+  --environment "$HOME/myinvest-v2-fresh-private-r2"
+```
+
+The command validates the original public build graph at the deployed revision
+without executing historical code. Local bundle, actual HEAD, immutable deployment,
+public metadata, fresh Script/Sheet bindings and manifest must all match. It keeps
+a private source ZIP and previous plan/bundle, uploads only code to this fresh test
+project, verifies a new immutable version, updates its existing test deployment,
+and checks public sourceDigest/identity feature metadata. No Sheets, Properties,
+NH, orders, old test resources or production resources are written/called.
+The web-app URL, fresh Sheet, schema version 2 and active snapshot remain unchanged.
+
+On a verified, non-concurrent failure it restores the prior code/deployment only;
+it never rolls back data. Any unknown source/deployment change stops with
+`OWNER_REVIEW_REQUIRED`. Do not repeat or erase an existing backup directory.
+A PASS reports `FRESH_TEST_IDENTITY_UPGRADE_VERIFIED`, sourceDigest PASS, backup
+PASS and false storage/Properties/NH/production-change flags. An upgrade PASS is
+not an actual overseas quotation PASS.
+
+After an upgrade PASS only, run the earlier `--diagnose-overseas-quote` command
+against the existing snapshot. This version also requires
+`referenceIdentityVerified: true`. Share only its sanitized JSON. Do not rerun the
+full capture flow on existing history. UI validation and a separately checked
+baseline restoration remain pending after the quote diagnosis.

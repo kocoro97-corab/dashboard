@@ -54,20 +54,32 @@ function handleNhStockQuotesV2(token,items){
   if(!sessionUser_(token))return jsonResponse({success:false,code:'AUTH_REQUIRED'});
   if(!Array.isArray(items)||!items.length||items.length>40)return jsonResponse({success:false,code:'INVALID_CODES'});
   const prices={},diagnostics={};
+  let reference=null,referenceError=null,referenceLoaded=false;
+  const overseasCode=/^[A-Za-z0-9][A-Za-z0-9._-]{0,14}$/;
+  function foreignReference(){
+    if(!referenceLoaded){referenceLoaded=true;try{reference=nhForeignReferenceV2_(items.filter(x=>x&&x.market==='OVERSEAS'&&typeof x.code==='string'&&overseasCode.test(x.code)).map(x=>x.code))}catch(e){referenceError=e}}
+    if(referenceError)throw referenceError;return reference;
+  }
   items.forEach((item,index)=>{
     const market=item&&item.market,code=item&&item.code;
-    if(typeof code!=='string'||!(market==='DOMESTIC'?/^[A-Z0-9]{6}$/:market==='OVERSEAS'?/^[A-Z0-9][A-Z0-9.-]{0,14}$/:/$a/).test(code)){
+    if(typeof code!=='string'||!(market==='DOMESTIC'?/^[A-Z0-9]{6}$/:market==='OVERSEAS'?overseasCode:/$a/).test(code)){
       diagnostics['invalid_'+(index+1)]={layer:'gas',code:'INVALID_SYMBOL'};return;
     }
     const key=market+':'+code;if(prices[key]||diagnostics[key])return;
     try{
-      const r=nhCall_(market==='DOMESTIC'?'/krstock/quote/v1/currentPrice':'/gbstock/quote/v1/current',market==='DOMESTIC'?{market_cd:'UNT',iem_cd:code}:{iem_cd:code});nhAssertResponse_(r);
-      const block=r.body.Output_0,o=Array.isArray(block)?block.find(x=>x&&x.iem_cd===code):block;
-      if(!o||o.iem_cd&&o.iem_cd!==code)throw nhFailure_('NH_NO_PRICE');
+      const ref=market==='OVERSEAS'?foreignReference():null;
+      const identity=ref?ref.resolve(code,item.currency):null;
+      const requestCode=identity?identity.row.symbol:code;
+      const r=nhCall_(market==='DOMESTIC'?'/krstock/quote/v1/currentPrice':'/gbstock/quote/v1/current',market==='DOMESTIC'?{market_cd:'UNT',iem_cd:code}:{iem_cd:requestCode});nhAssertResponse_(r);
+      const block=r.body.Output_0,o=Array.isArray(block)?block.find(x=>x&&(ref?ref.matches(identity,x.iem_cd):x.iem_cd===code)):block;
+      if(!o)throw nhFailure_('NH_NO_BLOCK');
+      if(ref?!ref.matches(identity,o.iem_cd):o.iem_cd&&o.iem_cd!==code)throw nhFailure_('NH_SYMBOL_MISMATCH');
       const price=market==='DOMESTIC'?nhExternalPrice_(o):nhAccountServiceV2_().number(o.trdprc);
       const currency=market==='DOMESTIC'?'KRW':/^[A-Z]{3}$/.test(String(o.currency_unit))?String(o.currency_unit):null;
-      if(price==null||price<=0||!currency)throw nhFailure_('NH_NO_PRICE');
+      if(price==null||price<=0)throw nhFailure_('NH_NO_PRICE');
+      if(!currency||identity&&currency!==identity.row.currency)throw nhFailure_('NH_CURRENCY_MISMATCH');
       prices[key]={price:price,currency:currency};
+      if(identity)prices[key].identity={verified:true,provider:identity.proof.provider,schema:identity.proof.schema,sourceSha256:identity.proof.sourceSha256,headerSha256:identity.proof.headerSha256,fetchedAt:identity.proof.fetchedAt,freshness:identity.proof.freshness};
     }catch(e){const d=nhSafeDiagnostic_(e);diagnostics[key]={layer:'nh',code:d.code,http:d.http}}
   });
   return jsonResponse({success:true,prices:prices,diagnostics:diagnostics,gatewayVersion:2});

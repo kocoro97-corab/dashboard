@@ -9,6 +9,8 @@ function createNhGatewayV2_(io) {
     [api,'/krstock/quote/v1/currentPrice','post','inquiry'],
     [api,'/gbstock/quote/v1/current','post','inquiry'],
     [api,'/krfuture/quote/v1/day','post','inquiry'],
+    [docs,'/instruments/m_gtsstock.h','get','reference'],
+    [docs,'/instruments/m_gtsstock.mst','get','reference'],
     [docs,'/openapi-docs/krstock/openapi.json','get','spec'],
     [docs,'/openapi-docs/gbstock/openapi.json','get','spec'],
     [docs,'/openapi-docs/krfuture/openapi.json','get','spec'],

@@ -23,7 +23,7 @@ function nhHeader_(headers, name) {
 
 // 접근토큰: 24시간 유효. 스크립트 속성에 만료시각과 함께 캐시해 재사용한다(재발급은 보안 알림을 유발).
 // Only locally defined codes and validated HTTP statuses may cross diagnostic boundaries.
-const NH_DIAGNOSTIC_CODES=['NH_OK','NH_TOKEN','NH_CONFIG','NH_NETWORK','NH_JSON','NH_HTTP','NH_RSP','NH_PATH','NH_NO_PRICE','NH_CONTRACT','NH_UNSUPPORTED','NH_UPSTREAM','NH_SPEC_OK','NH_SPEC_FAILED','NH_ACCOUNTS_OK','NH_DOMESTIC_OK','NH_OVERSEAS_OK','NH_FUTURE_OK'];
+const NH_DIAGNOSTIC_CODES=['NH_OK','NH_TOKEN','NH_CONFIG','NH_NETWORK','NH_JSON','NH_HTTP','NH_RSP','NH_PATH','NH_REFERENCE_UNAVAILABLE','NH_REFERENCE_INVALID','NH_IDENTITY_UNVERIFIED','NH_IDENTITY_AMBIGUOUS','NH_CURRENCY_MISMATCH','NH_SYMBOL_MISMATCH','NH_NO_BLOCK','NH_NO_PRICE','NH_CONTRACT','NH_UNSUPPORTED','NH_UPSTREAM','NH_SPEC_OK','NH_SPEC_FAILED','NH_ACCOUNTS_OK','NH_DOMESTIC_OK','NH_OVERSEAS_OK','NH_FUTURE_OK'];
 function nhSafeDiagnostic_(error) {
   const code=error&&NH_DIAGNOSTIC_CODES.indexOf(error.safeCode)>=0?error.safeCode:'NH_UPSTREAM';
   const http=error&&Number.isInteger(error.safeHttp)&&error.safeHttp>=100&&error.safeHttp<=599?error.safeHttp:null;

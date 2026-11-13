@@ -143,7 +143,7 @@ function doPost(e) {
     if(!body||Array.isArray(body)||typeof body!=='object')return jsonResponse({success:false,message:'잘못된 요청입니다.'});
     if(typeof securityEnvironmentGuard_==='function')securityEnvironmentGuard_(body);
     const action=body.action;
-    if(action==='appVersion')return jsonResponse(Object.assign({success:true,version:'v11-nh-v2',gatewayVersion:2,storeEngine:'account-store-v2',securityVersion:1,features:['nhAccounts','externalHoldings','nhExternalQuotes','changePassword'],readOnly:true},typeof securityEnvironmentMetadata_==='function'?securityEnvironmentMetadata_():{}));
+    if(action==='appVersion')return jsonResponse(Object.assign({success:true,version:'v11-nh-v2',foreignIdentityVersion:typeof createNhForeignReferenceV2_==='function'?1:0,gatewayVersion:2,storeEngine:'account-store-v2',securityVersion:1,features:['nhAccounts','externalHoldings','nhExternalQuotes','changePassword'],readOnly:true},typeof securityEnvironmentMetadata_==='function'?securityEnvironmentMetadata_():{}));
     if(action==='login')return securityLogin_(body.user,body.pass);
     if(action==='register')return securityRegister_(body.user,body.pass);
     if(action==='logout'){deleteSession_(body.token);return jsonResponse({success:true})}

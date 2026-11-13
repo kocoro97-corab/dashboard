@@ -19,7 +19,7 @@ function app(){
       else throw Error('unexpected synthetic endpoint');
       return {getResponseCode:()=>200,getContentText:()=>JSON.stringify({...body,rsp_cd:'00000'}),getHeaders:()=>({})};
     }}});
-  for(const file of ['NhGatewayV2','NhAccountsV2','Nhplug','AccountStoreV2','ExternalHoldings','NhSnapshotV2','Security'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../gas/'+file+'.gs'),'utf8'),c);
+  for(const file of ['NhGatewayV2','NhForeignIdentityV2','NhAccountsV2','Nhplug','AccountStoreV2','ExternalHoldings','NhSnapshotV2','Security'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../gas/'+file+'.gs'),'utf8'),c);
   c.securitySession_=token=>['alice','bob'].includes(token)?{u:token,p:false}:null;c.sessionUser_=token=>c.securitySession_(token)?.u;c.verifyAdmin=token=>token==='alice';c.securityWithLock_=fn=>fn();
   c.securityLegacyDoPost_=e=>{const b=JSON.parse(e.postData.contents);if(b.action==='nhAccounts')return c.handleNhAccounts(b.token);if(b.action==='nhExternalQuotes')return c.handleNhExternalQuotes(b.token,b.codes);return {success:false}};
   return {c,sheets,calls,props,call:(action,extra={},token='alice')=>c.doPost({postData:{contents:JSON.stringify({action,token,...extra})}})};

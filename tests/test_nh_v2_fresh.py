@@ -190,7 +190,7 @@ class FakeWeb:
             return {'success':True,'accounts':copy.deepcopy(self.accounts),'revision':self.rev,'snapshotId':'synthetic-before'}
         if action=='nhStockQuotes':
             item=fields['items'][0]
-            return {'success':True,'prices':{item['market']+':'+item['code']:{'price':999.125,'currency':'KRW' if item['market']=='DOMESTIC' else 'USD'}}}
+            return {'success':True,'prices':{item['market']+':'+item['code']:{'price':999.125,'currency':'KRW' if item['market']=='DOMESTIC' else 'USD','identity':{'verified':True}}}}
         if action=='nhSnapshotRestore':self.rev='2';self.accounts=[];return {'success':True,'revision':'2'}
         raise AssertionError('unexpected action')
 
