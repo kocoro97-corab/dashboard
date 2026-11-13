@@ -177,6 +177,53 @@ def browser_readback(web):
         server.shutdown();server.server_close()
 
 
+def verify_existing_snapshot_ui(web, username, password):
+    """Display existing private readback only. No capture, NH request or restore."""
+    report = {'mode': 'READ_ONLY_EXISTING_SNAPSHOT_UI', 'status': 'NOT_RUN',
+              'storageWrites': False, 'nhRequested': False, 'orderCalls': 0,
+              'rawFinancialDataIncluded': False, 'scope': 'LIVE_SNAPSHOT_UI_ADAPTER',
+              'desktop': 'NOT_RUN', 'mobile': 'NOT_RUN'}
+    before = None
+    class ReadOnlySnapshot:
+        def call(self, action, **fields):
+            if action != 'nhSnapshotRead' or fields:
+                raise Stop('READ_ONLY_SNAPSHOT_REQUIRED')
+            return web.call(action)
+    reader = ReadOnlySnapshot()
+    try:
+        login = web.call('login', **{'user': username, 'pass': password})
+        web.token = login.get('token')
+        if not web.token or not login.get('isAdmin') or login.get('mustChangePassword'):
+            raise Stop('DEDICATED_FRESH_ADMIN_REQUIRED')
+        before = reader.call('nhSnapshotRead')
+        if not before.get('accounts') or not before.get('revision'):
+            raise Stop('EXISTING_SNAPSHOT_REQUIRED')
+        report['activeSnapshotPresent'] = True
+        report['emptyBaselineRecoverable'] = any(h.get('holdings') == [] for h in before.get('history', []))
+        browser_readback(reader)
+        report.update(status='PASS', desktop='PASS', mobile='PASS')
+    except Exception as e:
+        safe = {'DEDICATED_FRESH_ADMIN_REQUIRED', 'EXISTING_SNAPSHOT_REQUIRED', 'PRIVATE_UI_READBACK_FAILED'}
+        code = e.code if isinstance(e, ApiFailure) and e.code in SAFE_REPORT_CODES else str(e) if isinstance(e, Stop) and str(e) in safe else 'PRIVATE_UI_VERIFICATION_FAILED'
+        report.update(status='FAIL', code=code)
+    finally:
+        if before is not None:
+            try:
+                after = reader.call('nhSnapshotRead')
+                unchanged = all(after.get(k) == before.get(k) for k in ('revision', 'accounts', 'history'))
+                report['storedSnapshotUnchanged'] = unchanged
+                if not unchanged:
+                    report.update(status='FAIL', code='CONCURRENT_SNAPSHOT_CHANGE')
+            except Exception:
+                report.update(status='FAIL', code='SNAPSHOT_UNCHANGED_NOT_CONFIRMED')
+        if web.token:
+            try:
+                web.call('logout')
+            except Exception:
+                report.update(status='FAIL', code='LOGOUT_FAILED')
+    return report
+
+
 def checks(web, username, password, display=False):
     report = {'status': 'NOT_RUN', 'checks': [], 'specialAccounts': {'ISA': 'NOT_RUN', 'PENSION': 'NOT_RUN', 'IRP': 'NOT_RUN'},
               'orderCalls': 0, 'existingResourcesChanged': False, 'privateHistoryRetained': False, 'rawFinancialDataIncluded': False}
@@ -246,11 +293,13 @@ def main():
     p.add_argument('--environment', type=Path, required=True)
     p.add_argument('--approve-nh-read-and-private-snapshot', action='store_true')
     p.add_argument('--browser', action='store_true')
-    p.add_argument('--diagnose-overseas-quote', action='store_true', help='Read existing snapshot and request one overseas quote; no capture, restore or storage writes')
+    modes = p.add_mutually_exclusive_group()
+    modes.add_argument('--verify-existing-snapshot-ui', action='store_true', help='Display existing saved snapshot on desktop/mobile; no NH, capture or restore')
+    modes.add_argument('--diagnose-overseas-quote', action='store_true', help='Read existing snapshot and request one overseas quote; no capture, restore or storage writes')
     a = p.parse_args()
     try:
-        web = preflight(a.environment, allow_same_source_tools=a.diagnose_overseas_quote)
-        if not a.approve_nh_read_and_private_snapshot and not a.diagnose_overseas_quote:
+        web = preflight(a.environment, allow_same_source_tools=a.diagnose_overseas_quote or a.verify_existing_snapshot_ui)
+        if not a.approve_nh_read_and_private_snapshot and not a.diagnose_overseas_quote and not a.verify_existing_snapshot_ui:
             print(json.dumps({'status': 'NOT_RUN', 'code': 'OWNER_NH_APPROVAL_REQUIRED', 'nhRequested': False}));return 2
         if not sys.stdin.isatty():
             raise Stop('OWNER_PRIVATE_TERMINAL_REQUIRED')
@@ -258,7 +307,12 @@ def main():
         password = getpass.getpass('Fresh staging password (hidden): ')
         if not username or len(password) < 16:
             raise Stop('STRONG_PRIVATE_CREDENTIALS_REQUIRED')
-        result = diagnose_overseas_quote(web, username, password) if a.diagnose_overseas_quote else checks(web, username, password, a.browser)
+        if a.verify_existing_snapshot_ui:
+            result = verify_existing_snapshot_ui(web, username, password)
+        elif a.diagnose_overseas_quote:
+            result = diagnose_overseas_quote(web, username, password)
+        else:
+            result = checks(web, username, password, a.browser)
     except Exception:
         result = {'status': 'NOT_RUN', 'code': 'FRESH_PREFLIGHT_OR_OWNER_AUTH_REQUIRED', 'orderCalls': 0, 'rawFinancialDataIncluded': False}
     print(json.dumps(result))

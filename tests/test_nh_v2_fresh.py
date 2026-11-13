@@ -266,4 +266,42 @@ class PrivatePromptTests(unittest.TestCase):
         self.assertNotIn(password,output.getvalue())
         self.assertNotIn('synthetic-user',output.getvalue())
 
+
+class ExistingSnapshotUiTests(unittest.TestCase):
+    def ready(self):
+        w=FakeWeb();w.call('nhSnapshotCapture');w.calls=[];return w
+    def test_existing_snapshot_display_is_readonly_and_preserves_history(self):
+        w=self.ready();before=copy.deepcopy(w.accounts)
+        def browser(reader):
+            self.assertEqual(reader.call('nhSnapshotRead')['accounts'],before)
+            for action in ('nhStockQuotes','nhSnapshotCapture','nhSnapshotRestore','nhAccounts'):
+                with self.assertRaises(live.Stop):reader.call(action)
+        with patch.object(live,'browser_readback',side_effect=browser):r=live.verify_existing_snapshot_ui(w,'synthetic','SYNTHETIC_PRIVATE_PASSWORD')
+        self.assertEqual(r['status'],'PASS');self.assertEqual(r['desktop'],'PASS');self.assertTrue(r['storedSnapshotUnchanged']);self.assertTrue(r['emptyBaselineRecoverable'])
+        self.assertTrue(set(w.calls)<= {'login','nhSnapshotRead','logout'})
+        self.assertEqual(w.accounts,before);self.assertFalse(r['nhRequested']);self.assertFalse(r['storageWrites'])
+        text=json.dumps(r)
+        for secret in ('SYNTHETIC_PRIVATE_HOLDING','SYNTHETIC_PRIVATE_TOKEN','SYNTHETIC_PRIVATE_PASSWORD','654'):self.assertNotIn(secret,text)
+    def test_empty_baseline_is_not_called_ui_success(self):
+        w=FakeWeb()
+        with patch.object(live,'browser_readback') as browser:r=live.verify_existing_snapshot_ui(w,'synthetic','SYNTHETIC_PRIVATE_PASSWORD')
+        self.assertEqual(r['status'],'FAIL');self.assertEqual(r['code'],'EXISTING_SNAPSHOT_REQUIRED');browser.assert_not_called();self.assertTrue(r['storedSnapshotUnchanged'])
+    def test_browser_failure_still_verifies_unchanged_state_and_logs_out_without_writes(self):
+        w=self.ready()
+        with patch.object(live,'browser_readback',side_effect=Exception('SYNTHETIC_PRIVATE_CANARY')):r=live.verify_existing_snapshot_ui(w,'synthetic','SYNTHETIC_PRIVATE_PASSWORD')
+        self.assertEqual(r['status'],'FAIL');self.assertTrue(r['storedSnapshotUnchanged']);self.assertEqual(w.calls[-1],'logout');self.assertNotIn('SYNTHETIC_PRIVATE_CANARY',json.dumps(r))
+    def test_ui_cli_dispatch_never_selects_capture_flow_and_permits_only_same_gas_helpers(self):
+        import contextlib
+        import io
+        w=self.ready()
+        with patch.object(sys,'argv',['nh_v2_live_check.py','--environment','synthetic','--verify-existing-snapshot-ui']), patch.object(live,'preflight',return_value=w) as preflight, patch.object(sys.stdin,'isatty',return_value=True), patch('builtins.input',return_value='synthetic'), patch.object(live.getpass,'getpass',return_value='SYNTHETIC_PRIVATE_PASSWORD'), patch.object(live,'verify_existing_snapshot_ui',return_value={'status':'PASS'}) as ui, patch.object(live,'checks') as capture, contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(live.main(),0)
+        preflight.assert_called_once_with(Path('synthetic'),allow_same_source_tools=True)
+        ui.assert_called_once();capture.assert_not_called()
+    def test_concurrent_snapshot_change_is_fail_and_never_restored(self):
+        w=self.ready()
+        with patch.object(live,'browser_readback',side_effect=lambda reader:setattr(w,'rev','concurrent')):r=live.verify_existing_snapshot_ui(w,'synthetic','SYNTHETIC_PRIVATE_PASSWORD')
+        self.assertEqual(r['status'],'FAIL');self.assertEqual(r['code'],'CONCURRENT_SNAPSHOT_CHANGE');self.assertNotIn('nhSnapshotRestore',w.calls)
+
+
 if __name__=='__main__':unittest.main()

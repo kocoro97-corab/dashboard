@@ -368,3 +368,35 @@ against the existing snapshot. This version also requires
 `referenceIdentityVerified: true`. Share only its sanitized JSON. Do not rerun the
 full capture flow on existing history. UI validation and a separately checked
 baseline restoration remain pending after the quote diagnosis.
+
+## Resume existing snapshot UI without recapturing data
+
+Owner-reported read-only diagnosis after the identity upgrade: PASS, positive
+foreign current price, balance/quote currency match, official reference identity
+verified and storedSnapshotUnchanged. This verifies that selected foreign quote;
+it does not verify every held foreign instrument or all account types.
+
+The prior full flow is intentionally not repeatable on existing data/history.
+After checking out the reviewed **helper-only** commit, run:
+
+```bash
+"$HOME/myinvest-v2-live-venv/bin/python" tools/nh_v2_live_check.py \
+  --environment "$HOME/myinvest-v2-fresh-private-r2" \
+  --verify-existing-snapshot-ui
+```
+
+No GAS reapplication is needed: the unchanged core sourceDigest and the originally
+deployed revision marker are fully checked against private bundle, actual HEAD,
+immutable source and fresh bindings before login. The owner enters existing fresh
+credentials privately. Only login/logout and snapshot reads are allowed. The
+browser receives actual saved readback via the isolated adapter and verifies names,
+codes, quantities, average/current prices and currencies at 1440/344px. All external
+browser traffic is intercepted; no screenshots, traces or financial values are
+printed. This is saved-data rendering, not native browser-to-GAS login E2E or a
+Galaxy Fold6 hardware test. Failure paths still reread revision/accounts/history
+and logout. Concurrent changes are FAIL, with no automatic restore or overwrite.
+
+Expected safe result: READ_ONLY_EXISTING_SNAPSHOT_UI, status PASS, desktop/mobile
+PASS, storedSnapshotUnchanged true, storageWrites false, nhRequested false and
+orderCalls 0. Baseline restoration is separate and is **not** performed by this mode.
+Keep the active snapshot and journal until its result is reviewed.
