@@ -73,19 +73,27 @@ class PublicDevelopment:
                 return deny(429, 'DEV_RATE_LIMIT')
         if env.get('REQUEST_METHOD') == 'OPTIONS':
             requested = {x.strip().lower() for x in env.get('HTTP_ACCESS_CONTROL_REQUEST_HEADERS', '').split(',')}
-            if requested - {'content-type', 'authorization', 'x-myinvest-dev-key'}:
+            if requested - {'content-type', 'authorization', 'x-myinvest-dev-key', 'x-myinvest-dev-client'}:
                 return deny(403, 'RELAY_PREFLIGHT_DENIED')
             # The secret is not carried in OPTIONS. Actual POST still requires it.
             forwarded = dict(env)
-            forwarded['HTTP_ACCESS_CONTROL_REQUEST_HEADERS'] = ','.join(requested - {'x-myinvest-dev-key'})
+            forwarded['HTTP_ACCESS_CONTROL_REQUEST_HEADERS'] = ','.join(requested - {'x-myinvest-dev-key', 'x-myinvest-dev-client'})
             def preflight_start(status, headers, exc_info=None):
-                headers = [(k, v + ', X-MyInvest-Dev-Key' if k == 'Access-Control-Allow-Headers' else v)
+                headers = [(k, v + ', X-MyInvest-Dev-Key, X-MyInvest-Dev-Client' if k == 'Access-Control-Allow-Headers' else v)
                            for k, v in headers]
                 return start(status, headers) if exc_info is None else start(status, headers, exc_info)
             return self.app(forwarded, preflight_start)
-        # Same-account Pages share an Origin. Check the full development referrer
-        # too; this is a routing guard, not authentication. GAS validates sessions.
-        if env.get('HTTP_REFERER') not in (self.page, self.page + 'index.html'):
+        # Referrer is browser-controlled and may be reduced/omitted on mobile.
+        # The explicit client marker is routing intent, not authentication: exact
+        # Origin, private development code and GAS authorization remain required.
+        referer = env.get('HTTP_REFERER', '')
+        client = env.get('HTTP_X_MYINVEST_DEV_CLIENT') == 'dashboard-v2-dev'
+        legacy = referer in (self.page, self.page + 'index.html')
+        if not (client or legacy):
+            return deny(403, 'DEV_PAGE_REQUIRED')
+        # Continue rejecting an explicitly different project path on the shared
+        # Pages origin, even when a caller supplies the public client marker.
+        if referer.startswith(self.origin + '/') and referer not in (self.origin + '/', self.page, self.page + 'index.html'):
             return deny(403, 'DEV_PAGE_REQUIRED')
         supplied = env.get('HTTP_X_MYINVEST_DEV_KEY', '')
         if len(supplied) > 128 or not hmac.compare_digest(hashlib.sha256(supplied.encode()).digest(), self.code_hash):

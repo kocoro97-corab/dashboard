@@ -21,7 +21,7 @@ def build(output, root=ROOT):
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
     text = (root / 'index.html').read_text()
     text = '\n'.join(line for line in text.splitlines() if 'https://cdn.jsdelivr.net/npm/tesseract' not in line)
-    text = text.replace('<head>', '<head>\n<meta name="referrer" content="unsafe-url">\n'
+    text = text.replace('<head>', '<head>\n<meta name="referrer" content="strict-origin-when-cross-origin">\n'
         '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; '
         'script-src \'self\' \'unsafe-inline\'; style-src \'self\' \'unsafe-inline\'; '
         'img-src \'self\' data:; connect-src \'self\' https://*.trycloudflare.com; '

@@ -21,11 +21,16 @@
       if(!/^[A-Za-z0-9_-]{16,128}$/.test(c.devAccessCode))throw failure('DEV_ACCESS_REQUIRED');
       headers['X-MyInvest-Dev-Key']=c.devAccessCode;
     }
+    if(c.devSession===true){
+      const loc=root.location;
+      if(!loc||loc.origin!=='https://kocoro97-corab.github.io'||!['/dashboard-v2-dev/','/dashboard-v2-dev/index.html'].includes(loc.pathname)||loc.search||loc.hash)throw failure('RELAY_CONFIG_INVALID');
+      headers['X-MyInvest-Dev-Client']='dashboard-v2-dev';
+    }
     if(data.token!=null){
       if(typeof data.token!=='string'||!/^[a-fA-F0-9]{64}$/.test(data.token))throw failure('AUTH_REQUIRED');
       headers.Authorization='Bearer '+data.token;delete data.token;
     }
-    return root.fetch(c.endpoint,{method:'POST',headers,body:JSON.stringify(data),credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:c.devAccessCode?'unsafe-url':'strict-origin-when-cross-origin',signal:options.signal}).catch(error=>{
+    return root.fetch(c.endpoint,{method:'POST',headers,body:JSON.stringify(data),credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:'strict-origin-when-cross-origin',signal:options.signal}).catch(error=>{
       if(['register','changePassword','approveUser','saveExternalHoldings','restoreExternalHoldings'].includes(data.action))throw failure('RELAY_WRITE_OUTCOME_UNKNOWN');
       throw error;
     });

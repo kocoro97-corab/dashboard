@@ -34,8 +34,9 @@ Official sources: [Quick Tunnels](https://developers.cloudflare.com/tunnel/get-s
   TLS verification is never disabled and client API redirects are rejected.
 - CORS allows only `https://kocoro97-corab.github.io`. Same-account project Pages
   **share this origin**: a different repository is not a different browser security
-  origin. The server additionally requires the exact development-page referrer
-  and a private, per-launch development access code. Referrer/Origin are routing
+  origin. The server additionally requires a development-client marker
+  (or the legacy exact development-page referrer) and a private, per-launch
+  development access code. Marker/Referrer/Origin are routing
   controls, not user authentication; the development code and existing GAS session
   are checked separately. An attacker-controlled same-origin script is not isolated
   by storage prefixes; this deployment trusts the owner's reviewed Pages code.
@@ -44,9 +45,12 @@ Official sources: [Quick Tunnels](https://developers.cloudflare.com/tunnel/get-s
   localStorage. Token and access-code state stay in that tab. Changing the relay
   endpoint clears development state before another request. No code/token/password
   is in a URL, public config, GitHub file, CLI argument or diagnostic report.
-- The full development-page referrer is sent deliberately to bind the shared
-  origin to the test path. The page rejects query/fragment configuration and
-  credentials are never in that URL. Production-path requests are rejected.
+- The client retains standard `strict-origin-when-cross-origin` referrer privacy.
+  Mobile browsers may omit Referer; the public `X-MyInvest-Dev-Client` marker
+  identifies routing intent without treating a path as authentication. The client
+  validates its exact development page before sending this marker. Explicit
+  production-path referrers remain rejected. The page rejects query/fragment
+  configuration and credentials are never in that URL.
 - A restrictive development CSP blocks external scripts/widgets and direct GAS
   browser calls. The existing HTML/authentication is reused; the development
   bootstrap establishes the test connection and suppresses normal account/market
@@ -133,8 +137,8 @@ Fold6 until Ctrl+C, tunnel exit, or its maximum lifetime. Browser failure closes
 
 Connection failures show only a local allowlisted code and HTTP status, never a
 raw response, exception or entered value. `DEV_ACCESS_REQUIRED` means the separate
-code was rejected; `DEV_PAGE_REQUIRED` means the browser did not supply the
-approved development-page referrer; `DEV_NETWORK` means no readable response
+code was rejected; `DEV_PAGE_REQUIRED` means the request lacked the development-client
+marker/legacy page referrer or supplied an explicitly different project path; `DEV_NETWORK` means no readable response
 arrived and does not establish a wrong code. Report only that code before changing
 credentials or retrying. The development inputs disable mobile autocapitalization.
 
@@ -153,3 +157,11 @@ the owner performs it. Never send the access code/password or browser storage to
 Playwright routing does not prove real HTTPS/CORS behavior. The owner tool has no
 routing and reports `LIVE_HTTPS_PAGES_TO_TEST_GAS` only after actual verification.
 The prior `LIVE_GAS_AUTH_ONLY_VIA_LOCAL_RELAY` PASS remains valid but separate.
+
+### Mobile referrer compatibility update
+
+Update the relay and publish the matching development artifact together: the new
+client marker requires the updated preflight allowlist. Restart the old relay
+after updating source, and use the newly printed endpoint. Existing GAS, Sheets,
+Properties and credentials remain unchanged. Synthetic browser checks cover both
+origin-only and missing Referer; actual Fold6 verification remains an owner step.

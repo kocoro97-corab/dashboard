@@ -61,7 +61,9 @@ with tempfile.TemporaryDirectory() as tmp:
                 payload = json.loads(r.request.post_data or '{}')
                 if r.request.method == 'POST':browser_actions.append(payload.get('action'))
                 changes = dict(REMOTE_ADDR='127.0.0.1', HTTP_HOST=HOST, HTTP_X_FORWARDED_PROTO='https',
-                               HTTP_REFERER=h.get('referer', ''), HTTP_X_MYINVEST_DEV_KEY=h.get('x-myinvest-dev-key', ''))
+                               HTTP_REFERER='' if width == 344 else h.get('referer', ''),
+                               HTTP_X_MYINVEST_DEV_CLIENT=h.get('x-myinvest-dev-client', ''),
+                               HTTP_X_MYINVEST_DEV_KEY=h.get('x-myinvest-dev-key', ''))
                 result = request(boundary, payload, origin=h.get('origin', ''),
                                  authorization=h.get('authorization'), method=r.request.method, **changes)
                 r.fulfill(status=result['status'], headers=result['headers'], body=json.dumps(result['body']));return

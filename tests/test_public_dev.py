@@ -56,16 +56,40 @@ class PublicDevTests(unittest.TestCase):
 
     def test_actual_preflight_advertises_dev_header_without_authentication_or_upstream(self):
         r = self.call(method='OPTIONS', HTTP_ACCESS_CONTROL_REQUEST_METHOD='POST',
-                      HTTP_ACCESS_CONTROL_REQUEST_HEADERS='authorization,content-type,x-myinvest-dev-key',
+                      HTTP_ACCESS_CONTROL_REQUEST_HEADERS='authorization,content-type,x-myinvest-dev-key,x-myinvest-dev-client',
                       HTTP_X_MYINVEST_DEV_KEY='', HTTP_REFERER='')
         self.assertEqual(r['status'], 204)
         self.assertEqual(r['headers']['Access-Control-Allow-Origin'], ORIGIN)
         self.assertIn('X-MyInvest-Dev-Key', r['headers']['Access-Control-Allow-Headers'])
+        self.assertIn('X-MyInvest-Dev-Client', r['headers']['Access-Control-Allow-Headers'])
         self.assertEqual(self.gateway.calls, [])
+
+    def test_reduced_or_missing_referrer_requires_marker_and_private_code(self):
+        for referer in ('', ORIGIN + '/'):
+            for marker in ('', 'incorrect'):
+                self.assertEqual(self.call(HTTP_REFERER=referer, HTTP_X_MYINVEST_DEV_CLIENT=marker)['body']['code'], 'DEV_PAGE_REQUIRED')
+            for code in ('', 'incorrect'):
+                self.assertEqual(self.call(HTTP_REFERER=referer, HTTP_X_MYINVEST_DEV_CLIENT='dashboard-v2-dev', HTTP_X_MYINVEST_DEV_KEY=code)['body']['code'], 'DEV_ACCESS_REQUIRED')
+        self.assertEqual(self.gateway.calls, [])
+        for referer in ('', ORIGIN + '/'):
+            self.assertEqual(self.call(HTTP_REFERER=referer, HTTP_X_MYINVEST_DEV_CLIENT='dashboard-v2-dev')['status'], 200)
+        self.assertEqual(self.gateway.calls, [{'action': 'appVersion'}] * 2)
+
+    def test_marker_does_not_bypass_origin_session_or_explicit_production_path(self):
+        for origin in ('null', 'https://other.example'):
+            result = self.call(HTTP_ORIGIN=origin, HTTP_REFERER='', HTTP_X_MYINVEST_DEV_CLIENT='dashboard-v2-dev')
+            self.assertEqual(result['status'], 403)
+            self.assertNotIn('Access-Control-Allow-Origin', result['headers'])
+        for referer in (ORIGIN + '/dashboard/', PAGE + '?token=synthetic'):
+            self.assertEqual(self.call(HTTP_REFERER=referer, HTTP_X_MYINVEST_DEV_CLIENT='dashboard-v2-dev')['body']['code'], 'DEV_PAGE_REQUIRED')
+        self.assertEqual(self.call({'action': 'sessionInfo'}, HTTP_REFERER='', HTTP_X_MYINVEST_DEV_CLIENT='dashboard-v2-dev')['status'], 401)
+        self.assertEqual(self.gateway.calls, [])
+        self.assertEqual(self.call({'action': 'sessionInfo'}, HTTP_REFERER='', HTTP_X_MYINVEST_DEV_CLIENT='dashboard-v2-dev', authorization='Bearer ' + TOKEN)['status'], 200)
+        self.assertEqual(self.gateway.calls, [{'action': 'sessionInfo', 'token': TOKEN}])
 
     def test_no_nh_store_order_or_arbitrary_target_reaches_gas(self):
         for action in ('nhAccounts', 'nhQuotes', 'nhStockQuotes', 'nhExternalQuotes', 'saveExternalHoldings', 'nhSnapshotCapture', 'order', 'cancel'):
-            self.assertIn(self.call({'action': action}, authorization='Bearer ' + TOKEN)['status'], (400, 403))
+            self.assertIn(self.call({'action': action}, HTTP_REFERER='', HTTP_X_MYINVEST_DEV_CLIENT='dashboard-v2-dev', authorization='Bearer ' + TOKEN)['status'], (400, 403))
         self.assertEqual(self.call({'action': 'login', 'gasUrl': 'https://other.example/'})['status'], 400)
         self.assertEqual(self.gateway.calls, [])
 
@@ -116,6 +140,7 @@ class PublicDevTests(unittest.TestCase):
             text = (out / 'index.html').read_text()
             self.assertIn('devSession:true', text)
             self.assertIn('Content-Security-Policy', text)
+            self.assertIn('name="referrer" content="strict-origin-when-cross-origin"', text)
             self.assertNotIn('https://cdn.jsdelivr.net/npm/tesseract', text)
             self.assertTrue(json.loads((out / 'development-only.json').read_text())['authOnly'])
             with self.assertRaises(ValueError):build(out)
