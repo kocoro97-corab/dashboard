@@ -91,6 +91,54 @@ def wait_for_dns(endpoint, timeout=30, interval=3, max_attempts=8, on_wait=None)
     raise HttpsProbeFailure('HTTPS_DNS_NOT_READY',evidence)
 
 
+def public_dns_status(host):
+    """Diagnostic only: query Cloudflare DNS over HTTPS, never use returned IPs.
+
+    Only the public tunnel hostname is sent. No relay key, GAS identifier,
+    account data, session or password is involved; redirects remain forbidden.
+    """
+    if not re.fullmatch(r'[a-z0-9-]+\.trycloudflare\.com', host):
+        return 'UNAVAILABLE'
+    request = urllib.request.Request('https://cloudflare-dns.com/dns-query?name=' + host + '&type=A',
+                                     headers={'Accept': 'application/dns-json'})
+    try:
+        with urllib.request.build_opener(NoRedirect()).open(request, timeout=3) as response:
+            if response.status != 200:return 'UNAVAILABLE'
+            raw = response.read(16385)
+            if len(raw) > 16384:return 'UNAVAILABLE'
+            data = json.loads(raw)
+            if not isinstance(data, dict) or type(data.get('Status')) is not int:return 'UNAVAILABLE'
+            if data['Status'] == 3:return 'NXDOMAIN'
+            if data['Status'] == 0:
+                answers = data.get('Answer')
+                if not isinstance(answers, list):return 'NO_A_RECORD'
+                return 'ANSWER' if any(isinstance(a, dict) and a.get('type') == 1 for a in answers) else 'NO_A_RECORD'
+            return 'DNS_ERROR'
+    except Exception:return 'UNAVAILABLE'
+
+
+def diagnose_tunnel_dns(endpoint, on_sample=None):
+    """Three bounded snapshots while the same tunnel stays alive; no API calls."""
+    _dns_target(endpoint)  # Validate the allocated public endpoint, not a user target.
+    host = urlsplit(endpoint).hostname
+    samples = []
+    for attempt in range(1, 4):
+        try:_dns_lookup(host, 3);system = True
+        except (OSError, TimeoutError):system = False
+        public = public_dns_status(host)
+        if public == 'ANSWER':
+            comparison = 'BOTH_RESOLVE' if system else 'PUBLIC_ONLY_RESOLVES'
+        elif public in ('NXDOMAIN', 'NO_A_RECORD', 'DNS_ERROR'):
+            comparison = 'SYSTEM_ONLY_RESOLVES' if system else 'BOTH_UNRESOLVED'
+        else:comparison = 'INCONCLUSIVE'
+        sample = {'attempt': attempt, 'systemDns': system, 'publicDns': public, 'comparison': comparison}
+        samples.append(sample)
+        if on_sample:on_sample(sample)
+        if system and public == 'ANSWER':break
+        if attempt < 3:time.sleep(2)
+    return samples
+
+
 def probe_evidence(status,headers,raw=b''):
     headers=headers or {}
     content=str(headers.get('Content-Type','')).split(';')[0].lower().strip()

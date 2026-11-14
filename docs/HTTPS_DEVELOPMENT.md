@@ -178,3 +178,33 @@ client marker requires the updated preflight allowlist. Restart the old relay
 after updating source, and use the newly printed endpoint. Existing GAS, Sheets,
 Properties and credentials remain unchanged. Synthetic browser checks cover both
 origin-only and missing Referer; actual Fold6 verification remains an owner step.
+
+### Credential-free DNS comparison
+
+When `HTTPS_DNS_NOT_READY` persists while the known-service controls resolve, do
+not infer a wrong code, alter system DNS, or repeatedly restart authentication.
+Use the existing launcher with `--diagnose-tunnel-dns` and the usual environment
+and connector arguments. This mode checks the pinned binary, opens one temporary
+tunnel against a reserved **unlistening** loopback port, and compares the allocated
+hostname using the system resolver and Cloudflare's HTTPS DNS JSON service. It
+samples at most three times, then closes the tunnel. No application is exposed.
+The environment path argument is retained for CLI compatibility but its contents
+are not read in this mode. No Google/GAS access, password, development code,
+account data or login is needed. Only a public allocated hostname is sent to the
+fixed Cloudflare DNS diagnostic endpoint; returned addresses are never printed,
+stored or used for connection routing. HTTPS redirects are rejected.
+
+- `PUBLIC_ONLY_RESOLVES`: the sampled public resolver has an A record while the
+  system resolver fails. Local caching/resolver behavior needs investigation;
+  this does not identify its exact cause or change the application's resolver.
+- `BOTH_UNRESOLVED` with `NXDOMAIN`: neither the system nor this sampled public
+  resolver resolves the new name. Issuance/propagation needs investigation; one
+  recursive resolver is not proof of a global provider outage.
+- `BOTH_RESOLVE`: both resolve at this snapshot; it is not a login/HTTPS PASS.
+- `SYSTEM_ONLY_RESOLVES` or `INCONCLUSIVE`: retain the categories for further
+  analysis without making a routing/authentication change.
+
+The final report deliberately keeps application status `NOT_RUN`, sets
+`diagnosticComplete`, and includes only these fixed categories. It never reports
+raw DNS answers, IPs, private paths or exception text. A new provider account,
+domain, paid service or Pages republication is unnecessary for this diagnostic.

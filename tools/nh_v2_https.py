@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -124,10 +125,23 @@ def main():
     parser.add_argument('--minutes', type=int, default=30, choices=range(1, 61))
     parser.add_argument('--verify-browser', action='store_true', help='Verify only the new public HTTPS/Pages path, then keep it open for Fold6')
     parser.add_argument('--diagnose-preflight', action='store_true', help='Read-only checks only: no tunnel, password prompt, login, browser or account writes')
+    parser.add_argument('--diagnose-tunnel-dns', action='store_true', help='Credential-free tunnel DNS comparison only; no GAS or login')
     args = parser.parse_args()
     report = {'status': 'NOT_RUN', 'phase': 'LOCAL_RUNTIME', 'actualNhCalls': 0, 'orderCalls': 0, 'accountStoreWrites': False}
     try:
-        validate_runtime(args.cloudflared, needs_tty=not args.diagnose_preflight)
+        validate_runtime(args.cloudflared, needs_tty=not (args.diagnose_preflight or args.diagnose_tunnel_dns))
+        if args.diagnose_tunnel_dns:
+            from nh_v2_https_browser import diagnose_tunnel_dns
+            report['phase'] = 'TUNNEL_DNS_DIAGNOSTIC'
+            # Reserve an unlistening loopback port: this diagnostic exposes no
+            # application, even while the connector is registered at the edge.
+            with socket.socket() as reserved:
+                reserved.bind(('127.0.0.1', 0))
+                with tunnel(reserved.getsockname()[1], args.cloudflared.resolve(), 60) as (host, _):
+                    samples = diagnose_tunnel_dns('https://' + host + '/api',
+                        on_sample=lambda sample:print(json.dumps(dict(sample, progress='TUNNEL_DNS_DIAGNOSTIC')), flush=True))
+            report.update(code='TUNNEL_DNS_DIAGNOSTIC_COMPLETE', diagnosticComplete=True, samples=samples)
+            print(json.dumps(report));return 0
         report['phase'] = 'PRIVATE_ENVIRONMENT'
         env = private_path(args.environment, False)
         try:plan = json.loads((env / 'fresh-plan.json').read_text())
