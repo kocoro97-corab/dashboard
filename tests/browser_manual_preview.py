@@ -107,8 +107,8 @@ with tempfile.TemporaryDirectory() as tmp:
                       const x=c.getContext('2d');x.fillStyle='white';x.fillRect(0,0,c.width,c.height);
                       x.fillStyle='black';x.font='40px "Noto Sans CJK KR"';
                       [['종목명',20,104],['수량',450,104],['매입가',700,104],
-                       ['KCC글라스',20,224],['7',450,248],['1,300',700,248],
-                       ['씨앤투스',20,384],['8',450,408],['2,400',700,408]].forEach(v=>x.fillText(...v));
+                       ['KCC글라스',20,224],['7',450,224],['1,300',700,224],
+                       ['씨앤투스',20,384],['8',450,384],['2,400',700,384]].forEach(v=>x.fillText(...v));
                       const w=(text,x,y,width=80)=>({text,bbox:{x0:x,x1:x+width,y0:y,y1:y+44}});
                       window.originalOcrRecognize=Tesseract.recognize;
                       Tesseract.recognize=async()=>({data:{text:'SYNTHETIC_FIRST_PASS',words:[
@@ -123,6 +123,30 @@ with tempfile.TemporaryDirectory() as tmp:
                     assert page.evaluate('EXT_ASSETS.length')==2
                     assert page.evaluate("EXT_ASSETS[0].quantity===7 && EXT_ASSETS[0].avgPrice===1300 && EXT_ASSETS[1].quantity===8 && EXT_ASSETS[1].avgPrice===2400")
                     assert page.evaluate("EXT_ASSETS[0].name==='KCC글라스' && EXT_ASSETS[1].name==='씨앤투스'")
+                    page.evaluate("""()=>{
+                      EXT_ASSETS=[];EXT_UNDO=[];renderExternalAssets();
+                      Tesseract.recognize=async()=>({data:{text:'SYNTHETIC_BAD_HEADER',words:[
+                        {text:'머리글오독',bbox:{x0:20,x1:200,y0:60,y1:104}}]}});
+                    }""")
+                    page.locator('#externalUploadBtn').click()
+                    page.wait_for_function("()=>!$('externalUploadBtn').disabled",timeout=120000)
+                    assert '재인식 머리글 확인' in page.locator('#externalOcrDiagnostics').inner_text(),page.locator('#externalOcrDiagnostics').inner_text()
+                    assert page.evaluate('EXT_ASSETS.length')==2
+                    assert page.evaluate("EXT_ASSETS[0].quantity===7&&EXT_ASSETS[0].avgPrice===1300&&EXT_ASSETS[1].quantity===8&&EXT_ASSETS[1].avgPrice===2400")
+                    assert page.evaluate("EXT_ASSETS[0].name==='KCC글라스'&&EXT_ASSETS[1].name==='씨앤투스'")
+                    # Retry remains bounded and cannot invent a missing header.
+                    page.evaluate("""()=>{
+                      EXT_ASSETS=[];EXT_UNDO=[];renderExternalAssets();
+                      window.originalOcrWorker=Tesseract.createWorker;window.failedLayoutAttempts=0;
+                      Tesseract.createWorker=async()=>{window.failedLayoutAttempts++;return {
+                        setParameters:async()=>{},recognize:async()=>({data:{text:'SYNTHETIC_MISSING_HEADERS',words:[]}}),terminate:async()=>{}
+                      }};
+                    }""")
+                    page.locator('#externalUploadBtn').click()
+                    page.wait_for_function("()=>!$('externalUploadBtn').disabled",timeout=120000)
+                    assert page.evaluate('EXT_ASSETS.length===0&&window.failedLayoutAttempts===1')
+                    assert '재인식 실패' in page.locator('#externalOcrDiagnostics').inner_text()
+                    page.evaluate('Tesseract.createWorker=window.originalOcrWorker;delete window.originalOcrWorker')
                     page.evaluate('Tesseract.recognize=window.originalOcrRecognize;delete window.originalOcrRecognize')
                     assert len(gas.calls)==baseline
                     page.evaluate('logout()');page.wait_for_selector('#authGuard',state='visible')

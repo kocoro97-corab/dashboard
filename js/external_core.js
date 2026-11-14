@@ -65,9 +65,11 @@
   function parse(data,accountType,index){
     if(!TYPES.has(accountType))throw Error('알 수 없는 계좌 구분');
     const all=words(data),rejected=[],warnings=[];
-    if(!all.length)return {holdings:[],rejected,warnings:['좌표가 포함된 OCR 결과가 필요합니다. 원문만으로 수량을 추측하지 않습니다.']};
+    if(!all.length)return {holdings:[],rejected,layoutVerified:false,headerChecks:{name:false,quantity:false,avgPrice:false},warnings:['좌표가 포함된 OCR 결과가 필요합니다. 원문만으로 수량을 추측하지 않습니다.']};
     const heights=all.map(w=>w.h).sort((a,b)=>a-b),height=heights[Math.floor(heights.length/2)],tolerance=Math.max(2,height*.45);
-    const headerText=w=>norm(w.text).replace(/[.:·ㆍ;>＊*]/g,'');
+    // A reproduced label-only OCR confusion. This never normalizes a holding's
+    // name/code and still requires separate quantity/price headers + geometry.
+    const headerText=w=>norm(w.text).replace(/[.:·ㆍ;>＊*]/g,'').replace(/^송목명$/,'종목명');
     const isName=w=>/^(종목명|상품명|종명)$/.test(headerText(w));
     const isQty=w=>/^(잔고수량|보유수량|수량)$/.test(headerText(w));
     const isAvg=w=>/^(평균매입가|평균매수가|평균매입단가|평단가|매입가)$/.test(headerText(w));
@@ -90,7 +92,8 @@
       const q=nearby.find(isQty),a=nearby.find(isAvg);
       if(q&&a&&q.x!==a.x&&n.x<q.x&&n.x<a.x){headers={name:n,quantity:q,avgPrice:a};break}
     }
-    if(!headers)return {holdings:[],rejected,warnings:['종목명·수량·평균매입가 머리글을 확인하지 못했습니다. 행을 추측하지 않습니다.']};
+    const headerChecks={name:headerWords.some(isName),quantity:headerWords.some(isQty),avgPrice:headerWords.some(isAvg)};
+    if(!headers)return {holdings:[],rejected,layoutVerified:false,headerChecks,warnings:['종목명·수량·평균매입가 머리글을 확인하지 못했습니다. 행을 추측하지 않습니다.']};
     const headerY=Math.max(...Object.values(headers).map(w=>w.y));
     const codeHeader=all.find(w=>norm(w.text)==='종목코드'&&Math.abs(w.y-headerY)<=height*2.5);if(codeHeader)headers.code=codeHeader;
     const knownHeader=w=>isName(w)||isQty(w)||isAvg(w)||/^(종목코드|현재가|평가금액|평가손익|수익률|매수구분|구분)$/.test(headerText(w));
@@ -136,7 +139,7 @@
       warnings.push('같은 종목의 서로 다른 OCR 값이 있습니다. 수량·평균매입가를 직접 확인하세요.');
       plan.conflicts.forEach(conflict=>{const row=plan.rows.find(x=>key(x)===key(conflict.after));if(row){row.quantity=null;row.avgPrice=null;row.needsReview=true}});
     }
-    return {holdings:plan.rows,rejected,warnings,conflicts:plan.conflicts,regions};
+    return {holdings:plan.rows,rejected,warnings,conflicts:plan.conflicts,regions,layoutVerified:true,headerChecks};
   }
   const key=row=>row.accountType+'|'+(row.code&&/^[A-Z0-9]{6}$/.test(row.code)?row.code:norm(row.name));
   const comparable=row=>JSON.stringify([row.accountType,norm(row.name),String(row.code||''),number(row.quantity),number(row.avgPrice)]);

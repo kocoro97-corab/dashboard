@@ -98,9 +98,32 @@ async function ocrImage(file){
   const localOptions=window.DevelopmentOCR?DevelopmentOCR.options:{};
   const result=await Tesseract.recognize(file,'kor+eng',{...localOptions,logger:m=>{if(m.status==='recognizing text')$('externalOcrProgress').textContent='이미지 인식 중 '+Math.round((m.progress||0)*100)+'%'}});
   let data=result.data||{text:''};
-  const regions=ExternalCore.parse(data,$('externalAccountType').value,EXT_MASTER).regions||[];
-  if(!regions.length||!EXT_MASTER||typeof Tesseract.createWorker!=='function')return data;
-  const bitmap=await createImageBitmap(file);
+  let parsed=ExternalCore.parse(data,$('externalAccountType').value,EXT_MASTER),layoutRetry='NOT_RUN',layoutRetryChecks=null,recognitionSource=file;
+  if(!parsed.layoutVerified&&typeof Tesseract.createWorker==='function'){
+    // One bounded alternate segmentation on the SAME image. Never infer a
+    // missing header from another file, saved holdings, names or numeric values.
+    let worker;layoutRetry='FAIL';
+    $('externalOcrProgress').textContent='머리글 재확인 · 같은 이미지를 확대 분석 중...';
+    try{
+      const source=await createImageBitmap(file);let enlarged;
+      try{
+        const scale=Math.min(2,Math.sqrt(12000000/(source.width*source.height)));
+        if(scale<1)throw new Error('OCR_IMAGE_LIMIT');
+        enlarged=document.createElement('canvas');enlarged.width=Math.floor(source.width*scale);enlarged.height=Math.floor(source.height*scale);
+        const ctx=enlarged.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,enlarged.width,enlarged.height);ctx.drawImage(source,0,0,enlarged.width,enlarged.height);
+      }finally{source.close()}
+      worker=await Tesseract.createWorker('kor+eng',1,localOptions);
+      await worker.setParameters({tessedit_pageseg_mode:'6'});
+      const alternate=await worker.recognize(enlarged),candidate=alternate.data||{text:''};
+      const check=ExternalCore.parse(candidate,$('externalAccountType').value,EXT_MASTER);
+      layoutRetryChecks=check.headerChecks;
+      if(check.layoutVerified){data=candidate;parsed=check;layoutRetry='PASS';recognitionSource=enlarged}
+    }catch(error){/* Keep original evidence and fail closed if retry is unavailable. */}
+    finally{if(worker)await worker.terminate()}
+  }
+  const regions=parsed.regions||[];
+  if(!regions.length||!EXT_MASTER||typeof Tesseract.createWorker!=='function')return {...data,layoutRetry,layoutRetryChecks};
+  const bitmap=await createImageBitmap(recognitionSource);
   try{
     const crops=regions.slice(0,12).map(region=>{
       const canvas=document.createElement('canvas'),scale=2;
@@ -121,7 +144,7 @@ async function ocrImage(file){
   }catch(error){
     // Optional refinement must preserve the original candidates for user review.
   }finally{bitmap.close()}
-  return data;
+  return {...data,layoutRetry,layoutRetryChecks};
 }
 // No guessed names, hardcoded symbol mappings, or destructive saved-row normalization.
 function extNormalizeOcrName(v){return String(v||'').trim()}
@@ -136,10 +159,11 @@ function suggestExternalNames(query){
 }
 function extSyncWithNH(){extResolveCodes();renderExternalAssets();if(EXT_PRICE_BUSY){EXT_PRICE_PENDING=true;return}if(EXT_ASSETS.some(x=>x.match.status==='matched'))refreshExternalPrices(true)}
 function parseExternalOcr(data,accountType){const result=ExternalCore.parse(data,accountType,EXT_MASTER);window.EXT_OCR_WARNINGS=result.warnings;return result.holdings}
-function showOcrReview(texts){
+function showOcrReview(texts,summaries=[]){
   let el=$('externalOcrReview');if(!el){el=document.createElement('div');el.id='externalOcrReview';$('externalOcrProgress').after(el)}
   el.innerHTML='<details><summary style="cursor:pointer;margin:8px 0">OCR 원문 보기</summary><div class="mini" style="margin:8px 0">종목명·수량·평균매입가를 확인하세요. 코드가 빈 종목은 직접 입력할 수 있습니다.</div><textarea id="externalOcrRaw" rows="7" style="width:100%;box-sizing:border-box" readonly></textarea></details>';
   $('externalOcrRaw').value=texts.join('\n\n----- 이미지 구분 -----\n\n').slice(0,18000);
+  if(window.DevelopmentOCR&&summaries.length){const p=document.createElement('p');p.id='externalOcrDiagnostics';p.className='mini';p.textContent=summaries.join(' / ');el.prepend(p)}
 }
 
 async function processExternalUploads(){
@@ -147,9 +171,22 @@ async function processExternalUploads(){
   const files=Array.from(($('externalImageFiles').files||[]));if(!files.length){alert('캡처 이미지를 선택하세요.');return}
   if(window.DevelopmentOCR&&(files.length>5||files.some(f=>f.size>10*1024*1024))){alert('개발 OCR은 한 번에 이미지 5개, 파일당 10MB 이하만 처리합니다.');return}
   if(files.some(f=>!/^image\//.test(f.type))){alert('이미지 파일만 업로드할 수 있습니다.');return}
-  const btn=$('externalUploadBtn');btn.disabled=true;let all=[],texts=[];
-  try{for(let i=0;i<files.length;i++){ $('externalOcrProgress').textContent=(i+1)+'/'+files.length+' 이미지 분석 중...';const data=await ocrImage(files[i]);if(session!==LS('invest_session_token'))return;texts.push(data.text||'');all=all.concat(parseExternalOcr(data,$('externalAccountType').value));}
-    showOcrReview(texts);if((window.EXT_OCR_WARNINGS||[]).length)$('externalOcrProgress').textContent=window.EXT_OCR_WARNINGS.join(' · ');if(!all.length){$('externalOcrProgress').textContent=(window.EXT_OCR_WARNINGS||[]).join(' · ')||'종목을 인식하지 못했습니다. 머리글과 동일 행의 수량·평균매입가를 확인하세요.';return}
+  const btn=$('externalUploadBtn');btn.disabled=true;let all=[],texts=[],summaries=[];
+  try{
+    for(let i=0;i<files.length;i++){
+      $('externalOcrProgress').textContent=(i+1)+'/'+files.length+' 이미지 분석 중...';
+      const data=await ocrImage(files[i]);if(session!==LS('invest_session_token'))return;
+      texts.push(data.text||'');
+      const parsed=ExternalCore.parse(data,$('externalAccountType').value,EXT_MASTER);
+      window.EXT_OCR_WARNINGS=parsed.warnings;all=all.concat(parsed.holdings);
+      const checks=data.layoutRetryChecks||parsed.headerChecks;
+      const labels=checks?Object.entries({name:'종목명',quantity:'수량',avgPrice:'매입가'})
+        .map(([key,label])=>label+(checks[key]?' 확인':' 미확인')).join(' · '):'';
+      summaries.push((i+1)+'번 이미지: 머리글 '+(parsed.layoutVerified?'확인':'미확인')+' · 후보 '+parsed.holdings.length+'개'
+        +(data.layoutRetry==='NOT_RUN'?'':' · 재인식 '+(data.layoutRetry==='PASS'?'머리글 확인':'실패'))
+        +(!parsed.layoutVerified?' · '+labels:''));
+    }
+    showOcrReview(texts,summaries);if((window.EXT_OCR_WARNINGS||[]).length)$('externalOcrProgress').textContent=window.EXT_OCR_WARNINGS.join(' · ');if(!all.length){$('externalOcrProgress').textContent=(window.EXT_OCR_WARNINGS||[]).join(' · ')||'종목을 인식하지 못했습니다. 머리글과 동일 행의 수량·평균매입가를 확인하세요.';return}
     if(!extImport(all))return;extResolveCodes();renderExternalAssets();$('externalOcrProgress').textContent=window.DevelopmentOCR?'인식 후보 '+all.length+'개 · 수량·평균매입가를 확인하세요. 임시 목록만 사용하며 저장·Drive는 차단됩니다.':'인식 후보 '+all.length+'개 · 수량·평균매입가를 확인·수정하고 [인식자료 저장]을 누르세요. 종목코드는 비워도 저장됩니다.'+(window.EXT_OCR_WARNINGS||[]).join(' · ');showExternalSaveButton();
   }catch(e){$('externalOcrProgress').textContent='이미지 인식 실패 · '+SafeDiagnostics.message(e)}finally{btn.disabled=false}
 }

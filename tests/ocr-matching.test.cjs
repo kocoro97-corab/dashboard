@@ -60,8 +60,10 @@ test('OCR does not steal numbers from adjacent cash or quantity-only rows',()=>{
   assert.equal(row.quantity,null);assert.equal(row.avgPrice,null);assert.equal(row.needsReview,true);
 });
 test('missing headers or missing word coordinates do not trigger positional guessing',()=>{
+  assert.equal(core.parse({text:'synthetic text only'},'ISA',index).layoutVerified,false);
   assert.equal(core.parse({text:'카카오 10 100'},'ISA',index).holdings.length,0);
   const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/irp-ocr.json')));
+  assert.equal(core.parse(fixture.data,fixture.accountType,index).layoutVerified,true);
   fixture.data.words=fixture.data.words.filter(x=>x.bbox.y0!==180);
   assert.match(core.parse(fixture.data,'IRP',index).warnings[0],/머리글/);
 });
@@ -120,4 +122,14 @@ test('the overlap allowance never fills values from a nonoverlapping numeric lin
     w('카카오',20,200),w('7',450,224),w('1,300',700,224)]},'ISA',index);
   assert.equal(result.holdings.length,1);assert.equal(result.holdings[0].quantity,null);
   assert.equal(result.holdings[0].avgPrice,null);assert.equal(result.holdings[0].needsReview,true);
+});
+test('reproduced name-header OCR confusion is accepted only with the other verified columns',()=>{
+  const w=(text,x,y)=>({text,bbox:{x0:x,x1:x+100,y0:y,y1:y+20}});
+  const words=[w('송목명',20,100),w('수량',450,100),w('매입가',700,100),
+    w('카카오',20,200),w('7',450,200),w('1,300',700,200)];
+  assert.equal(core.parse({words},'ISA',index).layoutVerified,true);
+  const failed=core.parse({words:words.filter(w=>w.text!=='매입가')},'ISA',index);
+  assert.equal(failed.layoutVerified,false);assert.equal(failed.holdings.length,0);
+  assert.deepEqual(failed.headerChecks,{name:true,quantity:true,avgPrice:false});
+  assert.equal(core.match({name:'송목명'},index).code,null);
 });

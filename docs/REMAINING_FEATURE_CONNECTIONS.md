@@ -114,3 +114,30 @@ and Korean names were recovered while synthetic quantities/average prices were
 preserved; no financial HTTP/storage calls occurred. The owner's original
 captures, raw text and numeric holdings were not stored in the repository.
 Confirmation against those captures remains pending development publication.
+
+## Missing-header recovery
+
+A subsequent owner screen still reported missing column headers. The public
+development marker and core asset were checked: efadd81 was deployed, so this was
+not established as a stale-code issue. Header failure returns no name regions,
+preventing the earlier crop refinement from running at all.
+
+Only when the first pass fails layout verification, OCR now makes one alternate
+pass over the same image: enlarge at most 2x within a 12-megapixel canvas cap,
+using the existing kor+eng worker in single-block segmentation mode. The alternate
+result is accepted only when all three headers and their geometry verify. Crop
+refinement then uses that enlarged source too, preserving its coordinate system.
+If verification still fails, original evidence remains and no rows are inferred
+from another image, saved values, expected stock names or a known account total.
+
+Actual engine comparisons on synthetic text showed a name-header read as
+`송목명`. This exact label-only variant is normalized for header detection, still
+requiring independent quantity/price labels and geometry; holding identity
+matching is unchanged. No financial value/name substitution was added.
+
+Development review now reports image number, candidate count, recovery status,
+and which of the three labels remain missing. It does not report filenames,
+holdings values or tokens, and logout clears it with the existing review panel.
+Synthetic actual-worker tests at 344/1440px cover missing first-pass headers,
+recovered labels/values/crop names, and a forced failed retry that runs exactly
+once and creates zero rows. Real owner capture confirmation remains pending.
