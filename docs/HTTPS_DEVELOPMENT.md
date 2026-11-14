@@ -228,8 +228,11 @@ the next. The working allocation stays open for actual connection; the final
 `HTTPS_DEV_READY` includes `allocationAttempt`. No separate diagnostic run or
 Pages republication is required.
 
-A public A-record answer with a system failure, unavailable diagnostic service,
-DNS SERVFAIL, failed controls or proxy-DNS failure stops with enriched evidence.
+A public A-record answer with a system failure and healthy controls now retains
+the same tunnel for up to 60 additional seconds of system-DNS-only waiting, within
+the original access lifetime (HTTPS_LOCAL_DNS_WAIT). Persistent failure stops with
+localWaitAttempted=true. Unavailable diagnostic service, DNS SERVFAIL, failed
+controls or proxy-DNS failure stops with enriched evidence.
 HTTP, TLS, CORS, authentication and failures after readiness never trigger an
 allocation replacement. The only repeated operation is allocating an unpublished
 credential-gated development tunnel after verified DNS absence. No login or

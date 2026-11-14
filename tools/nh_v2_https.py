@@ -125,7 +125,7 @@ def ready_public_relay(relay, access_code, binary, lifetime, on_progress):
     At most three allocations, with full cleanup between them. Authentication,
     metadata POST, HTTP/CORS and caller/browser failures are never retried here.
     """
-    from nh_v2_https_browser import probe, public_dns_status
+    from nh_v2_https_browser import probe, public_dns_status, wait_for_dns
     for attempt in range(1, 4):
         public = PublicDevelopment(relay, PAGE, access_code, lifetime=lifetime)
         with serve(public, binary, lifetime) as (endpoint, process):
@@ -142,10 +142,25 @@ def ready_public_relay(relay, access_code, binary, lifetime, on_progress):
                 evidence = dict(error.evidence, publicDns=status, allocationAttempt=attempt)
                 missing = status in ('NXDOMAIN', 'NO_A_RECORD')
                 controls = evidence.get('tunnelApiDns') is True and evidence.get('pagesDns') is True
-                if not (missing and controls and attempt < 3):
+                if status == 'ANSWER' and controls:
+                    # The name exists publicly: keep THIS connector alive while
+                    # the system resolver catches up. No alternate-IP connection,
+                    # resolver changes or credential-bearing HTTP is retried.
+                    remaining=min(60,max(0,public.deadline-public.clock()))
+                    on_progress(dict(evidence,progress='HTTPS_LOCAL_DNS_WAIT',waitLimitSeconds=int(remaining)))
+                    try:
+                        wait_for_dns(endpoint,timeout=remaining,interval=8,max_attempts=8)
+                        dns=probe(endpoint, access_code,
+                            on_dns_wait=lambda info:on_progress(dict(info,progress='HTTPS_DNS_WAIT')),
+                            on_edge_wait=lambda info:on_progress(dict(info,progress='HTTPS_EDGE_WAIT')))
+                    except HttpsProbeFailure as pending:
+                        raise HttpsProbeFailure(pending.code,dict(pending.evidence,publicDns=status,
+                            allocationAttempt=attempt,localWaitAttempted=True)) from None
+                elif missing and controls and attempt < 3:
+                    on_progress(dict(evidence, progress='HTTPS_TUNNEL_REALLOCATING'))
+                    continue  # Context cleanup closes the failed allocation first.
+                else:
                     raise HttpsProbeFailure(error.code, evidence) from None
-                on_progress(dict(evidence, progress='HTTPS_TUNNEL_REALLOCATING'))
-                continue  # Context cleanup closes the failed allocation first.
             dns = dict(dns, allocationAttempt=attempt)
             # Deliberately outside the probe exception handler: no retry after
             # yielding, when the owner/browser may already have authenticated.

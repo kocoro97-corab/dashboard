@@ -131,3 +131,25 @@ will publish the reviewed commit (including the marker required by the existing
 verifier), restart the SAME relay with --public-market --verify-market, and
 confirm public display. No repeat diagnostic mode or test GAS redeployment is
 needed. Until that result, complete Pages-to-market verification remains NOT_RUN.
+
+## Public record exists but system DNS still fails
+
+The owner again observed system errno -2 while both control names resolve and
+Cloudflare DNS reports ANSWER for the same allocated tunnel. This establishes a
+system/public-resolver discrepancy; negative caching versus resolver policy is
+not yet determined. It occurs before any public-market HTTP probe.
+
+Startup now retains that same connector and waits for system DNS for up to 60
+additional seconds (8 checks, 8-second intervals), bounded by the original public
+access deadline. It prints HTTPS_LOCAL_DNS_WAIT. Only when system DNS resolves
+does it continue the existing HTTPS/CORS/metadata probe. The initial failed probe
+stopped before HTTP, so credentials or metadata POSTs are not replayed. No new
+allocation is made for this condition. Persistent failure closes cleanly with
+localWaitAttempted=true; resolver/DNS/proxy/TLS settings and fallback IPs are
+unchanged. Existing missing-public-record reallocation remains bounded separately.
+
+This launcher-only change does not require Pages publication. Start the normal
+launcher with --public-market, keep the terminal open after HTTPS_DEV_READY, and
+use the new endpoint in the existing development page. This avoids repeating the
+already-passed login/session verification; a subsequent actual data display still
+needs owner confirmation. Market transport and GAS settings remain unchanged.

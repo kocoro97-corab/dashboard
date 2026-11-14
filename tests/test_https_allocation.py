@@ -19,7 +19,7 @@ class AllocationTests(unittest.TestCase):
     def setUp(self):
         self.boundaries = [];self.events = [];self.progress = Mock()
         def boundary(*a, **k):
-            app = Mock();self.boundaries.append(app);return app
+            app = Mock();app.clock=lambda:0;app.deadline=60;self.boundaries.append(app);return app
         @contextmanager
         def serve(app, *a):
             if len(self.boundaries) > 1:self.boundaries[-2].close.assert_called_once()
@@ -30,6 +30,8 @@ class AllocationTests(unittest.TestCase):
                 app.close();self.events.append(('close', n))
         for name, replacement in [('PublicDevelopment', boundary), ('serve', serve)]:
             p = patch.object(launcher, name, replacement);p.start();self.addCleanup(p.stop)
+        p=patch('nh_v2_https_browser.wait_for_dns',side_effect=self.failure())
+        self.waiter=p.start();self.addCleanup(p.stop)
 
     def ready(self):
         return launcher.ready_public_relay(Mock(), SECRET, Path('/synthetic/binary'), 60, self.progress)
@@ -102,3 +104,27 @@ class AllocationTests(unittest.TestCase):
                 self.assertEqual(len(self.boundaries), before + 1)
                 probe.assert_called_once();dns.assert_not_called()
                 self.boundaries[-1].close.assert_called_once()
+
+    def test_public_answer_keeps_same_tunnel_until_local_resolution_and_single_metadata_probe(self):
+        self.waiter.side_effect=None
+        self.waiter.return_value={'attempts':2}
+        with patch('nh_v2_https_browser.probe',side_effect=[self.failure(),{'attempts':1}]) as probe, \
+             patch('nh_v2_https_browser.public_dns_status',return_value='ANSWER'):
+            with self.ready() as (endpoint,process,public,dns):
+                self.assertEqual(len(self.boundaries),1)
+                self.assertEqual(dns['allocationAttempt'],1)
+                public.close.assert_not_called()
+        self.assertEqual(probe.call_count,2)  # First exits before HTTP at DNS stage.
+        self.assertEqual(probe.call_args_list[0].args,probe.call_args_list[1].args)
+        self.waiter.assert_called_once_with('https://synthetic-1.trycloudflare.com/api',timeout=60,interval=8,max_attempts=8)
+        self.assertEqual(self.progress.call_args.args[0]['progress'],'HTTPS_LOCAL_DNS_WAIT')
+        self.assertNotIn(SECRET,json.dumps(self.progress.call_args.args))
+
+    def test_expired_local_wait_closes_without_another_http_probe_or_allocation(self):
+        with patch('nh_v2_https_browser.probe',side_effect=self.failure()) as probe, \
+             patch('nh_v2_https_browser.public_dns_status',return_value='ANSWER'):
+            with self.assertRaises(HttpsProbeFailure) as caught:
+                with self.ready():self.fail('LOCAL_DNS_NOT_READY')
+        self.assertTrue(caught.exception.evidence['localWaitAttempted'])
+        self.assertEqual(probe.call_count,1);self.assertEqual(len(self.boundaries),1)
+        self.boundaries[0].close.assert_called_once()
