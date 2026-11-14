@@ -23,13 +23,14 @@ def build(output, root=ROOT):
     text = '\n'.join(line for line in text.splitlines() if 'https://cdn.jsdelivr.net/npm/tesseract' not in line)
     text = text.replace('<head>', '<head>\n<meta name="referrer" content="strict-origin-when-cross-origin">\n'
         '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; '
-        'script-src \'self\' \'unsafe-inline\'; style-src \'self\' \'unsafe-inline\'; '
-        'img-src \'self\' data:; connect-src \'self\' https://*.trycloudflare.com; '
-        'frame-src \'none\'; worker-src \'none\'; form-action \'none\'; base-uri \'none\'">')
+        'script-src \'self\' \'unsafe-inline\' \'wasm-unsafe-eval\'; style-src \'self\' \'unsafe-inline\'; '
+        'img-src \'self\' data:; connect-src \'self\' data: https://*.trycloudflare.com; '
+        'frame-src \'none\'; worker-src \'self\'; form-action \'none\'; base-uri \'none\'">')
     marker = '<script src="js/transport.js?v=1"></script>'
     if text.count(marker) != 1:
         raise ValueError('DEV_TRANSPORT_MARKER_CHANGED')
     text = text.replace(marker, '<script>window.MYINVEST_TRANSPORT_CONFIG={mode:"relay",endpoint:"",devSession:true};</script>\n<script src="js/dev_market.js?v=1"></script>\n<script src="js/dev_inspection.js?v=1"></script>\n<script src="js/dev_connect.js?v=1"></script>\n' + marker)
+    text = text.replace(marker, '<script src="vendor/ocr/tesseract.min.js"></script>\n<script src="js/dev_ocr.js?v=1"></script>\n'+marker)
     text = re.sub(r'(src="js/[^"?]+\?[^" ]+)(")', lambda m: m[1] + '&dev=' + revision[:12] + m[2], text)
     (output / 'index.html').write_text(text)
     assets = {'js': set(re.findall(r'src="js/([A-Za-z0-9_-]+\.js)', text)),
@@ -48,6 +49,16 @@ def build(output, root=ROOT):
                 shutil.copyfile(source, target / source.name)
     (output / 'data').mkdir()
     shutil.copyfile(root / 'data/krx-instruments.json', output / 'data/krx-instruments.json')
+    ocr = root / 'vendor/ocr'
+    pinned = json.loads((ocr / 'manifest.json').read_text())
+    for name, digest in pinned['sha256'].items():
+        source = ocr / name
+        if source.is_symlink() or source.parent != ocr or hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+            raise ValueError('DEV_OCR_ASSET_INVALID')
+        target = output / 'vendor/ocr' / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+    shutil.copyfile(ocr / 'manifest.json', output / 'vendor/ocr/manifest.json')
     (output / '.nojekyll').write_text('')
     (output / 'robots.txt').write_text('User-agent: *\nDisallow: /\n')
     (output / 'development-only.json').write_text(json.dumps({'myinvestDevelopmentOnly': True, 'authOnly': False, 'publicMarketCapable': True, 'nhAccountQueries': False, 'storageWrites': False, 'screenInspection': True, 'sourceBranch': 'feat/nh-integration-v2', 'sourceCommit': revision}))

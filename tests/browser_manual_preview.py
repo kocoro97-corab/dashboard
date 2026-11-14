@@ -1,5 +1,6 @@
 """Changed local-draft UI only. Synthetic authentication; zero account/store calls."""
 import json
+import base64
 from pathlib import Path
 import sys
 import tempfile
@@ -70,7 +71,7 @@ with tempfile.TemporaryDirectory() as tmp:
                 assert page.evaluate('EXT_ASSETS[0].quantity')==3
                 page.locator('#externalUndoBtn').click();assert page.evaluate('EXT_ASSETS[0].quantity')==2
                 assert len(gas.calls)==baseline  # Add/edit/undo do not call GAS, NH or storage.
-                assert page.locator('#externalUploadBtn').is_disabled() and page.locator('#externalDriveFolder').is_disabled()
+                assert page.locator('#externalUploadBtn').is_enabled() and page.locator('#externalDriveFolder').is_disabled()
                 assert page.locator('#nhAccountBtn').is_disabled() and page.locator('#externalAutoRefresh').is_disabled()
                 page.locator('#externalManualName').fill('SYNTHETIC_PRIVATE_UNSAVED_INPUT')
                 page.evaluate('logout()');page.wait_for_selector('#authGuard',state='visible')
@@ -78,6 +79,30 @@ with tempfile.TemporaryDirectory() as tmp:
                 for name in ('Code','Name','Qty','Avg'):assert page.locator('#externalManual'+name).input_value()==''
                 login();assert page.evaluate('EXT_ASSETS.length')==0
                 assert '미조회' in page.locator('#externalAssetRows').inner_text()
+                if '--real-ocr' in sys.argv:
+                    # Synthetic image only; execute the actual pinned worker/core/kor+eng.
+                    image=page.evaluate("""async()=>{
+                      await document.fonts.ready;
+                      const c=document.createElement('canvas');c.width=1150;c.height=260;
+                      const x=c.getContext('2d');x.fillStyle='white';x.fillRect(0,0,c.width,c.height);
+                      x.fillStyle='black';x.font='36px "Noto Sans CJK KR"';
+                      [['종목명',40,70],['수량',520,70],['평균매입가',800,70],
+                       ['카카오',40,160],['2',540,160],['1,000',840,160]].forEach(v=>x.fillText(...v));
+                      return c.toDataURL('image/png').split(',')[1];
+                    }""")
+                    baseline=len(gas.calls)
+                    page.locator('#externalImageFiles').set_input_files({'name':'synthetic-only.png','mimeType':'image/png','buffer':base64.b64decode(image)})
+                    page.locator('#externalUploadBtn').click()
+                    page.wait_for_function("()=>!$('externalUploadBtn').disabled",timeout=120000)
+                    assert page.evaluate('EXT_ASSETS.length')==1,page.locator('#externalOcrProgress').inner_text()
+                    assert page.evaluate("EXT_ASSETS[0].quantity===2 && EXT_ASSETS[0].avgPrice===1000")
+                    assert page.locator('#externalSaveBtn').is_disabled() and page.locator('#externalDriveFolder').is_disabled()
+                    assert len(gas.calls)==baseline
+                    assert page.locator('#externalOcrRaw').input_value()
+                    page.evaluate('logout()');page.wait_for_selector('#authGuard',state='visible')
+                    assert page.locator('#externalImageFiles').input_value()==''
+                    assert page.locator('#externalOcrRaw').count()==0
+                    print('PASS: actual local kor+eng OCR engine on synthetic image; review/quantity/price; no financial HTTP/storage; '+str(width)+'px')
                 assert set(gas.calls)<={'appVersion','login','sessionInfo','logout'}
                 assert not unexpected and not errors,(unexpected,errors)
                 context.close()

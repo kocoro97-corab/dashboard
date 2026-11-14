@@ -8,7 +8,8 @@ same branch, dev Pages and active relay; no GAS or authentication settings chang
 |---|---|---|
 | Manual entry | addExternalManual → validate/merge/confirm → local EXT_ASSETS → edit/undo | Development UI now enables in-memory preview only |
 | Save | reviewed draft + revision → saveExternalHoldings → AccountStoreV2 | Existing implementation preserved; button disabled and relay denies the action |
-| OCR | Tesseract → parseExternalOcr → review → local draft | Parser/review implemented; exported dev artifact omits the external engine and workers |
+| OCR | Local Tesseract → existing parseExternalOcr → review → local draft | Connected in development artifact; actual engine tested with synthetic images; real user captures not yet tested |
+| NH account inquiry | Existing nhAccounts → domestic/overseas balance | Owner-private inquiry-only command prepared; public relay still blocks accounts; live check awaits owner authentication |
 | Drive | frontend externalDriveImages → OCR/review | Current isolated GAS bridge has no handler; relay also denies the action |
 | Index settings | local LS invest_cfg_v4 + refresh | Implemented but save remains disabled; not executed |
 | External settings | local LS + optional NH refresh timer | Implemented but controls remain disabled; not executed |
@@ -25,11 +26,11 @@ balances. Price fields remain unconfirmed because NH requests are not enabled.
 Existing UI cleanup is extended in this development adapter to clear manual
 inputs and autocomplete suggestions on logout. Every login starts empty inputs;
 no private values persist through a new session. No token/authentication logic
-or server permission rule is rewritten. Other account/Drive/OCR/settings controls
+or server permission rule is rewritten. Other account/Drive/settings controls
 remain disabled. The server independently rejects account/store/NH operations.
 
 Synthetic browser checks at 344/1440 px add ISA/PENSION/IRP rows, edit quantity,
-undo, confirm save/Drive/OCR/NH controls remain blocked, and confirm logout/new
+undo, confirm save/Drive/NH controls remain blocked, and confirm logout/new
 login removes the local draft and inputs. The add/edit/undo portion makes zero GAS
 requests; the complete fake gateway sees auth actions only. No real data was
 entered, saved, changed or transmitted. No actual NH or order request was made.
@@ -46,8 +47,45 @@ currently dispatches only its existing NH actions, and Security.gs has no Drive
 handler. Widening the relay alone cannot connect it. Production private source
 was not read; no claim is made about the operating Drive implementation.
 
-Next: publish this frontend together with the pending chart cache if desired,
-keeping the active relay alive. Real OCR needs a reviewed/pinned local engine and
-worker/model asset/CSP connection; Drive needs a defined test handler and existing
-Google permissions review. Neither is implemented or opened here. Actual account
-reads, persistence and NH remain separately unauthorized.
+## Account inquiry and OCR connection
+
+The owner authorized account inquiry and OCR testing, deferring Drive to the last
+development phase. No GAS source, Properties, Sheet, auth or relay allowlist is
+changed. `nh_v2_live_check.py --account-inquiry-only --browser` reuses existing
+source/deployment/binding preflight, requires the existing dedicated admin, calls
+nhAccounts once, validates identity/currency/partial results and logs out. It does
+not capture/read/restore snapshots, request extra quotes, or write holdings. The
+existing PC/mobile adapter compares that one response in an intercepted private
+local browser; it does not send financial data through Cloudflare. Report fields
+are status flags only. Live NH validation remains NOT_RUN here without the owner
+Cloud Shell authentication. The public developer account button remains blocked;
+financial data transport through a public relay has not been opened.
+
+The development artifact includes official Tesseract.js/core 5.1.1 and pinned
+eng/kor 1.0.0 best_int models (about 12.6 MB). Package SHA-512 and file SHA-256 are
+recorded in `vendor/ocr/manifest.json`; build verifies every exported runtime file.
+The engine and worker licenses are included. Only those allowlisted files ship;
+no package install scripts run. All OCR assets come from the same Pages origin,
+with no CDN scripts or image upload. CSP permits same-origin workers and WASM
+compilation; ordinary eval and cross-origin workers remain disallowed. Embedded
+WASM uses data: fetch. No browser flags or CORS/security bypasses are used.
+
+`DevelopmentOCR` supplies the same fixed worker/core/language options to existing
+recognition and crop refinement; models use no IndexedDB cache. Development UI
+enables file selection/recognition only, capped at five images/10 MB each. Existing
+review/merge/undo is reused, with save/Drive/NH price controls blocked. Logout
+clears file selection, review/raw text, draft and warnings. No OCR values are
+stored by this integration. Static asset browser caching contains models only.
+
+Changed-scope results: account-inquiry unit cases 4 PASS; development security /
+artifact cases 14 PASS; existing OCR matching cases PASS. Actual local kor+eng
+engine recognized a generated Korean table into review/quantity/average price at
+344 and 1440 px, without financial HTTP/store requests. Synthetic domestic and
+overseas balances matched both display adapters with one fake inquiry. These are
+not live NH, real capture, or physical Fold6 results.
+
+Next: publish the existing development artifact from the owner Cloud Shell in a
+second terminal, keeping a working HTTPS relay open. Run the inquiry-only owner
+command once, and try OCR with one local capture on PC/Fold6 without sharing the
+image or raw results in chat. Drive, persistence and public financial transport
+remain closed; no new project, production deployment or merge is needed.

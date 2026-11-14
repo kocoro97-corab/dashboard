@@ -144,6 +144,10 @@ class PublicDevTests(unittest.TestCase):
             self.assertIn('Content-Security-Policy', text)
             self.assertIn('name="referrer" content="strict-origin-when-cross-origin"', text)
             self.assertNotIn('https://cdn.jsdelivr.net/npm/tesseract', text)
+            self.assertIn('vendor/ocr/tesseract.min.js', text)
+            self.assertIn("worker-src 'self'", text)
+            self.assertIn("'wasm-unsafe-eval'", text)
+            self.assertNotIn("'unsafe-eval'", text)
             self.assertTrue(json.loads((out / 'development-only.json').read_text())['publicMarketCapable'])
             self.assertFalse(json.loads((out / 'development-only.json').read_text())['nhAccountQueries'])
             with self.assertRaises(ValueError):build(out)
@@ -152,8 +156,10 @@ class PublicDevTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / 'source';root.mkdir()
             shutil.copyfile(ROOT / 'index.html', root / 'index.html')
-            for folder in ('js', 'css', 'data'):shutil.copytree(ROOT / folder, root / folder)
+            for folder in ('js', 'css', 'data', 'vendor'):shutil.copytree(ROOT / folder, root / folder)
             (root / 'js/unreferenced-private.js').write_text('SYNTHETIC_PRIVATE_CANARY')
+            (root / 'vendor/ocr/unreferenced-private.txt').write_text('SYNTHETIC_PRIVATE_CANARY')
             with patch('build_dev_pages.subprocess.check_output', return_value='f' * 40):
                 manifest = build(Path(tmp) / 'public', root)
             self.assertNotIn('js/unreferenced-private.js', manifest)
+            self.assertNotIn('vendor/ocr/unreferenced-private.txt', manifest)

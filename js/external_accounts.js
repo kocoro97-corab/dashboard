@@ -95,7 +95,8 @@ function saveExternalSettings(){LS('invest_external_drive_folder',$('externalDri
 function applyExternalAutoRefresh(){if(EXT_AUTO_TIMER)clearInterval(EXT_AUTO_TIMER);EXT_AUTO_TIMER=null;const cfg=LS('invest_external_settings')||{};if(cfg.auto)EXT_AUTO_TIMER=setInterval(()=>refreshExternalPrices(true),Math.max(5,Number(cfg.minutes)||10)*60000)}
 async function ocrImage(file){
   if(!window.Tesseract)throw new Error('OCR 엔진을 불러오지 못했습니다. 인터넷 연결을 확인하세요.');
-  const result=await Tesseract.recognize(file,'kor+eng',{logger:m=>{if(m.status==='recognizing text')$('externalOcrProgress').textContent='이미지 인식 중 '+Math.round((m.progress||0)*100)+'%'}});
+  const localOptions=window.DevelopmentOCR?DevelopmentOCR.options:{};
+  const result=await Tesseract.recognize(file,'kor+eng',{...localOptions,logger:m=>{if(m.status==='recognizing text')$('externalOcrProgress').textContent='이미지 인식 중 '+Math.round((m.progress||0)*100)+'%'}});
   let data=result.data||{text:''};
   const regions=ExternalCore.parse(data,$('externalAccountType').value,EXT_MASTER).regions||[];
   if(!regions.length||!EXT_MASTER||typeof Tesseract.createWorker!=='function')return data;
@@ -111,7 +112,7 @@ async function ocrImage(file){
     });
     const readings={};
     for(const language of ['kor','eng']){
-      const worker=await Tesseract.createWorker(language);
+      const worker=await Tesseract.createWorker(language,1,localOptions);
       try{await worker.setParameters({tessedit_pageseg_mode:'7'});readings[language]=[];
         for(const canvas of crops){const reading=await worker.recognize(canvas.toDataURL());readings[language].push(reading.data)}
       }finally{await worker.terminate()}
@@ -144,11 +145,12 @@ function showOcrReview(texts){
 async function processExternalUploads(){
   const session=LS('invest_session_token');
   const files=Array.from(($('externalImageFiles').files||[]));if(!files.length){alert('캡처 이미지를 선택하세요.');return}
+  if(window.DevelopmentOCR&&(files.length>5||files.some(f=>f.size>10*1024*1024))){alert('개발 OCR은 한 번에 이미지 5개, 파일당 10MB 이하만 처리합니다.');return}
   if(files.some(f=>!/^image\//.test(f.type))){alert('이미지 파일만 업로드할 수 있습니다.');return}
   const btn=$('externalUploadBtn');btn.disabled=true;let all=[],texts=[];
   try{for(let i=0;i<files.length;i++){ $('externalOcrProgress').textContent=(i+1)+'/'+files.length+' 이미지 분석 중...';const data=await ocrImage(files[i]);if(session!==LS('invest_session_token'))return;texts.push(data.text||'');all=all.concat(parseExternalOcr(data,$('externalAccountType').value));}
     showOcrReview(texts);if((window.EXT_OCR_WARNINGS||[]).length)$('externalOcrProgress').textContent=window.EXT_OCR_WARNINGS.join(' · ');if(!all.length){$('externalOcrProgress').textContent=(window.EXT_OCR_WARNINGS||[]).join(' · ')||'종목을 인식하지 못했습니다. 머리글과 동일 행의 수량·평균매입가를 확인하세요.';return}
-    if(!extImport(all))return;extResolveCodes();renderExternalAssets();$('externalOcrProgress').textContent='인식 후보 '+all.length+'개 · 수량·평균매입가를 확인·수정하고 [인식자료 저장]을 누르세요. 종목코드는 비워도 저장됩니다.'+(window.EXT_OCR_WARNINGS||[]).join(' · ');showExternalSaveButton();
+    if(!extImport(all))return;extResolveCodes();renderExternalAssets();$('externalOcrProgress').textContent=window.DevelopmentOCR?'인식 후보 '+all.length+'개 · 수량·평균매입가를 확인하세요. 임시 목록만 사용하며 저장·Drive는 차단됩니다.':'인식 후보 '+all.length+'개 · 수량·평균매입가를 확인·수정하고 [인식자료 저장]을 누르세요. 종목코드는 비워도 저장됩니다.'+(window.EXT_OCR_WARNINGS||[]).join(' · ');showExternalSaveButton();
   }catch(e){$('externalOcrProgress').textContent='이미지 인식 실패 · '+SafeDiagnostics.message(e)}finally{btn.disabled=false}
 }
 function mergeExternalRows(base,add){return ExternalCore.merge(base,add).rows}

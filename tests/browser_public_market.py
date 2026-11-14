@@ -80,7 +80,7 @@ with tempfile.TemporaryDirectory() as tmp:
                 page.wait_for_function("()=>$('nl_mk').textContent.includes('SYNTHETIC NEWS ONLY')&&$('nl_hd').textContent.includes('SYNTHETIC NEWS ONLY')",timeout=20000)
                 page.wait_for_function('()=>QD.length===2')
                 assert page.locator('#mkBtn').is_enabled()
-                assert page.locator('#nhAccountBtn').is_disabled() and page.locator('#externalUploadBtn').is_disabled()
+                assert page.locator('#nhAccountBtn').is_disabled() and page.locator('#externalUploadBtn').is_enabled()
                 assert page.locator('button[onclick="saveSettings()"]').is_disabled()
                 assert page.evaluate('()=>Object.keys(Q).length>0')
                 assert '미조회' in page.locator('#nhAccountRows').inner_text()

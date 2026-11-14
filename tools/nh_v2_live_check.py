@@ -52,6 +52,52 @@ def preflight(directory, client=invoke, web=None, allow_same_source_tools=False)
     return web
 
 
+def verify_account_inquiry(web, username, password, display=False):
+    """One owner-private balance inquiry; no snapshots, holdings writes or relay."""
+    import math
+    import re
+    report = {'mode': 'OWNER_PRIVATE_ACCOUNT_INQUIRY', 'status': 'FAIL',
+              'phase': 'LOGIN',
+              'nhRequested': False, 'accountStoreWrites': False, 'orderCalls': 0,
+              'rawFinancialDataIncluded': False, 'publicRelayUsed': False,
+              'desktopAdapter': 'NOT_RUN', 'mobileAdapter': 'NOT_RUN'}
+    try:
+        login = web.call('login', **{'user': username, 'pass': password})
+        web.token = login.get('token')
+        if not web.token or not login.get('isAdmin') or login.get('mustChangePassword'):
+            raise Stop('DEDICATED_FRESH_ADMIN_REQUIRED')
+        report['nhRequested'] = True
+        report['phase'] = 'ACCOUNT_INQUIRY'
+        result = web.call('nhAccounts')
+        accounts = result.get('accounts')
+        if result.get('gatewayVersion') != 2 or not isinstance(accounts, list) or not accounts:
+            raise Stop('ACCOUNT_RESPONSE_NOT_CONFIRMED')
+        report['domestic'] = all(isinstance(a, dict) and isinstance(a.get('domestic'), dict) and a['domestic'].get('partial') is False and isinstance(a['domestic'].get('holdings'), list) for a in accounts)
+        report['overseas'] = all(isinstance(a, dict) and isinstance(a.get('overseas'), dict) and a['overseas'].get('partial') is False and isinstance(a['overseas'].get('holdings'), list) for a in accounts)
+        keys = [a.get('accountKey') for a in accounts if isinstance(a, dict)]
+        report['accountIdentity'] = len(keys) == len(accounts) and all(isinstance(k, str) and re.fullmatch(r'[a-f0-9]{64}', k) for k in keys) and len(set(keys)) == len(keys)
+        report['noPartialErrors'] = all(isinstance(a, dict) and a.get('errors') == [] for a in accounts)
+        rows = [(market, row) for a in accounts if isinstance(a, dict) for market in ('domestic', 'overseas') if isinstance(a.get(market), dict) and isinstance(a[market].get('holdings'), list) for row in a[market]['holdings']]
+        report['holdingIdentityAndCurrency'] = all(isinstance(r, dict) and isinstance(r.get('code'), str) and re.fullmatch(r'[A-Z0-9]{6}' if market == 'domestic' else r'[A-Za-z0-9][A-Za-z0-9._-]{0,14}', r['code']) and isinstance(r.get('currency'), str) and re.fullmatch('KRW' if market == 'domestic' else '[A-Z]{3}', r['currency']) and type(r.get('quantity')) in (int, float) and math.isfinite(r['quantity']) and r['quantity'] >= 0 for market, r in rows)
+        report['status'] = 'PASS' if all(report[k] for k in ('domestic', 'overseas', 'accountIdentity', 'noPartialErrors', 'holdingIdentityAndCurrency')) else 'FAIL'
+        if report['status'] != 'PASS':report['code'] = 'ACCOUNT_RESPONSE_NOT_CONFIRMED'
+        elif display:
+            # Feed the one response to the existing private browser adapter.
+            # No second NH request, snapshot read, file, screenshot or tunnel.
+            report['phase'] = 'PRIVATE_DISPLAY'
+            browser_readback(None, accounts)
+            report.update(desktopAdapter='PASS', mobileAdapter='PASS')
+        if report['status'] == 'PASS':report['phase'] = 'COMPLETE'
+    except Exception as error:
+        report['code'] = error.code if isinstance(error, ApiFailure) and error.code in SAFE_REPORT_CODES else 'ACCOUNT_INQUIRY_NOT_CONFIRMED'
+    finally:
+        if web.token:
+            try:web.call('logout')
+            except Exception:report.update(status='FAIL', code='LOGOUT_FAILED')
+        web.token = None
+    return report
+
+
 def diagnose_overseas_quote(web, username, password):
     """Read existing snapshot and retry exactly one quote. Never capture, restore or edit."""
     import math
@@ -117,9 +163,9 @@ def diagnose_overseas_quote(web, username, password):
     return report
 
 
-def browser_readback(web):
+def browser_readback(web, accounts=None):
     # All browser network traffic is intercepted. Only local app assets and the
-    # approved server-side nhSnapshotRead adapter can supply data. No browser login,
+    # existing snapshot adapter or one in-memory account response supplies data. No browser login,
     # production request, screenshots, trace or financial output is produced.
     from playwright.sync_api import sync_playwright
     import os
@@ -140,7 +186,7 @@ def browser_readback(web):
                 page = browser.new_page(viewport={'width': width, 'height': 882}, is_mobile=width < 1000)
                 failures = []
                 page.on('pageerror', lambda _e: failures.append(True))
-                snapshot = web.call('nhSnapshotRead')['accounts']
+                snapshot = accounts if accounts is not None else web.call('nhSnapshotRead')['accounts']
                 def route(r):
                     if r.request.url.startswith('http://127.0.0.1:' + str(server.server_port) + '/'):
                         if '/js/init.js' in r.request.url:
@@ -368,18 +414,21 @@ def main():
     modes.add_argument('--diagnose-browser-cors', action='store_true', help='Anonymous browser header/redirect evidence only; no credentials, NH or storage writes')
     modes.add_argument('--verify-existing-snapshot-ui', action='store_true', help='Display existing saved snapshot on desktop/mobile; no NH, capture or restore')
     modes.add_argument('--diagnose-overseas-quote', action='store_true', help='Read existing snapshot and request one overseas quote; no capture, restore or storage writes')
+    modes.add_argument('--account-inquiry-only', action='store_true', help='One owner-private NH balance inquiry; no public relay, snapshots, quotes or holdings writes')
     a = p.parse_args()
     try:
+        if a.account_inquiry_only and (a.approve_nh_read_and_private_snapshot or a.repeat_empty_baseline or a.real_browser or a.representative_quotes):
+            raise Stop('INCOMPATIBLE_CHECK_MODES')
         if (a.repeat_empty_baseline or a.real_browser or a.representative_quotes) and (a.diagnose_overseas_quote or a.verify_existing_snapshot_ui or a.diagnose_browser_cors):
             raise Stop('INCOMPATIBLE_CHECK_MODES')
         if a.native_browser_only and (a.repeat_empty_baseline or a.real_browser or a.browser):
             raise Stop('INCOMPATIBLE_CHECK_MODES')
-        web = preflight(a.environment, allow_same_source_tools=a.diagnose_overseas_quote or a.verify_existing_snapshot_ui or a.repeat_empty_baseline or a.diagnose_browser_cors or a.native_browser_only)
+        web = preflight(a.environment, allow_same_source_tools=a.account_inquiry_only or a.diagnose_overseas_quote or a.verify_existing_snapshot_ui or a.repeat_empty_baseline or a.diagnose_browser_cors or a.native_browser_only)
         if a.diagnose_browser_cors:
             from nh_v2_browser_check import diagnose_browser_cors
             result = diagnose_browser_cors(web.url, web.binding)
             print(json.dumps(result));return 0 if result['status']=='PASS' else 2
-        if not a.approve_nh_read_and_private_snapshot and not a.diagnose_overseas_quote and not a.verify_existing_snapshot_ui and not a.native_browser_only:
+        if not a.approve_nh_read_and_private_snapshot and not a.account_inquiry_only and not a.diagnose_overseas_quote and not a.verify_existing_snapshot_ui and not a.native_browser_only:
             print(json.dumps({'status': 'NOT_RUN', 'code': 'OWNER_NH_APPROVAL_REQUIRED', 'nhRequested': False}));return 2
         if not sys.stdin.isatty():
             raise Stop('OWNER_PRIVATE_TERMINAL_REQUIRED')
@@ -387,7 +436,9 @@ def main():
         password = getpass.getpass('Fresh staging password (hidden): ')
         if not username or len(password) < 16:
             raise Stop('STRONG_PRIVATE_CREDENTIALS_REQUIRED')
-        if a.native_browser_only:
+        if a.account_inquiry_only:
+            result = verify_account_inquiry(web, username, password, a.browser)
+        elif a.native_browser_only:
             from nh_v2_browser_check import native_browser_check
             print(json.dumps({'progress':'NATIVE_BROWSER_ONLY_NO_CAPTURE_OR_RESTORE'}),flush=True)
             result = native_browser_check(web.url, username, password, web.binding)

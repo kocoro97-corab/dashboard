@@ -27,6 +27,8 @@
       };
       clearAccountState=function(){
         clear();manualFields.forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
+        const images=document.getElementById('externalImageFiles');if(images)images.value='';
+        text('externalOcrProgress','');window.EXT_OCR_WARNINGS=[];
         const list=document.getElementById('externalMasterNames');if(list)list.replaceChildren();
       };
       manualBound=true;
@@ -64,6 +66,7 @@
     const admin=document.getElementById('adminBtn');if(admin){admin.hidden=true;admin.style.display='none'}
     loadExternalMaster(); // Public same-origin listing file only; no GAS/NH API.
     manualPreview();
+    if(window.DevelopmentOCR)DevelopmentOCR.enable();
     DevelopmentMarket.enable();
   }
   window.DevelopmentInspection=Object.freeze({init});

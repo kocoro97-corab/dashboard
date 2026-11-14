@@ -268,9 +268,10 @@ def market_screen_check(page):
             publicReadSuccesses:NET.ok,publicReadFailures:NET.fail,
             publicMarketEnabled:window.MYINVEST_TRANSPORT_CONFIG.publicMarket===true,
             scriptErrorVisible:!!document.getElementById('errBar'),nhQueryBlocked:$('nhAccountBtn').disabled,
-            accountEditingBlocked:$('externalUploadBtn').disabled})""")
+            accountSavingBlocked:!$('externalSaveBtn')||$('externalSaveBtn').disabled,
+            driveBlocked:$('externalDriveFolder').disabled})""")
         print(json.dumps(dict(summary,progress='PUBLIC_MARKET_DATA_RESULT')),flush=True)
-    if not summary['nhQueryBlocked'] or not summary['accountEditingBlocked']:raise ValueError('PUBLIC_MARKET_SCOPE_INVALID')
+    if not summary['nhQueryBlocked'] or not summary['accountSavingBlocked'] or not summary['driveBlocked']:raise ValueError('PUBLIC_MARKET_SCOPE_INVALID')
     return summary
 
 
