@@ -13,6 +13,15 @@ import nh_v2_https as launcher
 
 
 class PreflightDiagnosticsTests(unittest.TestCase):
+    def test_market_check_requires_explicit_profile_before_private_environment_access(self):
+        out=io.StringIO()
+        with patch.object(sys,'argv',['tool','--environment','/synthetic/private','--cloudflared','/synthetic/connector','--verify-market']), \
+             patch.object(launcher.signal,'signal'),patch.object(launcher,'validate_runtime'), \
+             patch.object(launcher,'private_path') as private,patch.object(launcher.getpass,'getpass') as secret,redirect_stdout(out):
+            self.assertEqual(launcher.main(),2)
+        self.assertEqual(json.loads(out.getvalue())['code'],'HTTPS_PUBLIC_MARKET_FLAG_REQUIRED')
+        private.assert_not_called();secret.assert_not_called()
+
     def run_diagnostic(self, runtime_error=None, source_error=None, settings=None):
         with tempfile.TemporaryDirectory() as tmp:
             env=Path(tmp);(env/'fresh-plan.json').write_text(json.dumps({'scriptId':'SYNTHETIC_PRIVATE_VALUE','sourceDigest':'c'*64}))

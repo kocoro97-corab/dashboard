@@ -26,8 +26,10 @@ Official sources: [Quick Tunnels](https://developers.cloudflare.com/tunnel/get-s
 ## Security boundary
 
 - Existing GAS remains the user/session/admin authority. Public exposure is
-  restricted to `appVersion`, `login`, `sessionInfo`, `logout`; all NH, account
-  storage, editor diagnostic, proxy and order actions stop before upstream calls.
+  restricted by default to `appVersion`, `login`, `sessionInfo`, `logout`.
+  The explicit `--public-market` profile adds authenticated `publicFetch` only
+  for the exact existing public-market GET routes. All NH, account storage,
+  editor diagnostic, arbitrary proxy and order actions still stop before upstream calls.
 - The origin HTTP server binds to loopback only. Only the connected tunnel's exact
   Host and Cloudflare's HTTPS scheme header are accepted. HTTP clients are rejected
   before reading credentials; browser endpoint configuration also requires HTTPS.
@@ -235,3 +237,11 @@ metadata POST is replayed: the DNS-not-ready code arises before HTTP constructio
 No resolver/proxy settings, TLS checks, GAS modules or account data are changed.
 Three failures remain NOT_RUN; this is bounded recovery, not a claim that the
 provider registration problem or local resolver cause has been established.
+
+## Public-market opt-in
+
+See [PUBLIC_MARKET_DEVELOPMENT.md](PUBLIC_MARKET_DEVELOPMENT.md) for the new
+restricted public-data profile and actual/synthetic verification distinction.
+Reuse the same environment and add `--public-market`; add `--verify-market`
+for one owner-authorized actual display check. Defaults and earlier auth-only
+results remain distinct. No NH or saved-account operation is enabled.

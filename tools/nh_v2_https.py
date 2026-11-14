@@ -39,6 +39,7 @@ HTTPS_TUNNEL_UNAVAILABLE HTTPS_EDGE_NOT_CONFIRMED DEV_HTTPS_CONFIG_INVALID
 RELAY_TARGET_MISMATCH RELAY_GAS_ACCESS_REQUIRED RELAY_UPSTREAM_HTTP
 RELAY_UPSTREAM_NETWORK RELAY_NON_JSON RELAY_RESPONSE_INVALID
 RELAY_GOOGLE_CONTENT_400 RELAY_REDIRECT_DENIED RELAY_REDIRECT_METHOD_DENIED
+HTTPS_PUBLIC_MARKET_FLAG_REQUIRED
 '''.split())
 
 
@@ -160,12 +161,15 @@ def main():
     parser.add_argument('--cloudflared', type=Path, required=True)
     parser.add_argument('--minutes', type=int, default=30, choices=range(1, 61))
     parser.add_argument('--verify-browser', action='store_true', help='Verify only the new public HTTPS/Pages path, then keep it open for Fold6')
+    parser.add_argument('--public-market', action='store_true', help='Enable only authenticated allowlisted public market GETs; NH and storage stay blocked')
+    parser.add_argument('--verify-market', action='store_true', help='Check public market display with the existing browser verifier; requires --public-market')
     parser.add_argument('--diagnose-preflight', action='store_true', help='Read-only checks only: no tunnel, password prompt, login, browser or account writes')
     parser.add_argument('--diagnose-tunnel-dns', action='store_true', help='Credential-free tunnel DNS comparison only; no GAS or login')
     args = parser.parse_args()
     report = {'status': 'NOT_RUN', 'phase': 'LOCAL_RUNTIME', 'actualNhCalls': 0, 'orderCalls': 0, 'accountStoreWrites': False}
     try:
         validate_runtime(args.cloudflared, needs_tty=not (args.diagnose_preflight or args.diagnose_tunnel_dns))
+        if args.verify_market and not args.public_market:raise ValueError('HTTPS_PUBLIC_MARKET_FLAG_REQUIRED')
         if args.diagnose_tunnel_dns:
             from nh_v2_https_browser import diagnose_tunnel_dns
             report['phase'] = 'TUNNEL_DNS_DIAGNOSTIC'
@@ -197,7 +201,7 @@ def main():
         expected = {'freshTestEnvironment': True, 'testEnvironment': 'nh-staging',
                     'scriptHash': fingerprint(plan['scriptId']), 'sheetHash': web.binding,
                     'sourceDigest': plan['sourceDigest'], 'gatewayVersion': 2, 'storeEngine': 'account-store-v2'}
-        relay = RelayApp(Config(upstream=plan['url'], origins=frozenset({'https://kocoro97-corab.github.io'}), expected=expected))
+        relay = RelayApp(Config(upstream=plan['url'], origins=frozenset({'https://kocoro97-corab.github.io'}), expected=expected,public_market=args.public_market))
         # Verify the fixed target privately before exposing login traffic.
         report['phase'] = 'TARGET_METADATA'
         relay.gateway.verify()
@@ -207,12 +211,20 @@ def main():
             from nh_v2_https_browser import verify
             print(json.dumps({'status': 'HTTPS_DEV_READY', 'page': PAGE, 'endpoint': endpoint,
                               'expiresInMinutes': args.minutes, 'sourceDigest': 'PASS', 'isolation': 'PASS',
-                              'authOnly': True, 'orderCalls': 0, 'secretsIncluded': False, 'dns': dns}), flush=True)
-            if args.verify_browser:
+                              'authOnly': not args.public_market, 'publicMarket': args.public_market,
+                              'nhCallsAllowed': False, 'storageWritesAllowed': False,
+                              'orderCalls': 0, 'secretsIncluded': False, 'dns': dns}), flush=True)
+            if args.verify_browser or args.verify_market:
                 report['phase'] = 'PAGES_BROWSER'
                 username = input('Staging user (visible): ').strip()
                 password = getpass.getpass('Staging password (hidden): ')
-                result = verify(endpoint, access_code, username, password)
+                samples=[]
+                def check_market(page):
+                    from nh_v2_https_browser import market_screen_check
+                    samples.append(market_screen_check(page))
+                result = verify(endpoint, access_code, username, password,
+                                dashboard_check=check_market if args.verify_market else None)
+                if args.verify_market:result.update(publicMarket='PASS' if result['status']=='PASS' else 'FAIL',publicSamples=samples)
                 result['realHttpPreflights'] = relay.metrics['preflights']
                 print(json.dumps(result), flush=True)
                 if result['status'] != 'PASS':

@@ -55,14 +55,15 @@ $('tabs').innerHTML=TABS.map(t=>`<button data-y="${t[1]}" onclick="showQ('${t[1]
 
 const NET={log:[],ok:0,fail:0};
 async function getTxt(targetUrl){
+  const relay=typeof DashboardTransport!=='undefined'&&DashboardTransport.isRelay();
   const proxy=MYP();
-  if(!proxy)return null;
+  if(!relay&&!proxy)return null;
   const fullUrl=proxy+(proxy.includes('?')?'&':'?')+'url='+encodeURIComponent(targetUrl);
   try{
-    const c=new AbortController(),t=setTimeout(()=>c.abort(),9000);
+    const c=new AbortController(),t=setTimeout(()=>c.abort(),window.MYINVEST_TRANSPORT_CONFIG&&window.MYINVEST_TRANSPORT_CONFIG.publicMarket===true?30000:9000);
     const r=await (typeof DashboardTransport!=='undefined'?DashboardTransport.publicRead(targetUrl,{signal:c.signal}):fetch(fullUrl,{signal:c.signal}));
     clearTimeout(t);
-    if(r.ok){const x=await r.text();if(x&&x.length>10){NET.ok++;return x}}
+    if(r.ok){const x=await r.text();if(typeof x==='string'&&x.trim()){NET.ok++;return x}}
     NET.fail++;
   }catch(e){NET.fail++}
   return null;
@@ -242,8 +243,9 @@ const esc=v=>String(v).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[
 const ago=d=>{const m=(Date.now()-d)/60000;return m<1?'방금':m<60?Math.floor(m)+'분 전':Math.floor(m/1440)+'일 전'};
 
 async function fetchNews(q){
-  const x=await getTxt('https://news.google.com/rss/search?q='+encodeURIComponent(q)+'&hl=ko&gl=KR&ceid=KR:ko');if(!x)return[];
-  const d=new DOMParser().parseFromString(x,'text/xml');return[...d.querySelectorAll('item')].map(i=>{const g=t=>{const e=i.querySelector(t);return e?e.textContent:''};return{t:g('title'),l:g('link'),s:g('source'),d:new Date(g('pubDate')||0)}})
+  const x=await getTxt('https://news.google.com/rss/search?q='+encodeURIComponent(q)+'&hl=ko&gl=KR&ceid=KR:ko');if(!x)return null;
+  const d=new DOMParser().parseFromString(x,'text/xml');if(d.querySelector('parsererror')||!d.querySelector('rss,feed'))return null;
+  return[...d.querySelectorAll('item')].map(i=>{const g=t=>{const e=i.querySelector(t);return e?e.textContent:''};return{t:g('title'),l:g('link'),s:g('source'),d:new Date(g('pubDate')||0)}})
 }
 
 async function loadNews(){
@@ -251,6 +253,7 @@ async function loadNews(){
   const mks=await fetchNews('코스피 OR 증시 OR 나스닥 when:2d');
   const hds=await fetchNews('(삼성전자 OR SK하이닉스 OR 한미반도체 OR 알테오젠) when:2d');
   const renderN=(list,el,stEl)=>{
+    if(!Array.isArray(list)){$(el).replaceChildren();$(stEl).textContent='뉴스 수신 실패 · 미확인';return}
     const m={};list.forEach(a=>{const k=a.t.replace(/\s-\s[^-]+$/,'');if(!m[k]||a.d>m[k].d)m[k]={t:k,l:a.l,s:a.s,d:a.d}});
     const arr=Object.values(m).sort((a,b)=>b.d-a.d).slice(0,6);
     $(el).innerHTML=arr.length?arr.map(a=>`<div class="news"><strong><a href="${escA(/^https:\/\//i.test(String(a.l))?a.l:'#')}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${esc(a.t)}</a></strong><span class="mini">${esc(a.s)} · ${ago(a.d)}</span></div>`).join(''):'<div class="mini">기사 없음</div>';

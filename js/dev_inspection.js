@@ -37,6 +37,7 @@
     // this relay's unchanged server-side allowlist.
     const admin=document.getElementById('adminBtn');if(admin){admin.hidden=true;admin.style.display='none'}
     loadExternalMaster(); // Public same-origin listing file only; no GAS/NH API.
+    DevelopmentMarket.enable();
   }
   window.DevelopmentInspection=Object.freeze({init});
 })();

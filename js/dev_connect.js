@@ -35,7 +35,7 @@
   window.MYINVEST_TRANSPORT_CONFIG=config;
   const panel=document.createElement('div');panel.id='devConnect';
   panel.style.cssText='position:fixed;inset:0;z-index:20000;background:#0f172a;color:#eee;display:grid;place-items:center;padding:16px';
-  panel.innerHTML='<form style="width:100%;max-width:430px"><h2>V2 개발용 연결</h2><p>V2 화면·로그인 점검입니다. 실제 NH 조회와 저장은 차단됩니다.</p><label>개발 중계 HTTPS 주소<input id="devEndpoint" type="url" required autocomplete="off" autocapitalize="none" spellcheck="false" style="display:block;width:100%"></label><label>별도 개발 접속코드<input id="devCode" type="password" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" style="display:block;width:100%"></label><button id="devConnectSubmit" type="submit">연결 확인</button><p id="devConnectStatus" role="status"></p></form>';
+  panel.innerHTML='<form style="width:100%;max-width:430px"><h2>V2 개발용 연결</h2><p>공개 시장 자료 연결 및 V2 화면 점검입니다. NH 계좌조회와 저장은 차단됩니다.</p><label>개발 중계 HTTPS 주소<input id="devEndpoint" type="url" required autocomplete="off" autocapitalize="none" spellcheck="false" style="display:block;width:100%"></label><label>별도 개발 접속코드<input id="devCode" type="password" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" style="display:block;width:100%"></label><button id="devConnectSubmit" type="submit">연결 확인</button><p id="devConnectStatus" role="status"></p></form>';
   document.body.appendChild(panel);
   const status=panel.querySelector('#devConnectStatus');
   async function connect(event){
@@ -59,12 +59,14 @@
       if(!data||typeof data!=='object'||Array.isArray(data))reject('DEV_RESPONSE_INVALID');
       if(!response.ok||data.success!==true)reject(known(data.code)?data.code:'DEV_REJECTED');
       if(data.freshTestEnvironment!==true||data.testEnvironment!=='nh-staging'||data.gatewayVersion!==2||data.storeEngine!=='account-store-v2')reject('DEV_METADATA_MISMATCH');
+      config.publicMarket=data.developmentPublicMarket===true;
       stage='storage';
       sessionStorage.setItem(KEY,JSON.stringify({endpoint,code}));
       stage='render';
       panel.querySelector('#devCode').value='';panel.remove();
       const banner=document.createElement('div');banner.id='devBanner';banner.setAttribute('role','status');banner.textContent='V2 개발 화면 점검 · 실제 NH 조회 및 저장 차단';
       banner.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#153047;color:#fff;text-align:center;padding:6px;font-size:12px';document.body.appendChild(banner);
+      DevelopmentMarket.enable();
     }catch(e){
       const fallback={network:'DEV_NETWORK',response:'DEV_RESPONSE_INVALID',storage:'DEV_STORAGE',render:'DEV_UI_ERROR'}[stage];
       const reason=known(e&&e.devCode)?e.devCode:known(e&&e.code)?e.code:fallback;

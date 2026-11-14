@@ -144,7 +144,8 @@ class PublicDevTests(unittest.TestCase):
             self.assertIn('Content-Security-Policy', text)
             self.assertIn('name="referrer" content="strict-origin-when-cross-origin"', text)
             self.assertNotIn('https://cdn.jsdelivr.net/npm/tesseract', text)
-            self.assertTrue(json.loads((out / 'development-only.json').read_text())['authOnly'])
+            self.assertTrue(json.loads((out / 'development-only.json').read_text())['publicMarketCapable'])
+            self.assertFalse(json.loads((out / 'development-only.json').read_text())['nhAccountQueries'])
             with self.assertRaises(ValueError):build(out)
 
     def test_unreferenced_private_files_in_frontend_folders_are_not_published(self):

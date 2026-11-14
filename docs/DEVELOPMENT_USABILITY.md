@@ -1,5 +1,8 @@
 # MY INVEST V2 주요 기능 점검
 
+후속 공개 데이터 연결 작업: [PUBLIC_MARKET_DEVELOPMENT.md](PUBLIC_MARKET_DEVELOPMENT.md).
+아래 표는 329e1af 게시본의 선행 점검이며, 후속 연결 검증 결과를 대신하지 않는다.
+
 개발 URL: https://kocoro97-corab.github.io/dashboard-v2-dev/index.html
 
 점검 기준 게시 소스: `329e1af7279e22fa0a65428dc92cdda853379e08`.

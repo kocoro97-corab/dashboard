@@ -13,6 +13,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from relay.market_routes import allowed_market_url
 
 PRODUCTION_DEPLOYMENT='AKfycbxySfUKUai418Ar7C8RI6gwBJpjSZXH4y8EX2JhJZG9nGz7RVB0WCZGl3H1wHxOWGVd'
 AUTH_ACTIONS=frozenset({'appVersion','login','sessionInfo','logout'})
@@ -46,7 +47,9 @@ class Config:
     isolated:bool=True
     production_authorized:bool=False
     development:bool=False
+    public_market:bool=False
     def __post_init__(self):
+        if self.public_market and (not self.isolated or not self.auth_only):raise RelayFault('RELAY_CONFIG_INVALID',503)
         match=re.fullmatch(r'https://script\.google\.com/macros/s/([A-Za-z0-9_-]+)/exec',self.upstream)
         if not match or not self.origins or any(not valid_origin(x,self.development) for x in self.origins):raise RelayFault('RELAY_CONFIG_INVALID',503)
         if not self.isolated and not self.production_authorized:raise RelayFault('RELAY_PRODUCTION_NOT_APPROVED',503)
@@ -79,14 +82,14 @@ class GoogleContentRedirect(urllib.request.HTTPRedirectHandler):
 class GasGateway:
     def __init__(self,config,opener=None):
         self.config=config;self.opener=opener or urllib.request.build_opener(GoogleContentRedirect());self.until=0;self.lock=threading.Lock()
-    def _read(self,request,want_json=True):
+    def _read(self,request,want_json=True,timeout=120,max_bytes=50*1024*1024):
         try:
-            with self.opener.open(request,timeout=120) as response:
+            with self.opener.open(request,timeout=timeout) as response:
                 final=urllib.parse.urlsplit(response.geturl())
                 if final.scheme!='https' or final.hostname not in ('script.google.com','script.googleusercontent.com'):raise RelayFault('RELAY_REDIRECT_DENIED')
                 if response.status!=200:raise RelayFault('RELAY_UPSTREAM_HTTP')
-                raw=response.read(50*1024*1024+1)
-                if len(raw)>50*1024*1024:raise RelayFault('RELAY_RESPONSE_TOO_LARGE')
+                raw=response.read(max_bytes+1)
+                if len(raw)>max_bytes:raise RelayFault('RELAY_RESPONSE_TOO_LARGE')
                 if want_json:
                     if response.headers.get_content_type()!='application/json':raise RelayFault('RELAY_NON_JSON')
                     result=json.loads(raw)
@@ -112,9 +115,9 @@ class GasGateway:
             self.until=time.monotonic()+30
     def public(self,url,token):
         check=self.post({'action':'sessionInfo','token':token})
-        if check.get('success') is not True:raise RelayFault('AUTH_REQUIRED',401)
+        if check.get('success') is not True or check.get('mustChangePassword'):raise RelayFault('AUTH_REQUIRED',401)
         request=urllib.request.Request(self.config.upstream+'?url='+urllib.parse.quote(public_url(url),safe=''),method='GET')
-        return self._read(request,False)
+        return self._read(request,False,timeout=20,max_bytes=2*1024*1024)
 
 class RelayApp:
     def __init__(self,config,gateway=None):
@@ -150,17 +153,20 @@ class RelayApp:
             if not isinstance(payload,dict) or any(k in payload for k in ('token','stagingBinding','backendUrl','gasUrl','targetUrl')):raise RelayFault('RELAY_BAD_REQUEST',400)
             action=payload.get('action')
             if not isinstance(action,str) or action not in ACTIONS:raise RelayFault('RELAY_ACTION_DENIED',400)
-            if self.config.auth_only and action not in AUTH_ACTIONS:raise RelayFault('RELAY_SCOPE_BLOCKED',403)
+            if self.config.auth_only and action not in AUTH_ACTIONS and not (self.config.public_market and action=='publicFetch'):raise RelayFault('RELAY_SCOPE_BLOCKED',403)
             if action not in PUBLIC_ACTIONS:
                 match=re.fullmatch(r'Bearer ([a-fA-F0-9]{64})',environ.get('HTTP_AUTHORIZATION',''))
                 if not match:raise RelayFault('AUTH_REQUIRED',401)
                 payload['token']=match[1]
             elif environ.get('HTTP_AUTHORIZATION'):raise RelayFault('RELAY_BAD_REQUEST',400)
-            if action=='publicFetch':public_url(payload.get('url'))
+            if action=='publicFetch':
+                public_url(payload.get('url'))
+                if self.config.public_market and (set(payload)-{'action','url','token'} or not allowed_market_url(payload.get('url'))):raise RelayFault('RELAY_PUBLIC_URL_DENIED',403)
             self.gateway.verify()
             attempted=True
             with self.metrics_lock:self.metrics['upstreamAttempts'][action]=self.metrics['upstreamAttempts'].get(action,0)+1
             result={'success':True,'text':self.gateway.public(payload['url'],payload['token'])} if action=='publicFetch' else self.gateway.post(payload)
+            if action=='appVersion':result=dict(result,developmentPublicMarket=self.config.public_market)
             return send(200,result)
         except RelayFault as error:
             code='RELAY_WRITE_OUTCOME_UNKNOWN' if attempted and action in WRITES else error.code

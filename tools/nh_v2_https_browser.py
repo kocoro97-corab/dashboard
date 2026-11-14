@@ -253,6 +253,25 @@ def probe(endpoint, access_code, on_dns_wait=None, on_edge_wait=None):
         raise HttpsProbeFailure('HTTPS_PROBE_TRANSPORT_ERROR',evidence) from None
 
 
+def market_screen_check(page):
+    """Observe public UI counts only. No NH/account action or raw data logging."""
+    print(json.dumps({'progress':'PUBLIC_MARKET_DATA_WAIT'}),flush=True)
+    try:
+        page.wait_for_function("""()=>window.MYINVEST_TRANSPORT_CONFIG.publicMarket===true&&
+            Object.keys(Q).length>0&&QD.length>1&&
+            document.querySelectorAll('#nl_mk .news').length>0&&
+            document.querySelectorAll('#nl_hd .news').length>0""",timeout=90000)
+    finally:
+        summary=page.evaluate("""()=>({quoteSymbols:Object.keys(Q).length,chartRows:QD.length,
+            marketNews:document.querySelectorAll('#nl_mk .news').length,
+            defaultNews:document.querySelectorAll('#nl_hd .news').length,
+            publicReadFailures:NET.fail,nhQueryBlocked:$('nhAccountBtn').disabled,
+            accountEditingBlocked:$('externalUploadBtn').disabled})""")
+        print(json.dumps(dict(summary,progress='PUBLIC_MARKET_DATA_RESULT')),flush=True)
+    if not summary['nhQueryBlocked'] or not summary['accountEditingBlocked']:raise ValueError('PUBLIC_MARKET_SCOPE_INVALID')
+    return summary
+
+
 def verify(endpoint, access_code, username, password, synthetic=False, route=None, width=1440, dashboard_check=None):
     from playwright.sync_api import sync_playwright
     report = {'status': 'FAIL', 'scope': 'SIMULATED_HTTPS_PAGES' if synthetic else 'LIVE_HTTPS_PAGES_TO_TEST_GAS',
