@@ -12,7 +12,7 @@ async function nhFetch(items){
   if(!tk)return{ok:false,msg:'로그인 토큰 없음'};
   try{
     const c=new AbortController(),t=setTimeout(()=>c.abort(),25000);
-    const r=await fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'nhQuotes',token:tk,items:items}),signal:c.signal});
+    const r=await post({action:'nhQuotes',token:tk,items:items},{signal:c.signal});
     clearTimeout(t);
     const j=JSON.parse(await r.text());
     if(!j.success)return{ok:false,msg:SafeDiagnostics.message(j)};
@@ -55,23 +55,24 @@ $('tabs').innerHTML=TABS.map(t=>`<button data-y="${t[1]}" onclick="showQ('${t[1]
 
 const NET={log:[],ok:0,fail:0};
 async function getTxt(targetUrl){
+  const relay=typeof DashboardTransport!=='undefined'&&DashboardTransport.isRelay();
   const proxy=MYP();
-  if(!proxy)return null;
+  if(!relay&&!proxy)return null;
   const fullUrl=proxy+(proxy.includes('?')?'&':'?')+'url='+encodeURIComponent(targetUrl);
   try{
-    const c=new AbortController(),t=setTimeout(()=>c.abort(),9000);
-    const r=await fetch(fullUrl,{signal:c.signal});
+    const c=new AbortController(),t=setTimeout(()=>c.abort(),window.MYINVEST_TRANSPORT_CONFIG&&window.MYINVEST_TRANSPORT_CONFIG.publicMarket===true?30000:9000);
+    const r=await (typeof DashboardTransport!=='undefined'?DashboardTransport.publicRead(targetUrl,{signal:c.signal}):fetch(fullUrl,{signal:c.signal}));
     clearTimeout(t);
-    if(r.ok){const x=await r.text();if(x&&x.length>10){NET.ok++;return x}}
+    if(r.ok){const x=await r.text();if(typeof x==='string'&&x.trim()){NET.ok++;return x}}
     NET.fail++;
   }catch(e){NET.fail++}
   return null;
 }
 async function getJSON(u){const x=await getTxt(u);try{return JSON.parse(x)}catch(e){return null}}
 
-function openDg(){$('dgs').textContent='성공 '+NET.ok+'회 · 실패 '+NET.fail+'회';$('dgl').textContent=['NH 나무증권: '+NH_STATUS,'출처별 수신: '+srcSummary(Object.keys(Q)),'--- 통신 기록'].concat(NET.log.length?NET.log:['기록 없음']).join('\n');$('dgp').value=MYP();$('dg').classList.add('on')}
+function openDg(){const relay=typeof DashboardTransport!=='undefined'&&DashboardTransport.isRelay();$('dgs').textContent='성공 '+NET.ok+'회 · 실패 '+NET.fail+'회'+(relay?' · 중계 연결':'');$('dgl').textContent=['NH 나무증권: '+NH_STATUS,'출처별 수신: '+srcSummary(Object.keys(Q)),'--- 통신 기록'].concat(NET.log.length?NET.log:['기록 없음']).join('\n');$('dgp').value=relay?window.MYINVEST_TRANSPORT_CONFIG.endpoint:MYP();$('dgp').readOnly=relay;const save=$('saveProxyBtn');if(save)save.disabled=relay;$('dg').classList.add('on')}
 function closeDg(){$('dg').classList.remove('on')}
-function saveProxy(){LS('invest_myproxy',$('dgp').value.trim());NET.ok=0;NET.fail=0;closeDg();refresh();loadNews();THM_AT=0;fetchTopThemes()}
+function saveProxy(){if(typeof DashboardTransport!=='undefined'&&DashboardTransport.isRelay())return;LS('invest_myproxy',$('dgp').value.trim());NET.ok=0;NET.fail=0;closeDg();refresh();loadNews();THM_AT=0;fetchTopThemes()}
 
 const nnum=v=>{const n=parseFloat(String(v==null?'':v).replace(/[,+\s]/g,''));return isFinite(n)?n:null};
 function nsgn(o,ch){if(ch==null)return ch;const c=(o&&(o.compareToPreviousPrice||o.fluctuationsType))||{},cd=String(c.code||''),tx=String(c.name||'')+String(c.text||'');
@@ -229,8 +230,8 @@ function updateTickGauge(){
 function generateScenario(){
   const h=new Date().getHours(),isDay=h>=7&&h<21;
   const qK=Q['^KS11'],qQ=Q['^KQ11'],qN=Q['^IXIC'],qS=Q['^GSPC'];
-  const getP=q=>q&&q.prev?((q.p/q.prev-1)*100).toFixed(2):'0.00';
-  const txt=isDay?`[📊 한국장 주간 시나리오]\n• 코스피(${getP(qK)}%), 코스닥(${getP(qQ)}%)\n• 주도 테마 수급 집중 구간, 5일선 눌림목 중심 대응.`:`[🌙 미국장 야간 시나리오]\n• 나스닥(${getP(qN)}%), S&P500(${getP(qS)}%)\n• 필라델피아 반도체 및 빅테크 흐름 연동 대응.`;
+  const getP=q=>q&&Number.isFinite(q.p)&&q.p>0&&Number.isFinite(q.prev)&&q.prev>0?((q.p/q.prev-1)*100).toFixed(2)+'%':'미확인';
+  const txt=isDay?`[📊 한국장 주간 시나리오]\n• 코스피(${getP(qK)}), 코스닥(${getP(qQ)})\n• 주도 테마 수급 집중 구간, 5일선 눌림목 중심 대응.`:`[🌙 미국장 야간 시나리오]\n• 나스닥(${getP(qN)}), S&P500(${getP(qS)})\n• 필라델피아 반도체 및 빅테크 흐름 연동 대응.`;
   $('gv').textContent=txt;
   $('gptTime').textContent=new Date().toLocaleTimeString('ko-KR')+' 생성';
 }
@@ -242,8 +243,9 @@ const esc=v=>String(v).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[
 const ago=d=>{const m=(Date.now()-d)/60000;return m<1?'방금':m<60?Math.floor(m)+'분 전':Math.floor(m/1440)+'일 전'};
 
 async function fetchNews(q){
-  const x=await getTxt('https://news.google.com/rss/search?q='+encodeURIComponent(q)+'&hl=ko&gl=KR&ceid=KR:ko');if(!x)return[];
-  const d=new DOMParser().parseFromString(x,'text/xml');return[...d.querySelectorAll('item')].map(i=>{const g=t=>{const e=i.querySelector(t);return e?e.textContent:''};return{t:g('title'),l:g('link'),s:g('source'),d:new Date(g('pubDate')||0)}})
+  const x=await getTxt('https://news.google.com/rss/search?q='+encodeURIComponent(q)+'&hl=ko&gl=KR&ceid=KR:ko');if(!x)return null;
+  const d=new DOMParser().parseFromString(x,'text/xml');if(d.querySelector('parsererror')||!d.querySelector('rss,feed'))return null;
+  return[...d.querySelectorAll('item')].map(i=>{const g=t=>{const e=i.querySelector(t);return e?e.textContent:''};return{t:g('title'),l:g('link'),s:g('source'),d:new Date(g('pubDate')||0)}})
 }
 
 async function loadNews(){
@@ -251,6 +253,7 @@ async function loadNews(){
   const mks=await fetchNews('코스피 OR 증시 OR 나스닥 when:2d');
   const hds=await fetchNews('(삼성전자 OR SK하이닉스 OR 한미반도체 OR 알테오젠) when:2d');
   const renderN=(list,el,stEl)=>{
+    if(!Array.isArray(list)){$(el).replaceChildren();$(stEl).textContent='뉴스 수신 실패 · 미확인';return}
     const m={};list.forEach(a=>{const k=a.t.replace(/\s-\s[^-]+$/,'');if(!m[k]||a.d>m[k].d)m[k]={t:k,l:a.l,s:a.s,d:a.d}});
     const arr=Object.values(m).sort((a,b)=>b.d-a.d).slice(0,6);
     $(el).innerHTML=arr.length?arr.map(a=>`<div class="news"><strong><a href="${escA(/^https:\/\//i.test(String(a.l))?a.l:'#')}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${esc(a.t)}</a></strong><span class="mini">${esc(a.s)} · ${ago(a.d)}</span></div>`).join(''):'<div class="mini">기사 없음</div>';
@@ -283,6 +286,22 @@ let NH_ACCOUNT_BUSY = false;
 let NH_ACCOUNT_RUN=0;
 const nhMoney = v => v==null ? '—' : Number(v).toLocaleString('ko-KR',{maximumFractionDigits:2});
 const nhSafe = v => String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function mergeNhAccountResultsV2(previous,incoming){
+  if(!Array.isArray(incoming))throw Error('NH_CONTRACT');
+  const old=new Map((previous||[]).filter(a=>typeof a.accountKey==='string'&&a.accountKey).map(a=>[a.accountKey,a]));
+  return incoming.map(a=>{
+    const result={...a},before=old.get(a.accountKey);
+    if(before)for(const market of ['domestic','overseas']){
+      if(!result[market]&&before[market])result[market]={...before[market],stale:true};
+      else if(result[market]&&result[market].partial&&before[market]){
+        const rows=new Map((before[market].holdings||[]).map(h=>[h.code+'|'+h.currency,h]));
+        (result[market].holdings||[]).forEach(h=>rows.set(h.code+'|'+h.currency,h));
+        result[market]={...result[market],holdings:[...rows.values()],stale:true};
+      }
+    }
+    return result;
+  });
+}
 async function loadNHAccounts(){
   if(NH_ACCOUNT_BUSY)return;NH_ACCOUNT_BUSY=true;const run=++NH_ACCOUNT_RUN;
   const btn=$('nhAccountBtn'),st=$('nhAccountStatus');
@@ -291,20 +310,20 @@ async function loadNHAccounts(){
   try{
     const tk=LS('invest_session_token');
     if(!tk)throw new Error('로그인이 필요합니다.');
-    const res=await fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'nhAccounts',token:tk})});
+    const res=await post({action:'nhAccounts',token:tk});
     const data=JSON.parse(await res.text());
     if(run!==NH_ACCOUNT_RUN||tk!==LS('invest_session_token'))return;
     if(!data.success){
       throw Object.assign(new Error(''),{diagnostic:SafeDiagnostics.diagnostic(data)});
     }
-    NH_ACCOUNTS=(Array.isArray(data.accounts)?data.accounts:[]).filter(a=>['domestic','overseas'].some(k=>Array.isArray(a[k]&&a[k].holdings)&&a[k].holdings.length>0)).map(a=>({...a,errors:(Array.isArray(a.errors)?a.errors:[]).map(x=>SafeDiagnostics.message(x,'NH_UPSTREAM'))}));
+    NH_ACCOUNTS=mergeNhAccountResultsV2(NH_ACCOUNT_SESSION===tk?NH_ACCOUNTS:[],data.accounts).filter(a=>['domestic','overseas'].some(k=>Array.isArray(a[k]&&a[k].holdings)&&a[k].holdings.length>0)).map(a=>({...a,errors:(Array.isArray(a.errors)?a.errors:[]).map(x=>SafeDiagnostics.message(x,'NH_UPSTREAM'))}));
     NH_ACCOUNT_UPDATED=data.updatedAt||'';
     NH_ACCOUNT_FETCHED_AT=Date.now();
     NH_ACCOUNT_SESSION=tk;
     renderNHAccounts();
     if(typeof extSyncWithNH==='function')extSyncWithNH();
     const count=NH_ACCOUNTS.length;
-    if(st)st.textContent='조회 '+(NH_ACCOUNT_UPDATED||hms(new Date()))+' · 일반계좌 '+count+'개 · 모의계좌 제외';
+    if(st)st.textContent='조회 '+(NH_ACCOUNT_UPDATED||hms(new Date()))+' · 일반계좌 '+count+'개 · 모의계좌 제외'+(NH_ACCOUNTS.some(a=>['domestic','overseas'].some(k=>a[k]&&(a[k].stale||a[k].partial)))?' · 일부 이전 조회값 유지':'')+(data.gatewayVersion===2?' · ISA·연금저축·IRP: OCR·수동 관리(직접조회 미검증)':'');
   }catch(e){if(run!==NH_ACCOUNT_RUN)return;if(st)st.textContent='조회 실패(기존 조회값 유지) · '+SafeDiagnostics.message(e,'FRONTEND_NETWORK');if(typeof renderExternalAssets==='function')renderExternalAssets()}
   finally{if(run===NH_ACCOUNT_RUN){NH_ACCOUNT_BUSY=false;if(btn){btn.disabled=false;btn.textContent='↻ 계좌 잔고 조회'}}}
 }
@@ -321,7 +340,7 @@ function renderNHAccounts(){
       if(!d||!Array.isArray(d.holdings)||!d.holdings.length)return;
       const sm=d.summary||{},hs=Array.isArray(d.holdings)?d.holdings:[];
       const money=sm.evalAmount,profit=sm.profit,dep=sm.deposit;
-      cardHtml+=`<div class="card"><div class="cl"><span>일반계좌 · ${label}</span><span>${hs.length}종목</span></div><div class="value">${nhMoney(money)}<span class="mini"> 원 평가금액</span></div><div class="change ${profit>0?'up':profit<0?'down':'neutral'}">손익 ${nhMoney(profit)}원${sm.returnRate!=null?' · '+Number(sm.returnRate).toFixed(2)+'%':''}</div><div class="mini">예수금 ${nhMoney(dep)}원 · 계좌유형 ${a.acctType==='02'?'주문대리인':'일반'}</div></div>`;
+      cardHtml+=`<div class="card"><div class="cl"><span>일반계좌 · ${label}</span><span>${hs.length}종목${d.stale?' · 이전 조회값':d.partial?' · 부분 조회':''}</span></div><div class="value">${nhMoney(money)}<span class="mini"> 원 평가금액</span></div><div class="change ${profit>0?'up':profit<0?'down':'neutral'}">손익 ${nhMoney(profit)}원${sm.returnRate!=null?' · '+Number(sm.returnRate).toFixed(2)+'%':''}</div><div class="mini">예수금 ${nhMoney(dep)}원 · 계좌유형 ${a.acctType==='02'?'주문대리인':'일반'}</div></div>`;
       if(filter==='all'||filter===key)hs.forEach(h=>rows.push({a:'일반계좌',market:label,h:h}));
     });
     if(a.errors&&a.errors.length)cardHtml+=`<div class="mini" style="grid-column:1/-1;color:var(--amber)">일반계좌 조회 안내: ${nhSafe(a.errors.map(x=>SafeDiagnostics.message(x,'NH_UPSTREAM')).join(' / '))}</div>`;

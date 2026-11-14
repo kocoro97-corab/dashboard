@@ -1,0 +1,11 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs');
+function fixture(dev){
+  const original=new Map([['invest_session_token','"SYNTHETIC_OPERATING_SESSION"'],['invest_last_active','123'],['invest_external_drive_folder','"SYNTHETIC_OPERATING_FOLDER"']]);
+  const tab=new Map(),storage=map=>({getItem:k=>map.get(k)||null,setItem:(k,v)=>map.set(k,String(v)),removeItem:k=>map.delete(k)});
+  const elements=new Map(),element=id=>{if(!elements.has(id))elements.set(id,{style:{},replaceChildren(){},remove(){},classList:{remove(){}},textContent:''});return elements.get(id)};
+  const ctx=vm.createContext({localStorage:storage(original),sessionStorage:storage(tab),window:{MYINVEST_TRANSPORT_CONFIG:dev?{mode:'relay',devSession:true}:undefined},document:{readyState:'loading',addEventListener(){},getElementById:element},DashboardTransport:{post:async()=>({ok:true})},setInterval:()=>1,clearInterval(){},Date});
+  vm.runInContext(fs.readFileSync('js/auth.js','utf8'),ctx);return {ctx,original,tab};
+}
+test('development uses only namespaced tab storage and cannot adopt an operating session',()=>{const f=fixture(true);assert.equal(vm.runInContext("LS('invest_session_token')",f.ctx),null);vm.runInContext("LS('invest_session_token','SYNTHETIC_DEV_SESSION');touchActive(true)",f.ctx);assert.equal(f.tab.get('myinvest_v2_dev:invest_session_token'),'"SYNTHETIC_DEV_SESSION"');assert.equal(f.original.get('invest_session_token'),'"SYNTHETIC_OPERATING_SESSION"');assert.equal(f.original.get('invest_last_active'),'123')});
+test('development logout preserves every existing operating storage value',()=>{const f=fixture(true),before=JSON.stringify([...f.original]);vm.runInContext("LS('invest_session_token','SYNTHETIC_DEV_SESSION');logout()",f.ctx);assert.equal(f.tab.has('myinvest_v2_dev:invest_session_token'),false);assert.equal(JSON.stringify([...f.original]),before)});
+test('unchanged direct build continues using its original storage keys',()=>{const f=fixture(false);assert.equal(vm.runInContext("LS('invest_session_token')",f.ctx),'SYNTHETIC_OPERATING_SESSION');vm.runInContext("LS('invest_is_admin',false)",f.ctx);assert.equal(f.original.get('invest_is_admin'),'false');assert.equal(f.tab.size,0)});

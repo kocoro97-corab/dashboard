@@ -16,7 +16,7 @@ function backend(){
     PropertiesService:{getScriptProperties:()=>({getProperty:k=>props[k],setProperty:(k,v)=>props[k]=v})},
     LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},
     Utilities:{sleep(){},formatDate:()=> 'synthetic timestamp'},UrlFetchApp:{fetch:()=>{throw Error(raw)}}});
-  vm.runInContext(read('gas/Nhplug.gs'),ctx);return {ctx,logs};
+  vm.runInContext(read('gas/NhGatewayV2.gs'),ctx);vm.runInContext(read('gas/NhAccountsV2.gs'),ctx);vm.runInContext(read('gas/Nhplug.gs'),ctx);return {ctx,logs};
 }
 function response(http,text){return {getResponseCode:()=>http,getContentText:()=>text,getHeaders:()=>({})};}
 

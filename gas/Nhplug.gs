@@ -4,17 +4,17 @@
 // 이 파일의 함수는 편집기에서 직접 실행하는 진단용입니다. doGet/doPost에 연결하기 전까지
 // /exec 주소로는 호출되지 않습니다(계좌 정보 노출 방지).
 
-const NH_BASE = 'https://api.nhplug.com:8443';
-
-// 조회 경로만 허용. 주문(/order/)은 어떤 경우에도 막는다.
-const NH_ALLOWED_PATHS = [
-  '/n2/acctinfo',
-  '/common/inquiry/',
-  '/krfuture/quote/', '/krfuture/inquiry/',
-  '/krstock/quote/', '/krstock/inquiry/',
-  '/gbstock/quote/', '/gbstock/inquiry/'
-];
-
+// Thin UI compatibility adapters. All outbound NH traffic lives in NhGatewayV2.gs.
+let NH_GATEWAY_V2_INSTANCE;
+function nhGatewayV2_(){
+  if(!NH_GATEWAY_V2_INSTANCE)NH_GATEWAY_V2_INSTANCE=createNhGatewayV2_({
+    fetch:(url,options)=>UrlFetchApp.fetch(url,options),
+    properties:()=>PropertiesService.getScriptProperties(),now:()=>Date.now(),sleep:ms=>Utilities.sleep(ms),
+    withLock:fn=>{const lock=LockService.getScriptLock();lock.waitLock(15000);try{return fn()}finally{lock.releaseLock()}}
+  });
+  return NH_GATEWAY_V2_INSTANCE;
+}
+function nhRequest_(origin,path,method,purpose,data){return nhGatewayV2_().request(origin,path,method,purpose,data)}
 function nhHeader_(headers, name) {
   const lower = name.toLowerCase();
   for (const k in headers) if (k.toLowerCase() === lower) return headers[k];
@@ -23,7 +23,7 @@ function nhHeader_(headers, name) {
 
 // 접근토큰: 24시간 유효. 스크립트 속성에 만료시각과 함께 캐시해 재사용한다(재발급은 보안 알림을 유발).
 // Only locally defined codes and validated HTTP statuses may cross diagnostic boundaries.
-const NH_DIAGNOSTIC_CODES=['NH_OK','NH_TOKEN','NH_CONFIG','NH_NETWORK','NH_JSON','NH_HTTP','NH_RSP','NH_PATH','NH_NO_PRICE','NH_CONTRACT','NH_UNSUPPORTED','NH_UPSTREAM','NH_SPEC_OK','NH_SPEC_FAILED','NH_ACCOUNTS_OK','NH_DOMESTIC_OK','NH_OVERSEAS_OK','NH_FUTURE_OK'];
+const NH_DIAGNOSTIC_CODES=['NH_OK','NH_TOKEN','NH_CONFIG','NH_NETWORK','NH_JSON','NH_HTTP','NH_RSP','NH_PATH','NH_REFERENCE_UNAVAILABLE','NH_REFERENCE_INVALID','NH_IDENTITY_UNVERIFIED','NH_IDENTITY_AMBIGUOUS','NH_CURRENCY_MISMATCH','NH_SYMBOL_MISMATCH','NH_NO_BLOCK','NH_NO_PRICE','NH_CONTRACT','NH_UNSUPPORTED','NH_UPSTREAM','NH_SPEC_OK','NH_SPEC_FAILED','NH_ACCOUNTS_OK','NH_DOMESTIC_OK','NH_OVERSEAS_OK','NH_FUTURE_OK'];
 function nhSafeDiagnostic_(error) {
   const code=error&&NH_DIAGNOSTIC_CODES.indexOf(error.safeCode)>=0?error.safeCode:'NH_UPSTREAM';
   const http=error&&Number.isInteger(error.safeHttp)&&error.safeHttp>=100&&error.safeHttp<=599?error.safeHttp:null;
@@ -45,67 +45,9 @@ function nhAssertResponse_(r){
 function nhToken_(force) {
   try{return nhLoadToken_(force)}catch(error){const d=nhSafeDiagnostic_(error);throw nhFailure_(d.code==='NH_UPSTREAM'?'NH_TOKEN':d.code,d.http)}
 }
-function nhLoadToken_(force) {
-  const props = PropertiesService.getScriptProperties();
-  const cached = function () {
-    const tok = props.getProperty('NHPLUG_TOKEN');
-    const exp = Number(props.getProperty('NHPLUG_TOKEN_EXP') || 0);
-    return (tok && Date.now() < exp - 10 * 60 * 1000) ? tok : '';
-  };
-  if (!force) { const t = cached(); if (t) return t; }
-
-  const lock = LockService.getScriptLock();
-  lock.waitLock(15000);
-  try {
-    if (!force) { const t = cached(); if (t) return t; }   // 기다리는 사이 다른 실행이 발급했을 수 있음
-    const key = props.getProperty('NHPLUG_APP_KEY');
-    const secret = props.getProperty('NHPLUG_APP_SECRET');
-    if (!key || !secret) throw nhFailure_('NH_CONFIG');
-    const url = NH_BASE + '/oauth2/token?appkey=' + encodeURIComponent(key) +
-      '&appsecretkey=' + encodeURIComponent(secret) + '&grant_type=client_credentials&scope=oob';
-    const res = UrlFetchApp.fetch(url, {
-      method: 'post', contentType: 'application/x-www-form-urlencoded', payload: '', muteHttpExceptions: true
-    });
-    const code = res.getResponseCode();
-    let body = {};
-    try { body = JSON.parse(res.getContentText()); } catch (e) { /* 아래에서 처리 */ }
-    if (code !== 200 || !body.access_token) {
-      // 주소(키 포함)와 응답 본문 전체는 남기지 않는다
-      throw nhFailure_('NH_TOKEN',code);
-    }
-    props.setProperty('NHPLUG_TOKEN', body.access_token);
-    props.setProperty('NHPLUG_TOKEN_EXP', String(Date.now() + Number(body.expires_in || 86400) * 1000));
-    return body.access_token;
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-// 공통 호출. 반환: { http, body, cts, cts_flag }
+function nhLoadToken_(force){return nhGatewayV2_().token(force)}
+function nhReadCall_(path,input,opt){return nhGatewayV2_().read(path,input,opt,force=>nhToken_(force))}
 function nhCall_(path,input,opt){try{return nhReadCall_(path,input,opt)}catch(error){const d=nhSafeDiagnostic_(error);throw nhFailure_(d.code==='NH_UPSTREAM'?'NH_NETWORK':d.code,d.http)}}
-function nhReadCall_(path, input, opt) {
-  const okPath = NH_ALLOWED_PATHS.some(function (p) { return path.indexOf(p) === 0; });
-  if (!okPath || path.indexOf('/order/') >= 0) throw nhFailure_('NH_PATH');
-
-  let token = nhToken_(false);
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const headers = { Authorization: 'Bearer ' + token };
-    if (opt && opt.cts) { headers['cts'] = opt.cts; headers['cts_flag'] = opt.cts_flag || 'Y'; }
-    const res = UrlFetchApp.fetch(NH_BASE + path, {
-      method: 'post', contentType: 'application/json', headers: headers,
-      payload: JSON.stringify({ Input_0: input || {} }), muteHttpExceptions: true
-    });
-    const http = res.getResponseCode();
-    if (http === 401 && attempt === 0) { token = nhToken_(true); continue; }   // 401일 때만 재발급
-    Utilities.sleep(220);   // REST 초당 5건 제한 보호
-    let body;
-    try { body = JSON.parse(res.getContentText()); }
-    catch (e) { body = { rsp_cd: 'PARSE' }; }
-    if(!body||typeof body!=='object'||Array.isArray(body))body={rsp_cd:'PARSE'};
-    const h = res.getHeaders();
-    return { http: http, body: body, cts: nhHeader_(h, 'cts'), cts_flag: nhHeader_(h, 'cts_flag') };
-  }
-}
 
 // ---------- 진단 함수 (편집기에서 선택해 ▶ 실행, 실행 로그 확인) ----------
 
@@ -137,12 +79,15 @@ function nhProbeFutQuote() {
 
 // 명세 파일 내려받기: 일시적 오류가 나면 잠시 쉬었다가 최대 4번까지 다시 시도
 function nhFetchSpec_(g) {
+  const path='/openapi-docs/'+g+'/openapi.json';
+  nhGatewayV2_().validate('https://www.nhplug.com',path,'get','spec');
   for (let i = 1; i <= 4; i++) {
     try {
-      const res = UrlFetchApp.fetch('https://www.nhplug.com/openapi-docs/' + g + '/openapi.json', { muteHttpExceptions: true });
+      const res = nhRequest_('https://www.nhplug.com',path,'get','spec');
       return JSON.parse(res.getContentText());
     } catch (e) {
       nhLog_('NH_SPEC_FAILED');
+      if(e&&e.safeCode==='NH_HTTP'&&e.safeHttp>=300&&e.safeHttp<400)return null;
       if (i < 4) Utilities.sleep(2500 * i);
     }
   }
@@ -290,87 +235,8 @@ function nhTestFutures() {
 
 // ---------- 일반계좌 잔고 조회 전용 (ISA·연금저축·IRP 및 모의계좌 제외) ----------
 // 계좌번호는 서버 안에서만 사용하고 브라우저에는 끝 4자리만 전달한다.
-function nhReadPaged_(path, input, maxPages) {
-  const rows = [];
-  let summary = {}, last = null, cts = '', pages = 0, notice = '', partial = false;
-  const limit = Math.max(1, Math.min(Number(maxPages || 20), 20));
-  const seen = {};
-  for (let page = 0; page < limit; page++) {
-    const opt = cts ? { cts: cts, cts_flag: 'Y' } : null;
-    last = nhCall_(path, input, opt); pages++;
-    const b = last.body || {}, code = String(b.rsp_cd || '');
-    nhAssertResponse_(last);
-    // 00218: 연속조회 안내. 이미 수신한 잔고 블록을 버리지 않는다.
-    if (code && !/^0+$/.test(code) && code !== '00218' && code !== '00166') {
-      throw nhFailure_('NH_RSP');
-    }
-    if (code === '00218') notice = '연속조회 안내(00218)';
-    if (code === '00166') notice = '조회 완료(00166)';
-    const blocks = [b.Output_0, b.Output_1, b.Output_2];
-    // NH balance: Output_0 = 요약, Output_1 = 종목. API 변형에서 배열이 Output_0에 올 수도 있어 보존.
-    if (b.Output_0 && !Array.isArray(b.Output_0)) summary = Object.assign({}, summary, b.Output_0);
-    const holdingBlocks = Array.isArray(b.Output_1) ? [b.Output_1] :
-      (Array.isArray(b.Output_0) ? [b.Output_0] : []);
-    holdingBlocks.forEach(function(block) { block.forEach(function(x) {
-      const k = JSON.stringify(x);
-      if (!seen[k]) { seen[k] = true; rows.push(x); }
-    }); });
-    const next = String(last.cts || b.cts || '');
-    const flag = String(last.cts_flag || b.cts_flag || '').toUpperCase();
-    if (next && next !== cts && (flag === 'Y' || code === '00218')) { cts = next; continue; }
-    if (code === '00218') { partial = true; notice = '연속조회 필요(00218): 연속조회 헤더 미수신 · NH 응답 확인 필요'; }
-    break;
-  }
-  if (pages === limit && cts) { partial = true; notice = '최대 연속조회 횟수 도달'; }
-  return { summary: summary, rows: rows, pages: pages, notice: notice, partial: partial };
-}
-
-function nhAccountBalance_(acctNo, acctType) {
-  const result = { domestic: null, overseas: null, errors: [] };
-  // 국내주식: 현재가 기준(5), 상장종목(1), 순자산(1), 통합시세(UNT), 전체장(2)
-  try {
-    const d = nhReadPaged_('/krstock/inquiry/v1/balance', {
-      act_no: acctNo, bnc_bse_cd: '5', ltg_aot_dit_cd: '1',
-      aet_bse: '1', qut_dit_cd: 'UNT', aly_qut_cd: '2'
-    }, 10);
-    if (d.partial) result.errors.push('국내주식: ' + d.notice);
-    result.domestic = {
-      summary: {
-        deposit: nhNum_(d.summary.dca), netAsset: nhNum_(d.summary.nas_amt),
-        totalAsset: nhNum_(d.summary.tot_aet_amt), buyAmount: nhNum_(d.summary.tot_byn_amt),
-        evalAmount: nhNum_(d.summary.tot_eal_amt) || d.rows.reduce(function(v,x){return v+nhNum_(x.eal_amt)},0), profit: nhNum_(d.summary.tot_eal_pls) || d.rows.reduce(function(v,x){return v+nhNum_(x.eal_pls_amt)},0),
-        returnRate: nhNum_(d.summary.pft_rt)
-      },
-      holdings: d.rows.map(function (x) { return {
-        name: String(x.iem_nm || ''), code: String(x.iem_cd || ''),
-        quantity: nhNum_(x.itg_bnc_qty), avgPrice: nhNum_(x.phs_pr), currentPrice: nhNum_(x.now_pr),
-        evalAmount: nhNum_(x.eal_amt), profit: nhNum_(x.eal_pls_amt), returnRate: nhNum_(x.pft_rt), currency: 'KRW'
-      }; })
-    };
-  } catch (e) { result.errors.push('국내주식: ' + nhSafeErrorText_(e)); }
-
-  // 해외주식: 전체 시장·전체 통화(원화 환산값 포함)
-  try {
-    const g = nhReadPaged_('/gbstock/inquiry/v1/balance', {
-      act_no: acctNo, qut_iqr_dit_cd: '9', fc_sec_trd_nat_cd: '000', cur_cd: 'KRW', xns_dit_cd: '1'
-    }, 10);
-    if (g.partial) result.errors.push('해외주식: ' + g.notice);
-    result.overseas = {
-      summary: {
-        evalAmount: nhNum_(g.summary.eal_amt_sum) || g.rows.reduce(function(v,x){return v+nhNum_(x.krw_eal_amt)},0), profit: nhNum_(g.summary.eal_pls_sum_amt) || g.rows.reduce(function(v,x){return v+nhNum_(x.krw_eal_pls_amt)},0),
-        returnRate: nhNum_(g.summary.krw_pft_rt), deposit: nhNum_(g.summary.krw_dca),
-        totalAsset: nhNum_(g.summary.tot_aet_amt)
-      },
-      holdings: g.rows.map(function (x) { return {
-        name: String(x.iem_nm || ''), code: String(x.iem_cd || ''), country: String(x.fc_sec_trd_nat_nm || ''),
-        quantity: nhNum_(x.cns_bse_bnc_qty), avgPrice: nhNum_(x.fc_avg_phs_pr != null ? x.fc_avg_phs_pr : x.fc_phs_uit_pr),
-        currentPrice: nhNum_(x.fc_sec_end_pr), evalAmount: nhNum_(x.krw_eal_amt), profit: nhNum_(x.krw_eal_pls_amt),
-        returnRate: nhNum_(x.eal_pft_rt), currency: String(x.cur_cd || '')
-      }; })
-    };
-  } catch (e) { result.errors.push('해외주식: ' + nhSafeErrorText_(e)); }
-  return result;
-}
+function nhReadPaged_(path,input,maxPages){return nhAccountServiceV2_().page(path,input,maxPages)}
+function nhAccountBalance_(acctNo,acctType){return nhAccountServiceV2_().balance(acctNo)}
 
 function handleNhAccounts(token) {
   if (!sessionUser_(token)) return jsonResponse({ success: false, message: '로그인이 필요합니다. 다시 로그인하세요.' });
@@ -387,10 +253,11 @@ function handleNhAccounts(token) {
     }).map(function (a) {
       const no = String(a.acct_no);
       const data = nhAccountBalance_(no, String(a.acct_type));
-      return { masked: '••••' + no.slice(-4), acctType: String(a.acct_type), domestic: data.domestic,
+      const accountKey=Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,token+'|'+no).map(b=>('0'+(b&255).toString(16)).slice(-2)).join('');
+      return {accountKey:accountKey,acctType:String(a.acct_type),domestic:data.domestic,
         overseas: data.overseas, errors: data.errors };
     });
-    return jsonResponse({ success: true, accounts: accounts, excludedMockCount: all.filter(function (a) { return String(a.acct_type) === '03'; }).length,
+    return jsonResponse({ success: true,gatewayVersion:2,capabilities:nhAccountCapabilitiesV2_(),accounts: accounts, excludedMockCount: all.filter(function (a) { return String(a.acct_type) === '03'; }).length,
       updatedAt: Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') });
   } catch (e) {
     return jsonResponse({success:false,code:nhSafeDiagnostic_(e).code,message:nhSafeErrorText_(e)});

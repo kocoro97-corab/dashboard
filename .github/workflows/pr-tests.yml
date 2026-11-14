@@ -28,9 +28,16 @@ jobs:
         run: |
           .venv-browser/bin/python tests/browser_external.py
           .venv-browser/bin/python tests/browser_diagnostics.py
+          .venv-browser/bin/python tests/browser_native_snapshot.py
+          .venv-browser/bin/python tests/browser_relay.py
+          .venv-browser/bin/python tests/browser_https_dev.py
+          .venv-browser/bin/python tests/browser_dev_connection_errors.py
+          .venv-browser/bin/python tests/browser_public_market.py
+          .venv-browser/bin/python tests/browser_manual_preview.py
+          .venv-browser/bin/python tests/browser_account_inquiry.py
   nh-staging-live:
     # Security/preflight preparation branches never consume live credentials in CI.
-    if: github.event_name == 'pull_request' && github.head_ref != 'fix/issue-4-safe-diagnostics' && github.head_ref != 'fix/4b1-safety-checks' && github.event.pull_request.head.repo.full_name == github.repository && vars.NH_STAGING_ENABLED == 'true'
+    if: github.event_name == 'pull_request' && github.head_ref != 'fix/issue-4-safe-diagnostics' && github.head_ref != 'fix/4b1-safety-checks' && github.head_ref != 'feat/nh-integration-v2' && github.event.pull_request.head.repo.full_name == github.repository && vars.NH_STAGING_ENABLED == 'true'
     needs: regression
     runs-on: ubuntu-24.04
     timeout-minutes: 15

@@ -36,7 +36,8 @@ try:
             console, errors = [], []
             page.on('console', lambda message: console.append(message.text))
             page.on('pageerror', lambda error: errors.append(str(error)))
-            state = {'mode': 'partial'}
+            state = {'mode': 'partial', 'loginAttempts': []}
+            custom='https://script.google.com/macros/s/SYNTHETIC_PRIVACY_TEST/exec'
 
             def route_request(route):
                 if route.request.url.startswith('http://127.0.0.1:'):
@@ -50,6 +51,10 @@ try:
                     return
                 body = json.loads(route.request.post_data or '{}')
                 if body.get('action') == 'login':
+                    state['loginAttempts'].append(route.request.url)
+                    if state.get('loginMode')=='network':
+                        route.abort()
+                        return
                     route.fulfill(content_type='text/html', body='<html>'+CANARY+'</html>')
                     return
                 result = {'success': False, 'message': CANARY, 'code': CANARY}
@@ -59,11 +64,19 @@ try:
 
             page.route('**/*', route_request)
             page.goto('http://127.0.0.1:'+str(server.server_port), wait_until='load')
+            page.evaluate("url=>LS('invest_myproxy',url)",custom)
             page.fill('#authId', 'synthetic-user')
             page.fill('#authPw', 'synthetic-password')
             page.click('#authSubmitBtn')
             page.wait_for_function("$('authMsg').textContent.includes('GAS_NON_JSON')")
             private_free(page.locator('#authMsg').inner_text())
+            assert state['loginAttempts']==[custom], 'LOGIN_ENDPOINT_CHANGED_AFTER_ERROR'
+            assert page.evaluate("()=>LS('invest_myproxy')")==custom, 'CUSTOM_ENDPOINT_REMOVED'
+            state.update(loginAttempts=[],loginMode='network')
+            page.click('#authSubmitBtn')
+            page.wait_for_function("$('authMsg').textContent.includes('FRONTEND_NETWORK')")
+            assert state['loginAttempts']==[custom], 'LOGIN_ENDPOINT_CHANGED_AFTER_NETWORK_ERROR'
+            assert page.evaluate("()=>LS('invest_myproxy')")==custom, 'CUSTOM_ENDPOINT_REMOVED_AFTER_NETWORK_ERROR'
             page.evaluate("()=>{LS('invest_session_token','synthetic-session');$('authGuard').style.display='none';$('appContainer').style.display='block'}")
             page.evaluate('loadNHAccounts()')
             assert page.locator('#nhAccountRows tr').count() == 1

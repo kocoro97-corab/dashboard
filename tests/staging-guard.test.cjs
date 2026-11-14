@@ -5,7 +5,7 @@ function staging(){
   let opens=0,scriptId=SCRIPT,name='NH-STAGING synthetic';
   const ctx=vm.createContext({ScriptApp:{getScriptId:()=>scriptId},SpreadsheetApp:{openById:()=>{opens++;return {getId:()=>SHEET,getName:()=>name}}},PropertiesService:{getScriptProperties:()=>({getProperty:key=>properties.get(key)||null})},Utilities:{DigestAlgorithm:{SHA_256:'sha256'},computeDigest:(_,text)=>[...crypto.createHash('sha256').update(text).digest()]}});
   const code=fs.readFileSync(path.join(__dirname,'staging/StagingBridge.gs'),'utf8').replace('__SCRIPT_ID__',SCRIPT).replace('__REVISION__','a'.repeat(40)).replace('__SOURCE_DIGEST__','b'.repeat(64));
-  vm.runInContext(code,ctx);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../gas/NhSnapshotV2.gs'),'utf8'),ctx);vm.runInContext(code,ctx);
   return {ctx,properties,opens:()=>opens,setScript:value=>scriptId=value,setName:value=>name=value};
 }
 test('production script ID is refused before any spreadsheet access',()=>{
@@ -26,4 +26,22 @@ test('metadata contains only staging fingerprints and readiness flags, not crede
   const s=staging();s.ctx.securityEnvironmentGuard_({action:'appVersion'});const metadata=s.ctx.securityEnvironmentMetadata_();
   assert.equal(metadata.testEnvironment,'nh-staging');assert.equal(metadata.nhTestCredentialsDeclared,true);assert.equal(metadata.storeVersion,2);
   const text=JSON.stringify(metadata);assert.ok(!text.includes('SYNTHETIC_ONLY'));assert.ok(!text.includes(SHEET));
+});
+
+test('fresh setup refuses pre-bound project before creating or changing any Sheet',()=>{
+  const s=staging();let creates=0;s.ctx.SpreadsheetApp.create=()=>{creates++;throw Error('must not create')};
+  assert.throws(()=>s.ctx.setupNhFreshV2(),/FRESH_UNBOUND_PROJECT_REQUIRED/);assert.equal(creates,0);
+});
+test('fresh setup validates private settings before creating a new Sheet',()=>{
+  const s=staging();s.properties.delete('APP_ENV');s.properties.delete('STAGING_SHEET_ID');let creates=0;
+  s.ctx.SpreadsheetApp.create=()=>{creates++;throw Error('must not create')};
+  assert.throws(()=>s.ctx.setupNhFreshV2(),/PRIVATE_TEST_SETTINGS_REQUIRED/);assert.equal(creates,0);
+});
+test('fresh setup binds only the newly created Sheet and then initializes its dedicated user',()=>{
+  const s=staging();s.properties.delete('APP_ENV');s.properties.delete('STAGING_SHEET_ID');
+  s.properties.set('STAGING_TEST_USER','synthetic');s.properties.set('STAGING_TEST_PASSWORD','SYNTHETIC_NEW_PASSWORD_123');
+  s.ctx.PropertiesService.getScriptProperties=()=>({getProperty:k=>s.properties.get(k),setProperty:(k,v)=>s.properties.set(k,v)});
+  let creates=0,initialized=false;s.ctx.SpreadsheetApp.create=()=>{creates++;return {getId:()=>SHEET}};
+  s.ctx.setupNhStaging=()=>{initialized=true;assert.equal(s.properties.get('STAGING_SHEET_ID'),SHEET);assert.equal(s.properties.get('NH_V2_FRESH_TEST'),'true')};
+  s.ctx.setupNhFreshV2();assert.equal(creates,1);assert.equal(initialized,true);
 });

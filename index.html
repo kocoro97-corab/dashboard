@@ -61,7 +61,7 @@
         <div class="mini" id="tickSt" style="margin-top:6px;line-height:1.6"></div>
       </section>
       <section class="card">
-        <div class="sh"><div><h2>오늘의 시장 시나리오</h2><p id="gptTime">AI 분석</p></div>
+        <div class="sh"><div><h2>오늘의 시장 시나리오</h2><p id="gptTime">규칙 기반 분석</p></div>
         <div class="hr"><button onclick="copyScenario()">시나리오 복사</button><button onclick="refreshScenario()">↻ 재분석</button></div></div>
         <div id="gv" style="white-space:pre-wrap;line-height:1.6;font-size:11px"></div>
       </section>
@@ -108,7 +108,7 @@
     </section>
     <div class="grid two">
       <section class="card"><div class="sh"><div><h2>실시간 시장 뉴스</h2><p id="nst_mk">기사 불러오는 중...</p></div></div><div id="nl_mk"></div></section>
-      <section class="card"><div class="sh"><div><h2>내 보유종목 뉴스</h2><p id="nst_hd">기사 불러오는 중...</p></div></div><div id="nl_hd"></div></section>
+      <section class="card"><div class="sh"><div><h2>기본 관심종목 뉴스</h2><p id="nst_hd">기사 불러오는 중...</p></div></div><div id="nl_hd"></div></section>
     </div>
   </main>
 </div>
@@ -129,22 +129,23 @@
 <div class="hr" style="justify-content:space-between"><h3 style="font-size:14px">🩺 연결 진단</h3><button onclick="closeDg()">✕</button></div>
 <div class="mb"><div id="dgs" style="font-weight:700"></div>
 <pre id="dgl" style="font-size:10px;white-space:pre-wrap;color:var(--muted)"></pre>
-<div class="mini">GAS 웹 앱 URL:</div>
+<div class="mini">연결 주소 (중계 연결에서는 배포 설정으로 관리):</div>
 <input id="dgp" style="width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px;font:inherit">
-<button onclick="saveProxy()" style="background:var(--blue);color:#000;font-weight:700;margin-top:6px">저장 후 테스트</button>
+<button id="saveProxyBtn" onclick="saveProxy()" style="background:var(--blue);color:#000;font-weight:700;margin-top:6px">저장 후 테스트</button>
 </div></div></div>
 
 <!-- 스크립트: 순서를 바꾸지 마세요. 코드 수정 후 반영이 안 되면 ?v= 숫자를 올리세요. -->
 <script src="js/diagnostics.js?v=1-safe"></script>
 <script src="js/debug.js?v=3-safe"></script>
-<script src="js/auth.js?v=13-safe"></script>
+<script src="js/transport.js?v=1"></script>
+<script src="js/auth.js?v=14-transport"></script>
 <script src="js/data.js?v=10-security"></script>
-<script src="js/market.js?v=13-safe"></script>
+<script src="js/market.js?v=15-transport"></script>
 <script src="js/chart.js?v=4"></script>
 <script src="js/themes.js?v=5-safe"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="js/external_core.js?v=12-real-ocr"></script>
-<script src="js/external_accounts.js?v=13-safe"></script>
+<script src="js/external_accounts.js?v=15-transport"></script>
 <script src="js/init.js?v=13-safe"></script>
 
 </body>
