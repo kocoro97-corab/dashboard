@@ -253,7 +253,7 @@ def probe(endpoint, access_code, on_dns_wait=None, on_edge_wait=None):
         raise HttpsProbeFailure('HTTPS_PROBE_TRANSPORT_ERROR',evidence) from None
 
 
-def verify(endpoint, access_code, username, password, synthetic=False, route=None, width=1440):
+def verify(endpoint, access_code, username, password, synthetic=False, route=None, width=1440, dashboard_check=None):
     from playwright.sync_api import sync_playwright
     report = {'status': 'FAIL', 'scope': 'SIMULATED_HTTPS_PAGES' if synthetic else 'LIVE_HTTPS_PAGES_TO_TEST_GAS',
               'https': 'NOT_RUN', 'login': 'NOT_RUN', 'unauthenticatedBlocked': 'NOT_RUN',
@@ -306,11 +306,13 @@ def verify(endpoint, access_code, username, password, synthetic=False, route=Non
                 page.wait_for_function("()=>!!LS('invest_session_token')&&$('appContainer').style.display==='block'", timeout=120000)
                 token = page.evaluate("()=>LS('invest_session_token')")
                 report['login'] = 'PASS'
+                if dashboard_check:dashboard_check(page)
                 report['phase'] = 'SESSION_RELOAD'
                 page.reload(wait_until='domcontentloaded')
                 page.wait_for_function("()=>!!document.getElementById('devBanner')&&$('appContainer').style.display==='block'", timeout=90000)
                 if page.evaluate("()=>LS('invest_session_token')") != token:raise ValueError()
                 report['sessionReload'] = 'PASS'
+                if dashboard_check:dashboard_check(page)
                 report['phase'] = 'LOGOUT'
                 with page.expect_response(lambda r: r.url == endpoint and r.request.method == 'POST' and json.loads(r.request.post_data or '{}').get('action') == 'logout', timeout=90000):
                     page.evaluate('logout()')

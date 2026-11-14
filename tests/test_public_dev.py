@@ -139,6 +139,8 @@ class PublicDevTests(unittest.TestCase):
             self.assertNotIn('AKfycbxySfUKUai418', (out / 'js/auth.js').read_text())
             text = (out / 'index.html').read_text()
             self.assertIn('devSession:true', text)
+            self.assertIn('js/dev_inspection.js', text)
+            self.assertTrue(json.loads((out / 'development-only.json').read_text())['screenInspection'])
             self.assertIn('Content-Security-Policy', text)
             self.assertIn('name="referrer" content="strict-origin-when-cross-origin"', text)
             self.assertNotIn('https://cdn.jsdelivr.net/npm/tesseract', text)

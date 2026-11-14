@@ -24,6 +24,37 @@ PASSWORD = 'SYNTHETIC_PRIVATE_PASSWORD'
 TOKEN = 'a' * 64
 
 
+def inspect_screens(page):
+    try:inspect_screen_controls(page)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        raise
+
+
+def inspect_screen_controls(page):
+    assert page.locator('#cards .card').count() > 0
+    assert '미조회' in page.locator('#status').inner_text()
+    assert '미조회' in page.locator('#nhAccountRows').inner_text()
+    assert '미조회' in page.locator('#externalAssetRows').inner_text()
+    assert page.locator('#nhAccountBtn').is_disabled()
+    assert page.locator('#externalUploadBtn').is_disabled()
+    assert page.locator('#authToggleTxt').is_hidden()
+    assert page.locator('#adminBtn').is_hidden()
+    page.locator('button[onclick="openModal()"]').click()
+    assert page.locator('#mo').evaluate("el=>el.classList.contains('on')")
+    page.locator('#tKR').click();assert page.locator('#tKR').evaluate("el=>el.classList.contains('active')")
+    page.locator('#tUS').click();assert page.locator('#tUS').evaluate("el=>el.classList.contains('active')")
+    page.locator('button[onclick="closeModal()"]').click()
+    page.locator('button[onclick="openDg()"]').click()
+    assert page.locator('#dg').evaluate("el=>el.classList.contains('on')")
+    assert page.locator('#saveProxyBtn').is_disabled()
+    page.locator('button[onclick="closeDg()"]').click()
+    page.locator('#qm1').click();page.locator('#qm2').click()
+    # The existing public listing master loads from this artifact only.
+    page.wait_for_function("()=>!document.getElementById('externalMasterStatus').textContent.includes('확인 중')")
+
+
 class AuthOnlyGas:
     def __init__(self):self.live = False;self.calls = []
     def verify(self):pass
@@ -69,7 +100,7 @@ with tempfile.TemporaryDirectory() as tmp:
                 r.fulfill(status=result['status'], headers=result['headers'], body=json.dumps(result['body']));return
             unexpected.append('UNEXPECTED_HOST_OR_PATH')
             r.abort()
-        result = verify(ENDPOINT, CODE, 'synthetic-user', PASSWORD, synthetic=True, route=route, width=width)
+        result = verify(ENDPOINT, CODE, 'synthetic-user', PASSWORD, synthetic=True, route=route, width=width, dashboard_check=inspect_screens)
         assert result['status'] == 'PASS', {k: v for k, v in result.items() if k in ('scope', 'code', 'phase', 'login', 'logout', 'sessionReload', 'developmentGate', 'networkEvidence')}
         assert not unexpected
         assert set(gas.calls) <= {'appVersion', 'login', 'sessionInfo', 'logout'}

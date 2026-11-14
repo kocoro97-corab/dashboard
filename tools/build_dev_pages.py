@@ -29,7 +29,7 @@ def build(output, root=ROOT):
     marker = '<script src="js/transport.js?v=1"></script>'
     if text.count(marker) != 1:
         raise ValueError('DEV_TRANSPORT_MARKER_CHANGED')
-    text = text.replace(marker, '<script>window.MYINVEST_TRANSPORT_CONFIG={mode:"relay",endpoint:"",devSession:true};</script>\n<script src="js/dev_connect.js?v=1"></script>\n' + marker)
+    text = text.replace(marker, '<script>window.MYINVEST_TRANSPORT_CONFIG={mode:"relay",endpoint:"",devSession:true};</script>\n<script src="js/dev_inspection.js?v=1"></script>\n<script src="js/dev_connect.js?v=1"></script>\n' + marker)
     text = re.sub(r'(src="js/[^"?]+\?[^" ]+)(")', lambda m: m[1] + '&dev=' + revision[:12] + m[2], text)
     (output / 'index.html').write_text(text)
     assets = {'js': set(re.findall(r'src="js/([A-Za-z0-9_-]+\.js)', text)),
@@ -50,7 +50,7 @@ def build(output, root=ROOT):
     shutil.copyfile(root / 'data/krx-instruments.json', output / 'data/krx-instruments.json')
     (output / '.nojekyll').write_text('')
     (output / 'robots.txt').write_text('User-agent: *\nDisallow: /\n')
-    (output / 'development-only.json').write_text(json.dumps({'myinvestDevelopmentOnly': True, 'authOnly': True, 'sourceBranch': 'feat/nh-integration-v2', 'sourceCommit': revision}))
+    (output / 'development-only.json').write_text(json.dumps({'myinvestDevelopmentOnly': True, 'authOnly': True, 'screenInspection': True, 'sourceBranch': 'feat/nh-integration-v2', 'sourceCommit': revision}))
     manifest = {p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in sorted(output.rglob('*')) if p.is_file()}
     (output / 'asset-manifest.json').write_text(json.dumps(manifest, sort_keys=True))
