@@ -7,6 +7,7 @@ import getpass
 import json
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 import re
 import signal
 import socket
@@ -116,6 +117,41 @@ def serve(app, binary, lifetime):
         server.server_close()
 
 
+@contextmanager
+def ready_public_relay(relay, access_code, binary, lifetime, on_progress):
+    """Keep the successful allocation alive; replace only confirmed missing DNS.
+
+    At most three allocations, with full cleanup between them. Authentication,
+    metadata POST, HTTP/CORS and caller/browser failures are never retried here.
+    """
+    from nh_v2_https_browser import probe, public_dns_status
+    for attempt in range(1, 4):
+        public = PublicDevelopment(relay, PAGE, access_code, lifetime=lifetime)
+        with serve(public, binary, lifetime) as (endpoint, process):
+            try:
+                dns = probe(endpoint, access_code,
+                    on_dns_wait=lambda info:on_progress(dict(info, progress='HTTPS_DNS_WAIT')),
+                    on_edge_wait=lambda info:on_progress(dict(info, progress='HTTPS_EDGE_WAIT')))
+            except HttpsProbeFailure as error:
+                if error.code != 'HTTPS_DNS_NOT_READY' or error.evidence.get('dnsTarget') != 'PUBLIC_RELAY':
+                    raise
+                # Check the SAME allocation while its connector is still alive.
+                # A separate diagnostic hostname cannot establish its readiness.
+                status = public_dns_status(urlsplit(endpoint).hostname)
+                evidence = dict(error.evidence, publicDns=status, allocationAttempt=attempt)
+                missing = status in ('NXDOMAIN', 'NO_A_RECORD')
+                controls = evidence.get('tunnelApiDns') is True and evidence.get('pagesDns') is True
+                if not (missing and controls and attempt < 3):
+                    raise HttpsProbeFailure(error.code, evidence) from None
+                on_progress(dict(evidence, progress='HTTPS_TUNNEL_REALLOCATING'))
+                continue  # Context cleanup closes the failed allocation first.
+            dns = dict(dns, allocationAttempt=attempt)
+            # Deliberately outside the probe exception handler: no retry after
+            # yielding, when the owner/browser may already have authenticated.
+            yield endpoint, process, public, dns
+            return
+
+
 def main():
     def terminate(_signum, _frame):raise KeyboardInterrupt()
     signal.signal(signal.SIGTERM, terminate)
@@ -162,17 +198,13 @@ def main():
                     'scriptHash': fingerprint(plan['scriptId']), 'sheetHash': web.binding,
                     'sourceDigest': plan['sourceDigest'], 'gatewayVersion': 2, 'storeEngine': 'account-store-v2'}
         relay = RelayApp(Config(upstream=plan['url'], origins=frozenset({'https://kocoro97-corab.github.io'}), expected=expected))
-        public = PublicDevelopment(relay, PAGE, access_code, lifetime=args.minutes * 60)
         # Verify the fixed target privately before exposing login traffic.
         report['phase'] = 'TARGET_METADATA'
         relay.gateway.verify()
-        report['phase'] = 'HTTPS_TUNNEL'
-        with serve(public, args.cloudflared.resolve(), args.minutes * 60) as (endpoint, process):
-            from nh_v2_https_browser import probe, verify
-            report['phase'] = 'PUBLIC_HTTPS_PROBE'
-            dns=probe(endpoint, access_code,
-                      on_dns_wait=lambda info:print(json.dumps(dict(info,progress='HTTPS_DNS_WAIT')),flush=True),
-                      on_edge_wait=lambda info:print(json.dumps(dict(info,progress='HTTPS_EDGE_WAIT')),flush=True))
+        report['phase'] = 'PUBLIC_HTTPS_PROBE'
+        with ready_public_relay(relay, access_code, args.cloudflared.resolve(), args.minutes * 60,
+                                lambda info:print(json.dumps(info), flush=True)) as (endpoint, process, public, dns):
+            from nh_v2_https_browser import verify
             print(json.dumps({'status': 'HTTPS_DEV_READY', 'page': PAGE, 'endpoint': endpoint,
                               'expiresInMinutes': args.minutes, 'sourceDigest': 'PASS', 'isolation': 'PASS',
                               'authOnly': True, 'orderCalls': 0, 'secretsIncluded': False, 'dns': dns}), flush=True)

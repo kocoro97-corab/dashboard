@@ -208,3 +208,30 @@ The final report deliberately keeps application status `NOT_RUN`, sets
 `diagnosticComplete`, and includes only these fixed categories. It never reports
 raw DNS answers, IPs, private paths or exception text. A new provider account,
 domain, paid service or Pages republication is unnecessary for this diagnostic.
+
+### Readiness of the actual allocation
+
+A standalone DNS diagnostic allocates a different hostname and closes it at exit.
+Its success cannot establish readiness of a later application allocation. The
+owner observed this distinction: one diagnostic resolved immediately, while the
+next normal startup failed its own DNS lookup.
+
+Normal startup now compares the **same failing hostname** with the existing
+Cloudflare DNS diagnostic while its connector is still alive. Only when the
+system lookup fails, both known-service controls succeed, and public DNS reports
+`NXDOMAIN` or no A record, it closes that allocation and requests another. It
+reports `HTTPS_TUNNEL_REALLOCATING` and tries at most three allocations total.
+Every replacement fully closes the preceding tunnel/application before opening
+the next. The working allocation stays open for actual connection; the final
+`HTTPS_DEV_READY` includes `allocationAttempt`. No separate diagnostic run or
+Pages republication is required.
+
+A public A-record answer with a system failure, unavailable diagnostic service,
+DNS SERVFAIL, failed controls or proxy-DNS failure stops with enriched evidence.
+HTTP, TLS, CORS, authentication and failures after readiness never trigger an
+allocation replacement. The only repeated operation is allocating an unpublished
+credential-gated development tunnel after verified DNS absence. No login or
+metadata POST is replayed: the DNS-not-ready code arises before HTTP construction.
+No resolver/proxy settings, TLS checks, GAS modules or account data are changed.
+Three failures remain NOT_RUN; this is bounded recovery, not a claim that the
+provider registration problem or local resolver cause has been established.
