@@ -1,6 +1,7 @@
 """Changed local-draft UI only. Synthetic authentication; zero account/store calls."""
 import json
 import base64
+import argparse
 from pathlib import Path
 import sys
 import tempfile
@@ -15,6 +16,17 @@ from test_relay import configuration,EXPECTED,request
 
 ORIGIN='https://kocoro97-corab.github.io';HOST='synthetic-preview.trycloudflare.com';ENDPOINT='https://'+HOST+'/api'
 CODE='SYNTHETIC_PRIVATE_PREVIEW_CODE'
+parser=argparse.ArgumentParser()
+parser.add_argument('--real-ocr',action='store_true')
+parser.add_argument('--private-images',nargs=2,type=Path)
+parser.add_argument('--private-expected',type=Path)
+parser.add_argument('--private-width',type=int,choices=(344,1440),default=344)
+parser.add_argument('--force-private-header-retry',action='store_true')
+args=parser.parse_args()
+if bool(args.private_images)!=bool(args.private_expected):raise RuntimeError('PRIVATE_INPUTS_REQUIRED')
+if args.real_ocr and args.private_images or args.force_private_header_retry and not args.private_images:raise RuntimeError('INCOMPATIBLE_OCR_MODES')
+if args.private_images and any(p.resolve().is_relative_to(ROOT) for p in args.private_images+[args.private_expected]):raise RuntimeError('PRIVATE_INPUTS_MUST_STAY_OUTSIDE_REPOSITORY')
+if args.private_images and not all(p.is_file() for p in args.private_images+[args.private_expected]):raise RuntimeError('PRIVATE_INPUTS_REQUIRED')
 
 class Auth:
     def __init__(self):self.calls=[];self.number=0
@@ -32,7 +44,7 @@ with tempfile.TemporaryDirectory() as tmp:
     with sync_playwright() as p:
         browser=p.chromium.launch(headless=True)
         try:
-            for width in (344,1440):
+            for width in ((args.private_width,) if args.private_images else (344,1440)):
                 gas=Auth();edge=PublicDevelopment(RelayApp(configuration(origins=frozenset({ORIGIN})),gas),PAGE,CODE);edge.host=HOST
                 context=browser.new_context(viewport={'width':width,'height':882},service_workers='block')
                 unexpected=[];errors=[]
@@ -79,7 +91,48 @@ with tempfile.TemporaryDirectory() as tmp:
                 for name in ('Code','Name','Qty','Avg'):assert page.locator('#externalManual'+name).input_value()==''
                 login();assert page.evaluate('EXT_ASSETS.length')==0
                 assert '미조회' in page.locator('#externalAssetRows').inner_text()
-                if '--real-ocr' in sys.argv:
+                if args.private_images:
+                    baseline=len(gas.calls)
+                    page.evaluate("""()=>{
+                      window.privateNameReads=[];const create=Tesseract.createWorker;
+                      Tesseract.createWorker=async(lang,...args)=>{
+                        const w=await create(lang,...args),read=w.recognize;
+                        if(lang==='kor'||lang==='eng')w.recognize=async(image,...rest)=>{
+                          const r=await read(image,...rest);
+                          const b=await createImageBitmap(await (await fetch(image)).blob());
+                          window.privateNameReads.push({lang,width:b.width,height:b.height,data:{words:r.data.words||[]}});b.close();return r;
+                        };return w;
+                      };
+                    }""")
+                    if args.force_private_header_retry:
+                        page.evaluate("""()=>{
+                          const read=Tesseract.recognize;let first=true;
+                          Tesseract.recognize=(...args)=>{if(first){first=false;return Promise.resolve({data:{text:'CONTROLLED_HEADER_FAILURE',words:[]}})}return read(...args)};
+                        }""")
+                    page.locator('#externalImageFiles').set_input_files([str(p) for p in args.private_images])
+                    page.locator('#externalUploadBtn').click()
+                    page.wait_for_function("()=>!$('externalUploadBtn').disabled",timeout=300000)
+                    expected=json.loads(args.private_expected.read_text())
+                    report=page.evaluate("""expected=>{
+                      const norm=rows=>rows.map(r=>JSON.stringify([r.name,r.code,r.quantity,r.avgPrice])).sort().join('|');
+                      const ids=rows=>rows.map(r=>JSON.stringify([r.name,r.code])).sort().join('|');
+                      return {rowsMatch:EXT_ASSETS.length===expected.length,identitiesMatch:ids(EXT_ASSETS)===ids(expected),
+                        exactValuesAndIdentityMatch:norm(EXT_ASSETS)===norm(expected),
+                        reads:window.privateNameReads.map(r=>{
+                          const s=r.data.words.flatMap(w=>w.symbols||[]),k=s.filter(s=>/^[가-힣]$/.test(s.text)),a=s.filter(s=>/^[A-Za-z]$/.test(s.text));
+                          return {lang:r.lang,width:r.width,height:r.height,hangulSymbols:k.length,latinSymbols:a.length,
+                            minHangulConfidence:k.length?Math.floor(Math.min(...k.map(s=>s.confidence))):null,
+                            minLatinConfidence:a.length?Math.floor(Math.min(...a.map(s=>s.confidence))):null,
+                            prefixBoundary:ExternalCore.mixedPrefixRegion(r.data)?.x1??null};
+                        })};
+                    }""",expected)
+                    report.update(scope='PRIVATE_REAL_IMAGES_LOCAL_DEV_OCR',width=width,financialHttpCalls=len(gas.calls)-baseline,controlledHeaderRetry=args.force_private_header_retry)
+                    print(json.dumps(report))
+                    if not report['exactValuesAndIdentityMatch']:raise RuntimeError('PRIVATE_REAL_OCR_NOT_CONFIRMED')
+                    assert len(gas.calls)==baseline and page.locator('#externalSaveBtn').is_disabled()
+                    page.evaluate('logout()');page.wait_for_selector('#authGuard',state='visible')
+                    assert page.locator('#externalImageFiles').input_value()==''
+                if args.real_ocr:
                     # Synthetic image only; execute the actual pinned worker/core/kor+eng.
                     image=page.evaluate("""async()=>{
                       await document.fonts.ready;

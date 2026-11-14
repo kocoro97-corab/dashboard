@@ -167,3 +167,27 @@ real Korean symbol positions was recovered using the actual English prefix
 worker, preserving synthetic quantity/average price and blocked save/network
 boundaries. These tests are distinct from owner capture verification, which is
 still pending publication of this frontend update.
+
+## Owner mixed-name failure: private evidence comparison
+
+The next owner screen showed one prefix read but zero verified name corrections.
+This confirms that the optional read ran, not which verification condition failed.
+No further product-name mapping, confidence change or production fix was made
+without that evidence. Existing private original captures and expectations were
+located outside the repository and exercised against the current local-only
+development artifact, with synthetic authentication and zero financial HTTP or
+store requests. At 344px the available originals matched all seven identities,
+quantities and average prices. Injecting only the first header failure also
+matched; thus those files do not reproduce the owner's current prefix failure.
+Additional in-memory clipping/resolution comparisons did not establish the same
+failure either. They are not a PASS claim for the currently failing input file.
+
+The existing browser test now accepts opt-in `--private-images` (two paths) and
+`--private-expected` outside the repository, with `--private-width 344|1440`.
+`--force-private-header-retry` is a separate controlled fault mode. No private
+inputs are used by CI. Reports contain only equality flags, worker language,
+crop dimensions and symbol counts/confidence, never actual text, account numbers,
+names, quantities or prices. Images are selected from local files; the fixture
+gateway sees authentication actions only. The exact failing input file is needed
+before another product correction can be justified; real financial input files
+and expectation data remain outside Git.
