@@ -211,7 +211,7 @@ def main():
             report['phase']='MARKET_PROXY_DIAGNOSTIC'
             username=input('Staging user (visible): ').strip()
             password=getpass.getpass('Staging password (hidden): ')
-            report.update(diagnose_market_proxy(relay.gateway,username,password),scope='TEST_GAS_PUBLIC_PROXY_ONLY')
+            report.update(diagnose_market_proxy(relay.gateway,username,password),scope='TEST_GAS_AUTH_PUBLIC_MARKET_ONLY')
             print(json.dumps(report));return 0 if report['status']=='PASS' else 2
         report['phase'] = 'PUBLIC_HTTPS_PROBE'
         with ready_public_relay(relay, access_code, args.cloudflared.resolve(), args.minutes * 60,
@@ -220,6 +220,7 @@ def main():
             print(json.dumps({'status': 'HTTPS_DEV_READY', 'page': PAGE, 'endpoint': endpoint,
                               'expiresInMinutes': args.minutes, 'sourceDigest': 'PASS', 'isolation': 'PASS',
                               'authOnly': not args.public_market, 'publicMarket': args.public_market,
+                              'publicTransport': 'RELAY_DIRECT_AFTER_GAS_AUTH' if args.public_market else 'DISABLED',
                               'nhCallsAllowed': False, 'storageWritesAllowed': False,
                               'orderCalls': 0, 'secretsIncluded': False, 'dns': dns}), flush=True)
             if args.verify_browser or args.verify_market:

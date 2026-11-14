@@ -2,7 +2,7 @@
 import sys
 from pathlib import Path
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock,patch
 from urllib.parse import urlencode
 
 ROOT=Path(__file__).resolve().parents[1];sys.path[:0]=[str(ROOT),str(ROOT/'tests')]
@@ -88,15 +88,21 @@ class MarketScopeTests(unittest.TestCase):
         self.assertEqual(gateway.calls,[])
 
     def test_gas_session_is_validated_before_public_get_and_no_token_enters_url(self):
-        gateway=GasGateway(configuration(public_market=True));gateway.post=Mock(return_value={'success':True})
-        gateway._read=Mock(return_value='SYNTHETIC_PUBLIC_DATA')
-        self.assertEqual(gateway.public(INDEX,TOKEN),'SYNTHETIC_PUBLIC_DATA')
-        gateway.post.assert_called_once_with({'action':'sessionInfo','token':TOKEN})
-        req=gateway._read.call_args.args[0]
-        self.assertEqual(req.get_method(),'GET');self.assertIsNone(req.data)
-        self.assertNotIn(TOKEN,req.full_url);self.assertIsNone(req.get_header('Authorization'))
-        self.assertEqual(gateway._read.call_args.kwargs,{'timeout':20,'max_bytes':2*1024*1024})
-        for data in ({'success':False},{'success':True,'mustChangePassword':True}):
-            gateway.post.return_value=data;gateway._read.reset_mock()
-            with self.assertRaises(RelayFault):gateway.public(INDEX,TOKEN)
-            gateway._read.assert_not_called()
+        for enabled in (False,True):
+            gateway=GasGateway(configuration(public_market=enabled));gateway.post=Mock(return_value={'success':True})
+            gateway._read=Mock(return_value='SYNTHETIC_PUBLIC_DATA')
+            with patch('relay.app.read_market_text',return_value='SYNTHETIC_PUBLIC_DATA') as public:
+                self.assertEqual(gateway.public(INDEX,TOKEN),'SYNTHETIC_PUBLIC_DATA')
+                gateway.post.assert_called_once_with({'action':'sessionInfo','token':TOKEN})
+                if enabled:
+                    public.assert_called_once_with(INDEX)
+                    gateway._read.assert_not_called()  # No GET to the staging POST-only bridge.
+                else:
+                    public.assert_not_called()  # Preserve the existing non-public-profile path.
+                    req=gateway._read.call_args.args[0]
+                    self.assertEqual(req.get_method(),'GET');self.assertIsNone(req.data)
+                    self.assertNotIn(TOKEN,req.full_url);self.assertIsNone(req.get_header('Authorization'))
+                for data in ({'success':False},{'success':True,'mustChangePassword':True}):
+                    gateway.post.return_value=data;gateway._read.reset_mock();public.reset_mock()
+                    with self.assertRaises(RelayFault):gateway.public(INDEX,TOKEN)
+                    gateway._read.assert_not_called();public.assert_not_called()

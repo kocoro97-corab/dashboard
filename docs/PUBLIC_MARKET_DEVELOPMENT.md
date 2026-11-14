@@ -11,7 +11,7 @@ Sheet, authentication settings, account, provider or deployment is created.
 ## Data path
 
 Browser existing market/chart/news functions → existing HTTPS relay publicFetch →
-existing GAS sessionInfo authorization → existing GAS public GET proxy → existing
+existing GAS sessionInfo authorization → relay HTTPS GET to the existing
 Naver/Yahoo/Google News/Daum public endpoints. Tokens stay in the HTTPS request
 header and GAS session POST body; they never enter a URL or the vendor request.
 GAS source and the existing session authority are unchanged.
@@ -22,11 +22,12 @@ market_routes module restricts publicFetch to the actual UI paths, parameter
 names/values and bounds. Arbitrary same-host URLs, credential-bearing URLs,
 private/account/order endpoints, nested arbitrary targets, additional fields and
 duplicate queries are rejected before upstream calls. GAS verifies the session
-before every public GET, including expiry and required password change.
+before every public GET, including expiry and required password change. The public
+profile does not call GAS doGet, which is intentionally disabled in staging.
 
 Existing exact Origin/HTTPS/Host/private development code, body/rate/concurrency
 limits, fingerprint verification, redirection rules and expiry remain enabled.
-Public responses are bounded to 2 MiB with a 20-second GAS GET timeout. No NH
+Public responses are bounded to 2 MiB with a 20-second public GET timeout. No NH
 request, account read, Drive import, registration/admin action or store write is
 added to the allowlist. NH collectors are also skipped by the development adapter.
 The frontend waits for the relay's public capability before enabling market UI.
@@ -86,8 +87,9 @@ requests are queued, the capability is disabled, or HTTP-success responses conta
 non-market data. No provider/GAS error cause has yet been confirmed.
 
 Use the same owner launcher with `--public-market --diagnose-market` to compare
-only two fixed URLs (Naver KOSPI and default market-news RSS) through existing GAS
-and directly from the same Cloud Shell. This mode creates no tunnel or browser,
+only two fixed URLs (Naver KOSPI and default market-news RSS) through the authenticated market reader
+and directly from the same Cloud Shell. Before the transport correction, this
+field was named gasProxy and used GAS GET; it is now authenticatedMarket. This mode creates no tunnel or browser,
 needs no separate development code, and uses the existing private test login.
 It validates the isolated target and existing session, revokes that test session
 in finally, and makes no NH, account-store or Drive request. No transport fallback
@@ -101,3 +103,31 @@ redirects, a 15-second timeout and a 2-MiB cap. Values, arbitrary messages/keys,
 URLs, passwords and tokens are never printed. This distinguishes a GAS proxy
 problem from a Cloud Shell/provider problem without repeating the full browser
 failure. No Pages publication is needed for this tool-only diagnosis.
+
+## Confirmed staging GET failure and scoped correction
+
+Owner evidence: both Naver index and Google News returned GAS_PUBLIC_HOST_DENIED
+through staging, while direct reads in the SAME Cloud Shell returned valid price
+data and RSS/100 items with HTTP 200. This confirms the failure is not browser
+CORS, login, source availability or the Cloud Shell source network.
+
+StagingBridge.gs intentionally has PROXY_ALLOWED_HOSTS=[] and a legacy GET stub
+returning STAGING_POST_ONLY. Expanding the host list alone would not implement a
+proxy and could open an unnecessary anonymous GAS surface. This was missed in
+the initial public-data connection. No GAS code, versions, Sheets, Properties or
+source digest are changed to fix it.
+
+Only Config.public_market uses the corrected path: after the existing GAS
+sessionInfo check succeeds, a separate public-only reader performs the exact
+allowlisted GET. It constructs new fixed public headers and never receives a
+password, token, development code, cookie or client-supplied headers. It preserves
+default certificate validation/proxy/DNS behavior, rejects all redirects, caps
+responses at 2 MiB/20 seconds, and never falls back to the blocked GAS GET.
+The existing non-public-profile behavior remains unchanged.
+
+Related backend reader/scope/session/security tests: 55 PASS. Existing normal
+frontend/login tests are reused because those modules are unchanged. The owner
+will publish the reviewed commit (including the marker required by the existing
+verifier), restart the SAME relay with --public-market --verify-market, and
+confirm public display. No repeat diagnostic mode or test GAS redeployment is
+needed. Until that result, complete Pages-to-market verification remains NOT_RUN.

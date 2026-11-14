@@ -1,5 +1,7 @@
 """Exact GET routes used by the existing public-market UI; no arbitrary proxy."""
 import re
+import urllib.error
+import urllib.request
 from urllib.parse import parse_qsl, unquote, urlsplit
 
 NEWS_QUERIES = frozenset({'코스피 OR 증시 OR 나스닥 when:2d',
@@ -43,3 +45,36 @@ def allowed_market_url(value):
     if host == 'finance.daum.net' and path == '/api/home/sec':
         return set(q) == {'path'} and bool(re.fullmatch(r'/api/futures/KR[A-Z0-9]{10}', q['path']))
     return False
+
+
+class MarketReadError(Exception):
+    def __init__(self,code):self.code=code;super().__init__(code)
+
+
+class NoMarketRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self,*args,**kwargs):return None
+
+
+def read_market_text(url,opener=None):
+    """Public GET after GAS session validation; no auth/session headers or fallback."""
+    if not allowed_market_url(url):raise MarketReadError('RELAY_PUBLIC_URL_DENIED')
+    host=urlsplit(url).hostname
+    referer=('https://news.google.com/' if host=='news.google.com' else
+             'https://finance.yahoo.com/' if host=='query1.finance.yahoo.com' else
+             'https://finance.daum.net/' if host=='finance.daum.net' else 'https://stock.naver.com/')
+    request=urllib.request.Request(url,method='GET',headers={'Accept':'*/*','Accept-Encoding':'identity',
+        'User-Agent':'Mozilla/5.0','Referer':referer})
+    try:
+        client=opener or urllib.request.build_opener(NoMarketRedirect())
+        with client.open(request,timeout=20) as response:
+            if response.geturl()!=url:raise MarketReadError('RELAY_REDIRECT_DENIED')
+            if response.status!=200:raise MarketReadError('RELAY_PUBLIC_FAILED')
+            raw=response.read(2*1024*1024+1)
+            if len(raw)>2*1024*1024:raise MarketReadError('RELAY_RESPONSE_TOO_LARGE')
+            return raw.decode('utf-8')
+    except MarketReadError:raise
+    except urllib.error.HTTPError as error:
+        code='RELAY_REDIRECT_DENIED' if 300<=error.code<400 else 'RELAY_PUBLIC_FAILED'
+        error.close();raise MarketReadError(code) from None
+    except UnicodeError:raise MarketReadError('RELAY_RESPONSE_INVALID') from None
+    except Exception:raise MarketReadError('RELAY_UPSTREAM_NETWORK') from None

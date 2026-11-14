@@ -13,7 +13,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from relay.market_routes import allowed_market_url
+from relay.market_routes import allowed_market_url,read_market_text,MarketReadError
 
 PRODUCTION_DEPLOYMENT='AKfycbxySfUKUai418Ar7C8RI6gwBJpjSZXH4y8EX2JhJZG9nGz7RVB0WCZGl3H1wHxOWGVd'
 AUTH_ACTIONS=frozenset({'appVersion','login','sessionInfo','logout'})
@@ -116,6 +116,9 @@ class GasGateway:
     def public(self,url,token):
         check=self.post({'action':'sessionInfo','token':token})
         if check.get('success') is not True or check.get('mustChangePassword'):raise RelayFault('AUTH_REQUIRED',401)
+        if self.config.public_market:
+            try:return read_market_text(url)
+            except MarketReadError as error:raise RelayFault(error.code) from None
         request=urllib.request.Request(self.config.upstream+'?url='+urllib.parse.quote(public_url(url),safe=''),method='GET')
         return self._read(request,False,timeout=20,max_bytes=2*1024*1024)
 

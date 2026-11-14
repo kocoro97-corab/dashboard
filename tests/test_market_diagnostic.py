@@ -34,7 +34,7 @@ class MarketDiagnosticTests(unittest.TestCase):
                  patch('builtins.input',return_value=SECRET),patch('nh_v2_https_browser.diagnose_market_proxy',return_value={'status':'PASS','code':'MARKET_PROXY_DIAGNOSTIC_COMPLETE','probes':[]}),redirect_stdout(out):
                 self.assertEqual(launcher.main(),0)
             tunnel.assert_not_called();self.assertEqual(password.call_count,1);gateway.verify.assert_called_once()
-            result=json.loads(out.getvalue());self.assertEqual(result['scope'],'TEST_GAS_PUBLIC_PROXY_ONLY')
+            result=json.loads(out.getvalue());self.assertEqual(result['scope'],'TEST_GAS_AUTH_PUBLIC_MARKET_ONLY')
             self.assertEqual(result['actualNhCalls'],0);self.assertFalse(result['accountStoreWrites'])
             self.assertNotIn(SECRET,out.getvalue());self.assertNotIn(str(env),out.getvalue())
 
@@ -93,8 +93,8 @@ class MarketDiagnosticTests(unittest.TestCase):
         with patch('nh_v2_https_browser.direct_market_summary',return_value={'valid':True}),redirect_stdout(io.StringIO()):
             result=diagnose_market_proxy(gateway,SECRET,SECRET)
         self.assertEqual(result['status'],'FAIL')
-        self.assertEqual(result['probes'][0]['gasProxy']['knownCode'],'RELAY_UPSTREAM_HTTP')
-        self.assertEqual(result['probes'][1]['gasProxy']['knownCode'],'GAS_REJECTED')
+        self.assertEqual(result['probes'][0]['authenticatedMarket']['knownCode'],'RELAY_UPSTREAM_HTTP')
+        self.assertEqual(result['probes'][1]['authenticatedMarket']['knownCode'],'GAS_REJECTED')
         self.assertTrue(result['probes'][0]['directPublic']['valid'])
         gateway.post.assert_any_call({'action':'logout','token':TOKEN})
 

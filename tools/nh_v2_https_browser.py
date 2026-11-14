@@ -17,7 +17,7 @@ PROBE_RELAY_CODES=frozenset('''DEV_ACCESS_REQUIRED DEV_ACCESS_CLOSED DEV_PAGE_RE
 DEV_HTTPS_REQUIRED DEV_RATE_LIMIT DEV_BUSY RELAY_ORIGIN_DENIED RELAY_PATH_DENIED
 RELAY_BAD_REQUEST RELAY_REQUEST_SIZE RELAY_TARGET_MISMATCH RELAY_GAS_ACCESS_REQUIRED
 RELAY_UPSTREAM_HTTP RELAY_UPSTREAM_NETWORK RELAY_GOOGLE_CONTENT_400 RELAY_NON_JSON
-RELAY_RESPONSE_INVALID RELAY_SCOPE_BLOCKED'''.split())
+RELAY_RESPONSE_INVALID RELAY_SCOPE_BLOCKED RELAY_PUBLIC_FAILED RELAY_PUBLIC_URL_DENIED RELAY_RESPONSE_TOO_LARGE RELAY_REDIRECT_DENIED'''.split())
 
 
 class HttpsProbeFailure(Exception):
@@ -330,7 +330,7 @@ def direct_market_summary(url):
 
 
 def diagnose_market_proxy(gateway,username,password):
-    """Two fixed public reads over existing GAS; no browser/tunnel/NH/store."""
+    """Two authenticated public reads and direct controls; no browser/tunnel/NH/store."""
     from urllib.parse import urlencode
     token=None;probes=[]
     try:
@@ -349,8 +349,8 @@ def diagnose_market_proxy(gateway,username,password):
                 code=getattr(error,'code',None)
                 summary={'valid':False,'knownCode':code if code in PROBE_RELAY_CODES or code=='AUTH_REQUIRED' else 'PUBLIC_PROBE_FAILED'}
             print(json.dumps({'progress':'MARKET_DIRECT_DIAGNOSTIC','source':source}),flush=True)
-            probes.append({'source':source,'gasProxy':summary,'directPublic':direct_market_summary(url)})
-        return {'status':'PASS' if all(p['gasProxy']['valid'] for p in probes) else 'FAIL','code':'MARKET_PROXY_DIAGNOSTIC_COMPLETE','probes':probes}
+            probes.append({'source':source,'authenticatedMarket':summary,'directPublic':direct_market_summary(url)})
+        return {'status':'PASS' if all(p['authenticatedMarket']['valid'] for p in probes) else 'FAIL','code':'MARKET_PROXY_DIAGNOSTIC_COMPLETE','probes':probes}
     finally:
         if token:
             try:gateway.post({'action':'logout','token':token})
