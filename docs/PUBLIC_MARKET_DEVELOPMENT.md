@@ -153,3 +153,35 @@ launcher with --public-market, keep the terminal open after HTTPS_DEV_READY, and
 use the new endpoint in the existing development page. This avoids repeating the
 already-passed login/session verification; a subsequent actual data display still
 needs owner confirmation. Market transport and GAS settings remain unchanged.
+
+## Actual display confirmation and chart-selection latency
+
+The owner confirmed public index/quote cards, Korean/US chart switching, both news
+sections and manual refresh work in the development page. KOSDAQ150 futures is
+excluded as a pre-existing unimplemented feed; no new NH path is opened for it.
+This is actual user display evidence, distinct from the earlier synthetic tests.
+
+The owner measured chart transitions at approximately 5–10 seconds. Source review
+shows fresh requests on every selection, a one-at-a-time public queue and GAS
+session validation for each request. The contribution of each network stage is
+not individually measured. A single 120-row Naver request returned an error in
+a public parameter check, so that unconfirmed API change is not applied.
+
+Only the development public-chart UI now keeps up to 12 in-memory symbol/period
+entries for 30 seconds from receipt. Revisiting a chart within that window causes
+no additional public API or GAS request and displays the cache age. It does not
+cache account data, credentials on disk, or server authorization decisions. Scope
+changes, logout/local expiry make prior entries ineligible; a response begun in
+an older session cannot populate the new scope. Failures are not cached. Header
+full refresh clears the cache and fetches fresh data. Normal non-development
+chart behavior and all server authentication/permission rules remain unchanged.
+
+Related tests: chart/cache 10 and public queue/full-refresh 7 PASS. Cold first
+loads still incur network latency. Actual post-publication performance is not
+benchmarked yet; no numerical speedup is claimed. The browser CI case also checks
+that a recent Korean chart can be revisited after a US chart without another read.
+
+Publish the latest public artifact using the existing publisher in another Cloud
+Shell terminal. Keep the current working relay running: no backend/GAS update or
+tunnel restart is needed for this frontend-only change. Reload the development
+page, then revisit the same chart within 30 seconds to check the cache label.

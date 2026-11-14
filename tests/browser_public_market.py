@@ -87,6 +87,10 @@ with tempfile.TemporaryDirectory() as tmp:
                 page.evaluate('showQ("^GSPC","Synthetic Index","",1)')
                 page.wait_for_function("()=>$('qi').textContent.includes('Yahoo')")
                 assert any('finance.yahoo.com' in url for url in gas.reads)
+                before=len(gas.reads)
+                page.evaluate('showQ("^KS11","Synthetic index","",1)')
+                page.wait_for_function("()=>$('qi').textContent.includes('캐시')")
+                assert len(gas.reads)==before  # Returning to a recent chart adds no API/auth request.
                 assert any('news.google.com' in url for url in gas.reads)
                 summary=market_screen_check(page)
                 assert summary['quoteSymbols']>0 and summary['chartRows']>1

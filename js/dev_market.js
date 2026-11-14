@@ -36,6 +36,7 @@
   }
   async function refreshPublic(){
     if(busy)return;busy=true;
+    if(typeof clearChartCache==='function')clearChartCache();
     const token=LS('invest_session_token');
     try{
       await refreshMarket();
