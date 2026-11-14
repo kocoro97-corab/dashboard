@@ -229,8 +229,8 @@ function updateTickGauge(){
 function generateScenario(){
   const h=new Date().getHours(),isDay=h>=7&&h<21;
   const qK=Q['^KS11'],qQ=Q['^KQ11'],qN=Q['^IXIC'],qS=Q['^GSPC'];
-  const getP=q=>q&&q.prev?((q.p/q.prev-1)*100).toFixed(2):'0.00';
-  const txt=isDay?`[📊 한국장 주간 시나리오]\n• 코스피(${getP(qK)}%), 코스닥(${getP(qQ)}%)\n• 주도 테마 수급 집중 구간, 5일선 눌림목 중심 대응.`:`[🌙 미국장 야간 시나리오]\n• 나스닥(${getP(qN)}%), S&P500(${getP(qS)}%)\n• 필라델피아 반도체 및 빅테크 흐름 연동 대응.`;
+  const getP=q=>q&&Number.isFinite(q.p)&&q.p>0&&Number.isFinite(q.prev)&&q.prev>0?((q.p/q.prev-1)*100).toFixed(2)+'%':'미확인';
+  const txt=isDay?`[📊 한국장 주간 시나리오]\n• 코스피(${getP(qK)}), 코스닥(${getP(qQ)})\n• 주도 테마 수급 집중 구간, 5일선 눌림목 중심 대응.`:`[🌙 미국장 야간 시나리오]\n• 나스닥(${getP(qN)}), S&P500(${getP(qS)})\n• 필라델피아 반도체 및 빅테크 흐름 연동 대응.`;
   $('gv').textContent=txt;
   $('gptTime').textContent=new Date().toLocaleTimeString('ko-KR')+' 생성';
 }
