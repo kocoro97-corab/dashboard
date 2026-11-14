@@ -156,7 +156,9 @@ def main():
         with serve(public, args.cloudflared.resolve(), args.minutes * 60) as (endpoint, process):
             from nh_v2_https_browser import probe, verify
             report['phase'] = 'PUBLIC_HTTPS_PROBE'
-            dns=probe(endpoint, access_code,on_dns_wait=lambda info:print(json.dumps(dict(info,progress='HTTPS_DNS_WAIT')),flush=True))
+            dns=probe(endpoint, access_code,
+                      on_dns_wait=lambda info:print(json.dumps(dict(info,progress='HTTPS_DNS_WAIT')),flush=True),
+                      on_edge_wait=lambda info:print(json.dumps(dict(info,progress='HTTPS_EDGE_WAIT')),flush=True))
             print(json.dumps({'status': 'HTTPS_DEV_READY', 'page': PAGE, 'endpoint': endpoint,
                               'expiresInMinutes': args.minutes, 'sourceDigest': 'PASS', 'isolation': 'PASS',
                               'authOnly': True, 'orderCalls': 0, 'secretsIncluded': False, 'dns': dns}), flush=True)

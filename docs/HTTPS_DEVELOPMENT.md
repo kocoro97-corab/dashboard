@@ -79,7 +79,8 @@ raw exceptions, source, credential values and private paths remain suppressed.
 If startup reaches `PUBLIC_HTTPS_PROBE`, failures include a sanitized `probe`
 summary: HTTP status, JSON/HTML/OTHER, approved/missing/other CORS, a known relay
 reason if present, or a TLS/DNS/timeout/network category. Response bodies, Location
-URLs and exception text are never reported, and this check does not retry requests.
+URLs and exception text are never reported. Login/session and metadata POSTs
+are never retried.
 For a new tunnel, the required local DNS lookup is now checked before constructing
 the authenticated metadata request: up to 8 DNS checks within a 30-second budget.
 Only EAI_NONAME/EAI_AGAIN are retried; a hung lookup stops within the budget.
@@ -89,7 +90,19 @@ fallback endpoint. System DNS, proxies and TLS settings are not modified.
 On exhaustion, `HTTPS_DNS_NOT_READY` reports the target role, attempt count and
 DNS-only control results, without hostname/IP/proxy credentials. This does not
 establish whether the cause is temporary propagation or a persistent resolver
-policy. HTTP metadata is still sent once, only after the required name resolves.
+policy. After DNS, credential-free OPTIONS checks wait only on HTTP 530: at most
+6 attempts within 30 seconds, using the same endpoint and verified TLS. Progress
+is `HTTPS_EDGE_WAIT`; persistent 530 stops with `HTTPS_EDGE_NOT_READY`. Known
+plain-text Cloudflare error codes 1016/1033 are reported as numbers only; their
+absence leaves the direct cause unconfirmed. Other status/transport failures
+stop immediately. An exact approved CORS origin, POST method and current client
+headers must be advertised before proceeding. No access-code value, password,
+session, request body or upstream GAS call is involved in this readiness wait.
+The authenticated metadata POST is still sent once, only after readiness passes.
+This addresses transient edge readiness without treating a persistent 530 as a
+successful connection. The observed 530 alone does not establish its direct cause.
+This change is in the owner launcher only; existing development Pages assets do
+not need republication. Reuse the existing GAS and restart with the updated tool.
 
 Codex's current GitHub integration received HTTP 403 when attempting to create
 the separate development repository. The connector's issuance attempt also

@@ -28,6 +28,8 @@ class HttpsProbeTests(unittest.TestCase):
     def setUp(self):
         dns=patch('nh_v2_https_browser.wait_for_dns',return_value={'dnsTarget':'PUBLIC_RELAY','attempts':1})
         dns.start();self.addCleanup(dns.stop)
+        edge=patch('nh_v2_https_browser.wait_for_https_edge')
+        edge.start();self.addCleanup(edge.stop)
     def probe_failure(self,response=None,error=None):
         opener=Mock()
         if error is not None:opener.open.side_effect=error

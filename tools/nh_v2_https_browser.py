@@ -99,6 +99,11 @@ def probe_evidence(status,headers,raw=b''):
             'contentType':'JSON' if content=='application/json' else 'HTML' if content=='text/html' else 'OTHER',
             'allowOrigin':'APPROVED' if origin=='https://kocoro97-corab.github.io' else 'MISSING' if not origin else 'OTHER',
             'redirectBlocked':isinstance(status,int) and 300<=status<=399}
+    if status == 530:
+        # Only recognize known numeric edge codes; never report the body, Ray
+        # ID, requested URL or arbitrary header/exception text.
+        match = re.search(rb'\berror code:\s*(1016|1033)\b', raw, re.IGNORECASE)
+        if match:result['cloudflareCode'] = int(match[1])
     # Parse privately; report only exact local codes, never an upstream message.
     try:
         data=json.loads(raw)
@@ -112,6 +117,45 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *args, **kwargs):return None
 
 
+def wait_for_https_edge(opener, endpoint, on_wait=None):
+    """Bound 530 startup waiting using credential-free preflights only.
+
+    No login/session or metadata POST is retried. Non-530 errors fail immediately.
+    The caller validates DNS/endpoint first and handles transport failures.
+    """
+    deadline = time.monotonic() + 30
+    required = {'content-type', 'x-myinvest-dev-key', 'x-myinvest-dev-client'}
+    request = urllib.request.Request(endpoint, method='OPTIONS', headers={
+        'Origin': 'https://kocoro97-corab.github.io',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': ','.join(sorted(required))})
+    for attempt in range(1, 7):
+        try:
+            with opener.open(request, timeout=max(.001, min(5, deadline-time.monotonic()))) as response:
+                evidence = probe_evidence(response.status, response.headers)
+                methods = {v.strip().upper() for v in response.headers.get('Access-Control-Allow-Methods', '').split(',')}
+                headers = {v.strip().lower() for v in response.headers.get('Access-Control-Allow-Headers', '').split(',')}
+                if response.status != 204:
+                    raise HttpsProbeFailure('HTTPS_PROBE_PREFLIGHT_INVALID', evidence)
+                if evidence['allowOrigin'] != 'APPROVED' or 'POST' not in methods or not required <= headers:
+                    raise HttpsProbeFailure('HTTPS_PROBE_CORS_INVALID', evidence)
+                return
+        except urllib.error.HTTPError as error:
+            if error.code != 530:raise
+            try:
+                raw = error.read(65536)
+                evidence = probe_evidence(error.code, error.headers, raw)
+            finally:error.close()
+            evidence['edgeAttempts'] = attempt
+            remaining = deadline - time.monotonic()
+            if attempt == 6 or remaining <= 0:
+                raise HttpsProbeFailure('HTTPS_EDGE_NOT_READY', evidence) from None
+            if on_wait:on_wait(evidence)
+            time.sleep(min(3, remaining))
+            if time.monotonic() >= deadline:
+                raise HttpsProbeFailure('HTTPS_EDGE_NOT_READY', evidence) from None
+
+
 def network_failure(request, endpoint, phase):
     if request.url != endpoint:return None
     # Chrome 141 can report a consumed fetch as aborted when reload starts.
@@ -119,7 +163,7 @@ def network_failure(request, endpoint, phase):
     return 'RELOAD_CANCELLED' if phase == 'SESSION_RELOAD' and request.failure == 'net::ERR_ABORTED' else 'HTTPS_API_FAILURE'
 
 
-def probe(endpoint, access_code, on_dns_wait=None):
+def probe(endpoint, access_code, on_dns_wait=None, on_edge_wait=None):
     """TLS verified, no redirects; no password or session, only metadata."""
     dns=wait_for_dns(endpoint,on_wait=on_dns_wait)
     opener = urllib.request.build_opener(NoRedirect())
@@ -127,6 +171,7 @@ def probe(endpoint, access_code, on_dns_wait=None):
         'Origin': 'https://kocoro97-corab.github.io', 'Referer': PAGE,
         'Content-Type': 'application/json', 'X-MyInvest-Dev-Key': access_code})
     try:
+        wait_for_https_edge(opener, endpoint, on_wait=on_edge_wait)
         with opener.open(request, timeout=30) as response:
             raw=response.read(65537)
             evidence=probe_evidence(response.status,response.headers,raw[:65536])
