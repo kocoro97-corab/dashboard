@@ -76,3 +76,28 @@ A successful synthetic check is never reported as a live public-market PASS.
 Operating Pages/main/release-pages/GAS/Sheets/Properties are unchanged. Actual NH
 and order calls zero; account-store reads/writes zero. Normal test login/session
 properties are handled only by the existing GAS authentication implementation.
+
+## Zero-data actual result: narrow response diagnosis
+
+The owner reported HTTPS/login PASS but zero quote/chart/news counts after the
+public wait, with publicReadFailures=0 and 20 preflights. The published JS hashes
+match 597a314. This rules out missing publication but does not establish whether
+requests are queued, the capability is disabled, or HTTP-success responses contain
+non-market data. No provider/GAS error cause has yet been confirmed.
+
+Use the same owner launcher with `--public-market --diagnose-market` to compare
+only two fixed URLs (Naver KOSPI and default market-news RSS) through existing GAS
+and directly from the same Cloud Shell. This mode creates no tunnel or browser,
+needs no separate development code, and uses the existing private test login.
+It validates the isolated target and existing session, revokes that test session
+in finally, and makes no NH, account-store or Drive request. No transport fallback
+or authentication rule changes are introduced by this diagnostic.
+
+The result reports only format categories, whitelisted JSON key names, known
+GAS/relay codes, valid-price presence and RSS counts. A JSON-string-wrapped body,
+HTML and rejected JSON are never recorded as valid quote/RSS data. The direct
+comparison uses verified HTTPS, exact public routes, no credential headers, no
+redirects, a 15-second timeout and a 2-MiB cap. Values, arbitrary messages/keys,
+URLs, passwords and tokens are never printed. This distinguishes a GAS proxy
+problem from a Cloud Shell/provider problem without repeating the full browser
+failure. No Pages publication is needed for this tool-only diagnosis.

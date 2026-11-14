@@ -265,11 +265,96 @@ def market_screen_check(page):
         summary=page.evaluate("""()=>({quoteSymbols:Object.keys(Q).length,chartRows:QD.length,
             marketNews:document.querySelectorAll('#nl_mk .news').length,
             defaultNews:document.querySelectorAll('#nl_hd .news').length,
-            publicReadFailures:NET.fail,nhQueryBlocked:$('nhAccountBtn').disabled,
+            publicReadSuccesses:NET.ok,publicReadFailures:NET.fail,
+            publicMarketEnabled:window.MYINVEST_TRANSPORT_CONFIG.publicMarket===true,
+            scriptErrorVisible:!!document.getElementById('errBar'),nhQueryBlocked:$('nhAccountBtn').disabled,
             accountEditingBlocked:$('externalUploadBtn').disabled})""")
         print(json.dumps(dict(summary,progress='PUBLIC_MARKET_DATA_RESULT')),flush=True)
     if not summary['nhQueryBlocked'] or not summary['accountEditingBlocked']:raise ValueError('PUBLIC_MARKET_SCOPE_INVALID')
     return summary
+
+
+def market_payload_summary(text):
+    """Describe shape only; never print values, arbitrary keys or error text."""
+    try:data=json.loads(text)
+    except (ValueError, TypeError):
+        if '<!DOCTYPE' in text.upper():return {'format':'HTML_OR_DTD','valid':False}
+        try:
+            import xml.etree.ElementTree as ET
+            root=ET.fromstring(text)
+            rss=root.tag=='rss';count=len(root.findall('.//item')) if rss else 0
+            return {'format':'RSS' if rss else 'OTHER_XML','items':count,'valid':rss}
+        except Exception:return {'format':'OTHER','valid':False}
+    result={'format':'JSON_OBJECT' if isinstance(data,dict) else 'JSON_ARRAY' if isinstance(data,list) else 'JSON_STRING' if isinstance(data,str) else 'JSON_SCALAR','valid':False}
+    if isinstance(data,str):
+        # Detect wrapping without logging or silently accepting/normalizing it.
+        try:result['wrappedFormat']=market_payload_summary(data)['format']
+        except (ValueError,RecursionError):result['wrappedFormat']='OTHER'
+    if isinstance(data,dict):
+        result['keys']=[k for k in ('datas','data','result','items','chart','success','error','code','body','content') if k in data]
+        result['rejected']=data.get('success') is False or bool(data.get('error'))
+        if data.get('code') in ('GAS_REJECTED','GAS_UPSTREAM','GAS_NON_JSON','AUTH_REQUIRED'):result['knownCode']=data['code']
+        if data.get('error')=='허용되지 않은 주소입니다.':result['knownCode']='GAS_PUBLIC_HOST_DENIED'
+        elif data.get('error')=='GAS_UPSTREAM':result['knownCode']='GAS_UPSTREAM'
+    rows=data if isinstance(data,list) else None
+    if isinstance(data,dict):
+        for key in ('datas','result','data','items'):
+            if isinstance(data.get(key),list):rows=data[key];break
+        if rows is None and ('closePrice' in data or 'calcPrice' in data):rows=[data]
+    first=rows[0] if rows else None
+    if isinstance(first,dict):
+        result['priceFieldPresent']='closePrice' in first or 'calcPrice' in first
+        try:
+            import math
+            number=float(str(first.get('closePrice',first.get('calcPrice',''))).replace(',',''))
+            result['valid']=math.isfinite(number) and number>0 and not result.get('rejected',False)
+        except (ValueError,TypeError):pass
+    return result
+
+
+def direct_market_summary(url):
+    """Diagnostic public GET only; never forwards GAS credentials or follows redirects."""
+    from relay.market_routes import allowed_market_url
+    if not allowed_market_url(url):return {'valid':False,'knownCode':'PUBLIC_ROUTE_DENIED'}
+    request=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0','Accept':'*/*',
+        'Referer':'https://news.google.com/' if urlsplit(url).hostname=='news.google.com' else 'https://stock.naver.com/'})
+    try:
+        with urllib.request.build_opener(NoRedirect()).open(request,timeout=15) as response:
+            if response.status!=200:return {'valid':False,'http':response.status}
+            raw=response.read(2*1024*1024+1)
+            if len(raw)>2*1024*1024:return {'valid':False,'knownCode':'PUBLIC_RESPONSE_TOO_LARGE'}
+            return dict(market_payload_summary(raw.decode('utf-8')),http=response.status)
+    except urllib.error.HTTPError as error:
+        status=error.code;error.close();return {'valid':False,'http':status}
+    except Exception:return {'valid':False,'knownCode':'PUBLIC_DIRECT_TRANSPORT_FAILED'}
+
+
+def diagnose_market_proxy(gateway,username,password):
+    """Two fixed public reads over existing GAS; no browser/tunnel/NH/store."""
+    from urllib.parse import urlencode
+    token=None;probes=[]
+    try:
+        login=gateway.post({'action':'login','user':username,'pass':password})
+        if login.get('success') is not True:return {'status':'FAIL','code':'MARKET_DIAGNOSTIC_LOGIN_REQUIRED','probes':[]}
+        token=login.get('token')
+        if not isinstance(token,str) or not re.fullmatch(r'[a-fA-F0-9]{64}',token):
+            token=None;return {'status':'FAIL','code':'MARKET_DIAGNOSTIC_LOGIN_REQUIRED','probes':[]}
+        if login.get('mustChangePassword'):return {'status':'FAIL','code':'MARKET_DIAGNOSTIC_LOGIN_REQUIRED','probes':[]}
+        routes=(('NAVER_INDEX','https://polling.finance.naver.com/api/realtime/domestic/index/KOSPI'),
+                ('GOOGLE_NEWS','https://news.google.com/rss/search?'+urlencode({'q':'코스피 OR 증시 OR 나스닥 when:2d','hl':'ko','gl':'KR','ceid':'KR:ko'})))
+        for source,url in routes:
+            print(json.dumps({'progress':'MARKET_PROXY_DIAGNOSTIC','source':source}),flush=True)
+            try:summary=market_payload_summary(gateway.public(url,token))
+            except Exception as error:
+                code=getattr(error,'code',None)
+                summary={'valid':False,'knownCode':code if code in PROBE_RELAY_CODES or code=='AUTH_REQUIRED' else 'PUBLIC_PROBE_FAILED'}
+            print(json.dumps({'progress':'MARKET_DIRECT_DIAGNOSTIC','source':source}),flush=True)
+            probes.append({'source':source,'gasProxy':summary,'directPublic':direct_market_summary(url)})
+        return {'status':'PASS' if all(p['gasProxy']['valid'] for p in probes) else 'FAIL','code':'MARKET_PROXY_DIAGNOSTIC_COMPLETE','probes':probes}
+    finally:
+        if token:
+            try:gateway.post({'action':'logout','token':token})
+            except Exception:pass
 
 
 def verify(endpoint, access_code, username, password, synthetic=False, route=None, width=1440, dashboard_check=None):

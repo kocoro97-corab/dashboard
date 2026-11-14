@@ -163,13 +163,14 @@ def main():
     parser.add_argument('--verify-browser', action='store_true', help='Verify only the new public HTTPS/Pages path, then keep it open for Fold6')
     parser.add_argument('--public-market', action='store_true', help='Enable only authenticated allowlisted public market GETs; NH and storage stay blocked')
     parser.add_argument('--verify-market', action='store_true', help='Check public market display with the existing browser verifier; requires --public-market')
+    parser.add_argument('--diagnose-market', action='store_true', help='Inspect only two fixed public response shapes through existing GAS; no tunnel/browser/NH/store')
     parser.add_argument('--diagnose-preflight', action='store_true', help='Read-only checks only: no tunnel, password prompt, login, browser or account writes')
     parser.add_argument('--diagnose-tunnel-dns', action='store_true', help='Credential-free tunnel DNS comparison only; no GAS or login')
     args = parser.parse_args()
     report = {'status': 'NOT_RUN', 'phase': 'LOCAL_RUNTIME', 'actualNhCalls': 0, 'orderCalls': 0, 'accountStoreWrites': False}
     try:
         validate_runtime(args.cloudflared, needs_tty=not (args.diagnose_preflight or args.diagnose_tunnel_dns))
-        if args.verify_market and not args.public_market:raise ValueError('HTTPS_PUBLIC_MARKET_FLAG_REQUIRED')
+        if (args.verify_market or args.diagnose_market) and not args.public_market:raise ValueError('HTTPS_PUBLIC_MARKET_FLAG_REQUIRED')
         if args.diagnose_tunnel_dns:
             from nh_v2_https_browser import diagnose_tunnel_dns
             report['phase'] = 'TUNNEL_DNS_DIAGNOSTIC'
@@ -197,7 +198,7 @@ def main():
             report.update(status='PASS', phase='PREFLIGHT_COMPLETE', scope='HTTPS_PREFLIGHT_ONLY', sourceDigest='PASS', isolation='PASS', deploymentSettings=settings)
             print(json.dumps(report));return 0
         report['phase'] = 'DEVELOPMENT_CODE'
-        access_code = getpass.getpass('Separate development access code (16-128 ASCII letters/digits/_/-; hidden): ')
+        access_code = None if args.diagnose_market else getpass.getpass('Separate development access code (16-128 ASCII letters/digits/_/-; hidden): ')
         expected = {'freshTestEnvironment': True, 'testEnvironment': 'nh-staging',
                     'scriptHash': fingerprint(plan['scriptId']), 'sheetHash': web.binding,
                     'sourceDigest': plan['sourceDigest'], 'gatewayVersion': 2, 'storeEngine': 'account-store-v2'}
@@ -205,6 +206,13 @@ def main():
         # Verify the fixed target privately before exposing login traffic.
         report['phase'] = 'TARGET_METADATA'
         relay.gateway.verify()
+        if args.diagnose_market:
+            from nh_v2_https_browser import diagnose_market_proxy
+            report['phase']='MARKET_PROXY_DIAGNOSTIC'
+            username=input('Staging user (visible): ').strip()
+            password=getpass.getpass('Staging password (hidden): ')
+            report.update(diagnose_market_proxy(relay.gateway,username,password),scope='TEST_GAS_PUBLIC_PROXY_ONLY')
+            print(json.dumps(report));return 0 if report['status']=='PASS' else 2
         report['phase'] = 'PUBLIC_HTTPS_PROBE'
         with ready_public_relay(relay, access_code, args.cloudflared.resolve(), args.minutes * 60,
                                 lambda info:print(json.dumps(info), flush=True)) as (endpoint, process, public, dns):
