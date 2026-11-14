@@ -122,7 +122,8 @@ async function ocrImage(file){
     finally{if(worker)await worker.terminate()}
   }
   const regions=parsed.regions||[];
-  if(!regions.length||!EXT_MASTER||typeof Tesseract.createWorker!=='function')return {...data,layoutRetry,layoutRetryChecks};
+  const nameChecks={candidates:regions.length,prefixAttempts:0,verified:0};
+  if(!regions.length||!EXT_MASTER||typeof Tesseract.createWorker!=='function')return {...data,layoutRetry,layoutRetryChecks,nameChecks};
   const bitmap=await createImageBitmap(recognitionSource);
   try{
     const crops=regions.slice(0,12).map(region=>{
@@ -133,18 +134,34 @@ async function ocrImage(file){
       ctx.drawImage(bitmap,region.x0,region.y0,width,height,0,0,canvas.width,canvas.height);
       return canvas;
     });
-    const readings={};
+    const readings={prefix:[]};
     for(const language of ['kor','eng']){
       const worker=await Tesseract.createWorker(language,1,localOptions);
       try{await worker.setParameters({tessedit_pageseg_mode:'7'});readings[language]=[];
-        for(const canvas of crops){const reading=await worker.recognize(canvas.toDataURL());readings[language].push(reading.data)}
+        for(let i=0;i<crops.length;i++){
+          const canvas=crops[i],reading=await worker.recognize(canvas.toDataURL());readings[language].push(reading.data);
+          if(language==='eng'&&!ExternalCore.refinedName(readings.kor[i],reading.data,EXT_MASTER)){
+            // Read the actual Latin pixels separately; never complete a prefix
+            // from a likely stock name. The Korean worker supplies the boundary.
+            const region=ExternalCore.mixedPrefixRegion(readings.kor[i]);
+            if(region&&region.x1<canvas.width){
+              nameChecks.prefixAttempts++;
+              const prefix=document.createElement('canvas');prefix.width=region.x1;prefix.height=canvas.height;
+              prefix.getContext('2d').drawImage(canvas,0,0,prefix.width,prefix.height,0,0,prefix.width,prefix.height);
+              await worker.setParameters({tessedit_char_whitelist:'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789&.-'});
+              try{readings.prefix[i]=(await worker.recognize(prefix.toDataURL())).data}
+              catch(error){/* An optional prefix failure cannot erase a full-crop reading. */}
+              finally{await worker.setParameters({tessedit_char_whitelist:''})}
+            }
+          }
+        }
       }finally{await worker.terminate()}
     }
-    regions.slice(0,12).forEach((region,i)=>{const name=ExternalCore.refinedName(readings.kor[i],readings.eng[i],EXT_MASTER);if(name)data=ExternalCore.replaceName(data,region,name)});
+    regions.slice(0,12).forEach((region,i)=>{const name=ExternalCore.refinedName(readings.kor[i],readings.eng[i],EXT_MASTER,readings.prefix[i]);if(name){data=ExternalCore.replaceName(data,region,name);nameChecks.verified++}});
   }catch(error){
     // Optional refinement must preserve the original candidates for user review.
   }finally{bitmap.close()}
-  return {...data,layoutRetry,layoutRetryChecks};
+  return {...data,layoutRetry,layoutRetryChecks,nameChecks};
 }
 // No guessed names, hardcoded symbol mappings, or destructive saved-row normalization.
 function extNormalizeOcrName(v){return String(v||'').trim()}
@@ -184,7 +201,8 @@ async function processExternalUploads(){
         .map(([key,label])=>label+(checks[key]?' 확인':' 미확인')).join(' · '):'';
       summaries.push((i+1)+'번 이미지: 머리글 '+(parsed.layoutVerified?'확인':'미확인')+' · 후보 '+parsed.holdings.length+'개'
         +(data.layoutRetry==='NOT_RUN'?'':' · 재인식 '+(data.layoutRetry==='PASS'?'머리글 확인':'실패'))
-        +(!parsed.layoutVerified?' · '+labels:''));
+        +(!parsed.layoutVerified?' · '+labels:'')
+        +(data.nameChecks&&data.nameChecks.candidates?' · 이름 보정 '+data.nameChecks.verified+'/'+data.nameChecks.candidates+' · 영문 영역 재인식 '+data.nameChecks.prefixAttempts+'회':''));
     }
     showOcrReview(texts,summaries);if((window.EXT_OCR_WARNINGS||[]).length)$('externalOcrProgress').textContent=window.EXT_OCR_WARNINGS.join(' · ');if(!all.length){$('externalOcrProgress').textContent=(window.EXT_OCR_WARNINGS||[]).join(' · ')||'종목을 인식하지 못했습니다. 머리글과 동일 행의 수량·평균매입가를 확인하세요.';return}
     if(!extImport(all))return;extResolveCodes();renderExternalAssets();$('externalOcrProgress').textContent=window.DevelopmentOCR?'인식 후보 '+all.length+'개 · 수량·평균매입가를 확인하세요. 임시 목록만 사용하며 저장·Drive는 차단됩니다.':'인식 후보 '+all.length+'개 · 수량·평균매입가를 확인·수정하고 [인식자료 저장]을 누르세요. 종목코드는 비워도 저장됩니다.'+(window.EXT_OCR_WARNINGS||[]).join(' · ');showExternalSaveButton();

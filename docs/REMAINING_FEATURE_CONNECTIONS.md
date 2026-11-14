@@ -141,3 +141,29 @@ holdings values or tokens, and logout clears it with the existing review panel.
 Synthetic actual-worker tests at 344/1440px cover missing first-pass headers,
 recovered labels/values/crop names, and a forced failed retry that runs exactly
 once and creates zero rows. Real owner capture confirmation remains pending.
+
+## Mixed-script prefix recognition
+
+The owner confirmed header/row recovery; one mixed Latin/Hangul name remained
+unverified. Existing name refinement gave both language workers the entire name
+crop. It now additionally reads the actual Latin-prefix pixels only when a
+high-confidence Korean suffix supplies a usable boundary and full-name readings
+do not already resolve the name. The existing English worker is reused, with a
+fixed ASCII whitelist for that crop only; parameters are restored afterward.
+There is at most one prefix read per unresolved crop within the existing limit
+of twelve name crops. No extra full-image pass or new model/service is added.
+
+Both old and new evidence feed the same exact listing-master decision. Korean
+symbol confidence >=80, Latin symbol confidence >=90, pixel alignment/gap checks,
+and a unique full-name master match still apply. Conflicting exact names from
+either full-name worker remain unresolved even if the prefix read matches one.
+There is no stock-specific alias, fuzzy correction, lowered threshold or number
+replacement. A failed optional prefix read preserves full-crop evidence. Review
+reports correction counts and prefix-read counts only, never names or values.
+
+Changed-scope verification includes twenty matching/geometry/conflict cases and
+344/1440px actual local OCR checks. A controlled whole-name English failure with
+real Korean symbol positions was recovered using the actual English prefix
+worker, preserving synthetic quantity/average price and blocked save/network
+boundaries. These tests are distinct from owner capture verification, which is
+still pending publication of this frontend update.

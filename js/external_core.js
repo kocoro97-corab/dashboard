@@ -32,8 +32,15 @@
     function visit(node){if(!node||typeof node!=='object')return;if(Array.isArray(node.words))node.words.forEach(add);for(const k of ['blocks','paragraphs','lines'])if(Array.isArray(node[k]))node[k].forEach(visit)}
     visit(data);return out;
   }
+  const symbols=data=>(data&&data.words||[]).flatMap(w=>w.symbols||[]).filter(s=>s.bbox&&
+    ['x0','x1','y0','y1'].every(k=>Number.isFinite(s.bbox[k]))&&s.bbox.x1>s.bbox.x0&&s.bbox.y1>s.bbox.y0&&Number.isFinite(s.confidence));
+  function mixedPrefixRegion(korean){
+    const hangul=symbols(korean).filter(s=>/^[가-힣]$/.test(s.text)).sort((a,b)=>a.bbox.x0-b.bbox.x0);
+    if(hangul.length<2||hangul.some(s=>s.confidence<80))return null;
+    const boundary=Math.floor(hangul[0].bbox.x0);
+    return boundary>0?{x0:0,x1:boundary}:null;
+  }
   function mixedName(korean,english,index){
-    const symbols=data=>(data&&data.words||[]).flatMap(w=>w.symbols||[]).filter(s=>s.bbox&&Number.isFinite(s.confidence));
     const hangul=symbols(korean).filter(s=>/^[가-힣]$/.test(s.text)).sort((a,b)=>a.bbox.x0-b.bbox.x0);
     if(hangul.length<2||hangul.some(s=>s.confidence<80))return null;
     const boundary=hangul[0].bbox.x0;
@@ -48,7 +55,7 @@
     const flat=words(data).filter(w=>!(w.x>=region.x0&&w.x<region.x1&&w.y>=region.y0&&w.y<=region.y1));
     flat.push({text:name,bbox:region.bbox});return {text:data.text||'',words:flat};
   }
-  function refinedName(korean,english,index){
+  function refinedName(korean,english,index,prefixReading){
     // Full crop readings may fix Korean-only names too. Never use fuzzy aliases
     // or pick between disagreeing exact names from the two language workers.
     const names=new Set();
@@ -60,6 +67,7 @@
       const found=match({name,code:''},index);if(found.status==='proposal')names.add(found.canonicalName);
     }
     const mixed=mixedName(korean,english,index);if(mixed)names.add(mixed);
+    const separated=mixedName(korean,prefixReading,index);if(separated)names.add(separated);
     return names.size===1?[...names][0]:null;
   }
   function parse(data,accountType,index){
@@ -161,5 +169,5 @@
     }
     return rows;
   }
-  return {norm,number,master,match,parse,merge,key,comparable,validate,mixedName,refinedName,replaceName};
+  return {norm,number,master,match,parse,merge,key,comparable,validate,mixedName,mixedPrefixRegion,refinedName,replaceName};
 });

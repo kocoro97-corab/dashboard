@@ -133,3 +133,19 @@ test('reproduced name-header OCR confusion is accepted only with the other verif
   assert.deepEqual(failed.headerChecks,{name:true,quantity:true,avgPrice:false});
   assert.equal(core.match({name:'송목명'},index).code,null);
 });
+test('separately read Latin pixels can complete a mixed name only with exact symbol evidence',()=>{
+  const s=(text,x0,x1,confidence=99)=>({text,confidence,bbox:{x0,x1,y0:10,y1:30}});
+  const korean={words:[{text:'misread',confidence:20,symbols:[s('테',45,65),s('스',66,86),s('트',87,107)]}]};
+  const bad={words:[{text:'unverified',confidence:20,symbols:[s('?',5,36,20)]}]};
+  const prefix={words:[{text:'AB',confidence:99,symbols:[s('A',5,20),s('B',21,36)]}]};
+  const master=core.master({schema:1,source:{},instruments:[{name:'AB테스트',code:'000001',type:'STOCK'},{name:'XY테스트',code:'000002',type:'STOCK'}]});
+  assert.deepEqual(core.mixedPrefixRegion(korean),{x0:0,x1:45});
+  assert.equal(core.refinedName(korean,bad,master),null);
+  assert.equal(core.refinedName(korean,bad,master,prefix),'AB테스트');
+  prefix.words[0].symbols[0].confidence=89;assert.equal(core.refinedName(korean,bad,master,prefix),null);
+  prefix.words[0].symbols[0].confidence=99;
+  const conflict={words:[{text:'XY테스트',confidence:99,bbox:{x0:0,x1:107,y0:10,y1:30}}]};
+  assert.equal(core.refinedName(korean,conflict,master,prefix),null);
+  korean.words[0].symbols[0].confidence=79;assert.equal(core.mixedPrefixRegion(korean),null);
+  assert.equal(core.refinedName(korean,bad,master,prefix),null);
+});

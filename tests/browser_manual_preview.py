@@ -123,6 +123,36 @@ with tempfile.TemporaryDirectory() as tmp:
                     assert page.evaluate('EXT_ASSETS.length')==2
                     assert page.evaluate("EXT_ASSETS[0].quantity===7 && EXT_ASSETS[0].avgPrice===1300 && EXT_ASSETS[1].quantity===8 && EXT_ASSETS[1].avgPrice===2400")
                     assert page.evaluate("EXT_ASSETS[0].name==='KCC글라스' && EXT_ASSETS[1].name==='씨앤투스'")
+                    # Force a bad whole-name Latin reading; preserve real Korean
+                    # symbol positions and execute the actual Latin-prefix worker.
+                    page.evaluate("""()=>{
+                      EXT_ASSETS=[];EXT_UNDO=[];renderExternalAssets();
+                      window.mixedOriginalWorker=Tesseract.createWorker;window.realPrefixReads=0;
+                      Tesseract.createWorker=async(lang,...args)=>{
+                        const w=await window.mixedOriginalWorker(lang,...args),read=w.recognize;
+                        w.recognize=async(image,...rest)=>{
+                          if(lang==='eng'){
+                            const b=await createImageBitmap(await (await fetch(image)).blob());const full=b.width>=500;b.close();
+                            if(full)return {data:{text:'SYNTHETIC_BAD_FULL_NAME',words:[]}};
+                            window.realPrefixReads++;
+                          }
+                          const r=await read(image,...rest);
+                          if(lang==='kor'){
+                            const symbols=r.data.words.flatMap(x=>x.symbols||[]).filter(s=>/^[가-힣]$/.test(s.text));
+                            if(symbols.map(s=>s.text).join('')==='글라스')r.data.words=[{
+                              text:'SYNTHETIC_LOW_CONFIDENCE_FULL_NAME',confidence:20,symbols,
+                              bbox:{x0:0,x1:500,y0:0,y1:100}}];
+                          }
+                          return r;
+                        };return w;
+                      };
+                    }""")
+                    page.locator('#externalUploadBtn').click()
+                    page.wait_for_function("()=>!$('externalUploadBtn').disabled",timeout=120000)
+                    assert page.evaluate('window.realPrefixReads>0'),page.locator('#externalOcrDiagnostics').inner_text()
+                    assert page.evaluate("EXT_ASSETS[0].name==='KCC글라스'&&EXT_ASSETS[0].quantity===7&&EXT_ASSETS[0].avgPrice===1300")
+                    assert page.locator('#externalSaveBtn').is_disabled()
+                    page.evaluate('Tesseract.createWorker=window.mixedOriginalWorker;delete window.mixedOriginalWorker')
                     page.evaluate("""()=>{
                       EXT_ASSETS=[];EXT_UNDO=[];renderExternalAssets();
                       Tesseract.recognize=async()=>({data:{text:'SYNTHETIC_BAD_HEADER',words:[
