@@ -48,6 +48,20 @@
     const flat=words(data).filter(w=>!(w.x>=region.x0&&w.x<region.x1&&w.y>=region.y0&&w.y<=region.y1));
     flat.push({text:name,bbox:region.bbox});return {text:data.text||'',words:flat};
   }
+  function refinedName(korean,english,index){
+    // Full crop readings may fix Korean-only names too. Never use fuzzy aliases
+    // or pick between disagreeing exact names from the two language workers.
+    const names=new Set();
+    for(const reading of [korean,english]){
+      const items=reading&&reading.words||[];
+      if(!items.length||items.some(w=>!w.bbox||!['x0','x1','y0','y1'].every(k=>Number.isFinite(w.bbox[k]))||w.bbox.x1<=w.bbox.x0||w.bbox.y1<=w.bbox.y0||!Number.isFinite(w.confidence)||w.confidence<90))continue;
+      if(Math.min(...items.map(w=>w.bbox.y1))<=Math.max(...items.map(w=>w.bbox.y0)))continue;
+      const name=items.slice().sort((a,b)=>a.bbox.x0-b.bbox.x0).map(w=>w.text).join('');
+      const found=match({name,code:''},index);if(found.status==='proposal')names.add(found.canonicalName);
+    }
+    const mixed=mixedName(korean,english,index);if(mixed)names.add(mixed);
+    return names.size===1?[...names][0]:null;
+  }
   function parse(data,accountType,index){
     if(!TYPES.has(accountType))throw Error('알 수 없는 계좌 구분');
     const all=words(data),rejected=[],warnings=[];
@@ -85,7 +99,16 @@
     const centers=[...new Set(columns.map(w=>w.x))];
     const bounds={};Object.entries(headers).forEach(([key,w])=>{const i=centers.indexOf(w.x);bounds[key]=[i?(centers[i-1]+w.x)/2:-Infinity,i<centers.length-1?(w.x+centers[i+1])/2:Infinity]});
     const grouped=[];
-    all.filter(w=>w.y>headerY+height*.6).sort((a,b)=>a.y-b.y).forEach(w=>{let group=grouped.find(g=>Math.abs(g.y-w.y)<=tolerance);if(!group){group={y:w.y,parts:[]};grouped.push(group)}group.parts.push(w)});
+    all.filter(w=>w.y>headerY+height*.6).sort((a,b)=>a.y-b.y).forEach(w=>{
+      // Mixed scripts often have different box centers on the same printed row.
+      // Require actual vertical overlap for the extra allowance; never borrow
+      // numbers from a nearby cash/subtotal line based on distance alone.
+      const matches=grouped.filter(g=>Math.abs(g.y-w.y)<=tolerance||g.bottom>g.top&&
+        Math.min(g.bottom,w.bbox.y1)-Math.max(g.top,w.bbox.y0)>=Math.min(g.bottom-g.top,w.h)*.35);
+      let group=matches.length===1?matches[0]:null;
+      if(!group){group={y:w.y,top:w.bbox.y0,bottom:w.bbox.y1,parts:[]};grouped.push(group)}
+      group.parts.push(w);group.top=Math.max(group.top,w.bbox.y0);group.bottom=Math.min(group.bottom,w.bbox.y1);
+    });
     const holdings=[],regions=[];
     for(const group of grouped){
       const cell=key=>group.parts.filter(w=>w.x>=bounds[key][0]&&w.x<bounds[key][1]).sort((a,b)=>a.x-b.x);
@@ -135,5 +158,5 @@
     }
     return rows;
   }
-  return {norm,number,master,match,parse,merge,key,comparable,validate,mixedName,replaceName};
+  return {norm,number,master,match,parse,merge,key,comparable,validate,mixedName,refinedName,replaceName};
 });

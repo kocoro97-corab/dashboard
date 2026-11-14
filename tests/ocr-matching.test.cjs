@@ -94,3 +94,30 @@ test('an explicit code column is separated from the name and contradictory OCR c
   const result=core.parse(data,'ISA',index);assert.equal(result.holdings.length,1);assert.equal(result.holdings[0].name,'카카오');assert.equal(result.holdings[0].code,'');assert.match(result.warnings[0],/불일치/);
   data.words.find(x=>x.text==='999999').text='035720';assert.equal(core.parse(data,'ISA',index).holdings[0].code,'035720');
 });
+test('overlapping name and numeric boxes with different center lines remain one review row',()=>{
+  const w=(text,x,y,width=70)=>({text,bbox:{x0:x,x1:x+width,y0:y,y1:y+20}});
+  const data={words:[w('종목명',20,100),w('수량',450,100),w('매입가',700,100),
+    w('AB글라즈',20,200,140),w('7',450,212),w('1,300',700,212),
+    w('현금',20,250),w('999',450,250),w('9,999',700,250)]};
+  const result=core.parse(data,'ISA',index);
+  assert.equal(result.holdings.length,1);
+  assert.equal(result.holdings[0].name,'AB글라즈');assert.equal(result.holdings[0].code,'');
+  assert.equal(result.holdings[0].quantity,7);assert.equal(result.holdings[0].avgPrice,1300);
+  assert.equal(result.holdings[0].needsReview,true);assert.equal(result.regions.length,1);
+});
+test('single-language crop correction requires high-confidence exact full master name',()=>{
+  const word=(text,x=0,confidence=99)=>({text,confidence,bbox:{x0:x,x1:x+80,y0:0,y1:20}});
+  const korean={words:[word('카카오')]},english={words:[word('UNKNOWN')]};
+  assert.equal(core.refinedName(korean,english,index),'카카오');
+  korean.words[0].confidence=30;assert.equal(core.refinedName(korean,english,index),null);
+  korean.words[0]=word('카카O');assert.equal(core.refinedName(korean,english,index),null);
+  korean.words=[word('카카오'),word('서호전기',100)];assert.equal(core.refinedName(korean,english,index),null);
+  korean.words=[word('카카오')];english.words=[word('서호전기')];assert.equal(core.refinedName(korean,english,index),null);
+});
+test('the overlap allowance never fills values from a nonoverlapping numeric line',()=>{
+  const w=(text,x,y)=>({text,bbox:{x0:x,x1:x+80,y0:y,y1:y+20}});
+  const result=core.parse({words:[w('종목명',20,100),w('수량',450,100),w('매입가',700,100),
+    w('카카오',20,200),w('7',450,224),w('1,300',700,224)]},'ISA',index);
+  assert.equal(result.holdings.length,1);assert.equal(result.holdings[0].quantity,null);
+  assert.equal(result.holdings[0].avgPrice,null);assert.equal(result.holdings[0].needsReview,true);
+});

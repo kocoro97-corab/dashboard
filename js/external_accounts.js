@@ -117,7 +117,7 @@ async function ocrImage(file){
         for(const canvas of crops){const reading=await worker.recognize(canvas.toDataURL());readings[language].push(reading.data)}
       }finally{await worker.terminate()}
     }
-    regions.slice(0,12).forEach((region,i)=>{const name=ExternalCore.mixedName(readings.kor[i],readings.eng[i],EXT_MASTER);if(name)data=ExternalCore.replaceName(data,region,name)});
+    regions.slice(0,12).forEach((region,i)=>{const name=ExternalCore.refinedName(readings.kor[i],readings.eng[i],EXT_MASTER);if(name)data=ExternalCore.replaceName(data,region,name)});
   }catch(error){
     // Optional refinement must preserve the original candidates for user review.
   }finally{bitmap.close()}

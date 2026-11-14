@@ -89,3 +89,28 @@ second terminal, keeping a working HTTPS relay open. Run the inquiry-only owner
 command once, and try OCR with one local capture on PC/Fold6 without sharing the
 image or raw results in chat. Drive, persistence and public financial transport
 remain closed; no new project, production deployment or merge is needed.
+
+## OCR row omission repair
+
+The owner's private OCR preview showed misread names and text line separation;
+the preview does not contain the underlying word boxes, so exact original pixel
+alignment is not established. A related parser failure was reproduced with
+synthetic boxes: vertically overlapping name/quantity boxes whose centers differ
+more than the old median-height threshold became separate groups. An unmatched
+name with no numeric values in its group was discarded before crop refinement.
+Also, the previous crop helper handled mixed Latin/Hangul names only.
+
+The parser now permits a shared group only when the extra vertical overlap is
+measurable and the candidate group is unique. Disjoint numeric/cash lines cannot
+supply missing values. Existing center matching remains unchanged. Crop workers
+reuse the same local engines; high-confidence full-name readings from either
+language can now match the exact listing master. Disagreeing exact readings,
+partial names and low confidence remain uncorrected review candidates. No alias,
+stock-specific substitution or code guessing was added.
+
+Changed-scope verification: OCR matching cases, plus 344/1440px browser checks
+with actual local crop workers and synthetic initial OCR errors. Mixed-script
+and Korean names were recovered while synthetic quantities/average prices were
+preserved; no financial HTTP/storage calls occurred. The owner's original
+captures, raw text and numeric holdings were not stored in the repository.
+Confirmation against those captures remains pending development publication.

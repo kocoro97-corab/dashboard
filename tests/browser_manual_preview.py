@@ -99,6 +99,32 @@ with tempfile.TemporaryDirectory() as tmp:
                     assert page.locator('#externalSaveBtn').is_disabled() and page.locator('#externalDriveFolder').is_disabled()
                     assert len(gas.calls)==baseline
                     assert page.locator('#externalOcrRaw').input_value()
+                    # Controlled first-pass errors + actual crop workers. Values
+                    # are synthetic; no real holdings/image fixture is retained.
+                    crop_image=page.evaluate("""()=>{
+                      EXT_ASSETS=[];EXT_UNDO=[];renderExternalAssets();
+                      const c=document.createElement('canvas');c.width=1100;c.height=480;
+                      const x=c.getContext('2d');x.fillStyle='white';x.fillRect(0,0,c.width,c.height);
+                      x.fillStyle='black';x.font='40px "Noto Sans CJK KR"';
+                      [['종목명',20,104],['수량',450,104],['매입가',700,104],
+                       ['KCC글라스',20,224],['7',450,248],['1,300',700,248],
+                       ['씨앤투스',20,384],['8',450,408],['2,400',700,408]].forEach(v=>x.fillText(...v));
+                      const w=(text,x,y,width=80)=>({text,bbox:{x0:x,x1:x+width,y0:y,y1:y+44}});
+                      window.originalOcrRecognize=Tesseract.recognize;
+                      Tesseract.recognize=async()=>({data:{text:'SYNTHETIC_FIRST_PASS',words:[
+                        w('종목명',20,60),w('수량',450,60),w('매입가',700,60),
+                        w('MIXEDUNKNOWN',20,180,220),w('7',450,204),w('1,300',700,204),
+                        w('한글오독',20,340,180),w('8',450,364),w('2,400',700,364)]}});
+                      return c.toDataURL('image/png').split(',')[1];
+                    }""")
+                    page.locator('#externalImageFiles').set_input_files({'name':'synthetic-crop-only.png','mimeType':'image/png','buffer':base64.b64decode(crop_image)})
+                    page.locator('#externalUploadBtn').click()
+                    page.wait_for_function("()=>!$('externalUploadBtn').disabled",timeout=120000)
+                    assert page.evaluate('EXT_ASSETS.length')==2
+                    assert page.evaluate("EXT_ASSETS[0].quantity===7 && EXT_ASSETS[0].avgPrice===1300 && EXT_ASSETS[1].quantity===8 && EXT_ASSETS[1].avgPrice===2400")
+                    assert page.evaluate("EXT_ASSETS[0].name==='KCC글라스' && EXT_ASSETS[1].name==='씨앤투스'")
+                    page.evaluate('Tesseract.recognize=window.originalOcrRecognize;delete window.originalOcrRecognize')
+                    assert len(gas.calls)==baseline
                     page.evaluate('logout()');page.wait_for_selector('#authGuard',state='visible')
                     assert page.locator('#externalImageFiles').input_value()==''
                     assert page.locator('#externalOcrRaw').count()==0
