@@ -8,7 +8,7 @@ same branch, dev Pages and active relay; no GAS or authentication settings chang
 |---|---|---|
 | Manual entry | addExternalManual → validate/merge/confirm → local EXT_ASSETS → edit/undo | Development UI now enables in-memory preview only |
 | Save | reviewed draft + revision → saveExternalHoldings → AccountStoreV2 | Existing implementation preserved; button disabled and relay denies the action |
-| OCR | Local Tesseract → existing parseExternalOcr → review → local draft | Connected in development artifact; actual engine tested with synthetic images; real user captures not yet tested |
+| OCR | Local Tesseract → existing parseExternalOcr → review → local draft | Owner ZIP two-image batch matches all seven holdings at 344/1440px; development publication/device confirmation pending |
 | NH account inquiry | Existing nhAccounts → domestic/overseas balance | Owner-private inquiry-only command prepared; public relay still blocks accounts; live check awaits owner authentication |
 | Drive | frontend externalDriveImages → OCR/review | Current isolated GAS bridge has no handler; relay also denies the action |
 | Index settings | local LS invest_cfg_v4 + refresh | Implemented but save remains disabled; not executed |
@@ -201,3 +201,44 @@ calls remained zero. This was one multi-file upload per case, not separately
 accepted single-file results. These stored files are distinct from the currently
 displayed chat attachments, whose exact file bytes are not mounted in the
 execution environment; current-input resolution remains unverified.
+
+## Uploaded ZIP: reproduced failure and verified repair
+
+The owner subsequently supplied the exact two inputs in a ZIP. Both originals
+were extracted to a private directory outside Git, preserving their native
+1849x1853 / 1856x1851 pixels. One real two-file upload initially produced five
+candidates and zero from the other image because its name header was misread.
+After header recovery the batch produced seven rows, but one mixed-script name
+still failed the exact master check. Private diagnostics confirmed that Latin
+text, confidence and geometry passed while the Hangul suffix was misread.
+
+The repair stays in external_core/external_accounts only:
+
+- When real quantity/average-price labels share a row but the name label is
+  missing, locate that header's pixels and reread only that region. Map the
+  recovered header boxes back to the original coordinates, preserve body values,
+  and still require all three actual labels and their geometry before parsing.
+  Existing bounded full-image fallback remains for inputs with no usable anchors.
+- For an unresolved mixed name, reuse the Korean worker to reread the suffix
+  pixels once and offset its character boxes into the original crop coordinates.
+  Combine only actual high-confidence Latin/Hangul readings that exactly match
+  the listing master. Preserve conflicting full-name evidence as unresolved.
+
+No name alias, expected-holding lookup, financial value substitution or lower
+confidence threshold was added. At most one extra Hangul read is allowed per
+unresolved crop within the existing twelve-crop bound. No new model, remote
+service, GAS/auth/relay scope, store operation or order route is introduced.
+
+Exact ZIP verification: two files selected together, one upload invocation,
+6+5 image candidates, four duplicates removed, seven final rows matching every
+name/code/quantity/average price. PASS at 1440px and 344px; reversed selection order
+also PASS at 1440px. These used actual pinned OCR on the supplied images, with
+synthetic authentication and zero financial HTTP calls or saves. Unit matching /
+geometry / header preservation / conflicting-evidence checks: 23 PASS. Synthetic
+actual-engine browser regressions at 344/1440px also PASS. Raw images, account
+numbers, financial values and expectations were not committed or logged.
+
+This closes the earlier inability to reproduce the currently failing inputs.
+Owner publication to the existing development Pages and physical-device
+confirmation remain separate from these local browser results. Operating
+systems, private backups and recovery history remain unchanged.

@@ -55,7 +55,20 @@
     const flat=words(data).filter(w=>!(w.x>=region.x0&&w.x<region.x1&&w.y>=region.y0&&w.y<=region.y1));
     flat.push({text:name,bbox:region.bbox});return {text:data.text||'',words:flat};
   }
-  function refinedName(korean,english,index,prefixReading){
+  function replaceHeaderRegion(data,reading,region,scale){
+    if(!region||!['x0','x1','y0','y1'].every(k=>Number.isFinite(region[k]))||region.x1<=region.x0||region.y1<=region.y0||!Number.isFinite(scale)||scale<=0)throw Error('OCR_HEADER_REGION_INVALID');
+    const kept=words(data).filter(w=>!(w.x>=region.x0&&w.x<region.x1&&w.y>=region.y0&&w.y<region.y1));
+    const recovered=words(reading).map(w=>({text:w.text,bbox:{x0:region.x0+w.bbox.x0/scale,x1:region.x0+w.bbox.x1/scale,y0:region.y0+w.bbox.y0/scale,y1:region.y0+w.bbox.y1/scale}}))
+      .filter(w=>w.bbox.x0>=region.x0&&w.bbox.x1<=region.x1&&w.bbox.y0>=region.y0&&w.bbox.y1<=region.y1);
+    return {text:data.text||'',words:kept.concat(recovered)};
+  }
+  function offsetReading(reading,x,y){
+    if(!Number.isFinite(x)||!Number.isFinite(y))throw Error('OCR_OFFSET_INVALID');
+    const move=b=>b&&({x0:b.x0+x,x1:b.x1+x,y0:b.y0+y,y1:b.y1+y});
+    return {words:(reading&&reading.words||[]).map(w=>({text:w.text,confidence:w.confidence,bbox:move(w.bbox),
+      symbols:(w.symbols||[]).map(s=>({text:s.text,confidence:s.confidence,bbox:move(s.bbox)}))}))};
+  }
+  function refinedName(korean,english,index,prefixReading,suffixReading){
     // Full crop readings may fix Korean-only names too. Never use fuzzy aliases
     // or pick between disagreeing exact names from the two language workers.
     const names=new Set();
@@ -68,6 +81,7 @@
     }
     const mixed=mixedName(korean,english,index);if(mixed)names.add(mixed);
     const separated=mixedName(korean,prefixReading,index);if(separated)names.add(separated);
+    for(const latin of [english,prefixReading]){const recovered=mixedName(suffixReading,latin,index);if(recovered)names.add(recovered)}
     return names.size===1?[...names][0]:null;
   }
   function parse(data,accountType,index){
@@ -101,7 +115,21 @@
       if(q&&a&&q.x!==a.x&&n.x<q.x&&n.x<a.x){headers={name:n,quantity:q,avgPrice:a};break}
     }
     const headerChecks={name:headerWords.some(isName),quantity:headerWords.some(isQty),avgPrice:headerWords.some(isAvg)};
-    if(!headers)return {holdings:[],rejected,layoutVerified:false,headerChecks,warnings:['종목명·수량·평균매입가 머리글을 확인하지 못했습니다. 행을 추측하지 않습니다.']};
+    if(!headers){
+      let headerRetryRegion=null;
+      // Two actual same-row numeric-column labels can locate pixels to reread.
+      // They never stand in for the missing name label or authorize parsing.
+      for(const q of headerWords.filter(isQty)){
+        const a=headerWords.find(w=>isAvg(w)&&w.x>q.x&&Math.abs(w.y-q.y)<=height*.6);
+        if(!a)continue;
+        const rowY=(q.y+a.y)/2;
+        const others=headerWords.filter(w=>Math.abs(w.y-rowY)<=height*.6&&
+          (isQty(w)||isAvg(w)||/^(평가손익|평가금액|수익률|현재가)$/.test(headerText(w))));
+        const right=Math.min(...others.map(w=>w.bbox.x0));
+        if(right>0){headerRetryRegion={x0:0,x1:right,y0:Math.max(0,Math.min(q.bbox.y0,a.bbox.y0)-height*.5),y1:Math.max(q.bbox.y1,a.bbox.y1)+height*.5};break}
+      }
+      return {holdings:[],rejected,layoutVerified:false,headerChecks,headerRetryRegion,warnings:['종목명·수량·평균매입가 머리글을 확인하지 못했습니다. 행을 추측하지 않습니다.']};
+    }
     const headerY=Math.max(...Object.values(headers).map(w=>w.y));
     const codeHeader=all.find(w=>norm(w.text)==='종목코드'&&Math.abs(w.y-headerY)<=height*2.5);if(codeHeader)headers.code=codeHeader;
     const knownHeader=w=>isName(w)||isQty(w)||isAvg(w)||/^(종목코드|현재가|평가금액|평가손익|수익률|매수구분|구분)$/.test(headerText(w));
@@ -169,5 +197,5 @@
     }
     return rows;
   }
-  return {norm,number,master,match,parse,merge,key,comparable,validate,mixedName,mixedPrefixRegion,refinedName,replaceName};
+  return {norm,number,master,match,parse,merge,key,comparable,validate,mixedName,mixedPrefixRegion,refinedName,replaceName,replaceHeaderRegion,offsetReading};
 });

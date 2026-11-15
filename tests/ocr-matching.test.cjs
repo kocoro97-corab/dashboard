@@ -149,3 +149,40 @@ test('separately read Latin pixels can complete a mixed name only with exact sym
   korean.words[0].symbols[0].confidence=79;assert.equal(core.mixedPrefixRegion(korean),null);
   assert.equal(core.refinedName(korean,bad,master,prefix),null);
 });
+test('targeted name-header reread preserves every numeric body cell and requires a real label',()=>{
+  const w=(text,x,y)=>({text,bbox:{x0:x,x1:x+80,y0:y,y1:y+20}});
+  const source={words:[w('UNKNOWN_HEADER',20,100),w('평가손익',250,100),w('수량',450,100),w('매입가',700,100),
+    w('카카오',20,200),w('7',450,200),w('1,300',700,200)]};
+  const before=core.parse(source,'ISA',index);assert.equal(before.layoutVerified,false);
+  const region=before.headerRetryRegion;assert.ok(region);assert.equal(region.x1,250);
+  const recovered={words:[{text:'종목명',bbox:{x0:40,x1:200,y0:20,y1:60}}]};
+  const merged=core.replaceHeaderRegion(source,recovered,region,2);
+  const after=core.parse(merged,'ISA',index);assert.equal(after.layoutVerified,true);
+  assert.equal(after.holdings[0].quantity,7);assert.equal(after.holdings[0].avgPrice,1300);
+  assert.equal(source.words[0].text,'UNKNOWN_HEADER');
+  assert.equal(core.parse(core.replaceHeaderRegion(source,{words:[w('STILL_UNKNOWN',40,20)]},region,2),'ISA',index).layoutVerified,false);
+  assert.throws(()=>core.replaceHeaderRegion(source,recovered,region,0));
+});
+test('numeric headers on different rows cannot supply a name-header retry region',()=>{
+  const w=(text,x,y)=>({text,bbox:{x0:x,x1:x+80,y0:y,y1:y+20}});
+  const result=core.parse({words:[w('수량',450,100),w('매입가',700,200)]},'ISA',index);
+  assert.equal(result.layoutVerified,false);assert.equal(result.headerRetryRegion,null);
+});
+test('separate Hangul pixels can repair a misread suffix without lowering confidence or hiding conflict',()=>{
+  const s=(text,x0,x1,confidence=99)=>({text,confidence,bbox:{x0,x1,y0:10,y1:30}});
+  const korean={words:[{text:'unverified',confidence:20,symbols:[s('틀',45,65,86),s('스',66,86),s('트',87,107)]}]};
+  const english={words:[{text:'AB',confidence:99,symbols:[s('A',5,20),s('B',21,36)]}]};
+  const local={words:[{text:'테스트',confidence:99,bbox:{x0:0,x1:62,y0:10,y1:30},symbols:[s('테',0,20),s('스',21,41),s('트',42,62)]}]};
+  const suffix=core.offsetReading(local,45,0);
+  const instruments=[{name:'AB테스트',code:'000001',type:'STOCK'},{name:'테스트',code:'000003',type:'STOCK'}];
+  const m=core.master({schema:1,source:{},instruments});
+  assert.equal(core.refinedName(korean,english,m),null);
+  assert.equal(core.refinedName(korean,english,m,undefined,suffix),'AB테스트');
+  assert.equal(core.refinedName(korean,undefined,m,undefined,suffix),null); // A suffix is not a full holding identity.
+  assert.equal(local.words[0].symbols[0].bbox.x0,0);
+  const conflict=core.master({schema:1,source:{},instruments:instruments.concat({name:'AB틀스트',code:'000002',type:'STOCK'})});
+  assert.equal(core.refinedName(korean,english,conflict,undefined,suffix),null);
+  suffix.words[0].symbols[0].confidence=79;
+  assert.equal(core.refinedName(korean,english,m,undefined,suffix),null);
+  assert.throws(()=>core.offsetReading(local,NaN,0));
+});

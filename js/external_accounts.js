@@ -105,24 +105,30 @@ async function ocrImage(file){
     let worker;layoutRetry='FAIL';
     $('externalOcrProgress').textContent='머리글 재확인 · 같은 이미지를 확대 분석 중...';
     try{
-      const source=await createImageBitmap(file);let enlarged;
+      const source=await createImageBitmap(file);let enlarged,region=null;
       try{
-        const scale=Math.min(2,Math.sqrt(12000000/(source.width*source.height)));
+        const hint=parsed.headerRetryRegion;
+        if(hint)region={x0:Math.max(0,Math.floor(hint.x0)),x1:Math.min(source.width,Math.ceil(hint.x1)),y0:Math.max(0,Math.floor(hint.y0)),y1:Math.min(source.height,Math.ceil(hint.y1))};
+        const width=region?region.x1-region.x0:source.width,height=region?region.y1-region.y0:source.height;
+        if(width<=0||height<=0)throw new Error('OCR_IMAGE_LIMIT');
+        const scale=Math.min(2,Math.sqrt(12000000/(width*height)));
         if(scale<1)throw new Error('OCR_IMAGE_LIMIT');
-        enlarged=document.createElement('canvas');enlarged.width=Math.floor(source.width*scale);enlarged.height=Math.floor(source.height*scale);
-        const ctx=enlarged.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,enlarged.width,enlarged.height);ctx.drawImage(source,0,0,enlarged.width,enlarged.height);
+        enlarged=document.createElement('canvas');enlarged.width=Math.floor(width*scale);enlarged.height=Math.floor(height*scale);
+        const ctx=enlarged.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,enlarged.width,enlarged.height);
+        ctx.drawImage(source,region?region.x0:0,region?region.y0:0,width,height,0,0,enlarged.width,enlarged.height);
       }finally{source.close()}
       worker=await Tesseract.createWorker('kor+eng',1,localOptions);
-      await worker.setParameters({tessedit_pageseg_mode:'6'});
-      const alternate=await worker.recognize(enlarged),candidate=alternate.data||{text:''};
+      await worker.setParameters({tessedit_pageseg_mode:region?'7':'6'});
+      const alternate=await worker.recognize(enlarged);
+      const candidate=region?ExternalCore.replaceHeaderRegion(data,alternate.data||{},region,enlarged.width/(region.x1-region.x0)):alternate.data||{text:''};
       const check=ExternalCore.parse(candidate,$('externalAccountType').value,EXT_MASTER);
       layoutRetryChecks=check.headerChecks;
-      if(check.layoutVerified){data=candidate;parsed=check;layoutRetry='PASS';recognitionSource=enlarged}
+      if(check.layoutVerified){data=candidate;parsed=check;layoutRetry='PASS';recognitionSource=region?file:enlarged}
     }catch(error){/* Keep original evidence and fail closed if retry is unavailable. */}
     finally{if(worker)await worker.terminate()}
   }
   const regions=parsed.regions||[];
-  const nameChecks={candidates:regions.length,prefixAttempts:0,verified:0};
+  const nameChecks={candidates:regions.length,prefixAttempts:0,suffixAttempts:0,verified:0};
   if(!regions.length||!EXT_MASTER||typeof Tesseract.createWorker!=='function')return {...data,layoutRetry,layoutRetryChecks,nameChecks};
   const bitmap=await createImageBitmap(recognitionSource);
   try{
@@ -134,13 +140,23 @@ async function ocrImage(file){
       ctx.drawImage(bitmap,region.x0,region.y0,width,height,0,0,canvas.width,canvas.height);
       return canvas;
     });
-    const readings={prefix:[]};
+    const readings={prefix:[],suffix:[]};
     for(const language of ['kor','eng']){
       const worker=await Tesseract.createWorker(language,1,localOptions);
       try{await worker.setParameters({tessedit_pageseg_mode:'7'});readings[language]=[];
         for(let i=0;i<crops.length;i++){
           const canvas=crops[i],reading=await worker.recognize(canvas.toDataURL());readings[language].push(reading.data);
-          if(language==='eng'&&!ExternalCore.refinedName(readings.kor[i],reading.data,EXT_MASTER)){
+          if(language==='kor'&&!ExternalCore.refinedName(reading.data,undefined,EXT_MASTER)){
+            const region=ExternalCore.mixedPrefixRegion(reading.data);
+            if(region&&region.x1<canvas.width){
+              nameChecks.suffixAttempts++;
+              const suffix=document.createElement('canvas');suffix.width=canvas.width-region.x1;suffix.height=canvas.height;
+              suffix.getContext('2d').drawImage(canvas,region.x1,0,suffix.width,suffix.height,0,0,suffix.width,suffix.height);
+              try{readings.suffix[i]=ExternalCore.offsetReading((await worker.recognize(suffix.toDataURL())).data,region.x1,0)}
+              catch(error){/* Keep the full-name evidence if this optional read fails. */}
+            }
+          }
+          if(language==='eng'&&!ExternalCore.refinedName(readings.kor[i],reading.data,EXT_MASTER,undefined,readings.suffix[i])){
             // Read the actual Latin pixels separately; never complete a prefix
             // from a likely stock name. The Korean worker supplies the boundary.
             const region=ExternalCore.mixedPrefixRegion(readings.kor[i]);
@@ -157,7 +173,7 @@ async function ocrImage(file){
         }
       }finally{await worker.terminate()}
     }
-    regions.slice(0,12).forEach((region,i)=>{const name=ExternalCore.refinedName(readings.kor[i],readings.eng[i],EXT_MASTER,readings.prefix[i]);if(name){data=ExternalCore.replaceName(data,region,name);nameChecks.verified++}});
+    regions.slice(0,12).forEach((region,i)=>{const name=ExternalCore.refinedName(readings.kor[i],readings.eng[i],EXT_MASTER,readings.prefix[i],readings.suffix[i]);if(name){data=ExternalCore.replaceName(data,region,name);nameChecks.verified++}});
   }catch(error){
     // Optional refinement must preserve the original candidates for user review.
   }finally{bitmap.close()}
@@ -202,7 +218,7 @@ async function processExternalUploads(){
       summaries.push((i+1)+'번 이미지: 머리글 '+(parsed.layoutVerified?'확인':'미확인')+' · 후보 '+parsed.holdings.length+'개'
         +(data.layoutRetry==='NOT_RUN'?'':' · 재인식 '+(data.layoutRetry==='PASS'?'머리글 확인':'실패'))
         +(!parsed.layoutVerified?' · '+labels:'')
-        +(data.nameChecks&&data.nameChecks.candidates?' · 이름 보정 '+data.nameChecks.verified+'/'+data.nameChecks.candidates+' · 영문 영역 재인식 '+data.nameChecks.prefixAttempts+'회':''));
+        +(data.nameChecks&&data.nameChecks.candidates?' · 이름 보정 '+data.nameChecks.verified+'/'+data.nameChecks.candidates+' · 영문 영역 재인식 '+data.nameChecks.prefixAttempts+'회 · 한글 영역 재인식 '+data.nameChecks.suffixAttempts+'회':''));
     }
     showOcrReview(texts,summaries);if((window.EXT_OCR_WARNINGS||[]).length)$('externalOcrProgress').textContent=window.EXT_OCR_WARNINGS.join(' · ');if(!all.length){$('externalOcrProgress').textContent=(window.EXT_OCR_WARNINGS||[]).join(' · ')||'종목을 인식하지 못했습니다. 머리글과 동일 행의 수량·평균매입가를 확인하세요.';return}
     if(!extImport(all))return;extResolveCodes();renderExternalAssets();$('externalOcrProgress').textContent=window.DevelopmentOCR?'인식 후보 '+all.length+'개 · 수량·평균매입가를 확인하세요. 임시 목록만 사용하며 저장·Drive는 차단됩니다.':'인식 후보 '+all.length+'개 · 수량·평균매입가를 확인·수정하고 [인식자료 저장]을 누르세요. 종목코드는 비워도 저장됩니다.'+(window.EXT_OCR_WARNINGS||[]).join(' · ');showExternalSaveButton();
