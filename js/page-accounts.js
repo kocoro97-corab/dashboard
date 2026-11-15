@@ -9,6 +9,7 @@
     wrap.hidden=type.value!=='BROKER';select.replaceChildren();
     for(const name of brokerChoices()){const option=document.createElement('option');option.value=name;option.textContent=name;select.append(option)}
     const upload=document.getElementById('externalUploadBtn');if(upload)upload.disabled=type.value==='BROKER';
+    const manual=document.getElementById('externalManualAddBtn');if(manual)manual.disabled=type.value==='BROKER';
     const info=document.getElementById('externalOcrProgress');
     if(type.value==='BROKER'&&info)info.textContent='다른 증권사 목록은 이 브라우저에서만 관리됩니다. 현재 GAS 저장 규격은 ISA·연금저축·IRP만 지원하므로 다른 증권사 OCR·저장은 계좌별 저장 구조 확장 후 활성화합니다.';
   }
