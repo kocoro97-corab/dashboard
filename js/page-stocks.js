@@ -2,6 +2,7 @@
 'use strict';
 // Stock analysis V2: public OHLCV only. Never submits orders or modifies account records.
 const WATCH_KEY='myinvest_sector_watch_v2';
+const STRATEGY_KEY='myinvest_strategy_selection_v2';
 const SELECT_KEY='myinvest_stock_selection_v2';
 const readSelection=()=>{try{const x=JSON.parse(sessionStorage.getItem(SELECT_KEY));return x&&valid(x.symbol)&&Date.now()-x.at<3600000?x:null}catch{return null}};
 const clearSelection=()=>{try{sessionStorage.removeItem(SELECT_KEY)}catch{}};
@@ -38,6 +39,7 @@ function create(){
  if(m.rsi!==null)triggers.push('RSI '+fmt(m.rsi)+(m.rsi>=70?' · 과열 구간 주의':m.rsi<=30?' · 약세/과매도 구간 주의':' · 중립 범위'));
  const ul=el('ul');triggers.forEach(t=>ul.append(el('li',t)));results.append(ul);
  results.append(el('p','판단 근거: '+bars.length+'개 일봉 OHLCV · 이동평균/RSI 단순 계산. 신뢰도 한계: 수정주가·분봉·호가·기관/외국인 수급·실적·뉴스 미검증. AI 예측 확률 또는 매수 추천이 아닙니다.','sva-muted'));
+ const strategyBtn=btn('이 종목으로 투자전략 보기',()=>{try{sessionStorage.setItem(STRATEGY_KEY,JSON.stringify({symbol:sym,name:selectedContext?.name||sym,theme:selectedContext?.theme||'',mode,at:Date.now()}));root.location.hash='#/strategy'}catch{status.textContent='전략 선택 정보를 전달하지 못했습니다.'}});results.append(strategyBtn);
  const watchBtn=btn(watchRead().includes(sym)?'관심종목 해제':'관심종목 등록',()=>{const added=watchToggle(sym);watchBtn.textContent=added?'관심종목 해제':'관심종목 등록'});results.append(watchBtn);
  }
  async function analyze(sym){symbol=sym;const seq=++sequence;results.replaceChildren();status.textContent='실제 일봉 데이터 조회 중 · '+sym;
