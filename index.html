@@ -102,7 +102,7 @@
         <label>종목명<br><input id="externalManualName" placeholder="ETF/주식명 또는 코드 검색" list="externalMasterNames" oninput="suggestExternalNames(this.value)"><datalist id="externalMasterNames"></datalist></label>
         <label>수량<br><input id="externalManualQty" type="number" min="0" step="any" placeholder="0"></label>
         <label>평균매입가<br><input id="externalManualAvg" type="number" min="0" step="any" placeholder="0"></label>
-        <button onclick="addExternalManual()">종목 직접 추가</button>
+        <button id="externalManualAddBtn" onclick="addExternalManual()">종목 직접 추가</button>
       </div>
       <div class="mini" style="line-height:1.6;margin:4px 0 8px">이미지 인식 결과와 직접 입력한 종목은 아래 외부계좌 표에서 확인·수정한 뒤 저장하세요. Google Drive 가져오기는 추후 활성화합니다.</div>
       <div id="externalOcrProgress" class="mini" style="margin:6px 0"></div>
