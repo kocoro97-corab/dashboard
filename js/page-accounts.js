@@ -1,6 +1,6 @@
 (function(){
   'use strict';const {node,note,button}=DashboardPages;
-  const tabs=[['overview','전체 자산'],['holdings','통합보유종목'],['nh','일반계좌'],['special','ISA·연금·IRP'],['ocr','외부계좌 OCR'],['analysis','자산·손익 분석']];
+  const tabs=[['overview','전체 자산'],['holdings','통합보유종목'],['nh','일반계좌'],['special','ISA·연금·IRP'],['ocr','외부계좌'],['analysis','자산·손익 분석']];
   function format(v){return Number.isFinite(v)?nf(v):'—'}
   function combinedTable(target,snap){
     const section=node('section',null,'card');section.append(node('h2','동일 종목 통합 수량·평균매입가'),note('검증된 식별자·시장·통화가 같은 종목만 통합합니다. 평균매입가는 수량 가중평균입니다. 해외 식별자가 미확인인 행은 합치지 않습니다.'));
@@ -19,17 +19,17 @@
       target.append(note('보유종목 평가 기준입니다. 예수금·현금과 미연결 계좌를 포함한 전체 순자산으로 간주하지 않습니다.'));
       for(const [title,list] of [['계좌별 비중·평가손익',result.accounts],['국내·해외 비중',snap.byMarket],['보유 통화별 원화 평가액',result.byCurrency],['종목별 집중도·평가손익',result.exposures]]){
         const section=node('section',null,'card');section.append(node('h2',title));if(!list.length)section.append(note('미조회'));
-        for(const row of list){const label=row.key===null?'미확인':snap.details.find(x=>x.accountKey===row.key)?.accountLabel||row.key;section.append(node('p',label+' · 원화 평가액 '+format(row.valueKrw)+' · 평가손익 '+format(row.profitKrw)+' · 비중 '+(row.weight===null?'미확인':format(row.weight*100)+'%')))}target.append(section);
+        if(list.length){const wrap=node('div',null,'tw'),table=node('table'),thead=node('thead'),head=node('tr');for(const h of ['구분','평가금액(KRW)','평가손익(KRW)','비중(%)'])head.append(node('th',h));thead.append(head);table.append(thead);const tbody=node('tbody');for(const row of list){const label=row.key===null?'미확인':snap.details.find(x=>x.accountKey===row.key)?.accountLabel||row.key;const tr=node('tr');for(const value of [label,format(row.valueKrw),format(row.profitKrw),row.weight===null?'미확인':format(row.weight*100)])tr.append(node('td',value));tbody.append(tr)}table.append(tbody);wrap.append(table);section.append(wrap)}target.append(section);
       }
       target.append(note(result.risk.unknownExposure?'종목 집중 위험: 식별자 미확인 종목이 있어 확정할 수 없습니다.':result.risk.incomplete?'종목 집중 위험: 조회 범위가 불완전합니다.':result.risk.concentrated.length?'종목 집중 위험: 확인된 평가액의 25% 이상을 차지하는 종목이 있습니다.':'조회된 범위에서 25% 이상 단일 종목 집중 없음'));
       target.append(note('실현손익·과거 자산 이력·기간 수익률: 데이터 미연결. 평가손익을 실현손익으로 대체하거나 과거 그래프를 생성하지 않습니다.'));
     }else if(tab==='holdings'){
       combinedTable(target,snap);
       target.append(note('계좌별 원본 상세입니다. 동일 종목의 통합 노출은 자산·손익 분석에서 확인합니다. 평가금액·평가손익은 원화, 평균매입가·현재가는 거래 통화 기준입니다.'));
-      const wrap=node('div',null,'tw'),table=node('table'),head=node('tr');for(const h of ['계좌','종목','코드','시장','통화','수량','평단가','현재가','평가금액(KRW)','평가손익(KRW)','수익률','출처'])head.append(node('th',h));const thead=node('thead');thead.append(head);table.append(thead);const body=node('tbody');
-      snap.details.map((row,i)=>({row,analysis:result.rows[i]})).sort((a,b)=>(a.row.accountLabel||'').localeCompare(b.row.accountLabel||'','ko')||(a.row.name||'').localeCompare(b.row.name||'','ko')).forEach(({row,analysis})=>{const tr=node('tr');for(const value of [row.accountLabel,row.name,row.code||'미확인',row.market==='domestic'?'국내':'해외',row.currency,format(row.quantity),format(row.avgPrice),format(row.currentPrice),format(analysis.valueKrw),format(analysis.profitKrw),format(analysis.returnPct),row.source+(row.draft?' · 임시':'')])tr.append(node('td',value));body.append(tr)});
+      const wrap=node('div',null,'tw'),table=node('table'),head=node('tr');for(const h of ['계좌','종목','코드','시장','통화','수량','평단가','현재가','평가금액(KRW)','평가손익(KRW)','수익률','출처'])head.append(node('th',h));const thead=node('thead');thead.append(head);table.append(thead);const body=node('tbody');let previousAccount=null;
+      snap.details.map((row,i)=>({row,analysis:result.rows[i]})).sort((a,b)=>(a.row.accountLabel||'').localeCompare(b.row.accountLabel||'','ko')||(a.row.name||'').localeCompare(b.row.name||'','ko')).forEach(({row,analysis})=>{if(row.accountLabel!==previousAccount){const group=node('tr'),cell=node('th',row.accountLabel||'계좌 미확인');cell.colSpan=12;cell.scope='rowgroup';group.append(cell);body.append(group);previousAccount=row.accountLabel}const tr=node('tr');for(const value of [row.accountLabel,row.name,row.code||'미확인',row.market==='domestic'?'국내':'해외',row.currency,format(row.quantity),format(row.avgPrice),format(row.currentPrice),format(analysis.valueKrw),format(analysis.profitKrw),format(analysis.returnPct),row.source+(row.draft?' · 임시':'')])tr.append(node('td',value));body.append(tr)});
       table.append(body);wrap.append(table);target.append(wrap);if(!snap.details.length)target.append(note('미조회 · 보유종목이 없다는 뜻이 아닙니다.'));
-    }else if(tab==='special')target.append(note('ISA·연금저축·IRP는 기존 OCR·수동 입력 자료를 사용합니다. 확인한 NH 공식 공개 문서에서 특수계좌 지원 범위·상품 코드는 미확인, 실제 직접 조회는 미검증입니다. 일반계좌 코드를 임의 적용하지 않습니다. 수정·저장·복구는 외부계좌 OCR 탭에서 기존 절차로 진행합니다.'));
+    }else if(tab==='special')target.append(note('ISA·연금저축·IRP는 기존 OCR·수동 입력 자료를 사용합니다. 확인한 NH 공식 공개 문서에서 특수계좌 지원 범위·상품 코드는 미확인, 실제 직접 조회는 미검증입니다. 일반계좌 코드를 임의 적용하지 않습니다. 수정·저장·복구는 외부계좌 메뉴에서 기존 절차로 진행합니다.'));
   }
   DashboardPages.register('accounts',()=>{
     let tab='overview',route=null;
@@ -54,7 +54,7 @@
             const response=await fetch('data/account-test-holdings.json',{cache:'no-store'});if(!response.ok)throw Error();const rows=await response.json();if(session!==LS('invest_session_token'))return;
             const canonical=x=>JSON.stringify([x.accountType,x.code,x.name,x.quantity,x.avgPrice,x.source]),allowed=new Set(rows.map(canonical));
             if(!EXT_SAVED_REV||[...EXT_ASSETS,...EXT_SAVED_ROWS].some(row=>!allowed.has(canonical(row)))){connection.textContent='기존 저장자료 또는 임시자료가 승인된 합성 검증자료와 다릅니다. 기존 자료를 변경하지 않았습니다.';return}
-            if(extImport(rows)){renderExternalAssets();showExternalSaveButton()}connection.textContent='합성 테스트자료만 임시 목록에 준비했습니다. 외부계좌 OCR 탭에서 검토 후 저장하세요. 실제 OCR 자료 저장은 이 검증 권한에 포함되지 않습니다.';
+            if(extImport(rows)){renderExternalAssets();showExternalSaveButton()}connection.textContent='합성 테스트자료만 임시 목록에 준비했습니다. 외부계좌 메뉴에서 검토 후 저장하세요. 실제 OCR 자료 저장은 이 검증 권한에 포함되지 않습니다.';
           }catch{if(session===LS('invest_session_token'))connection.textContent='합성 검증자료를 준비하지 못했습니다. 기존 자료는 변경하지 않았습니다.'}
         });loadTest.id='loadAccountTestData';actions.append(loadTest);diagnostic.append(node('h2','계좌 API 연결 진단'),actions,connection);view.append(diagnostic);
         const nav=node('nav',null,'account-nav');nav.setAttribute('aria-label','계좌관리 하위 메뉴');nav.dataset.shellControl='true';for(const [key,title] of tabs){const link=node('a',title);link.href='#/accounts/'+key;link.dataset.accountTab=key;nav.append(link)}
