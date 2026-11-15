@@ -191,3 +191,13 @@ names, quantities or prices. Images are selected from local files; the fixture
 gateway sees authentication actions only. The exact failing input file is needed
 before another product correction can be justified; real financial input files
 and expectation data remain outside Git.
+
+The owner requested two-file batch validation explicitly. The private test now
+asserts two selected inputs, one upload invocation and two completed image
+results, before comparing the merged result. With the stored 1100x1280 originals
+at 1440px, both input orders produced 6+5 candidates, removed four duplicates,
+and exactly matched seven names/codes/quantities/average prices; financial HTTP
+calls remained zero. This was one multi-file upload per case, not separately
+accepted single-file results. These stored files are distinct from the currently
+displayed chat attachments, whose exact file bytes are not mounted in the
+execution environment; current-input resolution remains unverified.

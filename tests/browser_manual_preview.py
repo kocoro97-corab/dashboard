@@ -95,6 +95,15 @@ with tempfile.TemporaryDirectory() as tmp:
                     baseline=len(gas.calls)
                     page.evaluate("""()=>{
                       window.privateNameReads=[];const create=Tesseract.createWorker;
+                      window.privateBatchCalls=0;window.privateImageResults=[];
+                      const upload=processExternalUploads,imageRead=ocrImage;
+                      window.processExternalUploads=async(...args)=>{window.privateBatchCalls++;return upload(...args)};
+                      window.ocrImage=async(file)=>{
+                        const bitmap=await createImageBitmap(file),width=bitmap.width,height=bitmap.height;bitmap.close();
+                        const data=await imageRead(file),parsed=ExternalCore.parse(data,$('externalAccountType').value,EXT_MASTER);
+                        window.privateImageResults.push({width,height,layoutVerified:parsed.layoutVerified,candidates:parsed.holdings.length});
+                        return data;
+                      };
                       Tesseract.createWorker=async(lang,...args)=>{
                         const w=await create(lang,...args),read=w.recognize;
                         if(lang==='kor'||lang==='eng')w.recognize=async(image,...rest)=>{
@@ -116,7 +125,10 @@ with tempfile.TemporaryDirectory() as tmp:
                     report=page.evaluate("""expected=>{
                       const norm=rows=>rows.map(r=>JSON.stringify([r.name,r.code,r.quantity,r.avgPrice])).sort().join('|');
                       const ids=rows=>rows.map(r=>JSON.stringify([r.name,r.code])).sort().join('|');
-                      return {rowsMatch:EXT_ASSETS.length===expected.length,identitiesMatch:ids(EXT_ASSETS)===ids(expected),
+                      return {batchCalls:window.privateBatchCalls,selectedImages:$('externalImageFiles').files.length,
+                        imageResults:window.privateImageResults,mergedRows:EXT_ASSETS.length,
+                        duplicatesRemoved:window.privateImageResults.reduce((n,r)=>n+r.candidates,0)-EXT_ASSETS.length,
+                        rowsMatch:EXT_ASSETS.length===expected.length,identitiesMatch:ids(EXT_ASSETS)===ids(expected),
                         exactValuesAndIdentityMatch:norm(EXT_ASSETS)===norm(expected),
                         reads:window.privateNameReads.map(r=>{
                           const s=r.data.words.flatMap(w=>w.symbols||[]),k=s.filter(s=>/^[가-힣]$/.test(s.text)),a=s.filter(s=>/^[A-Za-z]$/.test(s.text));
@@ -128,6 +140,7 @@ with tempfile.TemporaryDirectory() as tmp:
                     }""",expected)
                     report.update(scope='PRIVATE_REAL_IMAGES_LOCAL_DEV_OCR',width=width,financialHttpCalls=len(gas.calls)-baseline,controlledHeaderRetry=args.force_private_header_retry)
                     print(json.dumps(report))
+                    if report['batchCalls']!=1 or report['selectedImages']!=2 or len(report['imageResults'])!=2:raise RuntimeError('PRIVATE_BATCH_FLOW_NOT_CONFIRMED')
                     if not report['exactValuesAndIdentityMatch']:raise RuntimeError('PRIVATE_REAL_OCR_NOT_CONFIRMED')
                     assert len(gas.calls)==baseline and page.locator('#externalSaveBtn').is_disabled()
                     page.evaluate('logout()');page.wait_for_selector('#authGuard',state='visible')
