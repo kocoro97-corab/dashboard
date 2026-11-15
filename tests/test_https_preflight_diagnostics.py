@@ -13,6 +13,12 @@ import nh_v2_https as launcher
 
 
 class PreflightDiagnosticsTests(unittest.TestCase):
+    def test_store_activation_requires_separate_account_flag_and_existing_test_user(self):
+        for flags,code in [(['--external-test-store'],'HTTPS_ACCOUNT_PROFILE_REQUIRED'),(['--accounts','--external-test-store'],'HTTPS_TEST_STORE_USER_REQUIRED')]:
+            out=io.StringIO()
+            with patch.object(sys,'argv',['tool','--environment','/synthetic/private','--cloudflared','/synthetic/connector',*flags]),patch.object(launcher.signal,'signal'),patch.object(launcher,'validate_runtime'),patch.object(launcher,'private_path') as private,redirect_stdout(out):
+                self.assertEqual(launcher.main(),2)
+            self.assertEqual(json.loads(out.getvalue())['code'],code);private.assert_not_called()
     def test_market_check_requires_explicit_profile_before_private_environment_access(self):
         out=io.StringIO()
         with patch.object(sys,'argv',['tool','--environment','/synthetic/private','--cloudflared','/synthetic/connector','--verify-market']), \

@@ -1,0 +1,5 @@
+[
+  {"accountType":"ISA","code":"035720","name":"SYNTHETIC TEST ISA","quantity":1,"avgPrice":100,"source":"synthetic-test"},
+  {"accountType":"PENSION","code":"035720","name":"SYNTHETIC TEST PENSION","quantity":2,"avgPrice":200,"source":"synthetic-test"},
+  {"accountType":"IRP","code":"0008Z0","name":"SYNTHETIC TEST IRP","quantity":3,"avgPrice":300,"source":"synthetic-test"}
+]

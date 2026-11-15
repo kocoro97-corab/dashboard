@@ -88,6 +88,13 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
     assert page.evaluate("LS('invest_session_token')")==token
     assert page.locator('#pageViewport>.page-content').count()==1
    go('/accounts/ocr');assert page.evaluate('EXT_ASSETS.length')==count and page.locator('#externalAssetSection').is_visible()
+   for sub in ['overview','nh','special','holdings','analysis']:
+    go('/accounts/'+sub);assert page.evaluate('EXT_ASSETS.length')==count
+    assert 'NaN' not in page.locator('#pageViewport').inner_text()
+    if sub=='holdings':assert page.get_by_role('heading',name='동일 종목 통합 수량·평균매입가').is_visible()
+    if sub=='nh':assert page.locator('#nhAccountSection').is_visible()
+   go('/accounts/ocr')
+   page.get_by_role('button',name='계좌 연결 상태 확인',exact=True).click();page.wait_for_function("()=>$('accountConnectionStatus').textContent.includes('GAS V2 연결 확인')")
    if development and width==344:
     page.set_viewport_size({'width':690,'height':900});page.set_viewport_size({'width':344,'height':900});assert page.evaluate('EXT_ASSETS.length')==count and page.evaluate("LS('invest_session_token')")==token
    if not development:

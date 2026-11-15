@@ -38,9 +38,9 @@
       // Current FX cannot reconstruct historical KRW acquisition cost or broker P/L.
       const reportedCost = reportedValue !== null && reportedProfit !== null
         ? valueOrNull(reportedValue - reportedProfit) : null;
-      const costKrw = valueKrw === null ? null : nonnegative(reportedCost) ? reportedCost :
+      const costKrw = issues.includes('CURRENCY_MISMATCH') ? null : nonnegative(reportedCost) ? reportedCost :
         currency === 'KRW' && (reportedProfit === null || reportedValue === null) ? computedCost : null;
-      const profitKrw = costKrw === null ? null : valueOrNull(valueKrw - costKrw);
+      const profitKrw = costKrw === null || valueKrw === null ? null : valueOrNull(valueKrw - costKrw);
       const returnPct = costKrw > 0 && profitKrw !== null ? valueOrNull(profitKrw / costKrw * 100) : null;
       if (valueKrw === null) issues.push(fx === null ? 'VALUATION_OR_FX_MISSING' : 'VALUATION_MISSING');
       if (costKrw === null) issues.push('COST_BASIS_MISSING');

@@ -13,14 +13,17 @@
     }
     const development=()=>window.MYINVEST_TRANSPORT_CONFIG?.devSession===true;
     const publicConnected=()=>!development()||window.MYINVEST_TRANSPORT_CONFIG.publicMarket===true;
+    const accountReads=()=>!development()||window.MYINVEST_TRANSPORT_CONFIG.accountReads===true;
     function snapshot(){
       const token=LS('invest_session_token');
       return AccountOverview.build({accounts:NH_ACCOUNT_SESSION===token?NH_ACCOUNTS:[],external:EXT_ASSETS,prices:EXT_PRICES,
         nhLoaded:!!token&&NH_ACCOUNT_SESSION===token&&NH_ACCOUNT_FETCHED_AT>0,externalLoaded:!!EXT_SAVED_REV,
         nhPartial:document.getElementById('nhAccountStatus')?.textContent.includes('조회 실패')===true,
-        draft:JSON.stringify(extRows(EXT_ASSETS))!==JSON.stringify(EXT_SAVED_ROWS),analyze:WorkPortfolio.analyze});
+        nhReceivedAt:NH_ACCOUNT_UPDATED,
+        externalPartial:document.getElementById('externalStatus')?.textContent.includes('외부계좌 자료 조회 실패')===true,
+        draft:JSON.stringify(extRows(EXT_ASSETS.filter(x=>x.source!=='synthetic-test')))!==JSON.stringify(EXT_SAVED_ROWS.filter(x=>x.source!=='synthetic-test')),analyze:WorkPortfolio.analyze});
     }
-    return {once,emit,snapshot,development,publicConnected,authenticated:()=>!!synchronize(),
+    return {once,emit,snapshot,development,publicConnected,accountReads,authenticated:()=>!!synchronize(),
       settings:()=>({indicators:JSON.parse(JSON.stringify(CFG)),market:sess()}),
       data:Object.freeze({publicRead:url=>publicConnected()?getTxt(url):Promise.resolve(null),accounts:snapshot}),
       error:()=>({status:'error',message:'모듈 처리 실패 · 연결 상태를 확인하세요.'}),
@@ -30,8 +33,8 @@
       chart(force=false){return publicConnected()?once('chart',()=>{if(force&&QX)return loadQ(qrg);if(!QX)return showQ('^KS11','코스피','',1)},force):Promise.resolve()},
       news(force=false){return publicConnected()?once('news',()=>loadNews(),force):Promise.resolve()},
       sectors(force=false){return publicConnected()?once('sectors',()=>{if(force)THM_AT=0;return fetchTopThemes()},force):Promise.resolve()},
-      accounts(force=false){if(development())return Promise.resolve();return once('accounts',async()=>{await loadProtectedHoldings();await loadNHAccounts();await loadExternalAssets()},force)},
-      state(){return {authenticated:!!LS('invest_session_token'),publicConnected:publicConnected(),privateReads:!development(),running:[...jobs.values()].filter(j=>j.busy).length}}
+      accounts(force=false){if(!accountReads())return Promise.resolve();return once('accounts',async()=>{if(!development())await loadProtectedHoldings();await loadNHAccounts();await loadExternalAssets()},force)},
+      state(){return {authenticated:!!LS('invest_session_token'),publicConnected:publicConnected(),privateReads:accountReads(),running:[...jobs.values()].filter(j=>j.busy).length}}
     };
   }
   root.AppContext=Object.freeze({create});

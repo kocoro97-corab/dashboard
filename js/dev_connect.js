@@ -61,6 +61,8 @@
       if(!response.ok||data.success!==true)reject(known(data.code)?data.code:'DEV_REJECTED');
       if(data.freshTestEnvironment!==true||data.testEnvironment!=='nh-staging'||data.gatewayVersion!==2||data.storeEngine!=='account-store-v2')reject('DEV_METADATA_MISMATCH');
       config.publicMarket=data.developmentPublicMarket===true;
+      config.accountReads=data.developmentAccountReads===true;
+      config.externalTestStore=config.accountReads&&data.developmentExternalTestStore===true;
       stage='storage';
       sessionStorage.setItem(KEY,JSON.stringify({endpoint,code}));
       stage='render';
@@ -68,6 +70,7 @@
       const banner=document.createElement('div');banner.id='devBanner';banner.setAttribute('role','status');banner.textContent='V2 개발 화면 점검 · 실제 NH 조회 및 저장 차단';
       banner.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#153047;color:#fff;text-align:center;padding:6px;font-size:12px';document.body.appendChild(banner);
       DevelopmentMarket.enable();
+      if(window.DevelopmentAccounts)DevelopmentAccounts.enable();
       if(window.DashboardShell&&DashboardShell.getStatus().page)DashboardShell.refresh(false);
     }catch(e){
       const fallback={network:'DEV_NETWORK',response:'DEV_RESPONSE_INVALID',storage:'DEV_STORAGE',render:'DEV_UI_ERROR'}[stage];

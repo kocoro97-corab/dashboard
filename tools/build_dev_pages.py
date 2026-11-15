@@ -49,6 +49,7 @@ def build(output, root=ROOT):
                 shutil.copyfile(source, target / source.name)
     (output / 'data').mkdir()
     shutil.copyfile(root / 'data/krx-instruments.json', output / 'data/krx-instruments.json')
+    shutil.copyfile(root / 'data/account-test-holdings.json', output / 'data/account-test-holdings.json')
     ocr = root / 'vendor/ocr'
     pinned = json.loads((ocr / 'manifest.json').read_text())
     for name, digest in pinned['sha256'].items():

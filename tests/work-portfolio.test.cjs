@@ -30,3 +30,6 @@ test('suppresses portfolio weights on partial fetch and flags unknown identity',
   assert.equal(out.byCountry[0].weight, null);
   assert.equal(out.risk.unknownExposure, true);
 });
+test('known domestic cost does not require a quote, but profit still requires valuation',()=>{
+  const out=api.analyze({holdings:[{...domestic,currentPrice:null}]});assert.equal(out.summary.costKrw,200);assert.equal(out.summary.valueKrw,null);assert.equal(out.summary.profitKrw,null);
+});

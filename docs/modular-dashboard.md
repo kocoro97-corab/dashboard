@@ -63,12 +63,13 @@ details remain distinct; confirmed instrument identities feed combined exposure.
 Unknown identities are not guessed. Original account numbers never enter new
 summary labels. There is no realized-P/L substitution or fabricated history.
 
-The published development profile intentionally still blocks NH/private storage
-through its existing relay scope. Account pages explicitly disclose this. OCR
-and manual input remain local drafts; pre-existing saved data is neither read nor
-overwritten under this profile. In the existing full source profile, the account
-page invokes the original protected holdings, NH read, external-store and recovery
-functions. Any future permission expansion requires separate authorization.
+The default development profile blocks NH/private storage. The owner-approved
+account capability in `accounts-live-connection-plan.md` separately enables
+isolated private reads and optional fixed synthetic-only save/restore. Real OCR
+and existing real store data cannot be replaced under this test-write scope.
+The page displays server capabilities, diagnostics and a reviewed test-fixture
+loader. The original full source profile retains its existing private handlers.
+Any further permission expansion requires separate authorization.
 
 ## Validation and limits
 

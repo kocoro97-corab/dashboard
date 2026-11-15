@@ -40,6 +40,7 @@ RELAY_TARGET_MISMATCH RELAY_GAS_ACCESS_REQUIRED RELAY_UPSTREAM_HTTP
 RELAY_UPSTREAM_NETWORK RELAY_NON_JSON RELAY_RESPONSE_INVALID
 RELAY_GOOGLE_CONTENT_400 RELAY_REDIRECT_DENIED RELAY_REDIRECT_METHOD_DENIED
 HTTPS_PUBLIC_MARKET_FLAG_REQUIRED
+HTTPS_ACCOUNT_PROFILE_REQUIRED HTTPS_TEST_STORE_USER_REQUIRED
 '''.split())
 
 
@@ -177,6 +178,9 @@ def main():
     parser.add_argument('--minutes', type=int, default=30, choices=range(1, 61))
     parser.add_argument('--verify-browser', action='store_true', help='Verify only the new public HTTPS/Pages path, then keep it open for Fold6')
     parser.add_argument('--public-market', action='store_true', help='Enable only authenticated allowlisted public market GETs; NH and storage stay blocked')
+    parser.add_argument('--accounts', action='store_true', help='Approved isolated private account reads only; orders/admin/Drive/snapshots remain blocked')
+    parser.add_argument('--external-test-store', action='store_true', help='Approved fixed synthetic-only save/restore; requires --accounts and --test-store-user')
+    parser.add_argument('--test-store-user', default='', help='Existing dedicated test administrator; no user is created')
     parser.add_argument('--verify-market', action='store_true', help='Check public market display with the existing browser verifier; requires --public-market')
     parser.add_argument('--diagnose-market', action='store_true', help='Inspect only two fixed public response shapes through existing GAS; no tunnel/browser/NH/store')
     parser.add_argument('--diagnose-preflight', action='store_true', help='Read-only checks only: no tunnel, password prompt, login, browser or account writes')
@@ -186,6 +190,8 @@ def main():
     try:
         validate_runtime(args.cloudflared, needs_tty=not (args.diagnose_preflight or args.diagnose_tunnel_dns))
         if (args.verify_market or args.diagnose_market) and not args.public_market:raise ValueError('HTTPS_PUBLIC_MARKET_FLAG_REQUIRED')
+        if args.external_test_store and not args.accounts:raise ValueError('HTTPS_ACCOUNT_PROFILE_REQUIRED')
+        if args.external_test_store and not re.fullmatch(r'[A-Za-z0-9_-]{2,64}',args.test_store_user):raise ValueError('HTTPS_TEST_STORE_USER_REQUIRED')
         if args.diagnose_tunnel_dns:
             from nh_v2_https_browser import diagnose_tunnel_dns
             report['phase'] = 'TUNNEL_DNS_DIAGNOSTIC'
@@ -217,7 +223,7 @@ def main():
         expected = {'freshTestEnvironment': True, 'testEnvironment': 'nh-staging',
                     'scriptHash': fingerprint(plan['scriptId']), 'sheetHash': web.binding,
                     'sourceDigest': plan['sourceDigest'], 'gatewayVersion': 2, 'storeEngine': 'account-store-v2'}
-        relay = RelayApp(Config(upstream=plan['url'], origins=frozenset({'https://kocoro97-corab.github.io'}), expected=expected,public_market=args.public_market))
+        relay = RelayApp(Config(upstream=plan['url'], origins=frozenset({'https://kocoro97-corab.github.io'}), expected=expected,public_market=args.public_market,account_reads=args.accounts,external_test_store=args.external_test_store,test_store_user=args.test_store_user))
         # Verify the fixed target privately before exposing login traffic.
         report['phase'] = 'TARGET_METADATA'
         relay.gateway.verify()
@@ -234,9 +240,10 @@ def main():
             from nh_v2_https_browser import verify
             print(json.dumps({'status': 'HTTPS_DEV_READY', 'page': PAGE, 'endpoint': endpoint,
                               'expiresInMinutes': args.minutes, 'sourceDigest': 'PASS', 'isolation': 'PASS',
-                              'authOnly': not args.public_market, 'publicMarket': args.public_market,
+                              'authOnly': not (args.public_market or args.accounts), 'publicMarket': args.public_market,
                               'publicTransport': 'RELAY_DIRECT_AFTER_GAS_AUTH' if args.public_market else 'DISABLED',
-                              'nhCallsAllowed': False, 'storageWritesAllowed': False,
+                              'nhCallsAllowed': args.accounts, 'storageWritesAllowed': args.external_test_store,
+                              'storageWritePolicy': 'FIXED_SYNTHETIC_ONLY' if args.external_test_store else 'BLOCKED',
                               'orderCalls': 0, 'secretsIncluded': False, 'dns': dns}), flush=True)
             if args.verify_browser or args.verify_market:
                 report['phase'] = 'PAGES_BROWSER'
@@ -268,6 +275,9 @@ def main():
         code = str(error)
         if isinstance(error,HttpsProbeFailure):report.update(code=error.code,probe=error.evidence)
         else:report.update(code=code if code in SAFE_STARTUP_CODES else 'HTTPS_DEV_PREFLIGHT_OR_TUNNEL_REQUIRED')
+    if 'relay' in locals() and args.accounts:
+        attempts=relay.metrics['upstreamAttempts'];nh=sum(attempts.get(k,0) for k in ('nhAccounts','nhExternalQuotes'));writes=sum(attempts.get(k,0) for k in ('saveExternalHoldings','restoreExternalHoldings'))
+        report.update(actualNhCalls='NOT_MEASURED' if nh else 0,nhRequestsSentToGas=nh,accountStoreWriteAttempts=writes,accountStoreWrites='POSSIBLE' if writes else False)
     print(json.dumps(report))
     return 0 if report['status'] == 'PASS' else 2
 
