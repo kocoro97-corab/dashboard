@@ -1,6 +1,36 @@
 (function(){
   'use strict';const {node,note,button}=DashboardPages;
   const tabs=[['overview','전체 자산'],['holdings','통합보유종목'],['nh','일반계좌'],['special','ISA·연금·IRP'],['ocr','외부계좌'],['analysis','자산·손익 분석']];
+  const brokerStorageKey='myinvest_external_broker_choices_v1';
+  function brokerChoices(){try{const values=JSON.parse(localStorage.getItem(brokerStorageKey)||'[]');return Array.isArray(values)?values.filter(v=>typeof v==='string'&&v.length<=30).slice(0,30):[]}catch{return []}}
+  function refreshBrokerChoices(){
+    const type=document.getElementById('externalAccountType'),wrap=document.getElementById('externalBrokerSelectWrap'),select=document.getElementById('externalBrokerSelect');
+    if(!type||!wrap||!select)return;
+    wrap.hidden=type.value!=='BROKER';select.replaceChildren();
+    for(const name of brokerChoices()){const option=document.createElement('option');option.value=name;option.textContent=name;select.append(option)}
+    const upload=document.getElementById('externalUploadBtn');if(upload)upload.disabled=type.value==='BROKER';
+    const info=document.getElementById('externalOcrProgress');
+    if(type.value==='BROKER'&&info)info.textContent='다른 증권사 목록은 이 브라우저에서만 관리됩니다. 현재 GAS 저장 규격은 ISA·연금저축·IRP만 지원하므로 다른 증권사 OCR·저장은 계좌별 저장 구조 확장 후 활성화합니다.';
+  }
+  window.addExternalBrokerChoice=function(){
+    const name=window.prompt('추가할 증권사 이름 (최대 30자)');if(name===null)return;
+    const value=name.trim();if(!value||value.length>30||/^[=+@-]/.test(value)){window.alert('증권사 이름을 확인하세요.');return}
+    const choices=brokerChoices();if(choices.includes(value)){window.alert('이미 등록된 증권사입니다.');return}
+    if(choices.length>=30){window.alert('최대 30개까지 등록할 수 있습니다.');return}
+    choices.push(value);localStorage.setItem(brokerStorageKey,JSON.stringify(choices));document.getElementById('externalAccountType').value='BROKER';refreshBrokerChoices();document.getElementById('externalBrokerSelect').value=value;
+  };
+  window.removeExternalBrokerChoice=function(){
+    const select=document.getElementById('externalBrokerSelect'),name=select&&select.value;
+    if(!name){window.alert('삭제할 증권사를 선택하세요.');return}
+    if(!window.confirm(name+' 증권사를 선택 목록에서 삭제할까요? 보유종목 저장자료는 삭제하지 않습니다.'))return;
+    localStorage.setItem(brokerStorageKey,JSON.stringify(brokerChoices().filter(x=>x!==name)));refreshBrokerChoices();
+  };
+  function initBrokerSelector(){
+    const type=document.getElementById('externalAccountType');if(!type||type.dataset.brokerReady)return;
+    type.dataset.brokerReady='true';type.addEventListener('change',refreshBrokerChoices);
+    const add=document.getElementById('externalBrokerAdd'),remove=document.getElementById('externalBrokerRemove');
+    if(add)add.hidden=false;if(remove)remove.hidden=false;refreshBrokerChoices();
+  }
   function format(v){return Number.isFinite(v)?nf(v):'—'}
   function combinedTable(target,snap){
     const section=node('section',null,'card');section.append(node('h2','동일 종목 통합 수량·평균매입가'),note('검증된 식별자·시장·통화가 같은 종목만 통합합니다. 평균매입가는 수량 가중평균입니다. 해외 식별자가 미확인인 행은 합치지 않습니다.'));
@@ -63,7 +93,7 @@
       refresh:(ctx,force)=>ctx.accounts(force),
       update(view,ctx){
         tab=route?.tab||'overview';for(const link of view.querySelectorAll('[data-account-tab]')){if(link.dataset.accountTab===tab)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current')}
-        const nh=document.getElementById('nhAccountSection'),ext=document.getElementById('externalAssetSection');nh.hidden=tab!=='nh';ext.hidden=tab!=='ocr';
+        initBrokerSelector();const nh=document.getElementById('nhAccountSection'),ext=document.getElementById('externalAssetSection');nh.hidden=tab!=='nh';ext.hidden=tab!=='ocr';
         if(tab==='special'){
           renderReport(view.querySelector('.account-report'),ctx,tab);
           for(const kind of ['ISA','PENSION','IRP']){const section=node('section',null,'card');section.append(node('h2',({ISA:'ISA',PENSION:'연금저축',IRP:'IRP'})[kind]));const rows=ctx.snapshot().details.filter(row=>row.accountType===kind);if(rows.length){const wrap=node('div',null,'tw'),table=node('table'),thead=node('thead'),header=node('tr');for(const h of ['종목','수량','평단가(KRW)','현재가(KRW)','출처','시세 출처','시세 관측시각'])header.append(node('th',h));thead.append(header);table.append(thead);const tbody=node('tbody');for(const row of rows){const tr=node('tr');for(const value of [row.name,format(row.quantity),format(row.avgPrice),format(row.currentPrice),row.source+(row.draft?' · 임시':''),row.quoteSource||'미확인',row.observedAt||'미확인'])tr.append(node('td',value));tbody.append(tr)}table.append(tbody);wrap.append(table);section.append(wrap)}if(!rows.length)section.append(note('저장자료 미조회 또는 해당 구분 자료 없음'));view.querySelector('.account-report').append(section)}
