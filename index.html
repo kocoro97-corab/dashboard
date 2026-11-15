@@ -85,15 +85,17 @@
       <div class="grid three" id="externalSummaryCards"></div>
       <details><summary>시세 실패 진단</summary><div id="externalQuoteDiagnostics" class="mini"></div></details>
       <details><summary>저장 복구 미리보기</summary><div id="externalHistory"></div></details>
+      <div class="hr" style="margin:8px 0"><button type="button" id="externalOpenImport" onclick="document.getElementById('externalImportDialog').hidden=false;document.getElementById('externalImportDialog').querySelector('button').focus()">+ 외부계좌 자료 추가 (OCR·직접 입력)</button><span class="mini">등록된 종목은 아래 표에서 수정·삭제하고 검토 후 저장할 수 있습니다.</span></div>
+      <div id="externalImportDialog" role="dialog" aria-modal="true" aria-label="외부계좌 자료 입력" hidden style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.75);overflow:auto;padding:clamp(12px,4vw,40px)">
+      <div class="card" style="max-width:900px;margin:2vh auto;max-height:90vh;overflow:auto">
+      <div class="hr" style="justify-content:space-between"><h2>외부계좌 자료 입력</h2><button type="button" onclick="document.getElementById('externalImportDialog').hidden=true">닫기 ✕</button></div>
+      <p class="mini">OCR 또는 직접 입력을 선택하세요. 등록된 값은 저장 전에 표에서 검토·수정할 수 있습니다.</p>
       <div class="hr" style="margin:8px 0;align-items:flex-end">
         <label>계좌 구분<br><select id="externalAccountType"><option value="ISA">ISA</option><option value="PENSION">연금저축</option><option value="IRP">IRP</option></select></label>
         <label>캡처 이미지 직접 업로드<br><input type="file" id="externalImageFiles" accept="image/*" multiple></label>
         <button id="externalUploadBtn" onclick="processExternalUploads()">이미지 인식</button>
       </div>
-      <div class="hr" style="margin:6px 0;align-items:flex-end">
-        <label style="flex:1;min-width:220px">Google Drive 폴더 ID<br><input id="externalDriveFolder" type="text" placeholder="Drive 폴더 ID 붙여넣기" style="width:100%"></label>
-        <button onclick="importExternalDriveImages()">Drive 이미지 가져오기</button>
-      </div>
+      <div class="mini" style="margin:8px 0">Google Drive 연동은 전체 기능 개발 이후 진행합니다. 현재는 이미지 업로드 또는 직접 입력을 이용하세요.</div>
       <div class="hr" style="margin:6px 0;align-items:flex-end">
         <label>종목코드(선택·6자리)<br><input id="externalManualCode" maxlength="20" placeholder="예: 360750"></label>
         <label>종목명<br><input id="externalManualName" placeholder="ETF/주식명 또는 코드 검색" list="externalMasterNames" oninput="suggestExternalNames(this.value)"><datalist id="externalMasterNames"></datalist></label>
@@ -103,6 +105,7 @@
       </div>
       <div class="mini" style="line-height:1.6;margin:4px 0 8px">Drive 폴더에는 계좌별 캡처 이미지를 넣어주세요. 이미지 파일을 읽으려면 Apps Script 배포 계정에 해당 폴더 접근권한이 필요합니다. 인식 결과는 저장 전에 직접 확인·수정할 수 있습니다.</div>
       <div id="externalOcrProgress" class="mini" style="margin:6px 0"></div>
+      </div></div>
       <div class="tw"><table style="min-width:760px"><thead><tr><th>계좌</th><th>종목명</th><th>종목코드</th><th>보유수량</th><th>평균매입가</th><th>현재가(NH)</th><th>평가금액</th><th>평가손익</th><th>관리</th></tr></thead><tbody id="externalAssetRows"><tr><td colspan="9" style="text-align:center">등록된 외부계좌 종목이 없습니다.</td></tr></tbody></table></div>
       <div class="hr" style="justify-content:space-between;margin-top:8px"><div class="hr"><label class="mini"><input type="checkbox" id="externalAutoRefresh"> 자동갱신 사용</label><label class="mini">간격 <select id="externalAutoMinutes"><option value="5">5분</option><option value="10" selected>10분</option><option value="30">30분</option><option value="60">60분</option></select></label></div><button onclick="saveExternalSettings()">갱신 설정 저장</button></div>
       <div class="mini" style="margin-top:5px">기본 설정은 자동갱신 꺼짐입니다. 대시보드 접속 시 1회 조회하며, 이후에는 수동 새로고침을 사용합니다. 자동갱신을 켜면 선택한 간격으로 현재가만 갱신합니다.</div>
