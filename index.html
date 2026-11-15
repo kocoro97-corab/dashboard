@@ -96,6 +96,7 @@
         <button id="externalUploadBtn" onclick="processExternalUploads()">이미지 인식</button>
       </div>
       <div class="mini" style="margin:8px 0">Google Drive 연동은 전체 기능 개발 이후 진행합니다. 현재는 이미지 업로드 또는 직접 입력을 이용하세요.</div>
+      <input type="hidden" id="externalDriveFolder" value="">
       <div class="hr" style="margin:6px 0;align-items:flex-end">
         <label>종목코드(선택·6자리)<br><input id="externalManualCode" maxlength="20" placeholder="예: 360750"></label>
         <label>종목명<br><input id="externalManualName" placeholder="ETF/주식명 또는 코드 검색" list="externalMasterNames" oninput="suggestExternalNames(this.value)"><datalist id="externalMasterNames"></datalist></label>
