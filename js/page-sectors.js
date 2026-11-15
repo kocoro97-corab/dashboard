@@ -1,6 +1,43 @@
-(function(){
-  'use strict';
-  DashboardPages.register('sectors',()=>DashboardPages.legacy({ids:['themesSection'],
-    intro:'기존 주도 테마와 강도판을 사용합니다. 글로벌 산업 상대강도·산업 순환매 전용 Work 모듈은 미연결입니다.',
-    refresh:(ctx,force)=>ctx.sectors(force)}));
-})();
+(function(root){
+'use strict';
+// Sector / theme V2. Read-only: reuses the existing verified Naver theme feed.
+// No fabricated US rankings, multi-day returns, order routes or account writes.
+const KEY='myinvest_sector_watch_v2';
+const make=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n};
+const button=(text,fn)=>{const b=make('button',text);b.type='button';b.addEventListener('click',fn);return b};
+const valid=s=>/^(?:[0-9]{6}|[A-Z][A-Z0-9.=-]{0,14})$/.test(s);
+const saved=()=>{try{const a=JSON.parse(localStorage.getItem(KEY));return Array.isArray(a)?a.filter(x=>typeof x==='string'&&valid(x)).slice(0,100):[]}catch{return []}};
+const safeNumber=v=>typeof v==='number'&&Number.isFinite(v)?v:null;
+const pct=v=>safeNumber(v)===null?'—':(v>=0?'+':'')+v.toFixed(2)+'%';
+function create(){
+ const legacy=DashboardPages.legacy({ids:['themesSection'],intro:'기존 네이버 국내 주도 테마·종목 화면 (별도 원천 데이터)',refresh:(ctx,force)=>ctx.sectors(force)});
+ let view,summary,list,notice,watchArea,market='KR',period='1d',mode='day',watch=saved(),active=false;
+ const css='.stv2{margin-bottom:18px}.stv2 button{cursor:pointer}.stv2-tabs{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}.stv2-tabs button{padding:7px 11px;border:1px solid #465775;border-radius:7px;background:#172238;color:#e7eef9}.stv2-tabs button[aria-pressed="true"]{border-color:#72b5ff;background:#264365}.stv2-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stv2-card{padding:13px;background:#172238;border:1px solid #344158;border-radius:10px;min-width:0;color:#e7eef9}.stv2-muted{color:#b6c5d9;font-size:12px}.stv2-row{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}.stv2-row input{min-width:140px;max-width:100%}.stv2-table{width:100%;border-collapse:collapse}.stv2-table td,.stv2-table th{padding:7px;border-bottom:1px solid #344158;text-align:left}.stv2-table button{color:#e7eef9;background:#264365;border:0;border-radius:5px;padding:5px}.stv2-status{padding:10px;border:1px solid #465775;border-radius:8px}.stv2-card:focus-visible{outline:2px solid #72b5ff}@media(max-width:550px){.stv2-grid{grid-template-columns:1fr}.stv2-table{font-size:12px}}';
+ function tabs(parent,options,get,set){const box=make('div',undefined,'stv2-tabs');options.forEach(([value,label])=>{const b=button(label,()=>{set(value);draw()});b.setAttribute('aria-pressed',String(get()===value));box.append(b)});parent.append(box)}
+ function data(){return typeof THM!=='undefined'&&Array.isArray(THM)?THM:[]}
+ function holdings(){const codes=new Set();try{if(typeof H!=='undefined'&&Array.isArray(H))H.forEach(r=>{const code=String(r?.[7]||'').trim().toUpperCase();if(valid(code))codes.add(code)})}catch{}return codes}
+ function themeRows(t){return Array.isArray(t.rows)?t.rows.filter(r=>r&&/^\d{6}$/.test(String(r.code))):[]}
+ function ranking(){return data().filter(t=>t&&t.name&&safeNumber(t.sc)!==null&&safeNumber(t.rate)!==null).slice().sort((a,b)=>b.sc-a.sc||b.rate-a.rate)}
+ function detail(t){list.replaceChildren();const back=button('← 테마 순위로',()=>draw());list.append(back,make('h3',t.name),make('p','원천: 네이버 국내 테마 API · 기존 대시보드 수신값 · '+(typeof THM_AT!=='undefined'&&THM_AT?new Date(THM_AT).toLocaleString('ko-KR'):'수신시각 미확인'),'stv2-muted'));
+ const rows=themeRows(t).slice().sort((a,b)=>(safeNumber(b.val)||0)-(safeNumber(a.val)||0));const table=make('table',undefined,'stv2-table'),head=make('tr');['종목','등락률','거래대금','내 종목'].forEach(x=>head.append(make('th',x)));table.append(head);const owned=holdings();rows.forEach(r=>{const tr=make('tr'),name=button(r.name||r.code,()=>{if(typeof showQ==='function')showQ(r.code,r.name||r.code,'')}),td=make('td');td.append(name);tr.append(td,make('td',pct(r.rate)),make('td',safeNumber(r.val)===null?'미수신':Number(r.val).toLocaleString('ko-KR')),make('td',owned.has(r.code)?'보유':watch.includes(r.code)?'관심':'—'));table.append(tr)});list.append(table);if(!rows.length)list.append(make('p','검증된 구성종목 데이터가 없습니다.','stv2-muted'));list.append(make('p','거래대금은 매수 순유입액이 아닙니다. 종목 중복으로 테마별 거래대금을 전체 시장 자금처럼 합산하지 않습니다.','stv2-muted'))}
+ function watchDraw(){watchArea.replaceChildren();const h=make('h3','내 보유·관심종목 연계'),form=make('form'),input=make('input'),add=button('관심종목 추가',()=>{});input.placeholder='국내 6자리 코드 / 미국 티커';input.setAttribute('aria-label','관심종목 코드');add.type='submit';form.append(input,add);form.addEventListener('submit',e=>{e.preventDefault();const id=input.value.trim().toUpperCase();if(!valid(id)){notice.textContent='국내 6자리 코드 또는 영문 티커를 입력하세요.';return}if(!watch.includes(id))watch.push(id);watch=watch.slice(0,100);try{localStorage.setItem(KEY,JSON.stringify(watch))}catch{}input.value='';draw()});watchArea.append(h,form);
+ const owned=holdings(),all=[...new Set([...owned,...watch])];if(!all.length){watchArea.append(make('p','연결된 보유종목 또는 직접 등록한 관심종목이 없습니다.','stv2-muted'));return}
+ const tbl=make('table',undefined,'stv2-table'),hdr=make('tr');['종목 코드','구분','국내 주도 테마','관리'].forEach(x=>hdr.append(make('th',x)));tbl.append(hdr);all.forEach(code=>{const related=ranking().filter(t=>themeRows(t).some(r=>r.code===code)).map(t=>t.name);const tr=make('tr');tr.append(make('td',code),make('td',owned.has(code)?'보유'+(watch.includes(code)?'·관심':''):'관심'),make('td',related.length?related.join(', '):'현재 수신된 상위 테마에서 미확인'));const td=make('td');if(watch.includes(code))td.append(button('삭제',()=>{watch=watch.filter(x=>x!==code);try{localStorage.setItem(KEY,JSON.stringify(watch))}catch{}draw()}));tr.append(td);tbl.append(tr)});watchArea.append(tbl,make('p','보유 여부는 현재 화면의 기존 계좌 데이터에 한정됩니다. 관심종목은 이 브라우저에만 저장되며, 종목명·상장 여부를 추정하지 않습니다.','stv2-muted'))}
+ function draw(){if(!active)return;summary.replaceChildren();list.replaceChildren();notice.textContent='';const h=make('h2','섹터·테마 분석 V2'),desc=make('p','전체 시장 주도 테마와 내 보유·관심종목 연결 · 데이터 검증 우선','stv2-muted');summary.append(h,desc);
+ tabs(summary,[['KR','한국'],['US','미국']],()=>market,v=>market=v);
+ tabs(summary,[['1d','1일'],['5d','5일'],['20d','20일']],()=>period,v=>period=v);
+ tabs(summary,[['day','단타'],['swing','스윙']],()=>mode,v=>mode=v);
+ const stamp=typeof THM_AT!=='undefined'&&THM_AT?new Date(THM_AT).toLocaleString('ko-KR'):'미수신';
+ summary.append(make('p','수신 기준: '+stamp+' · 국내 테마: 네이버 API · 분석 범위: 수신된 상위 후보만 · '+(mode==='day'?'단타 관찰: 거래대금·당일 상대강도':'스윙 관찰: 중기 추세·실적·수급 검증 필요'),'stv2-muted'));
+ if(market==='US'){list.append(make('p','미국 전체 섹터 구성종목·거래대금·기간별 상대강도 데이터가 아직 연결되지 않았습니다. 실제 순위를 표시하지 않습니다.','stv2-status'))}
+ else if(period!=='1d'){list.append(make('p','최근 '+(period==='5d'?'5일':'20일')+'의 검증된 섹터·테마 시계열이 없습니다. 당일 점수를 기간별 점수로 재사용하지 않습니다.','stv2-status'))}
+ else if(mode==='swing'){list.append(make('p','스윙 확정 순위에 필요한 5·20일 추세, 실적 및 수급 데이터가 미연결입니다. 아래는 당일 테마 관찰 목록이며 스윙 추천이 아닙니다.','stv2-status'));renderRanks()}
+ else renderRanks();
+ watchDraw()}
+ function renderRanks(){const items=ranking(),cards=make('div',undefined,'stv2-grid');if(!items.length){list.append(make('p','검증된 국내 테마 데이터 미수신 · 기존 테마 갱신 버튼으로 조회하세요.','stv2-status'));return}
+ items.forEach((t,i)=>{const card=button('',()=>detail(t));card.className='stv2-card';card.style.textAlign='left';card.append(make('strong',(i+1)+'위 · '+t.name),make('p','당일 테마 강도 '+Math.round(t.sc)+'/100 · 등락률 '+pct(t.rate)),make('p','구성종목 '+themeRows(t).length+'개 · '+(safeNumber(t.val)===null?'거래대금 미확인':'거래대금 집계 가능'),'stv2-muted'));const owned=holdings(),matches=themeRows(t).filter(r=>owned.has(r.code)||watch.includes(r.code));if(matches.length)card.append(make('p','내 종목 연계: '+matches.map(r=>r.name||r.code).join(', '),'stv2-muted'));cards.append(card)});list.append(cards,make('p','순위는 기존 수신 후보 내 상대점수이며 전체 시장의 확정 순위가 아닙니다. 순매수액·기관/외국인 수급·뉴스는 미반영입니다.','stv2-muted'))}
+ function mount(container,ctx){active=true;view=make('section',undefined,'stv2');const style=make('style');style.textContent=css;view.append(style);summary=make('div');list=make('div');notice=make('p',undefined,'stv2-muted');watchArea=make('div');view.append(summary,notice,list,watchArea);legacy.mount(container,ctx);container.prepend(view);draw()}
+ return {mount,refresh:async(ctx,force)=>{await legacy.refresh(ctx,force);draw()},unmount:()=>{active=false;view?.remove();legacy.unmount()},getStatus:()=>({status:active?'ready':'unmounted',market,period,mode})};
+}
+DashboardPages.register('sectors',create);
+})(window);
