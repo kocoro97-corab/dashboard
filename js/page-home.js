@@ -2,7 +2,7 @@
   'use strict';const {node,note}=DashboardPages;
   DashboardPages.register('home',()=>DashboardPages.legacy({
     intro:'홈은 다른 메뉴의 조회 결과를 재사용합니다. 미조회·미연결 항목은 요약을 만들지 않습니다.',
-    build(view){view.append(node('div',null,'summary-grid'));view.append(note('주도 산업 TOP 3·경제 이벤트·관심종목 변화: 전용 모듈 미연결. 단타·스윙 판단은 투자 전략에서 확인하세요.'))},
+    build(view){const links=node('div',null,'shell-form');for(const [label,path] of [['글로벌 시장','market'],['섹터·테마','sectors'],['AI 종목분석','stocks'],['투자전략','strategy'],['뉴스·이벤트','news'],['내 계좌','accounts']]){const b=node('button',label);b.type='button';b.addEventListener('click',()=>window.location.hash='#/'+path);links.append(b)}view.append(links);view.append(node('div',null,'summary-grid'));view.append(note('주도 산업 TOP 3·경제 이벤트·관심종목 변화: 전용 모듈 미연결. 단타·스윙 판단은 투자 전략에서 확인하세요.'))},
     refresh:(ctx,force)=>ctx.market(force),
     update(view,ctx){
       const grid=view.querySelector('.summary-grid');grid.replaceChildren();
