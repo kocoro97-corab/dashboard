@@ -72,23 +72,23 @@
       <div class="grid three" id="themes"></div>
     </section>
     <section class="card" id="nhAccountSection">
-      <div class="sh"><div><h2>NH 나무 일반계좌 · 실시간 잔고</h2><p>운영 일반계좌(01·02)만 조회 · ISA·연금저축·IRP 및 모의계좌 제외 · 주문 기능 없음</p><div class="mini" id="nhAccountStatus">계좌 조회 대기</div></div>
+      <div class="sh"><div><h2>일반계좌 · NH 나무 조회 전용</h2><p>일반계좌(01·02)만 조회 · ISA·연금저축·IRP 및 모의계좌 제외 · 주문 기능 없음</p><div class="mini" id="nhAccountStatus">계좌 조회 대기</div></div>
         <div class="hr"><select id="nhAssetFilter" onchange="renderNHAccounts()"><option value="all">국내+해외 전체</option><option value="domestic">국내주식</option><option value="overseas">해외주식</option></select><button id="nhAccountBtn" onclick="loadNHAccounts()">↻ 계좌 잔고 조회</button></div></div>
       <div class="grid three" id="nhAccountCards" style="margin-bottom:8px"></div>
       <div class="tw"><table><thead><tr><th>계좌</th><th>구분</th><th>종목</th><th>코드</th><th>수량</th><th>평단가</th><th>현재가</th><th>평가금액(원)</th><th>평가손익(원)</th><th>수익률</th></tr></thead><tbody id="nhAccountRows"><tr><td colspan="10" style="text-align:center">조회 버튼을 눌러 NH 계좌 잔고를 불러오세요.</td></tr></tbody></table></div>
     </section>
     <section class="card" id="externalAssetSection">
-      <div class="sh"><div><h2>외부계좌 통합 자산관리 · ISA / 연금저축 / IRP</h2><p>캡처 이미지 인식 → 종목·수량 확인 → NH 현재가 조회 · 주문 기능 없음</p><div class="mini" id="externalStatus">외부계좌 자료를 불러오는 중...</div></div>
+      <div class="sh"><div><h2>외부계좌 · 증권사별 계좌 관리</h2><p>캡처 이미지 인식 → 종목·수량 확인 → NH 현재가 조회 · 주문 기능 없음</p><div class="mini" id="externalStatus">외부계좌 자료를 불러오는 중...</div></div>
         <div class="hr"><button onclick="refreshExternalPrices()">↻ 현재가 새로고침</button></div></div>
       <div class="mini" id="externalMasterStatus">종목 마스터 확인 중...</div>
       <div class="hr" style="margin:6px 0"><button onclick="applyExternalMatchedCodes()">마스터 코드 적용 확인</button><button id="externalUndoBtn" onclick="undoExternalChange()" disabled>삭제·편집 취소</button><button onclick="showExternalHistory()">저장 복구 기록</button></div>
       <div class="grid three" id="externalSummaryCards"></div>
       <details><summary>시세 실패 진단</summary><div id="externalQuoteDiagnostics" class="mini"></div></details>
       <details><summary>저장 복구 미리보기</summary><div id="externalHistory"></div></details>
-      <div class="hr" style="margin:8px 0"><button type="button" id="externalOpenImport" onclick="document.getElementById('externalImportDialog').hidden=false;document.getElementById('externalImportDialog').querySelector('button').focus()">+ 외부계좌 자료 추가 (OCR·직접 입력)</button><span class="mini">등록된 종목은 아래 표에서 수정·삭제하고 검토 후 저장할 수 있습니다.</span></div>
+      <div class="hr" style="margin:8px 0"><button type="button" id="externalOpenImport" data-shell-control="true" onclick="ExternalAccountUI.openImport()">+ 외부계좌 자료 추가 (OCR·직접 입력)</button><span class="mini">등록된 종목은 아래 표에서 수정·삭제하고 검토 후 저장할 수 있습니다.</span></div>
       <div id="externalImportDialog" role="dialog" aria-modal="true" aria-label="외부계좌 자료 입력" onkeydown="if(event.key===&quot;Escape&quot;){this.hidden=true;document.getElementById(&quot;externalOpenImport&quot;).focus()}" onclick="if(event.target===this){this.hidden=true;document.getElementById(&quot;externalOpenImport&quot;).focus()}" hidden style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.75);overflow:auto;padding:clamp(12px,4vw,40px)">
       <div class="card" style="max-width:900px;margin:2vh auto;max-height:90vh;overflow:auto">
-      <div class="hr" style="justify-content:space-between"><h2>외부계좌 자료 입력</h2><button type="button" onclick="document.getElementById('externalImportDialog').hidden=true">닫기 ✕</button></div>
+      <div class="hr" style="justify-content:space-between"><h2>외부계좌 자료 입력</h2><button type="button" data-shell-control="true" onclick="ExternalAccountUI.closeImport()">닫기 ✕</button></div>
       <p class="mini">OCR 또는 직접 입력을 선택하세요. 등록된 값은 저장 전에 표에서 검토·수정할 수 있습니다.</p>
       <div class="hr" style="margin:8px 0;align-items:flex-end">
         <label>계좌 구분<br><select id="externalAccountType"><option value="ISA">ISA</option><option value="PENSION">연금저축</option><option value="IRP">IRP</option><option value="BROKER">다른 증권사</option></select></label><label id="externalBrokerSelectWrap" hidden>증권사명 직접 입력<br><input id="externalBrokerNameInput" type="text" maxlength="30" placeholder="예: 토스증권, 키움증권" list="externalBrokerNames"><datalist id="externalBrokerNames"></datalist></label><button type="button" id="externalBrokerAdd" onclick="addExternalBrokerChoice()">입력한 증권사 추가</button><button type="button" id="externalBrokerRemove" onclick="removeExternalBrokerChoice()">증권사 삭제</button>
@@ -152,6 +152,7 @@
 <script src="js/external_core.js?v=12-real-ocr"></script>
 <script src="js/external_accounts.js?v=15-transport"></script>
 <script src="js/dev_accounts.js?v=1"></script>
+<script src="js/external-account-ui.js?v=1"></script>
 <script src="js/work-portfolio.js?v=1"></script>
 <script src="js/account-overview.js?v=1"></script>
 <script src="js/app-router.js?v=1"></script>

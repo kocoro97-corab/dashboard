@@ -22,7 +22,7 @@
         accountCount:new Set(items.map(x=>x.row.accountKey)).size,verified:!!calculated.identity,partial:items.some(x=>x.calculated.valueKrw===null),draft:items.some(x=>x.row.draft)};
     });
   }
-  function build({accounts=[],external=[],prices={},nhLoaded=false,nhPartial=false,nhReceivedAt=null,externalLoaded=false,externalPartial=false,draft=false,analyze}){
+  function build({accounts=[],external=[],prices={},catalog=[],nhLoaded=false,nhPartial=false,nhReceivedAt=null,externalLoaded=false,externalUpdatedAt=null,externalPartial=false,draft=false,analyze}){
     let partial=!nhLoaded||nhPartial||!externalLoaded||externalPartial||draft;const rows=[],details=[],testRows=external.filter(row=>row.source==='synthetic-test');
     accounts.forEach((account,i)=>{
       if(account.errors?.length)partial=true;
@@ -32,17 +32,18 @@
         for(const h of data.holdings||[]){
           const validCode=typeof h.code==='string'&&(market==='domestic'?/^[A-Z0-9]{6}$/:/^[A-Za-z0-9][A-Za-z0-9._-]{0,14}$/).test(h.code);
           const row={...h,code:validCode?h.code:null,instrumentId:market==='domestic'?null:h.instrumentId,accountKey:'nh-'+i,market,source:'NH',draft:false,receivedAt:time(nhReceivedAt),observedAt:time(h.observedAt)};rows.push(row);
-          details.push({...row,accountLabel:'NH 계좌 '+(i+1),valuationCurrency:'KRW'});
+          details.push({...row,broker:'NH나무증권',accountType:'GENERAL',accountLabel:'일반계좌 '+(i+1),valuationCurrency:'KRW'});
         }
       }
     });
     external.filter(row=>row.source!=='synthetic-test').forEach(h=>{
+      const account=catalog.find(x=>x.id===(h.accountId||'legacy-'+h.accountType));
       const matched=h.match?.status==='matched'&&/^[A-Z0-9]{6}$/.test(h.code),quote=matched?prices[h.code]:null;
       const currentPrice=Number.isFinite(quote?.price)&&quote.price>0?quote.price:null;
-      const row={...h,code:matched?h.code:null,accountKey:'external-'+h.accountType,market:'domestic',currency:'KRW',currentPrice,
-        evalAmount:null,profit:null,source:({ocr:'OCR',drive:'Drive',manual:'수동'})[h.source]||'저장자료 · 입력방식 미확인',draft,
+      const row={...h,code:matched?h.code:null,accountKey:h.accountId&&!h.accountId.startsWith('legacy-')?h.accountId:'external-'+h.accountType,market:'domestic',currency:'KRW',currentPrice,
+        evalAmount:null,profit:null,source:({ocr:'OCR',drive:'Drive',manual:'수동'})[String(h.source||'').toLowerCase()]||'저장자료 · 입력방식 미확인',draft,storedAt:time(externalUpdatedAt),
         quoteSource:quote?.source||null,receivedAt:time(quote?.updatedAt),observedAt:time(quote?.observedAt)};
-      rows.push(row);details.push({...row,accountLabel:({ISA:'ISA',PENSION:'연금저축',IRP:'IRP'})[h.accountType]||'외부계좌',valuationCurrency:'KRW'});
+      rows.push(row);details.push({...row,broker:account?.broker||'증권사 미지정',accountLabel:account?.accountName||({ISA:'ISA',PENSION:'연금저축',IRP:'IRP',GENERAL:'일반 외부계좌'})[h.accountType]||'외부계좌',valuationCurrency:'KRW'});
     });
     const result=analyze({holdings:rows,partial});
     const known=result.rows.filter(r=>r.valueKrw!==null),confirmedEmpty=!partial&&rows.length===0;

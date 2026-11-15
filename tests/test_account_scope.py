@@ -94,6 +94,20 @@ class ReviewedAccountStoreTests(unittest.TestCase):
         self.gateway=Gateway();self.app=RelayApp(configuration(account_reads=True,external_store=True),self.gateway)
         self.rows=[{'accountType':'ISA','code':'035720','name':'Synthetic OCR module test','quantity':70,'avgPrice':43841,'source':'ocr'}]
     def call(self,payload,authenticated=True):return request(self.app,payload,authorization='Bearer '+TOKEN if authenticated else None)
+    def test_catalog_actions_are_authenticated_reviewed_and_excluded_from_fixture_only_mode(self):
+        payload={'action':'saveExternalAccounts','accounts':[],'brokers':[],'expectedRevision':'catalog0','confirmReplace':True}
+        self.assertEqual(self.call({'action':'externalAccounts'},False)['status'],401)
+        self.assertEqual(self.call({'action':'externalAccounts'})['status'],200)
+        self.assertEqual(self.call(payload,False)['status'],401)
+        self.assertEqual(self.call(payload|{'confirmReplace':False})['status'],403)
+        self.assertEqual(self.call(payload|{'userId':'another'})['status'],403)
+        self.assertEqual(self.call(payload)['status'],200)
+        restricted=RelayApp(configuration(account_reads=True,external_test_store=True,test_store_user='nh_test_v2'),self.gateway)
+        self.assertEqual(request(restricted,payload,authorization='Bearer '+TOKEN)['body']['code'],'RELAY_SCOPE_BLOCKED')
+        self.gateway.calls=[];self.gateway.fail='saveExternalAccounts'
+        self.assertEqual(self.call(payload)['body']['code'],'RELAY_WRITE_OUTCOME_UNKNOWN')
+        self.assertEqual(self.gateway.calls,['saveExternalAccounts'])
+
     def test_reviewed_ocr_rows_use_existing_handler_without_fixed_fixture_restriction(self):
         body={'action':'saveExternalHoldings','holdings':self.rows,'expectedRevision':'r0','confirmReplace':True}
         self.assertEqual(self.call(body,False)['status'],401);self.assertEqual(self.gateway.calls,[])

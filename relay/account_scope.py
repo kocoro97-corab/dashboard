@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 import threading
 
-READS=frozenset({'nhAccounts','nhExternalQuotes','externalHoldings','externalHistory'})
-WRITES=frozenset({'saveExternalHoldings','restoreExternalHoldings'})
+READS=frozenset({'nhAccounts','nhExternalQuotes','externalHoldings','externalHistory','externalAccounts'})
+WRITES=frozenset({'saveExternalHoldings','restoreExternalHoldings','saveExternalAccounts'})
 FIXTURE=Path(__file__).resolve().parents[1]/'data/account-test-holdings.json'
 
 class AccountPolicyError(Exception):pass
@@ -55,4 +55,6 @@ def validate_payload(payload):
         if not isinstance(codes,list) or not 1<=len(codes)<=40 or any(not isinstance(x,str) or not re.fullmatch('[A-Z0-9]{6}',x) for x in codes):raise AccountPolicyError('INVALID_CODES')
     elif action=='saveExternalHoldings':keys|={'holdings','expectedRevision','confirmReplace'}
     elif action=='restoreExternalHoldings':keys|={'snapshotId','expectedRevision','confirmReplace'}
+    elif action=='saveExternalAccounts':keys|={'accounts','brokers','expectedRevision','confirmReplace'}
+    if action=='saveExternalHoldings' and type(payload.get('externalAccountsVersion')) is int and payload['externalAccountsVersion']==1:keys.add('externalAccountsVersion')
     if set(payload)!=keys:raise AccountPolicyError('RELAY_BAD_REQUEST')

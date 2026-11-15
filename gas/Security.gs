@@ -118,11 +118,12 @@ function securityChangePassword_(token,current,password) {
   });
 }
 function securitySafeHolding_(x) {
-  return x&&typeof x==='object'&&['ISA','PENSION','IRP'].includes(x.accountType)&&
+  return x&&typeof x==='object'&&['ISA','PENSION','IRP','GENERAL'].includes(x.accountType)&&
     typeof x.code==='string'&&(!x.code||/^[A-Z0-9]{6}$/.test(x.code))&&
     typeof x.name==='string'&&x.name.trim().length>0&&x.name.length<=60&&!/^[\s]*[=+@\-\t\r\n]/.test(x.name)&&
     typeof x.quantity==='number'&&Number.isFinite(x.quantity)&&x.quantity>=0&&
     typeof x.avgPrice==='number'&&Number.isFinite(x.avgPrice)&&x.avgPrice>=0&&
+    (!x.accountId||(typeof x.accountId==='string'&&/^(?:legacy-(?:ISA|PENSION|IRP|GENERAL)|ext-[A-Za-z0-9-]{8,48})$/.test(x.accountId)))&&
     (!x.source||(typeof x.source==='string'&&x.source.length<=20&&!/^[\s]*[=+@\-\t\r\n]/.test(x.source)));
 }
 // Legacy private code is not copied here. Failures crossing its response boundary
@@ -143,7 +144,7 @@ function doPost(e) {
     if(!body||Array.isArray(body)||typeof body!=='object')return jsonResponse({success:false,message:'잘못된 요청입니다.'});
     if(typeof securityEnvironmentGuard_==='function')securityEnvironmentGuard_(body);
     const action=body.action;
-    if(action==='appVersion')return jsonResponse(Object.assign({success:true,version:'v11-nh-v2',foreignIdentityVersion:typeof createNhForeignReferenceV2_==='function'?1:0,gatewayVersion:2,storeEngine:'account-store-v2',securityVersion:1,features:['nhAccounts','externalHoldings','nhExternalQuotes','changePassword'],readOnly:true},typeof securityEnvironmentMetadata_==='function'?securityEnvironmentMetadata_():{}));
+    if(action==='appVersion')return jsonResponse(Object.assign({success:true,version:'v11-nh-v2',foreignIdentityVersion:typeof createNhForeignReferenceV2_==='function'?1:0,gatewayVersion:2,storeEngine:'account-store-v2',externalAccountCatalogVersion:1,securityVersion:1,features:['nhAccounts','externalHoldings','nhExternalQuotes','changePassword'],readOnly:true},typeof securityEnvironmentMetadata_==='function'?securityEnvironmentMetadata_():{}));
     if(action==='login')return securityLogin_(body.user,body.pass);
     if(action==='register')return securityRegister_(body.user,body.pass);
     if(action==='logout'){deleteSession_(body.token);return jsonResponse({success:true})}
@@ -154,6 +155,8 @@ function doPost(e) {
     if(session.p)return jsonResponse({success:false,message:'12자 이상 비밀번호로 변경한 후 이용하세요.',mustChangePassword:true});
     if(['nhSnapshotRead','nhSnapshotCapture','nhSnapshotRestore'].includes(action))return handleNhSnapshotV2_(body.token,action,body);
     if(action==='nhStockQuotes')return handleNhStockQuotesV2(body.token,body.items);
+    if(action==='externalAccounts')return handleExternalAccountCatalog_(body.token);
+    if(action==='saveExternalAccounts')return handleSaveExternalAccountCatalog_(body.token,body.accounts,body.brokers,body.expectedRevision,body.confirmReplace);
     if(action==='externalHoldings')return handleExternalHoldingsV2(body.token);
     if(action==='externalHistory')return handleExternalHistory(body.token);
     if(action==='restoreExternalHoldings')return handleRestoreExternalHoldings(body.token,body.snapshotId,body.expectedRevision,body.confirmReplace);
@@ -164,7 +167,7 @@ function doPost(e) {
     }
     if(action==='saveExternalHoldings'){
       if(!Array.isArray(body.holdings)||body.holdings.length>150||!body.holdings.every(securitySafeHolding_)||/^[\s]*[=+@\-\t\r\n]/.test(session.u))return jsonResponse({success:false,message:'저장할 종목 형식이 올바르지 않습니다. 기존 자료는 유지됩니다.'});
-      return handleSaveExternalHoldingsV2(body.token,body.holdings,body.expectedRevision,body.confirmReplace);
+      return handleSaveExternalHoldingsV2(body.token,body.holdings,body.expectedRevision,body.confirmReplace,body.externalAccountsVersion);
     }
     return securityDiagnosticResponse_(securityLegacyDoPost_(e),false);
   }catch(error){return jsonResponse({success:false,message:'요청을 처리하지 못했습니다. 입력값과 연결 상태를 확인하세요.'})}

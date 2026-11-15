@@ -4,6 +4,7 @@
   const brokerStorageKey='myinvest_external_broker_choices_v1';
   function brokerChoices(){try{const values=JSON.parse(localStorage.getItem(brokerStorageKey)||'[]');return Array.isArray(values)?values.filter(v=>typeof v==='string'&&v.length<=30).slice(0,30):[]}catch{return []}}
   function refreshBrokerChoices(){
+    if(window.ExternalAccountUI){ExternalAccountUI.selectorChanged();return}
     const type=document.getElementById('externalAccountType'),wrap=document.getElementById('externalBrokerSelectWrap'),input=document.getElementById('externalBrokerNameInput'),list=document.getElementById('externalBrokerNames');
     if(!type||!wrap||!input||!list)return;
     const isBroker=type.value==='BROKER';wrap.hidden=!isBroker;
@@ -14,6 +15,7 @@
     if(isBroker&&info)info.textContent='증권사명을 직접 입력하고 추가할 수 있습니다. 현재 목록은 이 브라우저에 저장됩니다. 다른 증권사의 OCR·GAS 보유종목 저장은 저장 규격 확장 후 지원합니다.';
   }
   window.addExternalBrokerChoice=function(){
+    if(window.ExternalAccountUI&&ExternalAccountUI.capable())return ExternalAccountUI.addBroker(document.getElementById('externalBrokerNameInput')?.value);
     const input=document.getElementById('externalBrokerNameInput');if(!input)return;
     const value=input.value.trim();if(!value||value.length>30||/^[=+@-]/.test(value)){window.alert('증권사 이름을 1~30자로 입력하세요.');input.focus();return}
     const choices=brokerChoices();if(choices.includes(value)){window.alert('이미 등록된 증권사입니다.');return}
@@ -22,6 +24,7 @@
     document.getElementById('externalAccountType').value='BROKER';refreshBrokerChoices();input.value=value;
   };
   window.removeExternalBrokerChoice=function(){
+    if(window.ExternalAccountUI&&ExternalAccountUI.capable())return ExternalAccountUI.removeBroker(document.getElementById('externalBrokerNameInput')?.value.trim());
     const input=document.getElementById('externalBrokerNameInput'),name=input&&input.value.trim();
     if(!name||!brokerChoices().includes(name)){window.alert('등록된 증권사명을 입력하거나 목록에서 선택하세요.');return}
     if(!window.confirm(name+' 증권사를 선택 목록에서 삭제할까요? 보유종목 저장자료는 삭제하지 않습니다.'))return;
@@ -44,8 +47,8 @@
     if(snap.testRows.length)target.append(note('합성 저장 검증자료 '+snap.testRows.length+'행은 실제 자산 합계·통합 수량·손익에서 제외했습니다.'));
     if(tab==='overview'||tab==='analysis'){
       target.append(note((snap.complete?'조회된 계좌 범위의 합계':'부분 합계 · 미조회 계좌/누락 시세 제외')+(snap.draft?' · 외부계좌 임시 검토값 포함':'')));
-      const grid=node('div',null,'summary-grid');
-      for(const [title,value] of [['확인된 평가금액',snap.knownSubtotal],['조회자료 매입금액',result.summary.costKrw],['조회자료 평가손익',result.summary.profitKrw],['수익률(%)',result.summary.returnPct]]){const card=node('dl',null,'card');card.append(node('dt',title),node('dd',format(value)));grid.append(card)}target.append(grid);
+      const summary=node('div',null,'tw'),summaryTable=node('table'),summaryHead=node('tr'),summaryBody=node('tr');
+      for(const [title,value] of [['확인된 평가금액(KRW)',snap.knownSubtotal],['조회자료 매입금액(KRW)',result.summary.costKrw],['조회자료 평가손익(KRW)',result.summary.profitKrw],['수익률(%)',result.summary.returnPct]]){summaryHead.append(node('th',title));summaryBody.append(node('td',format(value)))}const summaryThead=node('thead'),summaryTbody=node('tbody');summaryThead.append(summaryHead);summaryTbody.append(summaryBody);summaryTable.append(summaryThead,summaryTbody);summary.append(summaryTable);target.append(summary);
       target.append(note('NH 마지막 조회: '+(NH_ACCOUNT_UPDATED||'미조회')+' · 외부계좌 저장자료: '+(snap.externalLoaded?'조회됨':'미조회')+' · 서로 다른 통화의 금액을 임의 환산하지 않습니다.'));
       target.append(note('보유종목 평가 기준입니다. 예수금·현금과 미연결 계좌를 포함한 전체 순자산으로 간주하지 않습니다.'));
       for(const [title,list] of [['계좌별 비중·평가손익',result.accounts],['국내·해외 비중',snap.byMarket],['보유 통화별 원화 평가액',result.byCurrency],['종목별 집중도·평가손익',result.exposures]]){
@@ -57,8 +60,8 @@
     }else if(tab==='holdings'){
       combinedTable(target,snap);
       target.append(note('계좌별 원본 상세입니다. 동일 종목의 통합 노출은 자산·손익 분석에서 확인합니다. 평가금액·평가손익은 원화, 평균매입가·현재가는 거래 통화 기준입니다.'));
-      const wrap=node('div',null,'tw'),table=node('table'),head=node('tr');for(const h of ['계좌','종목','코드','시장','통화','수량','평단가','현재가','평가금액(KRW)','평가손익(KRW)','수익률','출처'])head.append(node('th',h));const thead=node('thead');thead.append(head);table.append(thead);const body=node('tbody');let previousAccount=null;
-      snap.details.map((row,i)=>({row,analysis:result.rows[i]})).sort((a,b)=>(a.row.accountLabel||'').localeCompare(b.row.accountLabel||'','ko')||(a.row.name||'').localeCompare(b.row.name||'','ko')).forEach(({row,analysis})=>{if(row.accountLabel!==previousAccount){const group=node('tr'),cell=node('th',row.accountLabel||'계좌 미확인');cell.colSpan=12;cell.scope='rowgroup';group.append(cell);body.append(group);previousAccount=row.accountLabel}const tr=node('tr');for(const value of [row.accountLabel,row.name,row.code||'미확인',row.market==='domestic'?'국내':'해외',row.currency,format(row.quantity),format(row.avgPrice),format(row.currentPrice),format(analysis.valueKrw),format(analysis.profitKrw),format(analysis.returnPct),row.source+(row.draft?' · 임시':'')])tr.append(node('td',value));body.append(tr)});
+      const wrap=node('div',null,'tw'),table=node('table'),head=node('tr');for(const h of ['증권사','계좌명','계좌 유형','종목','종목코드','시장','통화','수량','평균매입가','현재가','평가금액(KRW)','평가손익(KRW)','수익률','자료 출처','최근 갱신'])head.append(node('th',h));const thead=node('thead');thead.append(head);table.append(thead);const body=node('tbody');let previousAccount=null;
+      snap.details.map((row,i)=>({row,analysis:result.rows[i]})).sort((a,b)=>(a.row.broker||'').localeCompare(b.row.broker||'','ko')||(a.row.accountLabel||'').localeCompare(b.row.accountLabel||'','ko')||a.row.accountKey.localeCompare(b.row.accountKey)||(a.row.name||'').localeCompare(b.row.name||'','ko')).forEach(({row,analysis})=>{const groupKey=row.broker+'|'+row.accountKey;if(groupKey!==previousAccount){const group=node('tr'),cell=node('th',(row.broker||'증권사 미지정')+' · '+row.accountLabel);cell.colSpan=15;cell.scope='rowgroup';group.append(cell);body.append(group);previousAccount=groupKey}const tr=node('tr');for(const value of [row.broker||'증권사 미지정',row.accountLabel,({GENERAL:'일반',ISA:'ISA',PENSION:'연금저축',IRP:'IRP'})[row.accountType]||row.accountType,row.name,row.code||'미확인',row.market==='domestic'?'국내':'해외',row.currency,format(row.quantity),format(row.avgPrice),format(row.currentPrice),format(analysis.valueKrw),format(analysis.profitKrw),format(analysis.returnPct),row.source+(row.draft?' · 임시':''),row.observedAt||row.receivedAt&&'수신 '+row.receivedAt||row.storedAt&&'저장 '+row.storedAt||'미확인'])tr.append(node('td',value));body.append(tr)});
       table.append(body);wrap.append(table);target.append(wrap);if(!snap.details.length)target.append(note('미조회 · 보유종목이 없다는 뜻이 아닙니다.'));
     }else if(tab==='special')target.append(note('ISA·연금저축·IRP는 기존 OCR·수동 입력 자료를 사용합니다. 확인한 NH 공식 공개 문서에서 특수계좌 지원 범위·상품 코드는 미확인, 실제 직접 조회는 미검증입니다. 일반계좌 코드를 임의 적용하지 않습니다. 수정·저장·복구는 외부계좌 메뉴에서 기존 절차로 진행합니다.'));
   }
@@ -94,15 +97,16 @@
       refresh:(ctx,force)=>ctx.accounts(force),
       update(view,ctx){
         tab=route?.tab||'overview';for(const link of view.querySelectorAll('[data-account-tab]')){if(link.dataset.accountTab===tab)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current')}
-        initBrokerSelector();const nh=document.getElementById('nhAccountSection'),ext=document.getElementById('externalAssetSection');nh.hidden=tab!=='nh';ext.hidden=tab!=='ocr';
+        if(window.ExternalAccountUI)ExternalAccountUI.mount();
+        initBrokerSelector();const nh=document.getElementById('nhAccountSection'),ext=document.getElementById('externalAssetSection');nh.hidden=tab!=='nh';ext.hidden=tab!=='ocr';document.getElementById('nhAccountCards').hidden=true;document.getElementById('externalSummaryCards').hidden=true;
         if(tab==='special'){
           renderReport(view.querySelector('.account-report'),ctx,tab);
-          for(const kind of ['ISA','PENSION','IRP']){const section=node('section',null,'card');section.append(node('h2',({ISA:'ISA',PENSION:'연금저축',IRP:'IRP'})[kind]));const rows=ctx.snapshot().details.filter(row=>row.accountType===kind);if(rows.length){const wrap=node('div',null,'tw'),table=node('table'),thead=node('thead'),header=node('tr');for(const h of ['종목','수량','평단가(KRW)','현재가(KRW)','출처','시세 출처','시세 관측시각'])header.append(node('th',h));thead.append(header);table.append(thead);const tbody=node('tbody');for(const row of rows){const tr=node('tr');for(const value of [row.name,format(row.quantity),format(row.avgPrice),format(row.currentPrice),row.source+(row.draft?' · 임시':''),row.quoteSource||'미확인',row.observedAt||'미확인'])tr.append(node('td',value));tbody.append(tr)}table.append(tbody);wrap.append(table);section.append(wrap)}if(!rows.length)section.append(note('저장자료 미조회 또는 해당 구분 자료 없음'));view.querySelector('.account-report').append(section)}
+          for(const kind of ['ISA','PENSION','IRP']){const section=node('section',null,'card');section.append(node('h2',({ISA:'ISA',PENSION:'연금저축',IRP:'IRP'})[kind]));const rows=ctx.snapshot().details.filter(row=>row.accountType===kind);if(rows.length){const wrap=node('div',null,'tw'),table=node('table'),thead=node('thead'),header=node('tr');for(const h of ['증권사','계좌명','종목','수량','평단가(KRW)','현재가(KRW)','출처','시세 출처','시세 관측시각'])header.append(node('th',h));thead.append(header);table.append(thead);const tbody=node('tbody');for(const row of rows){const tr=node('tr');for(const value of [row.broker||'증권사 미지정',row.accountLabel,row.name,format(row.quantity),format(row.avgPrice),format(row.currentPrice),row.source+(row.draft?' · 임시':''),row.quoteSource||'미확인',row.observedAt||'미확인'])tr.append(node('td',value));tbody.append(tr)}table.append(tbody);wrap.append(table);section.append(wrap)}if(!rows.length)section.append(note('저장자료 미조회 또는 해당 구분 자료 없음'));view.querySelector('.account-report').append(section)}
         }else renderReport(view.querySelector('.account-report'),ctx,tab);
         if(ctx.development())view.querySelector('.account-report').append(note(ctx.accountReads()?'기존 인증된 계좌 경로입니다. '+(window.MYINVEST_TRANSPORT_CONFIG?.externalStore?'OCR·수동 입력 자료는 저장 전 검토 후 저장·복구할 수 있습니다. 이전 버전은 복구 이력으로 유지합니다.':window.MYINVEST_TRANSPORT_CONFIG?.externalTestStore?'선택한 합성 테스트 모드에서는 고정 합성자료만 저장·복구합니다.':'현재 중계는 조회 모드입니다. 저장·복구는 계좌관리 옵션으로 연결하세요.'):'현재 중계는 계좌관리 모드로 시작되지 않았습니다. 계좌관리 옵션으로 연결한 뒤 이용하세요.'));
         const testButton=view.querySelector('#loadAccountTestData');if(testButton){testButton.disabled=window.MYINVEST_TRANSPORT_CONFIG?.externalTestStore!==true;testButton.hidden=window.MYINVEST_TRANSPORT_CONFIG?.externalTestStore!==true}
       }
     });
-    return {...page,setRoute(next){route=next},mount(container,ctx){page.mount(container,ctx);if(!ctx.development())applyExternalAutoRefresh()},unmount(){if(EXT_AUTO_TIMER)clearInterval(EXT_AUTO_TIMER);EXT_AUTO_TIMER=null;page.unmount()}};
+    return {...page,setRoute(next){route=next},mount(container,ctx){page.mount(container,ctx);if(!ctx.development())applyExternalAutoRefresh()},unmount(){if(EXT_AUTO_TIMER)clearInterval(EXT_AUTO_TIMER);EXT_AUTO_TIMER=null;if(window.ExternalAccountUI)ExternalAccountUI.closeImport();page.unmount()}};
   });
 })();

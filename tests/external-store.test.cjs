@@ -11,9 +11,10 @@ class Sheet{
   }}
 }
 function store(){
-  const sheets=new Map();let locked=false;
+  const sheets=new Map(),properties=new Map();let locked=false;
   const sheet=name=>{if(!sheets.has(name))sheets.set(name,new Sheet());return sheets.get(name)};
   const ctx=vm.createContext({Date,console,getSheet:sheet,jsonResponse:x=>x,
+    PropertiesService:{getScriptProperties:()=>({getProperty:key=>properties.get(key)||null,setProperty:(key,value)=>properties.set(key,value)})},
     sessionUser_:token=>token==='alice-token'?'alice':token==='bob-token'?'bob':null,
     securityWithLock_:fn=>{assert.equal(locked,false);locked=true;try{return fn()}finally{locked=false}},
     Utilities:{DigestAlgorithm:{SHA_256:'sha256'},computeDigest:(_,text)=>[...crypto.createHash('sha256').update(text).digest()],getUuid:()=>crypto.randomUUID()}
@@ -21,10 +22,22 @@ function store(){
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../gas/AccountStoreV2.gs'),'utf8'),ctx);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../gas/ExternalHoldings.gs'),'utf8'),ctx);
   const read=(token='alice-token')=>ctx.handleExternalHoldingsV2(token);
-  const save=(rows,options={})=>ctx.handleSaveExternalHoldingsV2(options.token||'alice-token',rows,options.revision===undefined?read(options.token).revision:options.revision,options.confirm===undefined?true:options.confirm);
+  const save=(rows,options={})=>ctx.handleSaveExternalHoldingsV2(options.token||'alice-token',rows,options.revision===undefined?read(options.token).revision:options.revision,options.confirm===undefined?true:options.confirm,options.version);
   return {ctx,sheet,read,save};
 }
 const row=type=>({accountType:type,code:'035720',name:'카카오',quantity:101,avgPrice:20100,source:'manual'});
+test('optional account IDs preserve distinct brokers and survive readback/recovery',()=>{
+  const s=store(),rows=[{...row('GENERAL'),accountId:'ext-synthetic-account-a'},{...row('GENERAL'),accountId:'ext-synthetic-account-b'}];
+  const catalog=s.ctx.handleExternalAccountCatalog_('alice-token');assert.equal(s.ctx.handleSaveExternalAccountCatalog_('alice-token',rows.map((row,i)=>({id:row.accountId,accountType:'GENERAL',accountName:'Synthetic '+i,broker:'Synthetic Broker'})),['Synthetic Broker'],catalog.revision,true).success,true);
+  assert.equal(s.save(rows,{version:1}).success,true);assert.equal(s.read().holdings.length,2);assert.equal(s.read().holdings[0].accountId,rows[0].accountId);
+  assert.equal(s.save([]).code,'STORE_CLIENT_UPGRADE_REQUIRED');assert.equal(s.read().holdings.length,2);
+  assert.equal(s.save([],{version:1}).success,true);const id=s.ctx.handleExternalHistory('alice-token').history[0].snapshotId;
+  assert.equal(s.ctx.handleRestoreExternalHoldings('alice-token',id,s.read().revision,true).success,true);assert.equal(s.read().holdings[1].accountId,rows[1].accountId);
+});
+test('legacy account aliases do not bypass per-account duplicate validation',()=>{
+  const s=store();assert.equal(s.save([row('ISA'),{...row('ISA'),accountId:'legacy-ISA'}],{version:1}).code,'STORE_DUPLICATE');
+  assert.equal(s.save([{...row('ISA'),accountId:'legacy-IRP'}],{version:1}).code,'STORE_INVALID');
+});
 for(const type of ['ISA','PENSION','IRP'])test(type+' save backs up, preserves other users, and supports restore/redo',()=>{
   const s=store();assert.equal(s.save([row(type)],{token:'bob-token'}).success,true);
   assert.equal(s.save([row(type)]).success,true);

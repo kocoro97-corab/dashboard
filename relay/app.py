@@ -21,8 +21,8 @@ AUTH_ACTIONS=frozenset({'appVersion','login','sessionInfo','logout'})
 PUBLIC_ACTIONS=frozenset({'appVersion','login','register'})
 ACTIONS=PUBLIC_ACTIONS|{'sessionInfo','logout','changePassword','protectedHoldings','getPendingUsers','approveUser',
     'nhAccounts','nhQuotes','nhStockQuotes','nhExternalQuotes','externalDriveImages','externalHoldings','externalHistory',
-    'saveExternalHoldings','restoreExternalHoldings','publicFetch'}
-WRITES=frozenset({'register','changePassword','approveUser','saveExternalHoldings','restoreExternalHoldings'})
+    'saveExternalHoldings','restoreExternalHoldings','externalAccounts','saveExternalAccounts','publicFetch'}
+WRITES=frozenset({'register','changePassword','approveUser','saveExternalHoldings','restoreExternalHoldings','saveExternalAccounts'})
 PUBLIC_HOSTS=frozenset({'finance.daum.net','polling.finance.naver.com','stock.naver.com','m.stock.naver.com',
                         'query1.finance.yahoo.com','finance.yahoo.com','news.google.com'})
 LIMIT=200000
@@ -166,7 +166,7 @@ class RelayApp:
             if not isinstance(payload,dict) or any(k in payload for k in ('token','stagingBinding','backendUrl','gasUrl','targetUrl')):raise RelayFault('RELAY_BAD_REQUEST',400)
             action=payload.get('action')
             if not isinstance(action,str) or action not in ACTIONS:raise RelayFault('RELAY_ACTION_DENIED',400)
-            account_allowed=self.config.account_reads and action in ACCOUNT_READS or (self.config.external_test_store or self.config.external_store) and action in ACCOUNT_WRITES
+            account_allowed=self.config.account_reads and action in ACCOUNT_READS or self.config.external_store and action in ACCOUNT_WRITES or self.config.external_test_store and action in {'saveExternalHoldings','restoreExternalHoldings'}
             if self.config.auth_only and action not in AUTH_ACTIONS and not (self.config.public_market and action=='publicFetch') and not account_allowed:raise RelayFault('RELAY_SCOPE_BLOCKED',403)
             if action not in PUBLIC_ACTIONS:
                 match=re.fullmatch(r'Bearer ([a-fA-F0-9]{64})',environ.get('HTTP_AUTHORIZATION',''))

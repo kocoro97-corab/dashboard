@@ -64,6 +64,7 @@
       config.accountReads=data.developmentAccountReads===true;
       config.externalTestStore=config.accountReads&&data.developmentExternalTestStore===true;
       config.externalStore=config.accountReads&&data.developmentExternalStore===true;
+      config.externalAccountCatalogVersion=data.externalAccountCatalogVersion===1?1:0;
       stage='storage';
       sessionStorage.setItem(KEY,JSON.stringify({endpoint,code}));
       stage='render';

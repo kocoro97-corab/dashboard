@@ -72,6 +72,7 @@ with tempfile.TemporaryDirectory() as tmp:
                 def login():
                     page.locator('#authId').fill('synthetic');page.locator('#authPw').fill('SYNTHETIC_PRIVATE_PASSWORD');page.locator('#authSubmitBtn').click()
                     page.wait_for_function("()=>$('appContainer').style.display==='block'")
+                    page.locator('#externalOpenImport').click()
                 login();page.wait_for_function('()=>!!EXT_MASTER')
                 baseline=len(gas.calls)
                 for kind in ('ISA','PENSION','IRP'):
@@ -81,6 +82,7 @@ with tempfile.TemporaryDirectory() as tmp:
                 assert page.locator('#externalAssetRows tr').count()==3
                 assert page.locator('#externalSaveBtn').is_disabled()
                 assert page.locator('#externalSummaryCards').evaluate('e=>e.childElementCount')==0
+                page.get_by_role('button',name='닫기 ✕',exact=True).click()
                 quantity=page.locator('#externalAssetRows tr').first.locator('input[type="number"]').first
                 quantity.fill('3');quantity.press('Tab')
                 assert page.evaluate('EXT_ASSETS[0].quantity')==3
@@ -88,6 +90,7 @@ with tempfile.TemporaryDirectory() as tmp:
                 assert len(gas.calls)==baseline  # Add/edit/undo do not call GAS, NH or storage.
                 assert page.locator('#externalUploadBtn').is_enabled() and page.locator('#externalDriveFolder').is_disabled()
                 assert page.locator('#nhAccountBtn').is_disabled() and page.locator('#externalAutoRefresh').is_disabled()
+                page.locator('#externalOpenImport').click()
                 page.locator('#externalManualName').fill('SYNTHETIC_PRIVATE_UNSAVED_INPUT')
                 page.evaluate('logout()');page.wait_for_selector('#authGuard',state='visible')
                 assert page.evaluate('EXT_ASSETS.length')==0

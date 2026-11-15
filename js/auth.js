@@ -192,6 +192,7 @@ function enterDashboard(isAdmin){
 
 // Always discard private state and invalidate outstanding account requests at logout.
 function clearAccountState(){
+  if(window.ExternalAccountUI)ExternalAccountUI.clear();
   if(typeof NH_ACCOUNT_RUN!=='undefined')NH_ACCOUNT_RUN++;
   if(typeof NH_ACCOUNTS!=='undefined'){NH_ACCOUNTS=[];NH_ACCOUNT_UPDATED='';NH_ACCOUNT_FETCHED_AT=0;NH_ACCOUNT_SESSION='';NH_ACCOUNT_BUSY=false}
   if(typeof EXT_RUN_ID!=='undefined')EXT_RUN_ID++;

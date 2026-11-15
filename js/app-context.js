@@ -16,11 +16,12 @@
     const accountReads=()=>!development()||window.MYINVEST_TRANSPORT_CONFIG.accountReads===true;
     function snapshot(){
       const token=LS('invest_session_token');
-      return AccountOverview.build({accounts:NH_ACCOUNT_SESSION===token?NH_ACCOUNTS:[],external:EXT_ASSETS,prices:EXT_PRICES,
+      return AccountOverview.build({accounts:NH_ACCOUNT_SESSION===token?NH_ACCOUNTS:[],external:EXT_ASSETS,prices:EXT_PRICES,catalog:window.ExternalAccountUI?ExternalAccountUI.list():[],
         nhLoaded:!!token&&NH_ACCOUNT_SESSION===token&&NH_ACCOUNT_FETCHED_AT>0,externalLoaded:!!EXT_SAVED_REV,
         nhPartial:document.getElementById('nhAccountStatus')?.textContent.includes('조회 실패')===true,
         nhReceivedAt:NH_ACCOUNT_UPDATED,
         externalPartial:document.getElementById('externalStatus')?.textContent.includes('외부계좌 자료 조회 실패')===true,
+        externalUpdatedAt:window.ExternalAccountUI?ExternalAccountUI.updatedAt():null,
         draft:JSON.stringify(extRows(EXT_ASSETS.filter(x=>x.source!=='synthetic-test')))!==JSON.stringify(EXT_SAVED_ROWS.filter(x=>x.source!=='synthetic-test')),analyze:WorkPortfolio.analyze});
     }
     return {once,emit,snapshot,development,publicConnected,accountReads,authenticated:()=>!!synchronize(),

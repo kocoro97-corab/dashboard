@@ -51,3 +51,11 @@ test('a missing quote preserves known KRW acquisition cost and unknown P/L',()=>
 test('synthetic store-validation rows never enter real account totals or quantities',()=>{
   const out=build({...base,external:require('../data/account-test-holdings.json')});assert.equal(out.knownSubtotal,6220);assert.equal(out.details.length,2);assert.equal(out.testRows.length,3);assert.equal(out.combined.length,2);
 });
+
+test('individual broker accounts remain separate while verified quantities consolidate',()=>{
+  const catalog=[{id:'ext-synthetic-account-a',broker:'Synthetic Broker',accountName:'A'},{id:'ext-synthetic-account-b',broker:'Synthetic Broker',accountName:'B'}];
+  const external=catalog.map((x,i)=>({accountId:x.id,accountType:'GENERAL',code:'123456',name:'Synthetic',quantity:i+1,avgPrice:100,source:'OCR',match:{status:'matched'}}));
+  const out=build({...base,accounts:[],catalog,external,externalUpdatedAt:'2026-11-15T01:00:00Z',prices:{'123456':{price:110}}});
+  assert.equal(out.result.accounts.length,2);assert.equal(out.combined[0].accountCount,2);assert.equal(out.combined[0].quantity,3);assert.equal(out.combined[0].valueKrw,330);
+  assert.deepEqual(out.details.map(x=>x.accountLabel),['A','B']);assert.ok(out.details.every(x=>x.broker==='Synthetic Broker'&&x.source==='OCR'&&x.storedAt==='2026-11-15T01:00:00.000Z'));
+});

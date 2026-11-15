@@ -74,8 +74,10 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
    page.locator('#authId').fill('synthetic');page.locator('#authPw').fill('SYNTHETIC_PRIVATE_PASSWORD');page.locator('#authSubmitBtn').click();page.wait_for_function("()=>window.DashboardShell?.getStatus().path==='/accounts/ocr'")
    page.wait_for_function('()=>!!EXT_MASTER')
    if not development:page.wait_for_function("()=>EXT_SAVED_REV==='r1'")
+   page.locator('#externalOpenImport').click()
    page.evaluate('data=>window.Tesseract={recognize:async()=>({data})}',fixture['data'])
    page.locator('#externalImageFiles').set_input_files([{'name':'synthetic-1.png','mimeType':'image/png','buffer':pixel},{'name':'synthetic-2.png','mimeType':'image/png','buffer':pixel}]);page.locator('#externalUploadBtn').click();page.wait_for_function("()=>$('externalUploadBtn').disabled===false&&EXT_ASSETS.length>0")
+   page.get_by_role('button',name='닫기 ✕',exact=True).click()
    count=page.evaluate('EXT_ASSETS.length');assert count==len(fixture['expected'])
    token=page.evaluate("LS('invest_session_token')")
    def go(path):
@@ -113,7 +115,8 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
    page.evaluate('logout()');page.wait_for_function("()=>DashboardShell.getStatus().page===null");assert page.evaluate('EXT_ASSETS.length')==0
    page.locator('#authId').fill('synthetic');page.locator('#authPw').fill('SYNTHETIC_PRIVATE_PASSWORD');page.locator('#authSubmitBtn').click();page.wait_for_function("()=>DashboardShell.getStatus().page==='home'")
-   go('/accounts/ocr');assert page.locator('#externalImageFiles').is_visible();assert not errors and not unexpected,(errors,unexpected)
+   go('/accounts/ocr');page.locator('#externalOpenImport').click();assert page.locator('#externalImageFiles').is_visible();assert not errors and not unexpected,(errors,unexpected)
+   page.get_by_role('button',name='닫기 ✕',exact=True).click()
    page.evaluate("()=>DashboardShell.connect('settings',()=>({mount(){throw Error('SYNTHETIC_PAGE_FAILURE')},refresh(){},unmount(){throw Error('SYNTHETIC_UNMOUNT_FAILURE')},getStatus(){throw Error('SYNTHETIC_STATUS_FAILURE')}}))")
    go('/settings');assert '이 페이지 처리 실패' in page.locator('#pageStatus').inner_text();go('/home');assert page.locator('#pageViewport>.page-content').count()==1;assert not errors
    if development:assert set(gas.calls)<={'appVersion','login','sessionInfo','logout'}

@@ -280,7 +280,8 @@ def main():
         else:report.update(code=code if code in SAFE_STARTUP_CODES else 'HTTPS_DEV_PREFLIGHT_OR_TUNNEL_REQUIRED')
     if 'relay' in locals() and args.accounts:
         attempts=relay.metrics['upstreamAttempts'];nh=sum(attempts.get(k,0) for k in ('nhAccounts','nhExternalQuotes'));writes=sum(attempts.get(k,0) for k in ('saveExternalHoldings','restoreExternalHoldings'))
-        report.update(actualNhCalls='NOT_MEASURED' if nh else 0,nhRequestsSentToGas=nh,accountStoreWriteAttempts=writes,accountStoreWrites='POSSIBLE' if writes else False)
+        catalog=attempts.get('saveExternalAccounts',0)
+        report.update(actualNhCalls='NOT_MEASURED' if nh else 0,nhRequestsSentToGas=nh,accountStoreWriteAttempts=writes,accountStoreWrites='POSSIBLE' if writes else False,catalogWriteAttempts=catalog,propertiesWrites='POSSIBLE' if catalog else False)
     print(json.dumps(report))
     return 0 if report['status'] == 'PASS' else 2
 

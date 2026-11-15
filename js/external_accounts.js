@@ -11,7 +11,7 @@ let EXT_RUN_ID=0;
 let EXT_MASTER=null,EXT_MASTER_ERROR='';
 let EXT_SAVED_REV=null,EXT_SAVED_ROWS=[],EXT_UNDO=[],EXT_HISTORY=[];
 let EXT_DRAFT_VERSION=0,EXT_LOAD_RUN=0;
-function extRows(rows){return rows.map(x=>({accountType:x.accountType,code:String(x.code||''),name:String(x.name||''),quantity:ExternalCore.number(x.quantity),avgPrice:ExternalCore.number(x.avgPrice),source:x.source||'manual'}))}
+function extRows(rows){return rows.map(x=>{const row={accountType:x.accountType,code:String(x.code||''),name:String(x.name||''),quantity:ExternalCore.number(x.quantity),avgPrice:ExternalCore.number(x.avgPrice),source:x.source||'manual'};if(x.accountId)row.accountId=x.accountId;return row})}
 function extCheckpoint(){EXT_DRAFT_VERSION++;EXT_UNDO.push(extRows(EXT_ASSETS));if(EXT_UNDO.length>10)EXT_UNDO.shift();extStoreControls()}
 function undoExternalChange(){if(!EXT_UNDO.length)return;EXT_DRAFT_VERSION++;EXT_ASSETS=EXT_UNDO.pop();renderExternalAssets();showExternalSaveButton()}
 async function loadExternalMaster(){
@@ -25,6 +25,7 @@ async function loadExternalMaster(){
 }
 function extStoreControls(){const undo=$('externalUndoBtn');if(undo)undo.disabled=!EXT_UNDO.length}
 function extImport(rows){
+  if(window.ExternalAccountUI)rows=ExternalAccountUI.attach(rows);
   const plan=ExternalCore.merge(extRows(EXT_ASSETS),extRows(rows));
   if(!plan.changes.length){$('externalOcrProgress').textContent='동일 종목·수량은 중복 추가하지 않았습니다.';return false}
   const changes=plan.conflicts.map(x=>x.before.name+': '+x.before.quantity+' / '+x.before.avgPrice+' → '+x.after.quantity+' / '+x.after.avgPrice).join('\n');
@@ -54,11 +55,13 @@ function extNHPrices(){
   }));
   return prices;
 }
-const EXT_TYPES={ISA:'ISA',PENSION:'연금저축',IRP:'IRP'};
+const EXT_TYPES={ISA:'ISA',PENSION:'연금저축',IRP:'IRP',GENERAL:'일반(외부 입력)'};
 const extNum=v=>{if(v==null)return 0;const n=Number(String(v).replace(/[^0-9.-]/g,''));return Number.isFinite(n)?n:0};
 const extFmt=v=>Number(v||0).toLocaleString('ko-KR',{maximumFractionDigits:2});
 const extEsc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function extPost(action,extra={}){
+  if(action==='saveExternalHoldings'&&window.ExternalAccountUI){if(ExternalAccountUI.capable())extra={...extra,externalAccountsVersion:1};else if((extra.holdings||[]).some(x=>x.accountId||x.accountType==='GENERAL'))throw Error('STORE_CLIENT_UPGRADE_REQUIRED')}
+
   const token=LS('invest_session_token');if(!token)throw new Error('로그인이 필요합니다.');
   function failure(message,diagnostic){const error=new Error(message);error.diagnostic=diagnostic;return error}
   let response;
@@ -81,11 +84,12 @@ async function loadExternalAssets(){
   const st=$('externalStatus'),loadRun=++EXT_LOAD_RUN,draftVersion=EXT_DRAFT_VERSION;try{
     await loadExternalMaster();
     const data=await extPost('externalHoldings');if(loadRun!==EXT_LOAD_RUN)return;
+    if(window.ExternalAccountUI)await ExternalAccountUI.observe(data);
     EXT_SAVED_ROWS=extRows(Array.isArray(data.holdings)?data.holdings:[]);EXT_SAVED_REV=data.storeVersion===2?data.revision:null;EXT_HISTORY=[];
     if(draftVersion===EXT_DRAFT_VERSION){EXT_ASSETS=extRows(EXT_SAVED_ROWS);EXT_UNDO=[]}
     renderExternalAssets();extStoreControls();
     const cfg=LS('invest_external_settings')||{auto:false,minutes:10};$('externalDriveFolder').value=LS('invest_external_drive_folder')||'';$('externalAutoRefresh').checked=!!cfg.auto;$('externalAutoMinutes').value=String(cfg.minutes||10);applyExternalAutoRefresh();
-    if(EXT_ASSETS.length)await refreshExternalPrices(true);else if(st)st.textContent='외부계좌 종목 없음 · 이미지 업로드 또는 Drive 가져오기로 등록하세요.';
+    if(EXT_ASSETS.length)await refreshExternalPrices(true);else if(st)st.textContent='외부계좌 종목 없음 · 이미지 업로드 또는 직접 입력으로 등록하세요.';
     if(draftVersion!==EXT_DRAFT_VERSION&&st)st.textContent+=' · 불러오기 중 편집한 임시 목록을 보존했습니다. 저장 전 전체 비교가 필요합니다.';
     if(!EXT_SAVED_REV&&st)st.textContent+=' · 저장/복구용 GAS v2 승인 배포가 필요합니다.';
   }catch(error){if(error.name==='StaleSession')return;if(st)st.textContent='외부계좌 자료 조회 실패 · '+SafeDiagnostics.message(error)}
@@ -98,7 +102,7 @@ async function ocrImage(file){
   const localOptions=window.DevelopmentOCR?DevelopmentOCR.options:{};
   const result=await Tesseract.recognize(file,'kor+eng',{...localOptions,logger:m=>{if(m.status==='recognizing text')$('externalOcrProgress').textContent='이미지 인식 중 '+Math.round((m.progress||0)*100)+'%'}});
   let data=result.data||{text:''};
-  let parsed=ExternalCore.parse(data,$('externalAccountType').value,EXT_MASTER),layoutRetry='NOT_RUN',layoutRetryChecks=null,recognitionSource=file;
+  let parsed=ExternalCore.parse(data,window.ExternalAccountUI?ExternalAccountUI.inputType():$('externalAccountType').value==='BROKER'?'GENERAL':$('externalAccountType').value,EXT_MASTER),layoutRetry='NOT_RUN',layoutRetryChecks=null,recognitionSource=file;
   if(!parsed.layoutVerified&&typeof Tesseract.createWorker==='function'){
     // One bounded alternate segmentation on the SAME image. Never infer a
     // missing header from another file, saved holdings, names or numeric values.
@@ -121,7 +125,7 @@ async function ocrImage(file){
       await worker.setParameters({tessedit_pageseg_mode:region?'7':'6'});
       const alternate=await worker.recognize(enlarged);
       const candidate=region?ExternalCore.replaceHeaderRegion(data,alternate.data||{},region,enlarged.width/(region.x1-region.x0)):alternate.data||{text:''};
-      const check=ExternalCore.parse(candidate,$('externalAccountType').value,EXT_MASTER);
+      const check=ExternalCore.parse(candidate,window.ExternalAccountUI?ExternalAccountUI.inputType():$('externalAccountType').value==='BROKER'?'GENERAL':$('externalAccountType').value,EXT_MASTER);
       layoutRetryChecks=check.headerChecks;
       if(check.layoutVerified){data=candidate;parsed=check;layoutRetry='PASS';recognitionSource=region?file:enlarged}
     }catch(error){/* Keep original evidence and fail closed if retry is unavailable. */}
@@ -191,7 +195,7 @@ function suggestExternalNames(query){
   const key=ExternalCore.norm(query);[...EXT_MASTER.byCode.values()].filter(x=>ExternalCore.norm(x.name).includes(key)||x.code.startsWith(key)).slice(0,20).forEach(x=>{const option=document.createElement('option');option.value=x.name;option.label=x.code+' · '+x.market+' · '+x.type;list.appendChild(option)});
 }
 function extSyncWithNH(){extResolveCodes();renderExternalAssets();if(EXT_PRICE_BUSY){EXT_PRICE_PENDING=true;return}if(EXT_ASSETS.some(x=>x.match.status==='matched'))refreshExternalPrices(true)}
-function parseExternalOcr(data,accountType){const result=ExternalCore.parse(data,accountType,EXT_MASTER);window.EXT_OCR_WARNINGS=result.warnings;return result.holdings}
+function parseExternalOcr(data,accountType){const type=window.ExternalAccountUI?ExternalAccountUI.inputType():accountType==='BROKER'?'GENERAL':accountType;const result=ExternalCore.parse(data,type,EXT_MASTER);window.EXT_OCR_WARNINGS=result.warnings;return window.ExternalAccountUI?ExternalAccountUI.attach(result.holdings):result.holdings}
 function showOcrReview(texts,summaries=[]){
   let el=$('externalOcrReview');if(!el){el=document.createElement('div');el.id='externalOcrReview';$('externalOcrProgress').after(el)}
   el.innerHTML='<details><summary style="cursor:pointer;margin:8px 0">OCR 원문 보기</summary><div class="mini" style="margin:8px 0">종목명·수량·평균매입가를 확인하세요. 코드가 빈 종목은 직접 입력할 수 있습니다.</div><textarea id="externalOcrRaw" rows="7" style="width:100%;box-sizing:border-box" readonly></textarea></details>';
@@ -210,7 +214,7 @@ async function processExternalUploads(){
       $('externalOcrProgress').textContent=(i+1)+'/'+files.length+' 이미지 분석 중...';
       const data=await ocrImage(files[i]);if(session!==LS('invest_session_token'))return;
       texts.push(data.text||'');
-      const parsed=ExternalCore.parse(data,$('externalAccountType').value,EXT_MASTER);
+      const parsed=ExternalCore.parse(data,window.ExternalAccountUI?ExternalAccountUI.inputType():$('externalAccountType').value==='BROKER'?'GENERAL':$('externalAccountType').value,EXT_MASTER);
       window.EXT_OCR_WARNINGS=parsed.warnings;all=all.concat(parsed.holdings);
       const checks=data.layoutRetryChecks||parsed.headerChecks;
       const labels=checks?Object.entries({name:'종목명',quantity:'수량',avgPrice:'매입가'})
@@ -226,10 +230,10 @@ async function processExternalUploads(){
 }
 function mergeExternalRows(base,add){return ExternalCore.merge(base,add).rows}
 function addExternalManual(){
-  const row={accountType:$('externalAccountType').value,code:$('externalManualCode').value.trim(),name:$('externalManualName').value.trim(),quantity:ExternalCore.number($('externalManualQty').value),avgPrice:ExternalCore.number($('externalManualAvg').value),source:'manual'};
+  const row={accountType:window.ExternalAccountUI?ExternalAccountUI.inputType():$('externalAccountType').value==='BROKER'?'GENERAL':$('externalAccountType').value,code:$('externalManualCode').value.trim(),name:$('externalManualName').value.trim(),quantity:ExternalCore.number($('externalManualQty').value),avgPrice:ExternalCore.number($('externalManualAvg').value),source:'manual'};
   try{ExternalCore.validate([row]);if(!extImport([row]))return;renderExternalAssets();showExternalSaveButton();['externalManualCode','externalManualName','externalManualQty','externalManualAvg'].forEach(id=>$(id).value='')}catch(error){alert(SafeDiagnostics.message(error))}
 }
-function showExternalSaveButton(){let b=$('externalSaveBtn');if(!b){b=document.createElement('button');b.id='externalSaveBtn';b.textContent='인식자료 저장';b.onclick=saveExternalAssets;$('externalOcrProgress').after(b)}b.style.display='inline-block'}
+function showExternalSaveButton(){let b=$('externalSaveBtn');if(!b){b=document.createElement('button');b.id='externalSaveBtn';b.textContent='인식자료 저장';b.onclick=saveExternalAssets;($('externalOpenImport')||$('externalOcrProgress')).after(b)}b.style.display='inline-block'}
 async function importExternalDriveImages(){
   const session=LS('invest_session_token');
   const folderId=$('externalDriveFolder').value.trim();if(!folderId){alert('Google Drive 폴더 ID를 입력하세요.');return}LS('invest_external_drive_folder',folderId);
@@ -240,12 +244,13 @@ async function importExternalDriveImages(){
   }catch(e){$('externalOcrProgress').textContent='Drive 가져오기 실패 · '+SafeDiagnostics.message(e)}
 }
 function renderExternalAssets(){
+  if(window.ExternalAccountUI)ExternalAccountUI.render();
   extResolveCodes();
   const tb=$('externalAssetRows'),cards=$('externalSummaryCards');if(!tb||!cards)return;
   if(!EXT_ASSETS.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center">등록된 외부계좌 종목이 없습니다.</td></tr>';cards.innerHTML='';extStoreControls();return}
-  const totals={ISA:{eval:0,cost:0,count:0,priced:0},PENSION:{eval:0,cost:0,count:0,priced:0},IRP:{eval:0,cost:0,count:0,priced:0}};
+  const totals={ISA:{eval:0,cost:0,count:0,priced:0},PENSION:{eval:0,cost:0,count:0,priced:0},IRP:{eval:0,cost:0,count:0,priced:0},GENERAL:{eval:0,cost:0,count:0,priced:0}};
   tb.innerHTML=EXT_ASSETS.map((x,i)=>{const q=ExternalCore.number(x.quantity),a=ExternalCore.number(x.avgPrice),raw=x.match.status==='matched'&&EXT_PRICES[x.code]?EXT_PRICES[x.code].price:null,p=extPositivePrice(raw),evalAmt=p==null||q==null?null:p*q,cost=q==null||a==null?null:q*a,pl=evalAmt==null||cost==null?null:evalAmt-cost,returnRate=pl!=null&&cost>0?pl/cost*100:null;const t=Object.prototype.hasOwnProperty.call(totals,x.accountType)?totals[x.accountType]:null;if(t&&evalAmt!=null&&cost!=null){t.eval+=evalAmt;t.cost+=cost;t.priced++}if(t)t.count++;
-    return `<tr><td>${Object.prototype.hasOwnProperty.call(EXT_TYPES,x.accountType)?EXT_TYPES[x.accountType]:extEsc(x.accountType)}</td><td><input class="external-edit" style="min-width:100px" value="${extEsc(x.name)}" list="externalMasterNames" oninput="suggestExternalNames(this.value)" onchange="editExternalText(${i},'name',this.value)"></td><td><input class="external-edit" style="width:92px" maxlength="20" value="${extEsc(x.code)}" placeholder="코드 확인" onchange="editExternalText(${i},'code',this.value)"><div class="mini">${extEsc(x.match.reason)}</div></td><td><input class="external-edit" type="number" min="0" step="any" value="${q==null?'':q}" onchange="editExternal(${i},'quantity',this.value)"></td><td><input class="external-edit" type="number" min="0" step="any" value="${a==null?'':a}" onchange="editExternal(${i},'avgPrice',this.value)"></td><td>${p==null?'<span class="external-pending">시세 미확인</span>':extFmt(p)}</td><td>${evalAmt==null?'—':extFmt(evalAmt)}</td><td class="${pl==null?'neutral':pl>=0?'up':'down'}">${pl==null?'—':extFmt(pl)}<div class="mini">수익률 ${returnRate==null?'—':extFmt(returnRate)+'%'}</div></td><td><button onclick="removeExternal(${i})">삭제</button></td></tr>`;
+    return `<tr><td>${window.ExternalAccountUI?ExternalAccountUI.accountControl(x,i):Object.prototype.hasOwnProperty.call(EXT_TYPES,x.accountType)?EXT_TYPES[x.accountType]:extEsc(x.accountType)}</td><td><input class="external-edit" style="min-width:100px" value="${extEsc(x.name)}" list="externalMasterNames" oninput="suggestExternalNames(this.value)" onchange="editExternalText(${i},'name',this.value)"></td><td><input class="external-edit" style="width:92px" maxlength="20" value="${extEsc(x.code)}" placeholder="코드 확인" onchange="editExternalText(${i},'code',this.value)"><div class="mini">${extEsc(x.match.reason)}</div></td><td><input class="external-edit" type="number" min="0" step="any" value="${q==null?'':q}" onchange="editExternal(${i},'quantity',this.value)"></td><td><input class="external-edit" type="number" min="0" step="any" value="${a==null?'':a}" onchange="editExternal(${i},'avgPrice',this.value)"></td><td>${p==null?'<span class="external-pending">시세 미확인</span>':extFmt(p)}</td><td>${evalAmt==null?'—':extFmt(evalAmt)}</td><td class="${pl==null?'neutral':pl>=0?'up':'down'}">${pl==null?'—':extFmt(pl)}<div class="mini">수익률 ${returnRate==null?'—':extFmt(returnRate)+'%'}</div></td><td><button onclick="removeExternal(${i})">삭제</button></td></tr>`;
   }).join('');
   let html=Object.keys(totals).map(k=>{const t=totals[k],pl=t.eval-t.cost;return `<div class="card"><div class="cl"><b>${EXT_TYPES[k]}</b><span>${t.count}종목 · 시세 ${t.priced}/${t.count}</span></div><div class="value">${t.priced?extFmt(t.eval):'—'}<span class="mini">원 평가금액</span></div><div class="change ${pl>=0?'up':'down'}">평가손익 ${t.priced?extFmt(pl)+'원':'시세 미확인'}</div>${t.priced<t.count?'<div class="mini">부분 합계 · 미조회 종목 제외</div>':''}</div>`}).join('');
   const nh={eval:0,profit:0,count:0,incomplete:false,priced:0};

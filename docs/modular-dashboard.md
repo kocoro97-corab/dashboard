@@ -2,8 +2,9 @@
 
 The single scrolling screen is now an eight-route application. This is a gradual
 adapter migration: existing authentication, NH requests, OCR, revision checks,
-Sheets storage and recovery contracts are unchanged. No GAS, relay allowlist,
-production branch, private data or account schema is modified.
+Sheets storage and recovery contracts are preserved. The approved external
+account extension adds optional holding IDs and a user-scoped metadata catalog;
+see `external-account-management-plan.md`. Production branches and data remain unchanged.
 
 ## Routes and module ownership
 

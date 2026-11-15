@@ -1,7 +1,7 @@
 /* Pure OCR/identity/review logic. No network, credentials, DOM, or private fixtures. */
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.ExternalCore=api})(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
-  const TYPES=new Set(['ISA','PENSION','IRP']);
+  const TYPES=new Set(['ISA','PENSION','IRP','GENERAL']);
   const PURCHASE=new Set(['현금','신용','미수','대출']);
   const MENU=new Set(['종목명','종목코드','수량','잔고수량','보유수량','평균매입가','평균매수가','매입가','평단가','현재가','평가금액','평가손익','평가손익률','주식잔고손익','수익률','합계','총자산','예수금','조회','일괄매도','자산현황','평생우대','비용포함','국내잔고','주식잔고','매매손익','국내주식','해외주식','ISA','연금저축','IRP','매도','매수','원화','평가','전체','선택','정렬','총매입금액','원','KRW']);
   const norm=v=>String(v==null?'':v).normalize('NFKC').replace(/[\u200b-\u200d\ufeff\s]/g,'').toUpperCase();
@@ -177,12 +177,13 @@
     }
     return {holdings:plan.rows,rejected,warnings,conflicts:plan.conflicts,regions,layoutVerified:true,headerChecks};
   }
-  const key=row=>row.accountType+'|'+(row.code&&/^[A-Z0-9]{6}$/.test(row.code)?row.code:norm(row.name));
-  const comparable=row=>JSON.stringify([row.accountType,norm(row.name),String(row.code||''),number(row.quantity),number(row.avgPrice)]);
+  const accountKey=row=>row.accountId&&!row.accountId.startsWith('legacy-')?row.accountId:row.accountType;
+  const key=row=>accountKey(row)+'|'+(row.code&&/^[A-Z0-9]{6}$/.test(row.code)?row.code:norm(row.name));
+  const comparable=row=>JSON.stringify([accountKey(row),norm(row.name),String(row.code||''),number(row.quantity),number(row.avgPrice)]);
   function merge(base,added){
     const rows=base.map(x=>({...x})),changes=[],conflicts=[],duplicates=[];
     for(const item of added){
-      const i=rows.findIndex(row=>row.accountType===item.accountType&&(key(row)===key(item)||norm(row.name)===norm(item.name)));
+      const i=rows.findIndex(row=>accountKey(row)===accountKey(item)&&(key(row)===key(item)||norm(row.name)===norm(item.name)));
       if(i<0){rows.push({...item});changes.push({kind:'add',after:{...item}});continue}
       if(comparable(rows[i])===comparable(item)){duplicates.push({...item});continue}
       const change={kind:'replace',before:{...rows[i]},after:{...item}};changes.push(change);conflicts.push(change);rows[i]={...rows[i],...item};
@@ -193,6 +194,7 @@
     const seen=new Set();
     for(const row of rows){
       if(!TYPES.has(row.accountType)||!norm(row.name)||PURCHASE.has(norm(row.name))||String(row.name).length>60||/^\s*[=+@-]/.test(row.name)||row.code&&!/^[A-Z0-9]{6}$/.test(row.code)||number(row.quantity)===null||number(row.avgPrice)===null)throw Error('종목명·코드·수량·평균매입가 확인 필요');
+      if(row.accountId!==undefined&&(typeof row.accountId!=='string'||!/^(?:legacy-(?:ISA|PENSION|IRP|GENERAL)|ext-[A-Za-z0-9-]{8,48})$/.test(row.accountId)))throw Error('종목명·코드·수량·평균매입가 확인 필요');
       const k=key(row);if(seen.has(k))throw Error('같은 계좌에 중복 종목이 있습니다.');seen.add(k);
     }
     return rows;

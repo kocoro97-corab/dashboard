@@ -25,11 +25,12 @@ function createAccountStoreV2_(io) {
     return {holdings:rows,revision:revision,history:history.slice(-5).reverse()};
   }
   function append(values){const s=sheet(),start=s.getLastRow()+1;s.getRange(start,1,1,columns.length).setNumberFormat('@');s.getRange(start,1,1,columns.length).setValues([values]);io.flush()}
-  function commit(user,rows,expectedRevision,confirmReplace,reason){
+  function commit(user,rows,expectedRevision,confirmReplace,reason,guard){
     return io.lock(function(){
       const before=state(user);
       if(typeof expectedRevision!=='string'||expectedRevision!==before.revision)throw Error('STORE_CONFLICT');
       if(confirmReplace!==true)throw Error('STORE_CONFIRM');
+      if(guard)guard(before.holdings);
       const old=JSON.stringify(before.holdings),next=JSON.stringify(rows);
       if(old.length>45000||next.length>45000)throw Error('STORE_SNAPSHOT_TOO_LARGE');
       const id=io.uuid(),p=[user,id,'PREPARE',before.revision,io.now(),reason,old,next,''];p[8]=checksum(p);
@@ -54,5 +55,5 @@ function createAccountStoreV2_(io) {
     if(!snapshot)throw Error('STORE_NOT_FOUND');
     return commit(user,io.validate(snapshot.holdings,true),expectedRevision,confirmReplace,'restore');
   }
-  return {read:user=>io.lock(()=>state(user)),commit:commit,restore:restore};
+  return {read:user=>io.lock(()=>state(user)),inspectUnderLock:state,commit:commit,restore:restore};
 }
