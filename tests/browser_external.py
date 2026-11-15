@@ -46,6 +46,9 @@ with sync_playwright() as playwright:
 
         def route_request(route):
             url = route.request.url
+            # Isolate the existing module contract; full routing has its own integration test.
+            if '/js/app-shell.js' in url:
+                route.fulfill(content_type='application/javascript',body='');return
             if "127.0.0.1" in url:
                 if "/js/init.js" in url:
                     # Keep definitions, isolate unrelated market/chart initialization.

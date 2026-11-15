@@ -11,7 +11,7 @@
     td.colSpan=columns;td.textContent=value;tr.appendChild(td);el.replaceChildren(tr);
   }
   function disableControls(selector,reason){
-    document.querySelectorAll(selector).forEach(el=>{el.disabled=true;el.title=reason});
+    document.querySelectorAll(selector).forEach(el=>{if(!el.closest('[data-shell-control]')){el.disabled=true;el.title=reason}});
   }
   function manualPreview(){
     if(!manualBound){
@@ -68,6 +68,7 @@
     manualPreview();
     if(window.DevelopmentOCR)DevelopmentOCR.enable();
     DevelopmentMarket.enable();
+    if(window.DashboardShell)DashboardShell.start();
   }
   window.DevelopmentInspection=Object.freeze({init});
 })();

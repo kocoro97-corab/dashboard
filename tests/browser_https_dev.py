@@ -81,6 +81,9 @@ with tempfile.TemporaryDirectory() as tmp:
         unexpected = []
         browser_actions = []
         def route(r):
+            # Module-only regression; browser_app_shell.py covers routed integration.
+            if '/js/app-shell.js' in r.request.url:
+                r.fulfill(content_type='application/javascript',body='');return
             url = urlsplit(r.request.url)
             if url.hostname == 'kocoro97-corab.github.io' and url.path.startswith('/dashboard-v2-dev/'):
                 name = url.path.removeprefix('/dashboard-v2-dev/') or 'index.html'

@@ -25,6 +25,9 @@ real_wait=Page.wait_for_function
 
 def synthetic_transport(route,*args,**kwargs):
     global revoked
+    # This fixture isolates the original native adapter, not routed app startup.
+    if "/js/app-shell.js" in route.request.url:
+        route.fulfill(content_type="application/javascript",body="");return
     if route.request.url!=TARGET:return real_continue(route,*args,**kwargs)
     body=json.loads(kwargs.get('post_data') or route.request.post_data or '{}');action=body.get('action')
     assert body.get('stagingBinding')=='f'*64

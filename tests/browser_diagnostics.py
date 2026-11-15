@@ -40,6 +40,9 @@ try:
             custom='https://script.google.com/macros/s/SYNTHETIC_PRIVACY_TEST/exec'
 
             def route_request(route):
+                # Module-only regression; browser_app_shell.py covers routed integration.
+                if '/js/app-shell.js' in route.request.url:
+                    route.fulfill(content_type='application/javascript',body='');return
                 if route.request.url.startswith('http://127.0.0.1:'):
                     if '/js/init.js' in route.request.url:
                         route.fulfill(content_type='application/javascript', body=(ROOT / 'js/init.js').read_text().replace('async function initDashboard(', 'async function disabledInitDashboard('))

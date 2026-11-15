@@ -57,6 +57,9 @@ with tempfile.TemporaryDirectory() as tmp:
                 context=browser.new_context(viewport={'width':width,'height':882},timezone_id='Asia/Seoul',service_workers='block')
                 errors=[];unexpected=[]
                 def route(r):
+                    # Module-only regression; browser_app_shell.py covers routed integration.
+                    if '/js/app-shell.js' in r.request.url:
+                        r.fulfill(content_type='application/javascript',body='');return
                     u=urlsplit(r.request.url)
                     if u.hostname=='kocoro97-corab.github.io' and u.path.startswith('/dashboard-v2-dev/'):
                         path=artifact/(u.path.removeprefix('/dashboard-v2-dev/') or 'index.html')

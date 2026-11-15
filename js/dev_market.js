@@ -21,7 +21,7 @@
       // Public source adapters are reused. No NH request is attempted, including
       // the existing automatic futures call inside refreshMarket.
       fillNH=async()=>{NH_STATUS='미연결 · 개발 환경의 NH 요청 차단';return{ok:0,fail:0}};
-      manualRefresh=refreshPublic;
+      manualRefresh=()=>window.DashboardShell?DashboardShell.refresh():refreshPublic();
       installed=true;
     }
     if(activeToken===token)return;
@@ -32,7 +32,7 @@
     $('qi').textContent='공개 차트 수신 대기';
     $('thS').textContent='공개 테마 미조회 · 테마 갱신 버튼으로 조회하세요.';
     $('nst_mk').textContent='공개 뉴스 수신 대기';$('nst_hd').textContent='공개 뉴스 수신 대기';
-    refreshPublic();
+    if(!window.DashboardShell)refreshPublic();
   }
   async function refreshPublic(){
     if(busy)return;busy=true;

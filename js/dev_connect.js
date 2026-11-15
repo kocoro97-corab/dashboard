@@ -41,7 +41,8 @@
   async function connect(event){
     if(event)event.preventDefault();
     const endpoint=panel.querySelector('#devEndpoint').value.trim(),code=panel.querySelector('#devCode').value;
-    if(location.protocol!=='https:'||location.hostname!=='kocoro97-corab.github.io'||!/^\/dashboard-v2-dev\/(?:index.html)?$/.test(location.pathname)||location.search||location.hash||!valid(endpoint)||!/^[A-Za-z0-9_-]{16,128}$/.test(code)){
+    const routeOK=!location.hash||(window.AppRouter&&AppRouter.validHash(location.hash));
+    if(location.protocol!=='https:'||location.hostname!=='kocoro97-corab.github.io'||!/^\/dashboard-v2-dev\/(?:index.html)?$/.test(location.pathname)||location.search||!routeOK||!valid(endpoint)||!/^[A-Za-z0-9_-]{16,128}$/.test(code)){
       status.textContent='개발 페이지 주소·HTTPS 중계 주소·접속코드를 확인하세요.';return;
     }
     if(config.endpoint&&endpoint!==config.endpoint){
@@ -67,6 +68,7 @@
       const banner=document.createElement('div');banner.id='devBanner';banner.setAttribute('role','status');banner.textContent='V2 개발 화면 점검 · 실제 NH 조회 및 저장 차단';
       banner.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#153047;color:#fff;text-align:center;padding:6px;font-size:12px';document.body.appendChild(banner);
       DevelopmentMarket.enable();
+      if(window.DashboardShell&&DashboardShell.getStatus().page)DashboardShell.refresh(false);
     }catch(e){
       const fallback={network:'DEV_NETWORK',response:'DEV_RESPONSE_INVALID',storage:'DEV_STORAGE',render:'DEV_UI_ERROR'}[stage];
       const reason=known(e&&e.devCode)?e.devCode:known(e&&e.code)?e.code:fallback;

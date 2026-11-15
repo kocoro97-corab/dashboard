@@ -23,7 +23,8 @@
     }
     if(c.devSession===true){
       const loc=root.location;
-      if(!loc||loc.origin!=='https://kocoro97-corab.github.io'||!['/dashboard-v2-dev/','/dashboard-v2-dev/index.html'].includes(loc.pathname)||loc.search||loc.hash)throw failure('RELAY_CONFIG_INVALID');
+      const routeOK=!loc?.hash||root.AppRouter?.validHash(loc.hash)===true;
+      if(!loc||loc.origin!=='https://kocoro97-corab.github.io'||!['/dashboard-v2-dev/','/dashboard-v2-dev/index.html'].includes(loc.pathname)||loc.search||!routeOK)throw failure('RELAY_CONFIG_INVALID');
       headers['X-MyInvest-Dev-Client']='dashboard-v2-dev';
     }
     if(data.token!=null){

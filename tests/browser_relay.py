@@ -66,6 +66,8 @@ with local_servers(EXPECTED,URL,fake,auth_only=False) as (origin,endpoint,app):
                 page.wait_for_function("()=>$('authMsg').textContent==='로그인 정보 또는 계정 승인 상태를 확인하세요.'")
                 assert not page.evaluate("()=>LS('invest_session_token')")
                 page.locator('#authId').fill('synthetic');page.locator('#authPw').fill('SYNTHETIC_PRIVATE_PASSWORD');page.locator('#authSubmitBtn').click()
+                page.wait_for_function("()=>DashboardShell.getStatus().page==='home'")
+                page.locator('#dashboardNav a[href="#/accounts"]').click()
                 page.wait_for_function("()=>!NH_ACCOUNT_BUSY&&!!LS('invest_session_token')&&NH_ACCOUNT_SESSION===LS('invest_session_token')",timeout=15000)
                 assert page.locator('#nhAccountRows tr').count()==2
                 valid=page.evaluate("""async()=>{

@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#0b1220">
 <title>개인 투자 대시보드</title>
 <link rel="stylesheet" href="css/style.css?v=3">
+<link rel="stylesheet" href="css/dashboard-shell.css?v=1">
 </head>
 <body>
 
@@ -29,7 +30,7 @@
 
 <div id="appContainer">
   <header>
-    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v34 · 로그인 복구 · 실시간 테마</div><div class="sub" id="status">시세 불러오는 중...</div></div>
+    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">V2 · 메뉴 기반 대시보드</div><div class="sub" id="status">시세 불러오는 중...</div></div>
     <div class="hr">
       <span id="sessionBadge" class="badge">시장 판별 중</span>
       <button id="adminBtn" style="display:none;background:#3f261e;color:#ffab71;border-color:#f97316" onclick="openAdminModal()">👥 회원승인</button>
@@ -46,13 +47,13 @@
       <div class="mini" id="qi" style="margin-top:6px;min-height:14px"></div>
       <div class="hr" style="justify-content:space-between;margin-top:6px"><span class="tabs"><button id="qm1" onclick="qMode('l')">라인</button><button id="qm2" class="active" onclick="qMode('c')">캔들</button></span><a id="qy" target="_blank" rel="noopener" class="mini">Yahoo Finance ↗</a></div>
     </section>
-    <section>
+    <section id="marketSection">
       <div class="sh"><div><h2 id="mt">시장 종합</h2><p id="ms"></p></div>
         <div class="hr"><span class="mini" id="mkSt"></span><button id="mkBtn" onclick="refreshMarket()">↻ 지수 갱신</button></div></div>
       <div class="grid mg" id="cards"></div>
     </section>
     <div class="grid two">
-      <section class="card">
+      <section class="card" id="tickSection">
         <div class="sh"><div><h2>NYSE $TICK</h2><p>실시간(TradingView)</p></div></div>
         <div id="tickq" style="height:110px"></div>
         <div class="gauge"><i></i><i></i><i></i><i></i><i></i><b id="tm"></b></div>
@@ -60,13 +61,13 @@
         <div class="kr"><span>현재 $TICK 입력</span><span><input type="number" id="tin" style="width:90px" placeholder="예: 420" oninput="setTick()"> <b id="tl2" class="neutral">—</b></span></div>
         <div class="mini" id="tickSt" style="margin-top:6px;line-height:1.6"></div>
       </section>
-      <section class="card">
+      <section class="card" id="strategySection">
         <div class="sh"><div><h2>오늘의 시장 시나리오</h2><p id="gptTime">규칙 기반 분석</p></div>
         <div class="hr"><button onclick="copyScenario()">시나리오 복사</button><button onclick="refreshScenario()">↻ 재분석</button></div></div>
         <div id="gv" style="white-space:pre-wrap;line-height:1.6;font-size:11px"></div>
       </section>
     </div>
-    <section>
+    <section id="themesSection">
       <div class="sh"><div><h2>실시간 주도 테마 & 강도판</h2><p id="thS">거래대금·거래량·상승률 종합</p></div><button onclick="THM_AT=0;fetchTopThemes()">↻ 테마 갱신</button></div>
       <div class="grid three" id="themes"></div>
     </section>
@@ -106,7 +107,7 @@
       <div class="hr" style="justify-content:space-between;margin-top:8px"><div class="hr"><label class="mini"><input type="checkbox" id="externalAutoRefresh"> 자동갱신 사용</label><label class="mini">간격 <select id="externalAutoMinutes"><option value="5">5분</option><option value="10" selected>10분</option><option value="30">30분</option><option value="60">60분</option></select></label></div><button onclick="saveExternalSettings()">갱신 설정 저장</button></div>
       <div class="mini" style="margin-top:5px">기본 설정은 자동갱신 꺼짐입니다. 대시보드 접속 시 1회 조회하며, 이후에는 수동 새로고침을 사용합니다. 자동갱신을 켜면 선택한 간격으로 현재가만 갱신합니다.</div>
     </section>
-    <div class="grid two">
+    <div class="grid two" id="newsSection">
       <section class="card"><div class="sh"><div><h2>실시간 시장 뉴스</h2><p id="nst_mk">기사 불러오는 중...</p></div></div><div id="nl_mk"></div></section>
       <section class="card"><div class="sh"><div><h2>기본 관심종목 뉴스</h2><p id="nst_hd">기사 불러오는 중...</p></div></div><div id="nl_hd"></div></section>
     </div>
@@ -146,6 +147,21 @@
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="js/external_core.js?v=12-real-ocr"></script>
 <script src="js/external_accounts.js?v=15-transport"></script>
+<script src="js/work-portfolio.js?v=1"></script>
+<script src="js/account-overview.js?v=1"></script>
+<script src="js/app-router.js?v=1"></script>
+<script src="js/app-context.js?v=1"></script>
+<script src="js/page-adapter.js?v=1"></script>
+<script src="js/page-home.js?v=1"></script>
+<script src="js/page-market.js?v=1"></script>
+<script src="js/page-sectors.js?v=1"></script>
+<script src="js/page-stocks.js?v=1"></script>
+<script src="js/page-strategy.js?v=1"></script>
+<script src="js/page-news.js?v=1"></script>
+<script src="js/page-accounts.js?v=1"></script>
+<script src="js/page-settings.js?v=1"></script>
+<script src="js/work-macro-live-preview.js?v=2"></script>
+<script src="js/app-shell.js?v=1"></script>
 <script src="js/init.js?v=13-safe"></script>
 
 </body>
