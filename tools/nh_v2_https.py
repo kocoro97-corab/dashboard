@@ -179,13 +179,16 @@ def main():
     parser.add_argument('--verify-browser', action='store_true', help='Verify only the new public HTTPS/Pages path, then keep it open for Fold6')
     parser.add_argument('--public-market', action='store_true', help='Enable only authenticated allowlisted public market GETs; NH and storage stay blocked')
     parser.add_argument('--accounts', action='store_true', help='Approved isolated private account reads only; orders/admin/Drive/snapshots remain blocked')
-    parser.add_argument('--external-test-store', action='store_true', help='Approved fixed synthetic-only save/restore; requires --accounts and --test-store-user')
+    store_modes=parser.add_mutually_exclusive_group()
+    store_modes.add_argument('--external-test-store', action='store_true', help='Fixed synthetic-only save/restore; requires --accounts and --test-store-user')
+    store_modes.add_argument('--account-management', action='store_true', help='User-approved account reads and reviewed user-scoped OCR/manual save/restore; no orders/Drive/admin')
     parser.add_argument('--test-store-user', default='', help='Existing dedicated test administrator; no user is created')
     parser.add_argument('--verify-market', action='store_true', help='Check public market display with the existing browser verifier; requires --public-market')
     parser.add_argument('--diagnose-market', action='store_true', help='Inspect only two fixed public response shapes through existing GAS; no tunnel/browser/NH/store')
     parser.add_argument('--diagnose-preflight', action='store_true', help='Read-only checks only: no tunnel, password prompt, login, browser or account writes')
     parser.add_argument('--diagnose-tunnel-dns', action='store_true', help='Credential-free tunnel DNS comparison only; no GAS or login')
     args = parser.parse_args()
+    args.accounts=args.accounts or args.account_management
     report = {'status': 'NOT_RUN', 'phase': 'LOCAL_RUNTIME', 'actualNhCalls': 0, 'orderCalls': 0, 'accountStoreWrites': False}
     try:
         validate_runtime(args.cloudflared, needs_tty=not (args.diagnose_preflight or args.diagnose_tunnel_dns))
@@ -223,7 +226,7 @@ def main():
         expected = {'freshTestEnvironment': True, 'testEnvironment': 'nh-staging',
                     'scriptHash': fingerprint(plan['scriptId']), 'sheetHash': web.binding,
                     'sourceDigest': plan['sourceDigest'], 'gatewayVersion': 2, 'storeEngine': 'account-store-v2'}
-        relay = RelayApp(Config(upstream=plan['url'], origins=frozenset({'https://kocoro97-corab.github.io'}), expected=expected,public_market=args.public_market,account_reads=args.accounts,external_test_store=args.external_test_store,test_store_user=args.test_store_user))
+        relay = RelayApp(Config(upstream=plan['url'], origins=frozenset({'https://kocoro97-corab.github.io'}), expected=expected,public_market=args.public_market,account_reads=args.accounts,external_test_store=args.external_test_store,external_store=args.account_management,test_store_user=args.test_store_user))
         # Verify the fixed target privately before exposing login traffic.
         report['phase'] = 'TARGET_METADATA'
         relay.gateway.verify()
@@ -242,8 +245,8 @@ def main():
                               'expiresInMinutes': args.minutes, 'sourceDigest': 'PASS', 'isolation': 'PASS',
                               'authOnly': not (args.public_market or args.accounts), 'publicMarket': args.public_market,
                               'publicTransport': 'RELAY_DIRECT_AFTER_GAS_AUTH' if args.public_market else 'DISABLED',
-                              'nhCallsAllowed': args.accounts, 'storageWritesAllowed': args.external_test_store,
-                              'storageWritePolicy': 'FIXED_SYNTHETIC_ONLY' if args.external_test_store else 'BLOCKED',
+                              'nhCallsAllowed': args.accounts, 'storageWritesAllowed': args.external_test_store or args.account_management,
+                              'storageWritePolicy': 'REVIEWED_USER_STORE' if args.account_management else 'FIXED_SYNTHETIC_ONLY' if args.external_test_store else 'BLOCKED',
                               'orderCalls': 0, 'secretsIncluded': False, 'dns': dns}), flush=True)
             if args.verify_browser or args.verify_market:
                 report['phase'] = 'PAGES_BROWSER'

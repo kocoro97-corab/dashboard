@@ -45,7 +45,7 @@
             if(!auth.ok||identity.success!==true||identity.mustChangePassword){connection.textContent='인증 만료 또는 재인증 필요 · 다시 로그인하세요.';return}
             const response=await post({action:'appVersion'}),metadata=await response.json();if(session!==LS('invest_session_token'))return;
             if(!response.ok||metadata.success!==true||metadata.gatewayVersion!==2||metadata.storeEngine!=='account-store-v2'){connection.textContent='GAS V2 식별 확인 실패 · 기존 연결 설정을 확인하세요.';return}
-            connection.textContent='로그인 유효 · NH 관리자 권한 '+(identity.isAdmin?'확인':'없음')+' · GAS V2 연결 확인 · '+(ctx.development()?(metadata.developmentAccountReads===true?'격리 계좌 읽기 허용 · '+(metadata.developmentExternalTestStore===true?'합성 테스트자료 저장·복구만 허용':'저장·복구 차단'):'현재 개발 프로필의 계좌 조회·저장·복구는 차단 상태입니다.'):'기존 계좌 조회·저장 경로 사용 · 실제 조회와 저장 결과는 각 기능에서 확인하세요.')+' · 이 진단은 실제 계좌를 조회하거나 저장하지 않습니다.';
+            connection.textContent='로그인 유효 · NH 관리자 권한 '+(identity.isAdmin?'확인':'없음')+' · GAS V2 연결 확인 · '+(ctx.development()?(metadata.developmentAccountReads===true?'격리 계좌 읽기 허용 · '+(metadata.developmentExternalStore===true?'검토 후 계좌자료 저장·복구 사용':metadata.developmentExternalTestStore===true?'합성 테스트자료 저장·복구만 허용':'현재 연결은 저장·복구 미허용'):'현재 중계에서 계좌 기능을 제공하지 않습니다. 계좌관리 옵션으로 중계를 시작하세요.'):'기존 계좌 조회·저장 경로 사용 · 실제 조회와 저장 결과는 각 기능에서 확인하세요.')+' · 이 진단은 실제 계좌를 조회하거나 저장하지 않습니다.';
           }catch{if(session===LS('invest_session_token'))connection.textContent='연결 진단 실패 · 인증·중계·GAS 통신 상태를 확인하세요.'}
         }));
         const loadTest=button('합성 저장 검증자료 불러오기',async()=>{
@@ -68,8 +68,8 @@
           renderReport(view.querySelector('.account-report'),ctx,tab);
           for(const kind of ['ISA','PENSION','IRP']){const section=node('section',null,'card');section.append(node('h2',({ISA:'ISA',PENSION:'연금저축',IRP:'IRP'})[kind]));const rows=ctx.snapshot().details.filter(row=>row.accountType===kind);for(const row of rows)section.append(node('p',row.name+' · 수량 '+format(row.quantity)+' · 평단 '+format(row.avgPrice)+' KRW · 현재가 '+format(row.currentPrice)+' · '+row.source+(row.draft?' · 임시':'')+' · 시세 출처 '+(row.quoteSource||'미확인')+' · 시세 관측시각 '+(row.observedAt||'미확인')));if(!rows.length)section.append(note('저장자료 미조회 또는 해당 구분 자료 없음'));view.querySelector('.account-report').append(section)}
         }else renderReport(view.querySelector('.account-report'),ctx,tab);
-        if(ctx.development())view.querySelector('.account-report').append(note(ctx.accountReads()?'승인된 격리 계좌 읽기 경로입니다. '+(window.MYINVEST_TRANSPORT_CONFIG?.externalTestStore?'저장·복구는 고정 합성자료만 허용합니다. 실제 OCR 자료·기존 실자료를 교체하지 않습니다.':'저장·복구는 차단됩니다.'):'개발 중계의 기존 보안 범위: NH 조회·저장·복구는 차단, OCR·수동 입력은 임시 미리보기입니다. 기존 저장자료는 변경하지 않았습니다.'));
-        const testButton=view.querySelector('#loadAccountTestData');if(testButton)testButton.disabled=window.MYINVEST_TRANSPORT_CONFIG?.externalTestStore!==true;
+        if(ctx.development())view.querySelector('.account-report').append(note(ctx.accountReads()?'기존 인증된 계좌 경로입니다. '+(window.MYINVEST_TRANSPORT_CONFIG?.externalStore?'OCR·수동 입력 자료는 저장 전 검토 후 저장·복구할 수 있습니다. 이전 버전은 복구 이력으로 유지합니다.':window.MYINVEST_TRANSPORT_CONFIG?.externalTestStore?'선택한 합성 테스트 모드에서는 고정 합성자료만 저장·복구합니다.':'현재 중계는 조회 모드입니다. 저장·복구는 계좌관리 옵션으로 연결하세요.'):'현재 중계는 계좌관리 모드로 시작되지 않았습니다. 계좌관리 옵션으로 연결한 뒤 이용하세요.'));
+        const testButton=view.querySelector('#loadAccountTestData');if(testButton){testButton.disabled=window.MYINVEST_TRANSPORT_CONFIG?.externalTestStore!==true;testButton.hidden=window.MYINVEST_TRANSPORT_CONFIG?.externalTestStore!==true}
       }
     });
     return {...page,setRoute(next){route=next},mount(container,ctx){page.mount(container,ctx);if(!ctx.development())applyExternalAutoRefresh()},unmount(){if(EXT_AUTO_TIMER)clearInterval(EXT_AUTO_TIMER);EXT_AUTO_TIMER=null;page.unmount()}};

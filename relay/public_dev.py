@@ -99,7 +99,8 @@ class PublicDevelopment:
         if len(supplied) > 128 or not hmac.compare_digest(hashlib.sha256(supplied.encode()).digest(), self.code_hash):
             return deny(403, 'DEV_ACCESS_REQUIRED')
         try:
-            if env.get('HTTP_TRANSFER_ENCODING') or not 0 < int(env.get('CONTENT_LENGTH', '0')) <= 8192:
+            maximum=65536 if self.app.config.external_store else 8192
+            if env.get('HTTP_TRANSFER_ENCODING') or not 0 < int(env.get('CONTENT_LENGTH', '0')) <= maximum:
                 return deny(413, 'RELAY_REQUEST_SIZE')
         except (ValueError, TypeError):
             return deny(400, 'RELAY_BAD_REQUEST')

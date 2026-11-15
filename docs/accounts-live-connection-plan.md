@@ -1,14 +1,16 @@
 # Account integration: approved capabilities, owner runtime activation required
 
-Owner approval received on 2026-11-15 for both private reads through the existing
-Cloudflare relay and fixed synthetic-only save/readback/restore. No further
-approval is needed for these exact scopes. Real-data replacement and production
-changes remain outside that approval.
+The owner's latest instruction removes blanket account-feature restrictions.
+The existing isolated account page may read accounts and use ordinary reviewed
+OCR/manual save/restore under `--account-management`. Authentication, per-user
+store isolation, explicit replacement review, expected revision, durable recovery
+and order blocking remain mandatory. No automated real-data replacement is run
+as a test. Production changes remain outside this authorization.
 
 Targets: existing `feat/nh-integration-v2`, separate `dev-pages`, existing isolated
 test GAS / Sheets / Properties. No new project, account, subscription or NH scope.
 
-## Confirmed blockers
+## Historical blockers in the preview profile
 
 1. `AppContext.accounts()` returns immediately in the development profile.
 2. `DevelopmentInspection` disables NH/private-store controls and installs local
@@ -50,7 +52,22 @@ external transmission even though no financial data is committed to Pages.
 Browser users with authorized account access can view their corresponding data.
 Stop/expiry must close external access; no persistent private browser cache.
 
-## Approved B: limited external test-store writes
+## Ordinary reviewed account writes
+
+`--account-management` enables account reads plus exactly `saveExternalHoldings`
+and `restoreExternalHoldings`. It does not disable `auth_only` or allow arbitrary
+GAS actions. The relay requires an authenticated request, explicit review and a
+nonempty expected revision. Existing GAS handlers enforce the session's user,
+input validation, revision/locking and recoverable history. A caller cannot
+select another user, target or store through request fields. The bounded HTTPS
+body limit is 64 KiB in this mode, sufficient for the existing 150-row store.
+
+## Optional fixture-only test mode
+
+The earlier `--accounts --external-test-store --test-store-user ...` mode remains
+available only when intentionally selected. It is mutually exclusive with the
+ordinary account-management mode. Its restrictions below do not apply to normal
+reviewed account use.
 
 Separate default-off permission for `saveExternalHoldings` and
 `restoreExternalHoldings`, retaining existing authenticated user isolation,
@@ -87,8 +104,7 @@ git merge --ff-only origin/feat/nh-integration-v2 &&
 "$HOME/myinvest-v2-live-venv/bin/python" tools/nh_v2_https.py \
   --environment "$HOME/myinvest-v2-fresh-private-r2" \
   --cloudflared "$HOME/.local/bin/myinvest-cloudflared-2026.11.0" \
-  --minutes 60 --public-market --accounts --external-test-store \
-  --test-store-user nh_test_v2
+  --minutes 60 --public-market --account-management
 ```
 
 The explicit flags default to false; ordinary startup retains the old scope.
@@ -101,12 +117,12 @@ enter the new public endpoint plus the private development code and log in using
 the existing dedicated test administrator. No secrets go into chat.
 
 The page's "계좌 연결 상태 확인" button checks session/GAS metadata without
-another NH inquiry. On `#/accounts/ocr`, use "합성 저장 검증자료 불러오기",
-review the marked synthetic rows, save, read back, open "저장 복구 기록" and
-restore the reviewed prior synthetic/empty state. Each write retains the existing
-review dialog and expected revision. Actual OCR data may be recognized and edited
-locally but is rejected by this synthetic-only persistence permission. If current
-data is not the fixed fixture, stop; do not clear it to make the test pass.
+another NH inquiry. On `#/accounts/ocr`, recognize images or edit/manual-add rows,
+review replacements, save, read back and use "저장 복구 기록" to restore a
+reviewed prior version. Ordinary account management no longer requires fixed
+synthetic rows. The fixture loader is hidden in this mode. Every write still
+requires the existing review dialog and expected revision. Do not automatically
+save/delete/replace actual user data for verification.
 
 Live validation cannot run in the Codex workspace without the owner's existing
 private Google authentication and `fresh-plan.json`. Do not rerun the old private

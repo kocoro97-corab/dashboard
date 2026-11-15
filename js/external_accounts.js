@@ -221,7 +221,7 @@ async function processExternalUploads(){
         +(data.nameChecks&&data.nameChecks.candidates?' · 이름 보정 '+data.nameChecks.verified+'/'+data.nameChecks.candidates+' · 영문 영역 재인식 '+data.nameChecks.prefixAttempts+'회 · 한글 영역 재인식 '+data.nameChecks.suffixAttempts+'회':''));
     }
     showOcrReview(texts,summaries);if((window.EXT_OCR_WARNINGS||[]).length)$('externalOcrProgress').textContent=window.EXT_OCR_WARNINGS.join(' · ');if(!all.length){$('externalOcrProgress').textContent=(window.EXT_OCR_WARNINGS||[]).join(' · ')||'종목을 인식하지 못했습니다. 머리글과 동일 행의 수량·평균매입가를 확인하세요.';return}
-    if(!extImport(all))return;extResolveCodes();renderExternalAssets();$('externalOcrProgress').textContent=window.DevelopmentOCR?'인식 후보 '+all.length+'개 · 수량·평균매입가를 확인하세요. 임시 목록만 사용하며 저장·Drive는 차단됩니다.':'인식 후보 '+all.length+'개 · 수량·평균매입가를 확인·수정하고 [인식자료 저장]을 누르세요. 종목코드는 비워도 저장됩니다.'+(window.EXT_OCR_WARNINGS||[]).join(' · ');showExternalSaveButton();
+    if(!extImport(all))return;extResolveCodes();renderExternalAssets();$('externalOcrProgress').textContent=window.DevelopmentOCR?(window.MYINVEST_TRANSPORT_CONFIG?.externalStore===true?'인식 후보 '+all.length+'개 · 종목·수량·평균매입가를 검토한 뒤 저장하세요.':'인식 후보 '+all.length+'개 · 수량·평균매입가를 확인하세요. 임시 목록만 사용하며 저장·Drive는 차단됩니다.'):'인식 후보 '+all.length+'개 · 수량·평균매입가를 확인·수정하고 [인식자료 저장]을 누르세요. 종목코드는 비워도 저장됩니다.'+(window.EXT_OCR_WARNINGS||[]).join(' · ');showExternalSaveButton();
   }catch(e){$('externalOcrProgress').textContent='이미지 인식 실패 · '+SafeDiagnostics.message(e)}finally{btn.disabled=false}
 }
 function mergeExternalRows(base,add){return ExternalCore.merge(base,add).rows}

@@ -18,7 +18,7 @@
       const showSave=showExternalSaveButton,render=renderExternalAssets,clear=clearAccountState;
       showExternalSaveButton=function(){
         showSave();const button=document.getElementById('externalSaveBtn');
-        if(button){const allowed=window.MYINVEST_TRANSPORT_CONFIG?.externalTestStore===true;button.disabled=!allowed;button.textContent=allowed?'검토한 합성 테스트자료 저장':'미리보기 전용 · 저장 차단';button.title=allowed?'서버가 현재 자료·이력·저장 자료의 합성 테스트 여부를 검증합니다.':'기존 저장 자료는 읽거나 변경하지 않습니다.'}
+        if(button){const config=window.MYINVEST_TRANSPORT_CONFIG,normal=config?.externalStore===true,allowed=normal||config?.externalTestStore===true;button.disabled=!allowed;button.textContent=normal?'검토한 계좌자료 저장':allowed?'검토한 합성 테스트자료 저장':'미리보기 전용 · 저장 차단';button.title=normal?'저장 전 검토·버전 검사·복구 이력을 유지합니다.':allowed?'서버가 현재 자료·이력·저장 자료의 합성 테스트 여부를 검증합니다.':'현재 연결은 저장을 허용하지 않습니다.'}
       };
       renderExternalAssets=function(){
         render();if(window.MYINVEST_TRANSPORT_CONFIG?.accountReads===true){if(EXT_ASSETS.some(x=>x.source==='synthetic-test'))document.getElementById('externalSummaryCards').replaceChildren();return}document.getElementById('externalSummaryCards').replaceChildren();
@@ -26,7 +26,7 @@
         text('externalStatus','임시 목록 '+EXT_ASSETS.length+'종목 · 저장·NH 시세 조회 미실행 · 기존 저장 자료 미조회');
       };
       const history=showExternalHistory;
-      showExternalHistory=async function(){await history();if(window.MYINVEST_TRANSPORT_CONFIG?.externalTestStore!==true)document.querySelectorAll('#externalHistory button').forEach(button=>{button.disabled=true;button.title='현재 연결은 복구 쓰기를 허용하지 않습니다.'})};
+      showExternalHistory=async function(){await history();const config=window.MYINVEST_TRANSPORT_CONFIG;if(config?.externalTestStore!==true&&config?.externalStore!==true)document.querySelectorAll('#externalHistory button').forEach(button=>{button.disabled=true;button.title='현재 연결은 복구 쓰기를 허용하지 않습니다.'})};
       clearAccountState=function(){
         clear();manualFields.forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
         const images=document.getElementById('externalImageFiles');if(images)images.value='';

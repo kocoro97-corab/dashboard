@@ -51,10 +51,12 @@ class Config:
     public_market:bool=False
     account_reads:bool=False
     external_test_store:bool=False
+    external_store:bool=False
     test_store_user:str=''
     def __post_init__(self):
-        if type(self.account_reads) is not bool or type(self.external_test_store) is not bool:raise RelayFault('RELAY_CONFIG_INVALID',503)
-        if (self.account_reads or self.external_test_store) and (not self.isolated or not self.auth_only):raise RelayFault('RELAY_ISOLATION_REQUIRED',503)
+        if any(type(value) is not bool for value in (self.account_reads,self.external_test_store,self.external_store)):raise RelayFault('RELAY_CONFIG_INVALID',503)
+        if (self.account_reads or self.external_test_store or self.external_store) and (not self.isolated or not self.auth_only):raise RelayFault('RELAY_ISOLATION_REQUIRED',503)
+        if self.external_store and (not self.account_reads or self.external_test_store):raise RelayFault('RELAY_CONFIG_INVALID',503)
         if self.external_test_store and (not self.account_reads or not isinstance(self.test_store_user,str) or not re.fullmatch(r'[A-Za-z0-9_-]{2,64}',self.test_store_user)):raise RelayFault('RELAY_CONFIG_INVALID',503)
         if self.public_market and (not self.isolated or not self.auth_only):raise RelayFault('RELAY_CONFIG_INVALID',503)
         match=re.fullmatch(r'https://script\.google\.com/macros/s/([A-Za-z0-9_-]+)/exec',self.upstream)
@@ -164,7 +166,7 @@ class RelayApp:
             if not isinstance(payload,dict) or any(k in payload for k in ('token','stagingBinding','backendUrl','gasUrl','targetUrl')):raise RelayFault('RELAY_BAD_REQUEST',400)
             action=payload.get('action')
             if not isinstance(action,str) or action not in ACTIONS:raise RelayFault('RELAY_ACTION_DENIED',400)
-            account_allowed=self.config.account_reads and action in ACCOUNT_READS or self.config.external_test_store and action in ACCOUNT_WRITES
+            account_allowed=self.config.account_reads and action in ACCOUNT_READS or (self.config.external_test_store or self.config.external_store) and action in ACCOUNT_WRITES
             if self.config.auth_only and action not in AUTH_ACTIONS and not (self.config.public_market and action=='publicFetch') and not account_allowed:raise RelayFault('RELAY_SCOPE_BLOCKED',403)
             if action not in PUBLIC_ACTIONS:
                 match=re.fullmatch(r'Bearer ([a-fA-F0-9]{64})',environ.get('HTTP_AUTHORIZATION',''))
@@ -177,12 +179,14 @@ class RelayApp:
             self.gateway.verify()
             if account_allowed:
                 validate_payload(payload)
-                if action in ACCOUNT_WRITES:self.test_store.authorize(payload,self.gateway)
+                if action in ACCOUNT_WRITES:
+                    if self.test_store:self.test_store.authorize(payload,self.gateway)
+                    elif payload.get('confirmReplace') is not True or not isinstance(payload.get('expectedRevision'),str) or not payload['expectedRevision']:raise AccountPolicyError('STORE_CONFIRM')
             attempted=True
             with self.metrics_lock:self.metrics['upstreamAttempts'][action]=self.metrics['upstreamAttempts'].get(action,0)+1
             result={'success':True,'text':self.gateway.public(payload['url'],payload['token'])} if action=='publicFetch' else self.gateway.post(payload)
             if self.test_store:self.test_store.observe(payload,result)
-            if action=='appVersion':result=dict(result,developmentPublicMarket=self.config.public_market,developmentAccountReads=self.config.account_reads,developmentExternalTestStore=self.config.external_test_store)
+            if action=='appVersion':result=dict(result,developmentPublicMarket=self.config.public_market,developmentAccountReads=self.config.account_reads,developmentExternalTestStore=self.config.external_test_store,developmentExternalStore=self.config.external_store)
             return send(200,result)
         except AccountPolicyError as error:
             return send(401 if str(error)=='AUTH_REQUIRED' else 403,{'success':False,'code':str(error),'layer':'relay'})

@@ -89,4 +89,41 @@ class AccountScopeTests(unittest.TestCase):
         response=request(app,{'action':'nhAccounts'},origin='https://other.example',authorization='Bearer '+TOKEN,**env);self.assertNotIn('Access-Control-Allow-Origin',response['headers'])
         self.assertEqual(self.gateway.calls,[])
 
+class ReviewedAccountStoreTests(unittest.TestCase):
+    def setUp(self):
+        self.gateway=Gateway();self.app=RelayApp(configuration(account_reads=True,external_store=True),self.gateway)
+        self.rows=[{'accountType':'ISA','code':'035720','name':'Synthetic OCR module test','quantity':70,'avgPrice':43841,'source':'ocr'}]
+    def call(self,payload,authenticated=True):return request(self.app,payload,authorization='Bearer '+TOKEN if authenticated else None)
+    def test_reviewed_ocr_rows_use_existing_handler_without_fixed_fixture_restriction(self):
+        body={'action':'saveExternalHoldings','holdings':self.rows,'expectedRevision':'r0','confirmReplace':True}
+        self.assertEqual(self.call(body,False)['status'],401);self.assertEqual(self.gateway.calls,[])
+        self.assertEqual(self.call(body)['status'],200);self.assertEqual(self.gateway.rows,self.rows)
+        self.assertEqual(self.gateway.calls,['saveExternalHoldings'])
+        self.assertEqual(self.call({'action':'restoreExternalHoldings','snapshotId':'original-user-version','expectedRevision':'r0','confirmReplace':True})['status'],200)
+    def test_review_and_revision_are_mandatory_and_caller_cannot_select_another_user(self):
+        body={'action':'saveExternalHoldings','holdings':self.rows,'expectedRevision':'r0','confirmReplace':True}
+        for change in [{'confirmReplace':False},{'expectedRevision':''},{'userId':'other'}]:self.assertEqual(self.call(body|change)['status'],403)
+        self.assertEqual(self.gateway.calls,[])
+    def test_profile_never_enables_registration_admin_orders_or_other_gas_targets(self):
+        for action in ['register','changePassword','approveUser','externalDriveImages','nhSnapshotCapture','order']:self.assertIn(self.call({'action':action})['status'],(400,403))
+        self.assertEqual(self.call({'action':'nhAccounts','backendUrl':'https://other.example'})['status'],400)
+        self.assertEqual(self.gateway.calls,[])
+    def test_store_profiles_are_explicit_and_mutually_exclusive(self):
+        for change in [{'external_store':True},{'account_reads':True,'external_store':True,'auth_only':False},{'account_reads':True,'external_store':True,'external_test_store':True,'test_store_user':'nh_test_v2'},{'external_store':'true'}]:
+            with self.assertRaises(RelayFault):configuration(**change)
+        self.assertIs(request(self.app)['body']['developmentExternalStore'],True)
+    def test_network_loss_after_reviewed_write_is_not_retried(self):
+        self.gateway.fail='saveExternalHoldings';response=self.call({'action':'saveExternalHoldings','holdings':self.rows,'expectedRevision':'r0','confirmReplace':True})
+        self.assertEqual(response['body']['code'],'RELAY_WRITE_OUTCOME_UNKNOWN');self.assertEqual(self.gateway.calls,['saveExternalHoldings'])
+    def test_reviewed_store_supports_existing_150_row_limit_with_bounded_https_body(self):
+        from relay.public_dev import PublicDevelopment
+        origin='https://kocoro97-corab.github.io';host='synthetic-reviewed.trycloudflare.com';access='SYNTHETIC_PRIVATE_DEV_CODE'
+        app=PublicDevelopment(RelayApp(configuration(origins=frozenset({origin}),account_reads=True,external_store=True),self.gateway),origin+'/dashboard-v2-dev/',access);app.host=host
+        env=dict(REMOTE_ADDR='127.0.0.1',HTTP_HOST=host,HTTP_X_FORWARDED_PROTO='https',HTTP_X_MYINVEST_DEV_CLIENT='dashboard-v2-dev',HTTP_X_MYINVEST_DEV_KEY=access)
+        rows=[dict(self.rows[0],code=str(i).zfill(6),name='합성검증전용'*5) for i in range(150)]
+        payload={'action':'saveExternalHoldings','holdings':rows,'expectedRevision':'r0','confirmReplace':True}
+        self.assertGreater(len(json.dumps(payload).encode()),8192);self.assertLess(len(json.dumps(payload).encode()),65536)
+        self.assertEqual(request(app,payload,origin=origin,authorization='Bearer '+TOKEN,**env)['status'],200)
+        self.assertEqual(request(app,payload,origin=origin,authorization='Bearer '+TOKEN,CONTENT_LENGTH='65537',**env)['status'],413)
+
 if __name__=='__main__':unittest.main()

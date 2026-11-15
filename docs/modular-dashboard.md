@@ -64,11 +64,12 @@ Unknown identities are not guessed. Original account numbers never enter new
 summary labels. There is no realized-P/L substitution or fabricated history.
 
 The default development profile blocks NH/private storage. The owner-approved
-account capability in `accounts-live-connection-plan.md` separately enables
-isolated private reads and optional fixed synthetic-only save/restore. Real OCR
-and existing real store data cannot be replaced under this test-write scope.
-The page displays server capabilities, diagnostics and a reviewed test-fixture
-loader. The original full source profile retains its existing private handlers.
+account capability in `accounts-live-connection-plan.md` enables isolated private
+reads and reviewed OCR/manual save/restore with `--account-management`. Existing
+authentication, revision checking and recovery remain in effect. The earlier
+fixed synthetic-only profile is optional, not a restriction on normal account
+use. The page displays actual server capabilities and connection diagnostics.
+The original full source profile retains its existing private handlers.
 Any further permission expansion requires separate authorization.
 
 ## Validation and limits
