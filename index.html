@@ -86,7 +86,7 @@
       <details><summary>시세 실패 진단</summary><div id="externalQuoteDiagnostics" class="mini"></div></details>
       <details><summary>저장 복구 미리보기</summary><div id="externalHistory"></div></details>
       <div class="hr" style="margin:8px 0"><button type="button" id="externalOpenImport" onclick="document.getElementById('externalImportDialog').hidden=false;document.getElementById('externalImportDialog').querySelector('button').focus()">+ 외부계좌 자료 추가 (OCR·직접 입력)</button><span class="mini">등록된 종목은 아래 표에서 수정·삭제하고 검토 후 저장할 수 있습니다.</span></div>
-      <div id="externalImportDialog" role="dialog" aria-modal="true" aria-label="외부계좌 자료 입력" hidden style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.75);overflow:auto;padding:clamp(12px,4vw,40px)">
+      <div id="externalImportDialog" role="dialog" aria-modal="true" aria-label="외부계좌 자료 입력" onkeydown="if(event.key===&quot;Escape&quot;){this.hidden=true;document.getElementById(&quot;externalOpenImport&quot;).focus()}" onclick="if(event.target===this){this.hidden=true;document.getElementById(&quot;externalOpenImport&quot;).focus()}" hidden style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.75);overflow:auto;padding:clamp(12px,4vw,40px)">
       <div class="card" style="max-width:900px;margin:2vh auto;max-height:90vh;overflow:auto">
       <div class="hr" style="justify-content:space-between"><h2>외부계좌 자료 입력</h2><button type="button" onclick="document.getElementById('externalImportDialog').hidden=true">닫기 ✕</button></div>
       <p class="mini">OCR 또는 직접 입력을 선택하세요. 등록된 값은 저장 전에 표에서 검토·수정할 수 있습니다.</p>
@@ -104,7 +104,7 @@
         <label>평균매입가<br><input id="externalManualAvg" type="number" min="0" step="any" placeholder="0"></label>
         <button onclick="addExternalManual()">종목 직접 추가</button>
       </div>
-      <div class="mini" style="line-height:1.6;margin:4px 0 8px">Drive 폴더에는 계좌별 캡처 이미지를 넣어주세요. 이미지 파일을 읽으려면 Apps Script 배포 계정에 해당 폴더 접근권한이 필요합니다. 인식 결과는 저장 전에 직접 확인·수정할 수 있습니다.</div>
+      <div class="mini" style="line-height:1.6;margin:4px 0 8px">이미지 인식 결과와 직접 입력한 종목은 아래 외부계좌 표에서 확인·수정한 뒤 저장하세요. Google Drive 가져오기는 추후 활성화합니다.</div>
       <div id="externalOcrProgress" class="mini" style="margin:6px 0"></div>
       </div></div>
       <div class="tw"><table style="min-width:760px"><thead><tr><th>계좌</th><th>종목명</th><th>종목코드</th><th>보유수량</th><th>평균매입가</th><th>현재가(NH)</th><th>평가금액</th><th>평가손익</th><th>관리</th></tr></thead><tbody id="externalAssetRows"><tr><td colspan="9" style="text-align:center">등록된 외부계좌 종목이 없습니다.</td></tr></tbody></table></div>
