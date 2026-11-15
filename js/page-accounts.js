@@ -4,33 +4,33 @@
   const brokerStorageKey='myinvest_external_broker_choices_v1';
   function brokerChoices(){try{const values=JSON.parse(localStorage.getItem(brokerStorageKey)||'[]');return Array.isArray(values)?values.filter(v=>typeof v==='string'&&v.length<=30).slice(0,30):[]}catch{return []}}
   function refreshBrokerChoices(){
-    const type=document.getElementById('externalAccountType'),wrap=document.getElementById('externalBrokerSelectWrap'),select=document.getElementById('externalBrokerSelect');
-    if(!type||!wrap||!select)return;
-    wrap.hidden=type.value!=='BROKER';select.replaceChildren();
-    for(const name of brokerChoices()){const option=document.createElement('option');option.value=name;option.textContent=name;select.append(option)}
-    const upload=document.getElementById('externalUploadBtn');if(upload)upload.disabled=type.value==='BROKER';
-    const manual=document.getElementById('externalManualAddBtn');if(manual)manual.disabled=type.value==='BROKER';
+    const type=document.getElementById('externalAccountType'),wrap=document.getElementById('externalBrokerSelectWrap'),input=document.getElementById('externalBrokerNameInput'),list=document.getElementById('externalBrokerNames');
+    if(!type||!wrap||!input||!list)return;
+    const isBroker=type.value==='BROKER';wrap.hidden=!isBroker;
+    list.replaceChildren();for(const name of brokerChoices()){const option=document.createElement('option');option.value=name;list.append(option)}
+    const upload=document.getElementById('externalUploadBtn');if(upload)upload.disabled=isBroker;
+    const manual=document.getElementById('externalManualAddBtn');if(manual)manual.disabled=isBroker;
     const info=document.getElementById('externalOcrProgress');
-    if(type.value==='BROKER'&&info)info.textContent='다른 증권사 목록은 이 브라우저에서만 관리됩니다. 현재 GAS 저장 규격은 ISA·연금저축·IRP만 지원하므로 다른 증권사 OCR·저장은 계좌별 저장 구조 확장 후 활성화합니다.';
+    if(isBroker&&info)info.textContent='증권사명을 직접 입력하고 추가할 수 있습니다. 현재 목록은 이 브라우저에 저장됩니다. 다른 증권사의 OCR·GAS 보유종목 저장은 저장 규격 확장 후 지원합니다.';
   }
   window.addExternalBrokerChoice=function(){
-    const name=window.prompt('추가할 증권사 이름 (최대 30자)');if(name===null)return;
-    const value=name.trim();if(!value||value.length>30||/^[=+@-]/.test(value)){window.alert('증권사 이름을 확인하세요.');return}
+    const input=document.getElementById('externalBrokerNameInput');if(!input)return;
+    const value=input.value.trim();if(!value||value.length>30||/^[=+@-]/.test(value)){window.alert('증권사 이름을 1~30자로 입력하세요.');input.focus();return}
     const choices=brokerChoices();if(choices.includes(value)){window.alert('이미 등록된 증권사입니다.');return}
     if(choices.length>=30){window.alert('최대 30개까지 등록할 수 있습니다.');return}
-    choices.push(value);localStorage.setItem(brokerStorageKey,JSON.stringify(choices));document.getElementById('externalAccountType').value='BROKER';refreshBrokerChoices();document.getElementById('externalBrokerSelect').value=value;
+    try{localStorage.setItem(brokerStorageKey,JSON.stringify([...choices,value]))}catch{window.alert('이 브라우저에 증권사명을 저장할 수 없습니다.');return}
+    document.getElementById('externalAccountType').value='BROKER';refreshBrokerChoices();input.value=value;
   };
   window.removeExternalBrokerChoice=function(){
-    const select=document.getElementById('externalBrokerSelect'),name=select&&select.value;
-    if(!name){window.alert('삭제할 증권사를 선택하세요.');return}
+    const input=document.getElementById('externalBrokerNameInput'),name=input&&input.value.trim();
+    if(!name||!brokerChoices().includes(name)){window.alert('등록된 증권사명을 입력하거나 목록에서 선택하세요.');return}
     if(!window.confirm(name+' 증권사를 선택 목록에서 삭제할까요? 보유종목 저장자료는 삭제하지 않습니다.'))return;
-    localStorage.setItem(brokerStorageKey,JSON.stringify(brokerChoices().filter(x=>x!==name)));refreshBrokerChoices();
+    try{localStorage.setItem(brokerStorageKey,JSON.stringify(brokerChoices().filter(x=>x!==name)))}catch{window.alert('증권사 목록을 변경할 수 없습니다.');return}
+    input.value='';refreshBrokerChoices();
   };
   function initBrokerSelector(){
     const type=document.getElementById('externalAccountType');if(!type||type.dataset.brokerReady)return;
-    type.dataset.brokerReady='true';type.addEventListener('change',refreshBrokerChoices);
-    const add=document.getElementById('externalBrokerAdd'),remove=document.getElementById('externalBrokerRemove');
-    if(add)add.hidden=false;if(remove)remove.hidden=false;refreshBrokerChoices();
+    type.dataset.brokerReady='true';type.addEventListener('change',refreshBrokerChoices);refreshBrokerChoices();
   }
   function format(v){return Number.isFinite(v)?nf(v):'—'}
   function combinedTable(target,snap){
