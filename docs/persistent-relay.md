@@ -87,8 +87,9 @@ git merge --ff-only FETCH_HEAD &&
 Properties/Calendar에는 쓰지 않으며 실제 NH 조회도 배포 과정에서 실행하지 않는다.
 Google 설정이 기존 검증과 다르면 기존 격리 업데이트 절차부터 확인한다.
 
-실제 플랫폼 배포는 아직 실행하지 않았다. Wrangler/Cloudflare API 호환, 계정
-권한, 현지 공급자 응답은 실제 계정에서 검증이 필요하며 합성 테스트와 구분한다.
+소유자 Cloud Shell에서 실제 배포 후 `PERSISTENT_PUBLIC_READ_ONLY` PASS를
+확인했다. 기존 격리 GAS 지문 일치·실제 메타데이터 통신이 확인됐으며 실제
+로그인·공급자 시세·NH 조회 결과와는 구분한다.
 
 ## 검증 후 Pages 활성화
 
@@ -100,9 +101,10 @@ metadata를 재확인한 뒤 다음 공개 파일을 기존 소스 브랜치에 
 {"profile":"isolated-persistent","endpoint":"https://검증된-Worker.기존-서브도메인.workers.dev/api"}
 ```
 
-파일 위치: `config/development-relay.json`. 실제 고정 주소가 없는 현재는 이 파일을
-생성하거나 임의 주소를 게시하지 않는다. 따라서 현재 개발 페이지를 셸 불필요
-상태로 전환했다고 보고하지 않는다. 지원 코드 게시 후에도 임시 중계는 유지된다.
+파일 위치: `config/development-relay.json`. 소유자가 검증한 고정 주소
+`https://myinvest-v2-dev-relay.kocoro97.workers.dev/api`를 사용한다.
+이 고정 Worker는 임시 Cloud Shell 터널에 의존하지 않는다. 개발 페이지는 빌드 시
+주소를 고정하고, 서버 메타데이터 확인 후 아이디·비밀번호 로그인 화면을 제공한다.
 
 활성화 후 Codex: 실제 로그인/미인증 거부/국내·해외 조회/외부 시세/페이지 갱신/
 세션 복원/로그아웃을 한 번 확인한다. 소유자 인증이 필요한 항목은 사용자가
@@ -128,3 +130,11 @@ metadata를 재확인한 뒤 다음 공개 파일을 기존 소스 브랜치에 
 
 다음 담당: **사용자 — Cloudflare 무료 가입 및 소유자 환경 인증**.
 계정/권한이 확보되면 **Codex — 실제 배포 연결·Pages 활성화·GAS 통합 검증**.
+
+## 상시 중계 활성화 확인 (2026-11-16)
+
+- 소유자 공개 검사: PASS, isolation PASS, NH 조회·주문·저장 0.
+- 외부 비교: 기본 Python User-Agent 403/1010, 브라우저 User-Agent 200/JSON.
+- 개발 출처 CORS 헤더 일치 및 relayProfile persistent 확인.
+- 실제 아이디·비밀번호 로그인 및 로그인 후 계좌·시세는 별도 사용자 확인 필요.
+- 운영 페이지/GAS/Sheets/Calendar 변경 없음.
