@@ -12,3 +12,18 @@
 .shell-form{display:flex;gap:8px;flex-wrap:wrap;align-items:end}.shell-form label{display:grid;gap:5px}.shell-form input{min-height:36px}
 #appContainer>header{padding-top:36px}#legacyParking{display:none!important}
 @media(max-width:600px){body{padding:7px}.dashboard-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible}.dashboard-nav a{font-size:11px;text-align:center;padding:9px 2px}.shell-heading h1{font-size:18px}#pageViewport{height:calc(100dvh - 290px)}.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.shell-meta{font-size:10px}.page-content .two{grid-template-columns:minmax(0,1fr)}}
+
+/* Korean market convention: red gains, blue losses; keep text legible on dark cards.
+   Scoped to explicit quote direction classes to avoid recoloring navigation and alerts. */
+:root{--market-rise:#ff7777;--market-fall:#79b8ff;--market-unchanged:#e7eef9}
+#pageViewport .market-up,#pageViewport .price-up,#pageViewport .change-up,
+#pageViewport .rate-up,#pageViewport .rise,#pageViewport .positive{
+  color:var(--market-rise)!important;font-weight:750
+}
+#pageViewport .market-down,#pageViewport .price-down,#pageViewport .change-down,
+#pageViewport .rate-down,#pageViewport .fall,#pageViewport .negative{
+  color:var(--market-fall)!important;font-weight:750
+}
+#pageViewport .market-flat,#pageViewport .change-flat{
+  color:var(--market-unchanged)!important
+}
