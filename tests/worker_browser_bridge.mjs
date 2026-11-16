@@ -1,6 +1,10 @@
 /* Test-only loopback bridge for the real Worker handler and synthetic GAS. */
 import http from 'node:http';
-import {createHandler,RelayGate} from '../relay/worker/worker.mjs';
+import fs from 'node:fs';
+import {createHandler,RelayGate,allowedMarketUrl} from '../relay/worker/worker.mjs';
+// Optional public-only captured/synthetic response map for focused UI review.
+// No live credentials, supplier requests, or account fixtures are loaded here.
+const publicFixtures=process.env.MYINVEST_TEST_PUBLIC_FIXTURE?JSON.parse(fs.readFileSync(process.env.MYINVEST_TEST_PUBLIC_FIXTURE,'utf8')):{};
 const expected={freshTestEnvironment:true,testEnvironment:'nh-staging',scriptHash:'a'.repeat(64),sheetHash:'b'.repeat(64),sourceDigest:'c'.repeat(64),gatewayVersion:2,storeEngine:'account-store-v2'};
 const host='myinvest-v2-dev-relay.synthetic.workers.dev',token='a'.repeat(64),store=new Map(),storage={get:async k=>structuredClone(store.get(k)),put:async(k,v)=>store.set(k,structuredClone(v)),transaction(fn){return fn(this)}};
 const gate=new RelayGate({storage});let live=false;
@@ -15,7 +19,7 @@ const gateway={async verify(){return {...expected,success:true,version:'v11-nh-v
  if(p.action==='externalAccounts')return {success:true,accounts:[],brokers:[],revision:'c1'};
  if(p.action==='externalHistory')return {success:true,history:[]};
  throw Error('UNEXPECTED_SYNTHETIC_ACTION');
-},async public(url,t){if(!live||t!==token)throw Object.assign(Error(),{code:'AUTH_REQUIRED',status:401});if(url.includes('/api/polling/worldstock/index'))return JSON.stringify({datas:['.INX','.IXIC','.DJI','.SOX','.VIX'].map(reutersCode=>({reutersCode,closePrice:'102',compareToPreviousClosePrice:'2',compareToPreviousPrice:{code:'2'}}))});if(url.includes('news.google.com'))return '<rss><channel></channel></rss>';if(url.includes('query1.finance.yahoo.com'))return JSON.stringify({chart:{result:[]}});return JSON.stringify({datas:[]})}};
+},async public(url,t){if(!live||t!==token)throw Object.assign(Error(),{code:'AUTH_REQUIRED',status:401});if(Object.hasOwn(publicFixtures,url)){if(!allowedMarketUrl(url))throw Object.assign(Error(),{code:'RELAY_PUBLIC_URL_DENIED',status:403});return publicFixtures[url]}if(url.includes('/api/polling/worldstock/index'))return JSON.stringify({datas:['.INX','.IXIC','.DJI','.SOX','.VIX'].map(reutersCode=>({reutersCode,closePrice:'102',compareToPreviousClosePrice:'2',compareToPreviousPrice:{code:'2'}}))});if(url.includes('news.google.com'))return '<rss><channel></channel></rss>';if(url.includes('query1.finance.yahoo.com'))return JSON.stringify({chart:{result:[]}});return JSON.stringify({datas:[]})}};
 const handler=createHandler({gatewayFactory:()=>gateway});
 const server=http.createServer(async(req,res)=>{try{let text='';for await(const chunk of req)text+=chunk;const payload=JSON.parse(text),headers={...payload.headers,'CF-Connecting-IP':'192.0.2.7'};const request=new Request('https://'+host+'/api',{method:payload.method,headers,body:payload.method==='POST'?payload.body:undefined});const result=await handler(request,env);res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({status:result.status,headers:Object.fromEntries(result.headers),body:await result.text()}))}catch{res.writeHead(500);res.end('{"code":"TEST_BRIDGE_FAILED"}')}});
 server.listen(0,'127.0.0.1',()=>process.stdout.write(JSON.stringify({port:server.address().port})+'\n'));

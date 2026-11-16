@@ -40,7 +40,7 @@ class Auth:
         raise AssertionError('FINANCIAL_ACTION_FORBIDDEN')
 
 with tempfile.TemporaryDirectory() as tmp:
-    public=Path(tmp)/'public';build(public)
+    public=Path(tmp)/'public';build(public,use_public_config=False)
     with sync_playwright() as p:
         browser=p.chromium.launch(headless=True)
         try:

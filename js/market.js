@@ -65,7 +65,13 @@ async function getTxt(targetUrl){
     clearTimeout(t);
     if(r.ok){const x=await r.text();if(typeof x==='string'&&x.trim()){NET.ok++;return x}}
     NET.fail++;
-  }catch(e){NET.fail++}
+  }catch(e){
+    NET.fail++;
+    const family=String(targetUrl).startsWith('https://news.google.com/')?'뉴스':String(targetUrl).startsWith('https://query1.finance.yahoo.com/')?'Yahoo OHLCV':String(targetUrl).startsWith('https://m.stock.naver.com/api/stocks/theme')?'네이버 테마':'공개 시세';
+    const safe=new Set(['AUTH_REQUIRED','RELAY_PUBLIC_URL_DENIED','RELAY_PUBLIC_FAILED','RELAY_RATE_LIMIT','RELAY_BUSY','RELAY_UPSTREAM_NETWORK','RELAY_REDIRECT_DENIED','RELAY_GAS_ACCESS_REQUIRED','RELAY_TARGET_MISMATCH','RELAY_ACCESS_CLOSED']);
+    NET.log.push(family+' · '+(safe.has(e?.code)?e.code:e?.name==='AbortError'?'TIMEOUT':'NETWORK_OR_RESPONSE')+(Number.isInteger(e?.http)&&e.http>=100&&e.http<=599?' · HTTP '+e.http:''));
+    if(NET.log.length>30)NET.log.shift();
+  }
   return null;
 }
 async function getJSON(u){const x=await getTxt(u);try{return JSON.parse(x)}catch(e){return null}}

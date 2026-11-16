@@ -31,7 +31,7 @@ class Gas(Base):
 ORIGIN='https://kocoro97-corab.github.io';PAGE=ORIGIN+'/dashboard-v2-dev/index.html#/accounts/ocr';HOST='synthetic-catalog.trycloudflare.com';ENDPOINT='https://'+HOST+'/api';CODE='SYNTHETIC_PRIVATE_CATALOG_CODE'
 pixel=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j3X8AAAAASUVORK5CYII=')
 with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
- artifact=Path(tmp)/'public';build(artifact);browser=p.chromium.launch(headless=True)
+ artifact=Path(tmp)/'public';build(artifact,use_public_config=False);browser=p.chromium.launch(headless=True)
  try:
   for width in [1440,344]:
    gas=Gas();app=RelayApp(configuration(origins=frozenset({ORIGIN}),public_market=True,account_reads=True,external_store=True),gas);edge=PublicDevelopment(app,ORIGIN+'/dashboard-v2-dev/',CODE);edge.host=HOST

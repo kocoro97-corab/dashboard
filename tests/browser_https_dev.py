@@ -73,7 +73,7 @@ class AuthOnlyGas:
 
 with tempfile.TemporaryDirectory() as tmp:
     public = Path(tmp) / 'frontend'
-    build(public)
+    build(public,use_public_config=False)
     for width in (344, 768, 1440):
         gas = AuthOnlyGas()
         boundary = PublicDevelopment(RelayApp(configuration(origins=frozenset({ORIGIN})), gas), PAGE, CODE)

@@ -44,7 +44,12 @@
     if(!isRelay())return root.fetch(MYP()+(MYP().includes('?')?'&':'?')+'url='+encodeURIComponent(url),options);
     const token=typeof LS==='function'?LS('invest_session_token'):null;
     const response=await post({action:'publicFetch',url,token},options),data=await response.json();
-    if(!response.ok||!data||data.success!==true||typeof data.text!=='string')throw failure('RELAY_PUBLIC_FAILED');
+    if(!response.ok||!data||data.success!==true||typeof data.text!=='string'){
+      const safe=new Set(['AUTH_REQUIRED','RELAY_PUBLIC_URL_DENIED','RELAY_PUBLIC_FAILED','RELAY_RATE_LIMIT','RELAY_BUSY','RELAY_UPSTREAM_NETWORK','RELAY_REDIRECT_DENIED','RELAY_GAS_ACCESS_REQUIRED','RELAY_TARGET_MISMATCH','RELAY_ACCESS_CLOSED']);
+      const error=failure(safe.has(data?.code)?data.code:'RELAY_PUBLIC_FAILED');
+      if(Number.isInteger(response.status)&&response.status>=100&&response.status<=599)error.http=response.status;
+      throw error;
+    }
     return {ok:true,status:response.status,text:async()=>data.text};
   }
   root.DashboardTransport=Object.freeze({post,publicRead,isRelay});

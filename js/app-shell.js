@@ -16,7 +16,7 @@
     router=AppRouter.create({location,history,target:window,onChange:change});
     // Original renderers retain their IDs/contracts. Only their page adapter
     // subscribes; no timer or API is created by rendering or switching menus.
-    for(const key of ['renderNHAccounts','renderExternalAssets','renderCards']){
+    for(const key of ['renderNHAccounts','renderExternalAssets','renderCards','renderThemes']){
       const original=root[key];root[key]=function(...args){const result=original(...args);ctx.emit();return result};
     }
     const originalChart=root.showQ;root.showQ=function(...args){const result=originalChart(...args);if(started&&current?.page!=='stocks')router.go('/stocks');return result};

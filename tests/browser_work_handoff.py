@@ -32,7 +32,7 @@ p=argparse.ArgumentParser();p.add_argument('--published',action='store_true');p.
 if args.evidence_dir:args.evidence_dir.mkdir(parents=True,exist_ok=True)
 ORIGIN='https://kocoro97-corab.github.io';BASE=ORIGIN+'/dashboard-v2-dev/';HOST='synthetic-work.trycloudflare.com';ENDPOINT='https://'+HOST+'/api';CODE='SYNTHETIC_PRIVATE_WORK_CODE'
 with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
- artifact=Path(tmp)/'public';build(artifact);browser=pw.chromium.launch(headless=True)
+ artifact=Path(tmp)/'public';build(artifact,use_public_config=False);browser=pw.chromium.launch(headless=True)
  try:
   for width in [1440,344,690]:
    gas=Gas();app=RelayApp(configuration(origins=frozenset({ORIGIN}),public_market=True,account_reads=True),gas);edge=PublicDevelopment(app,BASE,CODE);edge.host=HOST;errors=[];unexpected=[];findings=[]

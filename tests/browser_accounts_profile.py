@@ -24,7 +24,7 @@ class Gas(Base):
 ORIGIN='https://kocoro97-corab.github.io';PAGE=ORIGIN+'/dashboard-v2-dev/index.html#/accounts/nh';HOST='synthetic-accounts.trycloudflare.com';ENDPOINT='https://'+HOST+'/api';CODE='SYNTHETIC_PRIVATE_DEV_CODE'
 parser=argparse.ArgumentParser();parser.add_argument('--management-only',action='store_true');args=parser.parse_args()
 with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
- artifact=Path(tmp)/'public';build(artifact);browser=p.chromium.launch(headless=True)
+ artifact=Path(tmp)/'public';build(artifact,use_public_config=False);browser=p.chromium.launch(headless=True)
  try:
   for mode,width in [('test',1440),('test',344),('test',690),('management',1440),('management',344),('management',690)]:
    if args.management_only and mode!='management':continue

@@ -22,9 +22,9 @@ def fixed_relay(value):
     return value
 
 
-def build(output, root=ROOT, relay_endpoint=None):
+def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
     public_config=root/'config/development-relay.json'
-    if relay_endpoint is None and public_config.is_file():
+    if use_public_config and relay_endpoint is None and public_config.is_file():
         doc=json.loads(public_config.read_text())
         if set(doc)!={'profile','endpoint'} or doc['profile']!='isolated-persistent':raise ValueError('PERSISTENT_RELAY_CONFIG_INVALID')
         relay_endpoint=doc['endpoint']

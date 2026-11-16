@@ -47,7 +47,7 @@ class Gas:
         return json.dumps({'datas':[{'reutersCode':c,'closePrice':'102','compareToPreviousClosePrice':'2','compareToPreviousPrice':{'code':'2'}} for c in codes]})
 
 with tempfile.TemporaryDirectory() as tmp:
-    artifact=Path(tmp)/'public';build(artifact)
+    artifact=Path(tmp)/'public';build(artifact,use_public_config=False)
     with sync_playwright() as p:
         browser=p.chromium.launch(headless=True)
         try:

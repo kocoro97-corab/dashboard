@@ -23,6 +23,7 @@ VALID=[INDEX,
  'https://stock.naver.com/api/domestic/market/theme/list?startIdx=0&pageSize=100&sortType=changeRate',
  'https://stock.naver.com/api/domestic/market/theme/12/stocklist?marketType=ALL&orderType=priceTop&startIdx=0&pageSize=100',
  'https://m.stock.naver.com/api/stocks/theme/12?page=1&pageSize=100',
+ 'https://m.stock.naver.com/api/stocks/theme?page=1&pageSize=100',
  'https://m.stock.naver.com/api/index/KOSPI/price?pageSize=60&page=12',
  'https://m.stock.naver.com/api/stock/005930/price?pageSize=60&page=1',
  'https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d&range=1d',
@@ -42,6 +43,11 @@ class MarketScopeTests(unittest.TestCase):
             self.assertTrue(allowed_market_url(base+'?'+urlencode({'interval':interval,'range':period})))
         for query in ['interval=1m&range=3mo','interval=1d&range=99y','interval=1d&range=3mo&token=private','interval=1d&range=3mo&range=5y']:
             self.assertFalse(allowed_market_url(base+'?'+query))
+
+    def test_mobile_theme_list_cannot_expand_to_arbitrary_queries(self):
+        base='https://m.stock.naver.com/api/stocks/theme?'
+        for query in ['page=2&pageSize=100','page=1&pageSize=1000','page=1&pageSize=100&token=private','page=1&page=2&pageSize=100','page=1&pageSize=100&url=https://127.0.0.1']:
+            self.assertFalse(allowed_market_url(base+query))
 
     def test_private_hosts_paths_credentials_nested_targets_and_extra_queries_are_denied(self):
         for url in ['https://api.nhplug.com:8443/order','https://127.0.0.1/api','http://stock.naver.com/api',

@@ -33,6 +33,7 @@ def allowed_market_url(value):
         if re.fullmatch(r'/api/domestic/market/theme/[0-9]{1,6}/stocklist', path):
             return q == {'marketType': 'ALL', 'orderType': 'priceTop', 'startIdx': '0', 'pageSize': '100'}
     if host == 'm.stock.naver.com':
+        if path == '/api/stocks/theme':return q == {'page': '1', 'pageSize': '100'}
         if re.fullmatch(r'/api/(?:stock/[0-9]{6}|index/(?:KOSPI|KOSDAQ))/price', path):
             return set(q) == {'pageSize', 'page'} and q['pageSize'] == '60' and q['page'] in {str(n) for n in range(1, 13)}
         if re.fullmatch(r'/api/stocks/theme/[0-9]{1,6}', path):return q == {'page': '1', 'pageSize': '100'}

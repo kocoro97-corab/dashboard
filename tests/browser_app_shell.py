@@ -41,7 +41,7 @@ class Gas(ns['Gas']):
   symbol=unquote(u.path.rsplit('/',1)[-1]);out=json.loads(super().public(url,token));out['chart']['result'][0]['meta'].update(symbol=symbol,regularMarketTime=1794528000,currency='KRW' if symbol=='KRW=X' else 'USD');return json.dumps(out)
 
 with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
- artifact=Path(tmp)/'public';build(artifact);browser=p.chromium.launch(headless=True)
+ artifact=Path(tmp)/'public';build(artifact,use_public_config=False);browser=p.chromium.launch(headless=True)
  try:
   for development,width in [(True,1440),(True,344),(True,690),(False,1440)]:
    gas=Gas();edge=PublicDevelopment(RelayApp(configuration(origins=frozenset({ORIGIN}),public_market=True),gas),ORIGIN+'/dashboard-v2-dev/',CODE);edge.host=HOST

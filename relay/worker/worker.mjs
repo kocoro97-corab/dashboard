@@ -34,6 +34,7 @@ export function allowedMarketUrl(value){
    if(/^\/api\/domestic\/market\/theme\/[0-9]{1,6}\/stocklist$/.test(p))return shape({marketType:'ALL',orderType:'priceTop',startIdx:'0',pageSize:'100'});
   }
   if(host==='m.stock.naver.com'){
+   if(p==='/api/stocks/theme')return shape({page:'1',pageSize:'100'});
    if(/^\/api\/(?:stock\/[0-9]{6}|index\/(?:KOSPI|KOSDAQ))\/price$/.test(p))return equalKeys(q,['pageSize','page'])&&q.pageSize==='60'&&/^(?:[1-9]|1[0-2])$/.test(q.page);
    if(/^\/api\/stocks\/theme\/[0-9]{1,6}$/.test(p))return shape({page:'1',pageSize:'100'});
   }

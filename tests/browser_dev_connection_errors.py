@@ -28,7 +28,7 @@ CASES=[
 ]
 
 with tempfile.TemporaryDirectory() as tmp:
-    artifact=Path(tmp)/'public';build(artifact)
+    artifact=Path(tmp)/'public';build(artifact,use_public_config=False)
     with sync_playwright() as p:
         args={'headless':True}
         if os.environ.get('CHROMIUM_EXECUTABLE'):args['executable_path']=os.environ['CHROMIUM_EXECUTABLE']
