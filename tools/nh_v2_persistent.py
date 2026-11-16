@@ -1,7 +1,7 @@
 """Owner-run deployment to an EXISTING Cloudflare Free account. No GAS writes.
 Cloudflare token and GAS configuration stay in memory/private owner environment.
 """
-import argparse,getpass,json,os,re,shutil,subprocess,sys,urllib.request,urllib.error
+import argparse,getpass,json,os,re,shutil,subprocess,sys,socket,ssl,urllib.request,urllib.error
 from pathlib import Path
 from nh_v2_fresh import private_path,SAFE_OWNER_CODES
 from nh_v2_live_check import preflight
@@ -9,21 +9,49 @@ from nh_v2_relay_check import deployment_settings
 from nh_staging_test import fingerprint
 from build_nh_staging import ROOT
 NAME='myinvest-v2-dev-relay';ROLE='myinvest-isolated-relay-v1';WRANGLER='wrangler@4.60.0';ORIGIN='https://kocoro97-corab.github.io'
-class Stop(Exception):pass
+class Stop(Exception):
+ def __init__(self,code,diagnostic=None):
+  super().__init__(code);self.diagnostic=diagnostic or {}
+
+def cloud_stage(path):
+ return 'WORKERS_SUBDOMAIN' if path.endswith('/workers/subdomain') else 'WORKER_SETTINGS' if path.endswith('/settings') else 'CLOUDFLARE_API'
+
+def provider_codes(data):
+ if not isinstance(data,dict) or not isinstance(data.get('errors'),list):return []
+ return [row['code'] for row in data['errors'][:10] if isinstance(row,dict) and type(row.get('code')) is int]
+
+def clean_token(value):
+ if not isinstance(value,str):raise Stop('CLOUDFLARE_TOKEN_FORMAT_REQUIRED')
+ value=value.strip()
+ if not value or len(value)>2048 or any(ord(c)<=32 or ord(c)>=127 for c in value) or value.startswith(('\"',"'")):
+  raise Stop('CLOUDFLARE_TOKEN_FORMAT_REQUIRED')
+ return value
 class NoRedirect(urllib.request.HTTPRedirectHandler):
  def redirect_request(self,*args,**kwargs):return None
 
 def cloud(path,token,optional=False):
- request=urllib.request.Request('https://api.cloudflare.com/client/v4'+path,headers={'Authorization':'Bearer '+token,'Accept':'application/json'})
+ stage=cloud_stage(path)
+ request=urllib.request.Request('https://api.cloudflare.com/client/v4'+path,headers={'Authorization':'Bearer '+clean_token(token),'Accept':'application/json'})
  try:
-  with urllib.request.build_opener(NoRedirect()).open(request,timeout=30) as response:data=json.load(response)
+  with urllib.request.build_opener(NoRedirect()).open(request,timeout=30) as response:
+   status=response.status
+   try:data=json.loads(response.read(65536))
+   except (ValueError,UnicodeError):raise Stop('CLOUDFLARE_RESPONSE_INVALID',{'stage':stage,'http':status}) from None
  except urllib.error.HTTPError as error:
-  status=error.code;error.close()
+  status=error.code
+  try:data=json.loads(error.read(16384))
+  except (ValueError,UnicodeError):data={}
+  finally:error.close()
   if optional and status==404:return None
-  raise Stop('EXISTING_CLOUDFLARE_ACCESS_REQUIRED') from None
- except Exception:raise Stop('EXISTING_CLOUDFLARE_ACCESS_REQUIRED') from None
- if data.get('success') is not True:raise Stop('EXISTING_CLOUDFLARE_ACCESS_REQUIRED')
+  raise Stop('EXISTING_CLOUDFLARE_ACCESS_REQUIRED',{'stage':stage,'http':status,'providerCodes':provider_codes(data)}) from None
+ except Stop:raise
+ except Exception as error:
+  reason=getattr(error,'reason',error)
+  transport='DNS' if isinstance(reason,socket.gaierror) else 'TIMEOUT' if isinstance(reason,(TimeoutError,socket.timeout)) else 'TLS' if isinstance(reason,ssl.SSLError) else 'NETWORK'
+  raise Stop('CLOUDFLARE_NETWORK_UNCONFIRMED',{'stage':stage,'transport':transport}) from None
+ if not isinstance(data,dict) or data.get('success') is not True:raise Stop('EXISTING_CLOUDFLARE_ACCESS_REQUIRED',{'stage':stage,'http':status,'providerCodes':provider_codes(data)})
  return data.get('result')
+
 
 def run(args,folder,env,secret=None):
  result=subprocess.run(['npx','--yes',WRANGLER,*args],cwd=folder,env=env,input=secret,text=True,capture_output=True,timeout=240)
@@ -48,17 +76,24 @@ def secrets(plan,host):return {'MYINVEST_GAS_URL':plan['url'],'MYINVEST_EXPECTED
 
 def deploy(args,api=cloud,runner=run,preflight_fn=preflight,settings_fn=deployment_settings,probe=public_request,cf_token=None):
  if not re.fullmatch(r'[a-f0-9]{32}',args.account_id or ''):raise Stop('EXISTING_CLOUDFLARE_ACCOUNT_ID_REQUIRED')
- if not args.free_plan_confirmed and not args.disable:raise Stop('EXISTING_FREE_PLAN_CONFIRMATION_REQUIRED')
- if not shutil.which('npx'):raise Stop('OWNER_NODE_NPX_REQUIRED')
- env_dir=private_path(args.environment,False);folder=env_dir/'persistent-worker';folder.mkdir(mode=0o700,exist_ok=True)
- token=cf_token or os.environ.get('CLOUDFLARE_API_TOKEN') or getpass.getpass('Existing Cloudflare API token (hidden): ')
- if not token:raise Stop('EXISTING_CLOUDFLARE_ACCESS_REQUIRED')
+ diagnose=getattr(args,'diagnose_cloudflare',False)
+ if not args.free_plan_confirmed and not args.disable and not diagnose:raise Stop('EXISTING_FREE_PLAN_CONFIRMATION_REQUIRED')
+ if not diagnose and not shutil.which('npx'):raise Stop('OWNER_NODE_NPX_REQUIRED')
+ if not diagnose:
+  env_dir=private_path(args.environment,False);folder=env_dir/'persistent-worker';folder.mkdir(mode=0o700,exist_ok=True)
+ token_source='PARAMETER' if cf_token else 'PROMPT' if getattr(args,'prompt_token',False) or not os.environ.get('CLOUDFLARE_API_TOKEN') else 'ENVIRONMENT'
+ token=clean_token(cf_token or (None if getattr(args,'prompt_token',False) else os.environ.get('CLOUDFLARE_API_TOKEN')) or getpass.getpass('Cloudflare API token value (hidden): '))
  root='/accounts/'+args.account_id
- subdomain=api(root+'/workers/subdomain',token)
- if not isinstance(subdomain,dict) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,62}',subdomain.get('subdomain','')):raise Stop('EXISTING_WORKERS_SUBDOMAIN_REQUIRED')
+ try:subdomain=api(root+'/workers/subdomain',token)
+ except Stop as error:
+  error.diagnostic={**error.diagnostic,'tokenSource':token_source};raise
+ if not isinstance(subdomain,dict) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,62}',subdomain.get('subdomain','')):raise Stop('EXISTING_WORKERS_SUBDOMAIN_REQUIRED',{'stage':'WORKERS_SUBDOMAIN','accountReadAccess':'PASS','subdomainConfigured':False,'tokenSource':token_source})
  host=NAME+'.'+subdomain['subdomain']+'.workers.dev';endpoint='https://'+host+'/api'
- settings=api(root+'/workers/scripts/'+NAME+'/settings',token,optional=True)
+ try:settings=api(root+'/workers/scripts/'+NAME+'/settings',token,optional=True)
+ except Stop as error:
+  error.diagnostic={**error.diagnostic,'tokenSource':token_source};raise
  if settings is not None and not any(x.get('name')=='MYINVEST_ROLE' and x.get('text')==ROLE for x in settings.get('bindings',[])):raise Stop('EXISTING_WORKER_NAME_CONFLICT')
+ if diagnose:return {'status':'PASS','scope':'CLOUDFLARE_READ_ACCESS_ONLY','tokenSource':token_source,'subdomainConfigured':True,'workerExists':settings is not None,'writePermission':'NOT_RUN','deploymentAttempted':False,'gasAccess':'NOT_RUN','credentialsIncluded':False,'orderCalls':0}
  if args.disable and settings is None:raise Stop('EXISTING_WORKER_REQUIRED')
  if not args.disable:
   preflight_fn(env_dir,allow_same_source_tools=True)
@@ -84,13 +119,15 @@ def deploy(args,api=cloud,runner=run,preflight_fn=preflight,settings_fn=deployme
  return {'status':'PASS','scope':'PERSISTENT_RELAY_READY','endpoint':endpoint,'page':'https://kocoro97-corab.github.io/dashboard-v2-dev/','isolation':'PASS','publicMarket':True,'accountReads':True,'reviewedStore':True,'developmentCodeRequired':False,'pageActivation':'PENDING_VERIFIED_ENDPOINT_BINDING','actualNhCalls':0,'orderCalls':0,'credentialsIncluded':False}
 
 def main():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('--environment',type=Path,required=True);p.add_argument('--account-id',help='Existing Cloudflare account ID; otherwise read from owner environment or prompt');p.add_argument('--free-plan-confirmed',action='store_true',help='Owner confirms an existing Workers Free account; no paid plan or account is created');p.add_argument('--disable',action='store_true',help='Close existing relay; no GAS operation');args=p.parse_args()
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('--environment',type=Path,required=True);p.add_argument('--account-id',help='Existing Cloudflare account ID; otherwise read from owner environment or prompt');p.add_argument('--free-plan-confirmed',action='store_true',help='Owner confirms an existing Workers Free account; no paid plan or account is created');p.add_argument('--disable',action='store_true',help='Close existing relay; no GAS operation');p.add_argument('--diagnose-cloudflare',action='store_true',help='Read-only API check: no deployment, Google or NH calls');p.add_argument('--prompt-token',action='store_true',help='Use a fresh hidden prompt instead of any existing token environment variable');args=p.parse_args()
  try:
   if not args.account_id:args.account_id=os.environ.get('CLOUDFLARE_ACCOUNT_ID') or input('Cloudflare account ID (32 characters): ').strip()
   result=deploy(args)
  except EOFError:result={'status':'NOT_RUN','code':'OWNER_CLOUDFLARE_SETUP_REQUIRED','credentialsIncluded':False,'orderCalls':0}
  except KeyboardInterrupt:result={'status':'NOT_RUN','code':'OWNER_CANCELLED','credentialsIncluded':False}
- except Stop as error:result={'status':'NOT_RUN','code':str(error),'credentialsIncluded':False,'orderCalls':0}
+ except Stop as error:
+  result={'status':'NOT_RUN','code':str(error),'credentialsIncluded':False,'orderCalls':0}
+  if error.diagnostic:result['diagnostic']=error.diagnostic
  except Exception as error:result={'status':'NOT_RUN','code':str(error) if str(error) in SAFE_OWNER_CODES else 'PERSISTENT_OWNER_PREFLIGHT_FAILED','credentialsIncluded':False,'orderCalls':0}
  print(json.dumps(result));return 0 if result.get('status')=='PASS' else 1
 if __name__=='__main__':raise SystemExit(main())

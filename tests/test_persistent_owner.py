@@ -1,11 +1,36 @@
 """Deployment plan tests only. No Cloudflare/GAS API, credentials or resources."""
-import json,sys,tempfile,unittest
+import io,json,socket,sys,tempfile,unittest,urllib.error
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'tools'))
 import nh_v2_persistent as mod
 class OwnerTests(unittest.TestCase):
+ def test_api_errors_report_only_status_stage_and_numeric_codes(self):
+  for status in (401,403):
+   error=urllib.error.HTTPError('https://private.invalid',status,'PRIVATE_MESSAGE',{},io.BytesIO(json.dumps({'errors':[{'code':10000,'message':'PRIVATE_TOKEN'},{'code':'PRIVATE_ID'}]}).encode()))
+   with patch.object(mod.urllib.request,'build_opener') as opener:
+    opener.return_value.open.side_effect=error
+    with self.assertRaises(mod.Stop) as caught:mod.cloud('/accounts/PRIVATE_ID/workers/subdomain','SYNTHETIC_TOKEN')
+   self.assertEqual(caught.exception.diagnostic,{'stage':'WORKERS_SUBDOMAIN','http':status,'providerCodes':[10000]})
+   self.assertNotIn('PRIVATE',str(caught.exception)+json.dumps(caught.exception.diagnostic))
+ def test_dns_and_optional_missing_worker_are_distinguished(self):
+  with patch.object(mod.urllib.request,'build_opener') as opener:
+   opener.return_value.open.side_effect=urllib.error.URLError(socket.gaierror(-2,'PRIVATE_HOST'))
+   with self.assertRaises(mod.Stop) as caught:mod.cloud('/accounts/private/workers/subdomain','SYNTHETIC')
+   self.assertEqual(caught.exception.diagnostic,{'stage':'WORKERS_SUBDOMAIN','transport':'DNS'})
+   opener.return_value.open.side_effect=urllib.error.HTTPError('https://private.invalid',404,'PRIVATE',{},io.BytesIO(b'{}'))
+   self.assertIsNone(mod.cloud('/accounts/private/workers/scripts/test/settings','SYNTHETIC',optional=True))
+ def test_read_only_diagnosis_uses_fresh_prompt_without_local_or_remote_writes(self):
+  args=SimpleNamespace(environment=Path('/unused'),account_id='a'*32,free_plan_confirmed=False,disable=False,diagnose_cloudflare=True,prompt_token=True)
+  def api(path,token,optional=False):
+   self.assertEqual(token,'FRESH_SYNTHETIC');return None if '/scripts/' in path else {'subdomain':'synthetic'}
+  with patch.dict(mod.os.environ,{'CLOUDFLARE_API_TOKEN':'STALE_SYNTHETIC'}),patch.object(mod.getpass,'getpass',return_value='FRESH_SYNTHETIC'),patch.object(mod,'private_path',side_effect=AssertionError('private environment accessed')),patch.object(mod.shutil,'which',side_effect=AssertionError('npx accessed')):
+   result=mod.deploy(args,api=api,runner=lambda *a:self.fail('deployment'),preflight_fn=lambda *a,**k:self.fail('Google'),probe=lambda *a:self.fail('probe'))
+  self.assertEqual(result['status'],'PASS');self.assertEqual(result['tokenSource'],'PROMPT');self.assertFalse(result['deploymentAttempted']);self.assertEqual(result['writePermission'],'NOT_RUN')
+ def test_token_format_rejects_header_prefix_and_control_characters(self):
+  for token in ('Bearer SYNTHETIC','SYNTHETIC\nHEADER','"SYNTHETIC"',''):
+   with self.assertRaisesRegex(mod.Stop,'TOKEN_FORMAT'):mod.clean_token(token)
  def test_deploy_targets_existing_free_account_and_sends_secrets_only_on_stdin(self):
   with tempfile.TemporaryDirectory() as t:
    folder=Path(t);plan={'scriptId':'SYNTHETIC_SCRIPT','url':'https://script.google.com/macros/s/SYNTHETIC_DEPLOYMENT/exec','sheetHash':'b'*64,'sourceDigest':'c'*64};(folder/'fresh-plan.json').write_text(json.dumps(plan));calls=[]

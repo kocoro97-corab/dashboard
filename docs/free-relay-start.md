@@ -35,6 +35,23 @@ CLI는 계정 ID를 확인하고 API token을 숨김 입력으로 받은 뒤 기
 Cloudflare에 무료 개발 Worker를 배포하고 공개 endpoint만 결과로 출력한다.
 GitHub Actions의 운영 GAS 배포 버튼은 이 절차에 사용하지 않는다.
 
+### Cloudflare 접근 오류가 나온 경우
+
+`EXISTING_CLOUDFLARE_ACCESS_REQUIRED`만으로 토큰 오류와 계정 권한 부족을
+구분하지 않는다. 최신 소스에서 아래 읽기 전용 진단을 실행한다.
+이전 환경변수의 토큰 대신 숨김 입력으로 새 토큰 값을 받는다.
+
+```bash
+"$HOME/myinvest-v2-live-venv/bin/python" tools/nh_v2_persistent.py \
+  --environment "$HOME/myinvest-v2-fresh-private-r2" \
+  --diagnose-cloudflare --prompt-token
+```
+
+결과에는 단계·HTTP 상태·Cloudflare 숫자 오류 번호만 포함한다. 응답 원문,
+토큰, 계정 ID는 출력하지 않는다. 이 진단은 배포·GAS·NH 호출 없이 계정의
+workers.dev 설정 및 기존 Worker 설정만 읽는다. PASS도 배포 권한이나 실제
+로그인 성공을 의미하지 않는다. 실패 JSON을 바탕으로 필요한 설정만 수정한다.
+
 ## 3. Codex: 개발 페이지 활성화 및 실제 검증
 
 검증된 고정 endpoint를 `config/development-relay.json`에 반영해 기존 dev-pages로
