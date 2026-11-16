@@ -52,6 +52,23 @@ GitHub Actions의 운영 GAS 배포 버튼은 이 절차에 사용하지 않는�
 workers.dev 설정 및 기존 Worker 설정만 읽는다. PASS도 배포 권한이나 실제
 로그인 성공을 의미하지 않는다. 실패 JSON을 바탕으로 필요한 설정만 수정한다.
 
+### 배포 후 공개 응답 확인이 실패한 경우
+
+`PERSISTENT_PUBLIC_PROBE_FAILED`는 배포 명령 이후 공개 응답 검사 실패를
+뜻한다. 배포를 반복하지 않고 아래 진단으로 기존 Worker를 확인한다.
+
+```bash
+"$HOME/myinvest-v2-live-venv/bin/python" tools/nh_v2_persistent.py \
+  --environment "$HOME/myinvest-v2-fresh-private-r2" \
+  --diagnose-public --prompt-token
+```
+
+이 모드는 계정·Worker 설정을 읽고 공개 중계로 `appVersion` 한 번만 요청한다.
+재배포·설정 변경·NH 조회·계좌 저장은 하지 않는다. 중계는 기존 GAS의 환경
+지문만 확인한다. DNS/TLS/시간초과, HTTP 상태, 실제 CORS 헤더 일치 여부,
+허용된 중계 오류 코드만 출력하며 응답 원문·토큰·GAS 주소는 출력하지 않는다.
+PASS도 실제 로그인이나 계좌조회 검증을 대신하지 않는다.
+
 ## 3. Codex: 개발 페이지 활성화 및 실제 검증
 
 검증된 고정 endpoint를 `config/development-relay.json`에 반영해 기존 dev-pages로
