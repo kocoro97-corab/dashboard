@@ -39,7 +39,7 @@ def allowed_market_url(value):
     if host == 'query1.finance.yahoo.com':
         return (bool(re.fullmatch(r'/v8/finance/chart/[A-Za-z0-9^=.-]{1,32}', path)) and
                 set(q) == {'interval', 'range'} and q['interval'] in ('1d', '1wk', '1mo') and
-                q['range'] in ('1d', '1y', '2y', '10y', 'max'))
+                q['range'] in ('1d', '3mo', '1y', '2y', '5y', '10y', 'max'))
     if host == 'news.google.com' and path == '/rss/search':
         return set(q) == {'q', 'hl', 'gl', 'ceid'} and q['q'] in NEWS_QUERIES and q['hl'] == 'ko' and q['gl'] == 'KR' and q['ceid'] == 'KR:ko'
     if host == 'finance.daum.net' and path == '/api/home/sec':

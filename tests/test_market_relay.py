@@ -36,6 +36,13 @@ class MarketScopeTests(unittest.TestCase):
         for url in VALID:
             with self.subTest(url=url):self.assertTrue(allowed_market_url(url))
 
+    def test_work_market_chart_ranges_remain_exact_public_gets(self):
+        base='https://query1.finance.yahoo.com/v8/finance/chart/%5EKS11'
+        for interval,period in [('1d','3mo'),('1wk','2y'),('1mo','5y'),('1mo','10y')]:
+            self.assertTrue(allowed_market_url(base+'?'+urlencode({'interval':interval,'range':period})))
+        for query in ['interval=1m&range=3mo','interval=1d&range=99y','interval=1d&range=3mo&token=private','interval=1d&range=3mo&range=5y']:
+            self.assertFalse(allowed_market_url(base+'?'+query))
+
     def test_private_hosts_paths_credentials_nested_targets_and_extra_queries_are_denied(self):
         for url in ['https://api.nhplug.com:8443/order','https://127.0.0.1/api','http://stock.naver.com/api',
                     'https://user:secret@stock.naver.com/api','https://stock.naver.com/private/accounts',
