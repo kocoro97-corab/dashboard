@@ -42,8 +42,15 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
     if r.request.url==ENDPOINT:
      h=r.request.headers;result=request(edge,json.loads(r.request.post_data or '{}'),origin=h.get('origin',''),authorization=h.get('authorization'),method=r.request.method,REMOTE_ADDR='127.0.0.1',HTTP_HOST=HOST,HTTP_X_FORWARDED_PROTO='https',HTTP_REFERER=h.get('referer',''),HTTP_X_MYINVEST_DEV_CLIENT=h.get('x-myinvest-dev-client',''),HTTP_X_MYINVEST_DEV_KEY=h.get('x-myinvest-dev-key',''));r.fulfill(status=result['status'],headers=result['headers'],body=json.dumps(result['body']));return
     unexpected.append(u.hostname);r.abort()
-   context.route('**/*',route);page=context.new_page();page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept());page.set_default_timeout(7000)
-   page.goto(BASE+'index.html#/accounts',wait_until='domcontentloaded');page.locator('#devEndpoint').fill(ENDPOINT);page.locator('#devCode').fill(CODE);page.locator('#devConnectSubmit').click();page.wait_for_selector('#devBanner');page.locator('#authId').fill('synthetic');page.locator('#authPw').fill('SYNTHETIC_PRIVATE_PASSWORD');page.locator('#authSubmitBtn').click();page.wait_for_function('()=>!!EXT_SAVED_REV&&NH_ACCOUNT_SESSION===LS("invest_session_token")')
+   context.route('**/*',route);page=context.new_page();public_starts={}
+   def asset_start(req):
+    if urlsplit(req.url).hostname=='kocoro97-corab.github.io':public_starts[id(req)]=time.monotonic()
+   def asset_finished(req):
+    started=public_starts.pop(id(req),None)
+    if started is not None and time.monotonic()-started>3:print(json.dumps({'stage':'PUBLIC_ASSET_WAIT','path':urlsplit(req.url).path,'elapsedMs':round((time.monotonic()-started)*1000)}),flush=True)
+   page.on('request',asset_start);page.on('requestfinished',asset_finished);
+   page.on('pageerror',lambda e:errors.append(str(e)));page.on('dialog',lambda d:d.accept());page.set_default_timeout(7000)
+   page.goto(BASE+'index.html#/accounts',wait_until='domcontentloaded');page.locator('#devEndpoint').fill(ENDPOINT);page.locator('#devCode').fill(CODE);page.locator('#devConnectSubmit').click();page.wait_for_selector('#devBanner');page.locator('#authId').fill('synthetic');page.locator('#authPw').fill('SYNTHETIC_PRIVATE_PASSWORD');page.locator('#authSubmitBtn').click();page.wait_for_function('()=>!!EXT_SAVED_REV&&NH_ACCOUNT_SESSION===LS("invest_session_token")',timeout=30000 if args.published else 7000)
    def go(path):page.evaluate('(p)=>location.hash="#/"+p',path);page.wait_for_function('(p)=>DashboardShell.getStatus().path==="/"+p',arg=path)
    def emit():page.evaluate('window.__reviewContexts[0].ctx.emit()')
    def base():page.evaluate(BASELINE)
