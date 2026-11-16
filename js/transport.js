@@ -9,6 +9,7 @@
     let url;try{url=new URL(c.endpoint)}catch(e){throw failure('RELAY_CONFIG_INVALID')}
     const local=host=>['localhost','127.0.0.1'].includes(host);
     const development=c.development===true&&root.location&&root.location.protocol==='http:'&&local(root.location.hostname)&&local(url.hostname);
+    if(c.persistentRelay===true&&c.endpoint!==root.MYINVEST_PERSISTENT_RELAY?.endpoint)throw failure('RELAY_CONFIG_INVALID');
     if(url.username||url.password||url.search||url.hash||url.pathname!=='/api'||!(url.protocol==='https:'||development&&url.protocol==='http:'))throw failure('RELAY_CONFIG_INVALID');
     return c;
   }
@@ -31,8 +32,11 @@
       if(typeof data.token!=='string'||!/^[a-fA-F0-9]{64}$/.test(data.token))throw failure('AUTH_REQUIRED');
       headers.Authorization='Bearer '+data.token;delete data.token;
     }
-    return root.fetch(c.endpoint,{method:'POST',headers,body:JSON.stringify(data),credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:'strict-origin-when-cross-origin',signal:options.signal}).catch(error=>{
-      if(['register','changePassword','approveUser','saveExternalHoldings','restoreExternalHoldings'].includes(data.action))throw failure('RELAY_WRITE_OUTCOME_UNKNOWN');
+    return root.fetch(c.endpoint,{method:'POST',headers,body:JSON.stringify(data),credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:'strict-origin-when-cross-origin',signal:options.signal}).then(async response=>{
+      if(c.persistentRelay===true&&['saveExternalHoldings','restoreExternalHoldings','saveExternalAccounts'].includes(data.action)){let result;try{result=await response.clone().json()}catch{throw failure('RELAY_WRITE_OUTCOME_UNKNOWN')}if(!result||typeof result.success!=='boolean')throw failure('RELAY_WRITE_OUTCOME_UNKNOWN')}
+      return response;
+    }).catch(error=>{
+      if(['register','changePassword','approveUser','saveExternalHoldings','restoreExternalHoldings','saveExternalAccounts'].includes(data.action))throw failure('RELAY_WRITE_OUTCOME_UNKNOWN');
       throw error;
     });
   }

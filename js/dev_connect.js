@@ -1,10 +1,14 @@
-/* Explicit, temporary HTTPS test connection. No secret in URL or public config. */
+/* Temporary tunnel or pinned persistent isolated relay. No credential in URL/public config. */
 (function(){
   'use strict';
   const KEY='myinvest_v2_dev:connection';
   // Only local messages/codes are displayed. Never echo an upstream message,
   // HTML body, exception, entered code, or URL from a failed request.
   const errors=Object.freeze({
+    RELAY_ACCESS_CLOSED:'로그인 서버가 중지되어 있습니다. 관리자에게 연결 상태를 확인하세요.',
+    RELAY_RATE_LIMIT:'요청 제한입니다. 잠시 뒤 다시 확인하세요.',
+    RELAY_BUSY:'로그인 서버가 처리 중입니다. 잠시 뒤 다시 확인하세요.',
+    RELAY_HTTPS_REQUIRED:'HTTPS 서버 연결을 확인하세요.',
     DEV_ACCESS_REQUIRED:'개발 접속코드가 일치하지 않습니다.',
     DEV_PAGE_REQUIRED:'브라우저에서 개발 페이지 출처를 확인할 수 없습니다.',
     DEV_ACCESS_CLOSED:'개발 중계의 사용 시간이 종료되었습니다.',
@@ -27,29 +31,35 @@
   const known=code=>typeof code==='string'&&Object.prototype.hasOwnProperty.call(errors,code);
   function reject(code){throw Object.assign(new Error(),{devCode:code})}
   function valid(value){
+    if(fixed)return fixedValid&&value===persistent.endpoint;
     try{const u=new URL(value);return u.protocol==='https:'&&/^[a-z0-9-]+\.trycloudflare\.com$/.test(u.hostname)&&!u.port&&!u.username&&!u.password&&!u.search&&!u.hash&&u.pathname==='/api'}catch(e){return false}
   }
+  const persistent=window.MYINVEST_PERSISTENT_RELAY;
+  const fixed=!!persistent;
+  const fixedValid=fixed&&persistent.profile==='isolated'&&/^https:\/\/[a-z0-9][a-z0-9-]{0,62}\.[a-z0-9][a-z0-9-]{0,62}\.workers\.dev\/api$/.test(persistent.endpoint);
   let saved;try{saved=JSON.parse(sessionStorage.getItem(KEY)||'null')}catch(e){}
-  const config={mode:'relay',endpoint:'',devSession:true};
-  if(saved&&valid(saved.endpoint)&&/^[A-Za-z0-9_-]{16,128}$/.test(saved.code))Object.assign(config,{endpoint:saved.endpoint,devAccessCode:saved.code});
+  if(fixed&&(saved?.kind!=='persistent'||saved?.endpoint!==persistent.endpoint)){for(let i=sessionStorage.length-1;i>=0;i--){const key=sessionStorage.key(i);if(key?.startsWith('myinvest_v2_dev:'))sessionStorage.removeItem(key)}}
+  const config={mode:'relay',endpoint:fixedValid?persistent.endpoint:'',devSession:true,persistentRelay:fixed};
+  if(!fixed&&saved&&valid(saved.endpoint)&&/^[A-Za-z0-9_-]{16,128}$/.test(saved.code))Object.assign(config,{endpoint:saved.endpoint,devAccessCode:saved.code});
   window.MYINVEST_TRANSPORT_CONFIG=config;
   const panel=document.createElement('div');panel.id='devConnect';
   panel.style.cssText='position:fixed;inset:0;z-index:20000;background:#0f172a;color:#eee;display:grid;place-items:center;padding:16px';
   panel.innerHTML='<form style="width:100%;max-width:430px"><h2>V2 개발용 연결</h2><p>공개 시장 자료 연결 및 V2 화면 점검입니다. NH 계좌조회와 저장은 차단됩니다.</p><label>개발 중계 HTTPS 주소<input id="devEndpoint" type="url" required autocomplete="off" autocapitalize="none" spellcheck="false" style="display:block;width:100%"></label><label>별도 개발 접속코드<input id="devCode" type="password" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" style="display:block;width:100%"></label><button id="devConnectSubmit" type="submit">연결 확인</button><p id="devConnectStatus" role="status"></p></form>';
+  if(fixed)panel.innerHTML='<div style="max-width:430px"><h2>서비스 연결 확인</h2><p>로그인 서버를 확인하고 있습니다.</p><button id="devConnectSubmit" type="button" hidden>다시 연결</button><p id="devConnectStatus" role="status"></p></div>';
   document.body.appendChild(panel);
   const status=panel.querySelector('#devConnectStatus');
   async function connect(event){
     if(event)event.preventDefault();
-    const endpoint=panel.querySelector('#devEndpoint').value.trim(),code=panel.querySelector('#devCode').value;
+    const endpoint=fixed?persistent.endpoint:panel.querySelector('#devEndpoint').value.trim(),code=fixed?null:panel.querySelector('#devCode').value;
     const routeOK=!location.hash||(window.AppRouter&&AppRouter.validHash(location.hash));
-    if(location.protocol!=='https:'||location.hostname!=='kocoro97-corab.github.io'||!/^\/dashboard-v2-dev\/(?:index.html)?$/.test(location.pathname)||location.search||!routeOK||!valid(endpoint)||!/^[A-Za-z0-9_-]{16,128}$/.test(code)){
-      status.textContent='개발 페이지 주소·HTTPS 중계 주소·접속코드를 확인하세요.';return;
+    if(location.protocol!=='https:'||location.hostname!=='kocoro97-corab.github.io'||!/^\/dashboard-v2-dev\/(?:index.html)?$/.test(location.pathname)||location.search||!routeOK||!valid(endpoint)||!fixed&&!/^[A-Za-z0-9_-]{16,128}$/.test(code)){
+      status.textContent=fixed?'서비스 연결 설정을 확인하세요.':'개발 페이지 주소·HTTPS 중계 주소·접속코드를 확인하세요.';return;
     }
     if(config.endpoint&&endpoint!==config.endpoint){
       // No old session is ever replayed to a newly selected tunnel.
       for(let i=sessionStorage.length-1;i>=0;i--){const k=sessionStorage.key(i);if(k&&k.startsWith('myinvest_v2_dev:'))sessionStorage.removeItem(k)}
     }
-    config.endpoint=endpoint;config.devAccessCode=code;
+    config.endpoint=endpoint;if(!fixed)config.devAccessCode=code;
     panel.querySelector('button').disabled=true;status.textContent='격리 환경 확인 중…';
     let stage='network',http=null;
     try{
@@ -66,9 +76,9 @@
       config.externalStore=config.accountReads&&data.developmentExternalStore===true;
       config.externalAccountCatalogVersion=data.externalAccountCatalogVersion===1?1:0;
       stage='storage';
-      sessionStorage.setItem(KEY,JSON.stringify({endpoint,code}));
+      sessionStorage.setItem(KEY,JSON.stringify(fixed?{endpoint,kind:'persistent'}:{endpoint,code}));
       stage='render';
-      panel.querySelector('#devCode').value='';panel.remove();
+      if(!fixed)panel.querySelector('#devCode').value='';panel.remove();
       const banner=document.createElement('div');banner.id='devBanner';banner.setAttribute('role','status');banner.textContent='V2 개발 화면 점검 · 실제 NH 조회 및 저장 차단';
       banner.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:9999;background:#153047;color:#fff;text-align:center;padding:6px;font-size:12px';document.body.appendChild(banner);
       DevelopmentMarket.enable();
@@ -77,13 +87,12 @@
     }catch(e){
       const fallback={network:'DEV_NETWORK',response:'DEV_RESPONSE_INVALID',storage:'DEV_STORAGE',render:'DEV_UI_ERROR'}[stage];
       const reason=known(e&&e.devCode)?e.devCode:known(e&&e.code)?e.code:fallback;
+      if(fixed)panel.querySelector('button').hidden=false;
       status.textContent=errors[reason]+' ('+reason+(http?' · HTTP '+http:'')+')';
     }
     finally{panel.querySelector('button').disabled=false}
   }
-  panel.querySelector('form').addEventListener('submit',connect);
-  panel.querySelector('#devEndpoint').value=config.endpoint;
-  panel.querySelector('#devCode').value=config.devAccessCode||'';
+  if(fixed)panel.querySelector('button').addEventListener('click',connect);else{panel.querySelector('form').addEventListener('submit',connect);panel.querySelector('#devEndpoint').value=config.endpoint;panel.querySelector('#devCode').value=config.devAccessCode||'';}
   // Initialize existing local screens only. Auth/transport and the server-side
   // auth-only allowlist remain unchanged; no automatic account/market requests.
   window.addEventListener('DOMContentLoaded',()=>{
@@ -91,5 +100,5 @@
     window.initDashboard=()=>window.DevelopmentInspection.init();
   },{once:true});
   // Defer until transport.js exists, and preserve session reload in this tab.
-  if(config.endpoint)window.addEventListener('DOMContentLoaded',()=>connect(),{once:true});
+  if(config.endpoint||fixed)window.addEventListener('DOMContentLoaded',()=>connect(),{once:true});
 })();

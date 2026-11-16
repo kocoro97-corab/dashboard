@@ -96,3 +96,9 @@ No actual orders, actual account writes, paid AI or production deployments are
 part of this change. Economic calendar, relative sector strength, detailed stock
 fundamentals/watchlist UI and advanced trading-plan UI are visibly unconnected
 until their independently supplied Work modules are integrated.
+
+## Persistent relay support
+
+See `persistent-relay.md`. A verified `config/development-relay.json` selects a
+fixed isolated Worker and removes address/code entry. Until the existing account
+and deployment are verified, the current temporary tunnel remains active.
