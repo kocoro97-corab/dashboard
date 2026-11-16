@@ -79,7 +79,7 @@ def deploy(args,api=cloud,runner=run,preflight_fn=preflight,settings_fn=deployme
  runner(['secret','bulk','--config',str(config_path)],folder,runtime,json.dumps(values))
  if args.disable:return {'status':'PASS','code':'PERSISTENT_ACCESS_CLOSED','endpoint':endpoint,'orderCalls':0,'gasWrites':False}
  metadata=probe(endpoint,{'action':'appVersion'})
- if any(metadata.get(k)!=v for k,v in expected(plan).items()) or metadata.get('relayProfile')!='persistent' or metadata.get('developmentAccountReads') is not True or metadata.get('developmentPublicMarket') is not True:raise Stop('PERSISTENT_TARGET_NOT_VERIFIED')
+ if any(metadata.get(k)!=v for k,v in expected(plan).items()) or metadata.get('relayProfile')!='persistent' or metadata.get('developmentAccountReads') is not True or metadata.get('developmentPublicMarket') is not True or metadata.get('developmentExternalStore') is not True:raise Stop('PERSISTENT_TARGET_NOT_VERIFIED')
  public={'profile':'isolated-persistent','endpoint':endpoint};(folder/'public-activation.json').write_text(json.dumps(public));(folder/'public-activation.json').chmod(0o600)
  return {'status':'PASS','scope':'PERSISTENT_RELAY_READY','endpoint':endpoint,'page':'https://kocoro97-corab.github.io/dashboard-v2-dev/','isolation':'PASS','publicMarket':True,'accountReads':True,'reviewedStore':True,'developmentCodeRequired':False,'pageActivation':'PENDING_VERIFIED_ENDPOINT_BINDING','actualNhCalls':0,'orderCalls':0,'credentialsIncluded':False}
 

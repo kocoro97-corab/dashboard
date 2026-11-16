@@ -11,7 +11,7 @@ class OwnerTests(unittest.TestCase):
    folder=Path(t);plan={'scriptId':'SYNTHETIC_SCRIPT','url':'https://script.google.com/macros/s/SYNTHETIC_DEPLOYMENT/exec','sheetHash':'b'*64,'sourceDigest':'c'*64};(folder/'fresh-plan.json').write_text(json.dumps(plan));calls=[]
    def api(path,token,optional=False):return None if '/scripts/' in path else {'subdomain':'synthetic'}
    def runner(args,cwd,env,secret=None):calls.append((args,env,secret));return ''
-   def probe(endpoint,body):return dict(mod.expected(plan),success=True,relayProfile='persistent',developmentAccountReads=True,developmentPublicMarket=True)
+   def probe(endpoint,body):return dict(mod.expected(plan),success=True,relayProfile='persistent',developmentAccountReads=True,developmentPublicMarket=True,developmentExternalStore=True)
    args=SimpleNamespace(environment=folder,account_id='a'*32,free_plan_confirmed=True,disable=False)
    with patch.object(mod,'private_path',return_value=folder),patch.object(mod.shutil,'which',return_value='/synthetic/npx'):
     result=mod.deploy(args,api=api,runner=runner,preflight_fn=lambda *a,**k:None,settings_fn=lambda p:dict(status='PASS',executeAs='USER_DEPLOYING',access='ANYONE_ANONYMOUS',versionMatches=True),probe=probe,cf_token='SYNTHETIC_PRIVATE_TOKEN')
