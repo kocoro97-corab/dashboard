@@ -42,10 +42,47 @@
     for(const row of snap.combined){const tr=node('tr');for(const value of [row.name,row.code||'미확인',row.market==='domestic'?'국내':'해외',row.currency||'미확인',row.accountCount,format(row.quantity),format(row.avgPrice),format(row.currentPrice),format(row.valueKrw),format(row.profitKrw),format(row.returnPct),(row.verified?'식별자 확인':'식별자 미확인 · 별도 행')+(row.partial?' · 일부 시세 미확인':'')+(row.draft?' · 임시':'')+(row.observedAt?' · 관측 '+row.observedAt:' · 시세 관측시각 미확인')])tr.append(node('td',value));body.append(tr)}
     table.append(body);wrap.append(table);section.append(wrap);if(!snap.combined.length)section.append(note(snap.status==='empty'?'조회된 계좌 범위에 보유종목이 없습니다.':'미조회 · 보유종목이 없다는 뜻이 아닙니다.'));target.append(section);
   }
+  // Read-only portfolio visuals: use calculated KRW values, never recompute FX or account cost basis.
+  function portfolioVisuals(target,snap){
+    const result=snap.result||{},summary=result.summary||{};
+    const section=node('section',null,'card');section.classList.add('portfolio-visuals');
+    const style=node('style');style.textContent=`
+      .portfolio-visuals{min-width:0}.pv-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:12px 0 18px}
+      .pv-kpi{border:1px solid #40516a;border-radius:10px;padding:12px;min-width:0;background:#172238;color:#e7eef9}
+      .pv-kpi small{display:block;color:#bdcadc;font-size:12px}.pv-kpi strong{display:block;font-size:clamp(15px,1.8vw,23px);overflow-wrap:anywhere;margin-top:5px}
+      .pv-panels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.pv-panel{border:1px solid #40516a;border-radius:10px;padding:13px;min-width:0}
+      .pv-panel h3{margin:0 0 12px}.pv-bar-row{margin:10px 0}.pv-bar-label{display:flex;justify-content:space-between;gap:10px;font-size:13px;overflow-wrap:anywhere}
+      .pv-track{height:12px;background:#344158;border-radius:20px;overflow:hidden;margin-top:5px}.pv-fill{height:100%;background:#69a7e9}
+      .pv-fill.negative{background:#e58b8b}.pv-donut{width:150px;height:150px;border-radius:50%;margin:10px auto;position:relative}
+      .pv-donut:after{content:'';position:absolute;inset:27px;border-radius:50%;background:#172238}.pv-legend{font-size:12px;display:grid;gap:5px}
+      .pv-legend-item{display:flex;align-items:center;gap:7px;overflow-wrap:anywhere}.pv-dot{width:10px;height:10px;flex:none;border-radius:3px}
+      .pv-muted{font-size:12px;color:#b6c5d9}.pv-warning{margin:10px 0}
+      @media(max-width:900px){.pv-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.pv-panels{grid-template-columns:1fr}}
+      @media(max-width:390px){.pv-kpis{grid-template-columns:1fr 1fr}.pv-kpi{padding:9px}.pv-donut{width:125px;height:125px}.pv-donut:after{inset:24px}}
+    `;section.append(style,node('h2','포트폴리오 한눈에 보기'));
+    const kpis=node('div',null,'pv-kpis');
+    const entries=[['확인된 보유종목 평가액',snap.knownSubtotal,'원'],['조회자료 매입금액',summary.costKrw,'원'],['평가손익',summary.profitKrw,'원'],['평가수익률',summary.returnPct,'%']];
+    for(const [label,value,unit] of entries){const card=node('div',null,'pv-kpi');card.append(node('small',label),node('strong',Number.isFinite(value)?format(value)+unit:'미확인'));kpis.append(card)}section.append(kpis);
+    const warning=node('p',(snap.complete?'조회된 계좌 범위 기준':'부분 합계 · 미조회 계좌 또는 시세 누락')+(snap.draft?' · 임시 검토자료 포함':'')+' · 현금·예수금 제외 · 실현손익·과거 추이 미연결','pv-muted pv-warning');section.append(warning);
+    const panels=node('div',null,'pv-panels');
+    const colors=['#69a7e9','#67c6a4','#e7bd70','#bb9de6','#e58b8b','#84c8d8','#a9bc7b'];
+    function rowsFor(list){return(Array.isArray(list)?list:[]).filter(x=>x&&Number.isFinite(x.valueKrw)&&x.valueKrw>0)}
+    function labelFor(x){if(x.key===null||x.key===undefined)return '미확인';return snap.details?.find(d=>d.accountKey===x.key)?.accountLabel||String(x.key)}
+    function panel(title,list,mode){const box=node('section',null,'pv-panel');box.append(node('h3',title));const rows=rowsFor(list);if(!rows.length){box.append(node('p','확인된 평가액 없음 · 미보유를 뜻하지 않습니다.','pv-muted'));return box}
+      const sum=rows.reduce((a,x)=>a+x.valueKrw,0);
+      if(mode==='donut'){const donut=node('div',null,'pv-donut');donut.setAttribute('role','img');donut.setAttribute('aria-label',title+' · '+rows.map(x=>labelFor(x)+' '+(x.valueKrw/sum*100).toFixed(1)+'%').join(', '));let pos=0;const stops=rows.map((x,i)=>{const from=pos;pos+=x.valueKrw/sum*100;return colors[i%colors.length]+' '+from.toFixed(3)+'% '+pos.toFixed(3)+'%'});donut.style.background='conic-gradient('+stops.join(',')+')';box.append(donut);const legend=node('div',null,'pv-legend');rows.forEach((x,i)=>{const item=node('div',null,'pv-legend-item'),dot=node('span',null,'pv-dot');dot.style.background=colors[i%colors.length];item.append(dot,node('span',labelFor(x)+' · '+(x.valueKrw/sum*100).toFixed(1)+'%'));legend.append(item)});box.append(legend)}
+      else{const max=Math.max(...rows.map(x=>mode==='profit'?Math.abs(Number.isFinite(x.profitKrw)?x.profitKrw:0):x.valueKrw));rows.slice(0,12).forEach(x=>{const item=node('div',null,'pv-bar-row'),line=node('div',null,'pv-bar-label');const val=mode==='profit'?x.profitKrw:x.valueKrw;line.append(node('span',labelFor(x)),node('span',Number.isFinite(val)?format(val)+'원':'미확인'));item.append(line);const track=node('div',null,'pv-track'),fill=node('div',null,'pv-fill'+(Number.isFinite(val)&&val<0?' negative':''));fill.style.width=(Number.isFinite(val)&&max>0?Math.min(100,Math.abs(val)/max*100):0)+'%';track.append(fill);item.append(track);box.append(item)})}
+      return box}
+    panels.append(panel('계좌별 평가액 비중',result.accounts,'donut'),panel('국내·해외 구성',snap.byMarket,'donut'),panel('계좌별 평가손익',result.accounts,'profit'),panel('종목별 평가액 집중도',result.exposures,'value'));section.append(panels);
+    const risk=result.risk||{};section.append(node('p',risk.unknownExposure?'식별자 미확인 종목이 있어 집중도 확정 불가':risk.incomplete?'조회 범위가 불완전하여 집중도는 부분 자료 기준':risk.concentrated?.length?'단일 종목 25% 이상 집중 경고':'집중도는 조회된 평가액 기준이며 미연결 자산은 제외','pv-muted'));
+    section.append(node('p','표 아래의 원본 계좌별 자료와 평단가는 변경하지 않습니다. 그래프의 비중은 확인된 양의 원화 평가액만을 분모로 계산합니다. 환율 기준시각이 없으면 확인할 수 없습니다.','pv-muted'));
+    target.append(section);
+  }
   function renderReport(target,ctx,tab){
     const snap=ctx.snapshot(),result=snap.result;target.replaceChildren();
     if(snap.testRows.length)target.append(note('합성 저장 검증자료 '+snap.testRows.length+'행은 실제 자산 합계·통합 수량·손익에서 제외했습니다.'));
     if(tab==='overview'||tab==='analysis'){
+      portfolioVisuals(target,snap);
       target.append(note((snap.complete?'조회된 계좌 범위의 합계':'부분 합계 · 미조회 계좌/누락 시세 제외')+(snap.draft?' · 외부계좌 임시 검토값 포함':'')));
       const summary=node('div',null,'tw'),summaryTable=node('table'),summaryHead=node('tr'),summaryBody=node('tr');
       for(const [title,value] of [['확인된 평가금액(KRW)',snap.knownSubtotal],['조회자료 매입금액(KRW)',result.summary.costKrw],['조회자료 평가손익(KRW)',result.summary.profitKrw],['수익률(%)',result.summary.returnPct]]){summaryHead.append(node('th',title));summaryBody.append(node('td',format(value)))}const summaryThead=node('thead'),summaryTbody=node('tbody');summaryThead.append(summaryHead);summaryTbody.append(summaryBody);summaryTable.append(summaryThead,summaryTbody);summary.append(summaryTable);target.append(summary);
