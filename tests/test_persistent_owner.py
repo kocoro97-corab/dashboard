@@ -18,7 +18,7 @@ class OwnerTests(unittest.TestCase):
      with self.assertRaises(mod.Stop) as caught:mod.public_request('https://test.synthetic.workers.dev/api',{'action':'appVersion'})
      self.assertNotIn('PRIVATE',json.dumps(caught.exception.diagnostic))
     request=opener.return_value.open.call_args.args[0]
-    self.assertIsNone(request.get_header('Authorization'));self.assertEqual(json.loads(request.data),{'action':'appVersion'})
+    self.assertIsNone(request.get_header('Authorization'));self.assertEqual(json.loads(request.data),{'action':'appVersion'});self.assertTrue(request.get_header('User-agent').startswith('Mozilla/5.0'))
  def test_public_http_errors_redact_body_and_identify_worker_failure(self):
   headers=Message();headers['Content-Type']='application/json';headers['Access-Control-Allow-Origin']=mod.ORIGIN
   for code,expected in [('RELAY_CONFIG_INVALID','RELAY_CONFIG_INVALID'),('PRIVATE_TOKEN',None)]:

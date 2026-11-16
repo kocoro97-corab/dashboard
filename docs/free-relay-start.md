@@ -69,6 +69,12 @@ workers.dev 설정 및 기존 Worker 설정만 읽는다. PASS도 배포 권한�
 허용된 중계 오류 코드만 출력하며 응답 원문·토큰·GAS 주소는 출력하지 않는다.
 PASS도 실제 로그인이나 계좌조회 검증을 대신하지 않는다.
 
+공개 검사에서 Python 기본 User-Agent는 Cloudflare `403 / 1010`을 받고,
+같은 요청의 브라우저 User-Agent는 `200 / JSON`을 받는 사례를 확인했다.
+검사 도구는 브라우저 식별자로 요청한다. Cloudflare 차단을 끄거나 인증·Origin·
+GAS 지문 검사를 완화하지 않는다. 해당 원인 확인 후에는 재배포 대신 위 읽기
+전용 검사로 소유자 환경의 예상 GAS 지문까지 일치하는지 확인한다.
+
 ## 3. Codex: 개발 페이지 활성화 및 실제 검증
 
 검증된 고정 endpoint를 `config/development-relay.json`에 반영해 기존 dev-pages로

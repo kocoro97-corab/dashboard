@@ -65,7 +65,10 @@ def public_diagnostic(response,data=None):
  return diagnostic
 
 def public_request(endpoint,body,token=None):
- headers={'Origin':ORIGIN,'Content-Type':'application/json','X-MyInvest-Dev-Client':'dashboard-v2-dev'}
+ # Exercise the browser-facing edge with a browser User-Agent. The default
+ # Python agent can receive Cloudflare 1010 before the Worker executes.
+ # This adds no authentication; Origin, GAS isolation and session checks remain.
+ headers={'Origin':ORIGIN,'Content-Type':'application/json','X-MyInvest-Dev-Client':'dashboard-v2-dev','User-Agent':'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'}
  if token:headers['Authorization']='Bearer '+token
  request=urllib.request.Request(endpoint,data=json.dumps(body).encode(),headers=headers,method='POST')
  try:
