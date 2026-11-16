@@ -1,7 +1,9 @@
 # 상시 개발 중계 — 구현 및 소유자 연결 절차
 
+처음 시작한다면 [무료 가입부터 연결까지](free-relay-start.md)를 따른다.
+
 **상태: 코드/합성 검증 완료, 실제 배포 및 GAS 연결 NOT_RUN.**
-기존 Cloudflare 계정·Workers Free 플랜·소유자 인증이 확인되지 않았다.
+사용자는 GitHub + 무료 상시 중계를 선택했다. Cloudflare 무료 가입과 소유자 인증이 아직 필요하다.
 새 계정/유료 플랜/운영 인프라/Google 프로젝트는 생성하지 않았다.
 기존 GitHub Pages, 격리 GAS/Sheets/Properties와 사용자 인증을 재사용한다.
 
@@ -56,7 +58,7 @@ Durable Objects Free 한도 초과 시 작업 실패(자동 유료 전환 아님
 - https://developers.cloudflare.com/workers/platform/pricing/
 - https://developers.cloudflare.com/durable-objects/platform/pricing/
 
-이 사실은 사용자의 실제 계정 플랜을 확인했다는 뜻이 아니다. 기존 계정이
+이 사실은 사용자의 실제 계정 플랜을 확인했다는 뜻이 아니다. 가입/인증된 계정이
 Workers Free인지 소유자가 확인해야 하며 배포 CLI는 `--free-plan-confirmed`가
 없으면 동작하지 않는다. 유료 플랜 활성화/계정 생성/결제 설정 API는 호출하지 않는다.
 실제 계정이 없거나 비용/권한 조건을 확인할 수 없으면 배포를 중단한다.
@@ -124,5 +126,5 @@ metadata를 재확인한 뒤 다음 공개 파일을 기존 소스 브랜치에 
 - 실제 Cloudflare 배포·실제 GAS/시세·실계좌 조회: NOT_RUN.
 - 운영 변경0, 실제 NH/주문0, 실제 저장0, 새 계정/유료 결제0.
 
-다음 담당: **사용자 — 기존 Cloudflare 계정 유무 확인 및 소유자 환경 인증**.
+다음 담당: **사용자 — Cloudflare 무료 가입 및 소유자 환경 인증**.
 계정/권한이 확보되면 **Codex — 실제 배포 연결·Pages 활성화·GAS 통합 검증**.

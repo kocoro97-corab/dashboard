@@ -84,8 +84,11 @@ def deploy(args,api=cloud,runner=run,preflight_fn=preflight,settings_fn=deployme
  return {'status':'PASS','scope':'PERSISTENT_RELAY_READY','endpoint':endpoint,'page':'https://kocoro97-corab.github.io/dashboard-v2-dev/','isolation':'PASS','publicMarket':True,'accountReads':True,'reviewedStore':True,'developmentCodeRequired':False,'pageActivation':'PENDING_VERIFIED_ENDPOINT_BINDING','actualNhCalls':0,'orderCalls':0,'credentialsIncluded':False}
 
 def main():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('--environment',type=Path,required=True);p.add_argument('--account-id',required=True);p.add_argument('--free-plan-confirmed',action='store_true',help='Owner confirms an existing Workers Free account; no paid plan or account is created');p.add_argument('--disable',action='store_true',help='Close existing relay; no GAS operation');args=p.parse_args()
- try:result=deploy(args)
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('--environment',type=Path,required=True);p.add_argument('--account-id',help='Existing Cloudflare account ID; otherwise read from owner environment or prompt');p.add_argument('--free-plan-confirmed',action='store_true',help='Owner confirms an existing Workers Free account; no paid plan or account is created');p.add_argument('--disable',action='store_true',help='Close existing relay; no GAS operation');args=p.parse_args()
+ try:
+  if not args.account_id:args.account_id=os.environ.get('CLOUDFLARE_ACCOUNT_ID') or input('Cloudflare account ID (32 characters): ').strip()
+  result=deploy(args)
+ except EOFError:result={'status':'NOT_RUN','code':'OWNER_CLOUDFLARE_SETUP_REQUIRED','credentialsIncluded':False,'orderCalls':0}
  except KeyboardInterrupt:result={'status':'NOT_RUN','code':'OWNER_CANCELLED','credentialsIncluded':False}
  except Stop as error:result={'status':'NOT_RUN','code':str(error),'credentialsIncluded':False,'orderCalls':0}
  except Exception as error:result={'status':'NOT_RUN','code':str(error) if str(error) in SAFE_OWNER_CODES else 'PERSISTENT_OWNER_PREFLIGHT_FAILED','credentialsIncluded':False,'orderCalls':0}
