@@ -7,6 +7,7 @@ BASE='https://kocoro97-corab.github.io/dashboard-v2-dev/'
 ENDPOINT='https://myinvest-v2-dev-relay.synthetic.workers.dev/api'
 ETF=['XLK','XLF','XLE','XLV','XLI','XLY','XLP','XLC','XLU','XLB','XLRE']
 LIST='https://m.stock.naver.com/api/stocks/theme?page=1&pageSize=100'
+US_STOCKS={r['symbol']:r for t in json.loads((ROOT/'data/us-theme-instruments.json').read_text())['themes'] for r in t['instruments']}
 def history_url(symbol,interval='1d',period='1y'):return 'https://query1.finance.yahoo.com/v8/finance/chart/'+quote(symbol,safe="~()*!.'")+'?interval='+interval+'&range='+period
 LAST=1794528000 # 2026-11-13 UTC, before all test clock boundaries.
 def history(symbol,count=100,step=None,interval='1d',period='1y'):
@@ -16,12 +17,12 @@ def history(symbol,count=100,step=None,interval='1d',period='1y'):
   from datetime import datetime,timezone
   times=[int(datetime(m//12,m%12+1,1,tzinfo=timezone.utc).timestamp()) for m in months];count=len(times)
  else:times=[LAST-(count-1-i)*(7 if interval=='1wk' else 1)*86400 for i in range(count)]
- values=[base+i*step for i in range(count)];domestic=symbol.endswith(('.KS','.KQ')) or symbol in ['^KS11','^KQ11'];exchange='KOE' if symbol.endswith('.KQ') or symbol=='^KQ11' else 'KSC' if domestic else 'PCX'
- return {'chart':{'result':[{'meta':{'symbol':symbol,'currency':'KRW' if domestic else 'USD','exchangeName':exchange,'regularMarketPrice':values[-1],'chartPreviousClose':values[-2] if count>1 else None,'regularMarketTime':times[-1]},'timestamp':times,'indicators':{'quote':[{'open':[v-1 for v in values],'high':[v+2 for v in values],'low':[v-2 for v in values],'close':values,'volume':[1000]*count}]}}]}}
+ values=[base+i*step for i in range(count)];domestic=symbol.endswith(('.KS','.KQ')) or symbol in ['^KS11','^KQ11'];exchange='KOE' if symbol.endswith('.KQ') or symbol=='^KQ11' else 'KSC' if domestic else US_STOCKS.get(symbol,{}).get('exchange','PCX')
+ return {'chart':{'result':[{'meta':{'symbol':symbol,'currency':'KRW' if domestic else 'USD','exchangeName':exchange,'instrumentType':'EQUITY' if symbol in US_STOCKS else 'ETF' if symbol in ETF or symbol=='SPY' else 'INDEX','regularMarketPrice':values[-1],'chartPreviousClose':values[-2] if count>1 else None,'regularMarketTime':times[-1]},'timestamp':times,'indicators':{'quote':[{'open':[v-1 for v in values],'high':[v+2 for v in values],'low':[v-2 for v in values],'close':values,'volume':[1000]*count}]}}]}}
 def synthetic_feeds():
  def row(code,name,rate,val):return {'itemCode':code,'stockName':name,'fluctuationsRatio':str(rate),'accumulatedTradingValue':str(val),'accumulatedTradingVolume':'100'}
  data={LIST:json.dumps({'groups':[{'no':12,'name':'합성테마 A','changeRate':'4'},{'no':13,'name':'합성테마 B','changeRate':'2'}]}),'https://m.stock.naver.com/api/stocks/theme/12?page=1&pageSize=100':json.dumps({'stocks':[row('005930','삼성전자',2,100),row('000660','SK하이닉스',-1,300),row('035720','카카오',0,200)]}),'https://m.stock.naver.com/api/stocks/theme/13?page=1&pageSize=100':json.dumps({'stocks':[row('005930','삼성전자',2,100),row('344820','KCC글라스',-2,500),row('352700','씨앤투스',1,400)]})}
- symbols=ETF+['SPY','^KS11','^KQ11','^GSPC','^IXIC','^DJI','^SOX','^VIX','^TNX','^IRX','KRW=X','GC=F','CL=F','NQ=F','ES=F','YM=F','005930.KS','000660.KS','035720.KS','344820.KS','352700.KQ']
+ symbols=list(US_STOCKS)+ETF+['SPY','^KS11','^KQ11','^GSPC','^IXIC','^DJI','^SOX','^VIX','^TNX','^IRX','KRW=X','GC=F','CL=F','NQ=F','ES=F','YM=F','005930.KS','000660.KS','035720.KS','344820.KS','352700.KQ']
  for symbol in symbols:
   for interval,period in [('1d','1d'),('1d','1y'),('1d','3mo'),('1wk','2y'),('1mo','5y'),('1mo','10y'),('1mo','max')]:data[history_url(symbol,interval,period)]=json.dumps(history(symbol,interval=interval,period=period))
  return data

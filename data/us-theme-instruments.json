@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "publisher": "ARK Invest",
+  "scope": "ISSUER_THEMATIC_EQUITY_SAMPLES",
+  "retrievedAt": "2026-11-17T21:53:58.012485+00:00",
+  "themes": [
+    {
+      "id": "ARKQ",
+      "name": "자율주행·로보틱스",
+      "asOf": "2026-11-17",
+      "source": "https://assets.ark-funds.com/fund-documents/funds-etf-csv/ARK_AUTONOMOUS_TECH._&_ROBOTICS_ETF_ARKQ_HOLDINGS.csv",
+      "sourcePage": "https://www.ark-funds.com/funds/arkq",
+      "sourceSha256": "5686a179acf8385fd999790889a55c6214aca2f5fbac33363917abe41a353ed1",
+      "selection": "공개 구성자료 순서 상위 5개 미국 상장 일반종목 표본; 비주식·식별 미확인·이력 부족 제외",
+      "instruments": [
+        {
+          "symbol": "TSLA",
+          "name": "TESLA INC",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "SPCX",
+          "name": "SPACE EXPLORATION TECHN-CL A",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "KTOS",
+          "name": "KRATOS DEFENSE & SECURITY",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "NVDA",
+          "name": "NVIDIA CORP",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "RKLB",
+          "name": "ROCKET LAB CORP",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        }
+      ]
+    },
+    {
+      "id": "ARKG",
+      "name": "유전체·바이오 혁신",
+      "asOf": "2026-11-17",
+      "source": "https://assets.ark-funds.com/fund-documents/funds-etf-csv/ARK_GENOMIC_REVOLUTION_ETF_ARKG_HOLDINGS.csv",
+      "sourcePage": "https://www.ark-funds.com/funds/arkg",
+      "sourceSha256": "cf7a56291adfefc27313387277a599583171ee488b3fbb583ce46e7756f2052b",
+      "selection": "공개 구성자료 순서 상위 5개 미국 상장 일반종목 표본; 비주식·식별 미확인·이력 부족 제외",
+      "instruments": [
+        {
+          "symbol": "TEM",
+          "name": "TEMPUS AI INC-CL A",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "TXG",
+          "name": "10X GENOMICS INC-CLASS A",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "TWST",
+          "name": "TWIST BIOSCIENCE CORP",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "CRSP",
+          "name": "CRISPR THERAPEUTICS AG",
+          "currency": "USD",
+          "exchange": "NGM",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "GH",
+          "name": "GUARDANT HEALTH INC",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        }
+      ]
+    },
+    {
+      "id": "ARKW",
+      "name": "차세대 인터넷",
+      "asOf": "2026-11-17",
+      "source": "https://assets.ark-funds.com/fund-documents/funds-etf-csv/ARK_NEXT_GENERATION_TECHNOLOGY_ETF_ARKW_HOLDINGS.csv",
+      "sourcePage": "https://www.ark-funds.com/funds/arkw",
+      "sourceSha256": "704925fd6153fa0d18e059147333ef366f1b9d4b871697087e3b334ee6b9be60",
+      "selection": "공개 구성자료 순서 상위 5개 미국 상장 일반종목 표본; 비주식·식별 미확인·이력 부족 제외",
+      "instruments": [
+        {
+          "symbol": "TSLA",
+          "name": "TESLA INC",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "META",
+          "name": "META PLATFORMS INC-CLASS A",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "SPCX",
+          "name": "SPACE EXPLORATION TECHN-CL A",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "AMZN",
+          "name": "AMAZON.COM INC",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "SHOP",
+          "name": "SHOPIFY INC - CLASS A",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        }
+      ]
+    },
+    {
+      "id": "ARKF",
+      "name": "핀테크 혁신",
+      "asOf": "2026-11-17",
+      "source": "https://assets.ark-funds.com/fund-documents/funds-etf-csv/ARK_BLOCKCHAIN_&_FINTECH_INNOVATION_ETF_ARKF_HOLDINGS.csv",
+      "sourcePage": "https://www.ark-funds.com/funds/arkf",
+      "sourceSha256": "d28835fc46b7096a1e015e88a27188421decd9f00aa2fa92cef7c3db62882567",
+      "selection": "공개 구성자료 순서 상위 5개 미국 상장 일반종목 표본; 비주식·식별 미확인·이력 부족 제외",
+      "instruments": [
+        {
+          "symbol": "XYZ",
+          "name": "BLOCK INC",
+          "currency": "USD",
+          "exchange": "NYQ",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "SHOP",
+          "name": "SHOPIFY INC - CLASS A",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "META",
+          "name": "META PLATFORMS INC-CLASS A",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "CRCL",
+          "name": "CIRCLE INTERNET GROUP INC",
+          "currency": "USD",
+          "exchange": "NYQ",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "TOST",
+          "name": "TOAST INC-CLASS A",
+          "currency": "USD",
+          "exchange": "NYQ",
+          "instrumentType": "EQUITY"
+        }
+      ]
+    },
+    {
+      "id": "ARKX",
+      "name": "우주·방위 혁신",
+      "asOf": "2026-11-17",
+      "source": "https://assets.ark-funds.com/fund-documents/funds-etf-csv/ARK_SPACE_&_DEFENSE_INNOVATION_ETF_ARKX_HOLDINGS.csv",
+      "sourcePage": "https://www.ark-funds.com/funds/arkx",
+      "sourceSha256": "5f2c716d8467042a07b3c396dabba19e14dd032f6441b63de77bc65402027b5c",
+      "selection": "공개 구성자료 순서 상위 5개 미국 상장 일반종목 표본; 비주식·식별 미확인·이력 부족 제외",
+      "instruments": [
+        {
+          "symbol": "SPCX",
+          "name": "SPACE EXPLORATION TECHN-CL A",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "LHX",
+          "name": "L3HARRIS TECHNOLOGIES INC",
+          "currency": "USD",
+          "exchange": "NYQ",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "RKLB",
+          "name": "ROCKET LAB CORP",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "DE",
+          "name": "DEERE & CO",
+          "currency": "USD",
+          "exchange": "NYQ",
+          "instrumentType": "EQUITY"
+        },
+        {
+          "symbol": "AVAV",
+          "name": "AEROVIRONMENT INC",
+          "currency": "USD",
+          "exchange": "NMS",
+          "instrumentType": "EQUITY"
+        }
+      ]
+    }
+  ]
+}

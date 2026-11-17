@@ -17,6 +17,8 @@ for sym in ['^KS11','^KQ11','^GSPC','^IXIC','^DJI','^SOX','^VIX','^TNX','^IRX','
  values=[100+i for i in range(70)];stamp=int(time.time())-80*86400
  doc={'chart':{'result':[{'meta':{'symbol':sym,'currency':'KRW' if sym.endswith(('.KS','.KQ')) or sym in ['^KS11','^KQ11'] else 'USD','exchangeName':'KSC' if sym.endswith('.KS') or sym=='^KS11' else 'KOE' if sym.endswith('.KQ') or sym=='^KQ11' else 'PCX','regularMarketPrice':169,'chartPreviousClose':168,'regularMarketTime':stamp+69*86400},'timestamp':[stamp+i*86400 for i in range(70)],'indicators':{'quote':[{'open':values,'high':[x+2 for x in values],'low':[x-2 for x in values],'close':values,'volume':[1000]*70}]}}]}}
  for interval,period in [('1d','1d'),('1d','1y'),('1d','3mo')]:fixtures['https://query1.finance.yahoo.com/v8/finance/chart/'+quote(sym,safe="~()*!.'")+'?interval='+interval+'&range='+period]=json.dumps(doc)
+from public_integration_support import US_STOCKS,history,history_url
+for symbol in US_STOCKS:fixtures[history_url(symbol)]=json.dumps(history(symbol))
 results=[]
 with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
  artifact=Path(tmp)/'public';build(artifact,relay_endpoint=ENDPOINT);fixture=Path(tmp)/'feeds.json';fixture.write_text(json.dumps(fixtures));browser=pw.chromium.launch(headless=True)
@@ -87,12 +89,12 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
        rows=page.locator('.stv2-overview table tr').all()[1:];codes=[r.locator('td').first.inner_text() for r in rows];assert codes==['KCC글라스 (344820)','씨앤투스 (352700)','SK하이닉스 (000660)','카카오 (035720)','삼성전자 (005930)'];assert [r.locator('td').nth(3).inner_text() for r in rows]==['500','400','300','200','100'];page.screenshot(path=str(args.output/(str(width)+'-sectors-leaders.png')))
       check('LEADERS_TURNOVER_ORDER_DEDUP_AND_NAMES',leaders)
       def refresh():
-       page.locator('.stv2 > div').first.get_by_role('button',name='국내 테마 새로고침',exact=True).click();page.wait_for_function('()=>!THM_BUSY');page.wait_for_selector('.stv2 button:text-is("국내 테마 새로고침")');assert sum(r['url']==LIST for r in requests)==2
+       page.get_by_role('button',name='테마 데이터 새로고침',exact=True).click();page.wait_for_function('()=>!THM_BUSY');page.wait_for_selector('.stv2-heading button:not([disabled])');assert sum(r['url']==LIST for r in requests)==2
       check('EXPLICIT_REFRESH_FETCHES_ONCE',refresh)
       def modes():
-       page.locator('.stv2-tabs button',has_text='미국').click();page.wait_for_function('()=>document.querySelector(".stv2").textContent.includes("미국 11개 섹터 ETF 상대강도")');assert '개별 미국 테마' in page.locator('.stv2').inner_text();assert page.locator('.stv2-overview').count()==0
-       page.locator('.stv2-tabs button',has_text='한국').click();page.locator('.stv2-tabs button',has_text='5일').click();page.wait_for_function('()=>document.querySelector(".stv2").textContent.includes("국내 상위 테마 구성종목 표본 분석")');assert '전체 테마 수익률' in page.locator('.stv2').inner_text();assert page.locator('.stv2-overview').count()==0
-       page.locator('.stv2-tabs button',has_text='1일').click();page.locator('.stv2-tabs button',has_text='스윙').click();page.wait_for_function('()=>document.querySelector(".stv2").textContent.includes("매수 추천이 아닙니다")');page.locator('.stv2-tabs button',has_text='단타').click()
+       page.get_by_role('button',name='시장 전환: 현재 한국',exact=True).click();page.wait_for_function('()=>document.querySelector(".stv2").textContent.includes("미국 11개 섹터 ETF 상대강도")');assert '개별 미국 테마' in page.locator('.stv2').text_content();assert page.locator('.stv2-overview').count()==0
+       page.get_by_role('button',name='시장 전환: 현재 미국',exact=True).click();page.locator('.stv2-tabs button',has_text='스윙').click();page.locator('.stv2-tabs button',has_text='5일').click();page.wait_for_function('()=>document.querySelector(".stv2").textContent.includes("국내 상위 테마 구성종목 표본 분석")');assert '전체 테마 수익률' in page.locator('.stv2').inner_text();assert page.locator('.stv2-overview').count()==0
+       page.wait_for_function('()=>document.querySelector(".stv2").textContent.includes("매수 추천이 아닙니다")');page.locator('.stv2-tabs button',has_text='단타').click()
       check('US_AND_KR_HISTORY_SCOPES_AND_SWING_DISCLOSURES',modes)
       def selection():
        page.locator('.stv2-overview table tr').nth(1).get_by_role('button',name='종목분석',exact=True).click();page.wait_for_function('()=>DashboardShell.getStatus().page==="stocks"');assert page.locator('#stockSearch').input_value()=='344820';page.wait_for_function('()=>document.querySelector(".sva")?.textContent.includes("분석 완료")');assert 'KCC글라스 (344820)' in page.locator('.sva').inner_text();assert any(r['url'] and '344820.KS' in r['url'] for r in requests);go('sectors')
