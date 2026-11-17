@@ -69,7 +69,7 @@ function create(){
    if(!active||version!==analysisVersion)return;
    analytics.set(key,{rows:rows.sort((a,b)=>b.relative-a.relative),benchmark:base,benchmarkSymbol,received:Date.now(),period,market});
   }catch(e){if(active&&version===analysisVersion)analysisError='시계열 수신 또는 검증 실패 · 실제 데이터 연결 상태를 확인하세요.'}
-  finally{if(active&&version===analysisVersion){analysisBusy=false;draw()}}
+  finally{if(active&&version===analysisVersion){analysisBusy=false;draw();if(keyFor()!==key)void loadAnalytics()}}
  }
  function analyticsView(){
   const key=keyFor(),data=analytics.get(key);
