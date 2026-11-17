@@ -1,8 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-function setup(enabled=true){
+function setup(enabled=true,persistent=false){
   const state={token:'synthetic-token',calls:[],releases:[],nhCalls:0,chartClears:0};
-  const config={publicMarket:enabled,endpoint:'https://synthetic-one.trycloudflare.com/api'};
+  const config={publicMarket:enabled,endpoint:'https://synthetic-one.trycloudflare.com/api',persistentRelay:persistent};
   const nodes={appContainer:{style:{display:'block'}},devBanner:{textContent:''},status:{textContent:''}};
   const original=url=>{state.calls.push({url,token:state.token,endpoint:config.endpoint});return new Promise(resolve=>state.releases.push(resolve))};
   const ctx=vm.createContext({window:{MYINVEST_TRANSPORT_CONFIG:config},LS:()=>state.token,$:id=>nodes[id]??={textContent:'',style:{display:''}},document:{querySelectorAll:()=>[]},
@@ -39,3 +39,6 @@ test('pending public reads are bounded and do not multiply upstream calls',async
 test('full manual refresh invalidates the chart cache before requesting fresh data',async()=>{
   const f=setup();await tick();const n=f.state.chartClears;await f.ctx.manualRefresh();assert.equal(f.state.chartClears,n+1);
 });
+
+test('persistent public reads use at most three slots and keep the fourth available for authentication',async()=>{const f=setup(true,true);const jobs=['a','b','c','d'].map(s=>f.ctx.getTxt(s));await tick();assert.equal(f.state.calls.length,3);f.state.releases.shift()('one');await tick();assert.equal(f.state.calls.length,4);while(f.state.releases.length)f.state.releases.shift()('done');await Promise.all(jobs)});
+test('persistent parallel queue discards logout results without starting waiting work',async()=>{const f=setup(true,true);const jobs=Array.from({length:9},(_,i)=>f.ctx.getTxt('q'+i));await tick();assert.equal(f.state.calls.length,3);f.state.token=null;while(f.state.releases.length)f.state.releases.shift()('stale');assert.ok((await Promise.all(jobs)).every(x=>x===null));assert.equal(f.state.calls.length,3)});

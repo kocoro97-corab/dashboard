@@ -15,17 +15,34 @@ const US_SECTORS=[['XLK','정보기술'],['XLF','금융'],['XLE','에너지'],['
 const PERIODS={'1d':1,'5d':5,'20d':20,'60d':60};
 const SERIES_CACHE=new Map(),SERIES_TTL=10*60*1000;
 const ret=(bars,n)=>bars.length>n&&bars.at(-1-n)>0?(bars.at(-1)/bars.at(-1-n)-1)*100:null;
+const SERIES_PENDING=new WeakMap();
 async function series(ctx,symbol){
  const cached=SERIES_CACHE.get(symbol);if(cached&&Date.now()-cached.at<SERIES_TTL)return cached.value;
- const url='https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(symbol)+'?interval=1d&range=6mo';
+ let pending=SERIES_PENDING.get(ctx);if(!pending){pending=new Map();SERIES_PENDING.set(ctx,pending)}
+ if(pending.has(symbol))return pending.get(symbol);
+ const job=readSeries(ctx,symbol);pending.set(symbol,job);
+ try{return await job}finally{if(pending.get(symbol)===job)pending.delete(symbol)}
+}
+async function readSeries(ctx,symbol){
+ // Reuse the existing permitted history route; 1y covers 60 trading-day windows.
+ const url='https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(symbol)+'?interval=1d&range=1y';
  const raw=await ctx.data.publicRead(url);if(!raw)throw Error('PUBLIC_DATA_UNAVAILABLE');
- const result=JSON.parse(raw)?.chart?.result?.[0],q=result?.indicators?.quote?.[0],times=result?.timestamp||[];
- if(!result||!q||!Array.isArray(times))throw Error('INVALID_CHART');
- const bars=times.map((t,i)=>({t,c:q.close?.[i],v:q.volume?.[i]})).filter(x=>Number.isFinite(x.c)&&x.c>0&&Number.isSafeInteger(x.t));
+ const result=JSON.parse(raw)?.chart?.result?.[0],q=result?.indicators?.quote?.[0],times=result?.timestamp;
+ if(!result||!q||!Array.isArray(times)||result.meta?.symbol!==symbol)throw Error('INVALID_CHART_IDENTITY');
+ const domestic=symbol==='^KS11'||/\.(KS|KQ)$/.test(symbol),currency=result.meta?.currency,exchange=String(result.meta?.exchangeName||'');
+ if(currency!==(domestic?'KRW':'USD'))throw Error('CHART_CURRENCY_MISMATCH');
+ if(domestic&&!(/\.KQ$/.test(symbol)?/^(KOE|KOSDAQ)$/i:/^(KSC|KOSPI|KRX|SEOUL)$/i).test(exchange))throw Error('CHART_EXCHANGE_MISMATCH');
+ let previous=0;const now=Date.now()/1000;
+ for(const t of times){if(!Number.isSafeInteger(t)||t<=previous||t>now+300)throw Error('INVALID_CHART_TIME');previous=t}
+ const regular=result.meta?.currentTradingPeriod?.regular;
+ const activeDay=Number.isFinite(regular?.start)&&Number.isFinite(regular?.end)&&now<regular.end?new Date(regular.start*1000).toISOString().slice(0,10):null;
+ const bars=times.map((t,i)=>({t,c:q.close?.[i],v:q.volume?.[i]})).filter(x=>Number.isFinite(x.c)&&x.c>0&&(!activeDay||new Date(x.t*1000).toISOString().slice(0,10)!==activeDay));
  if(bars.length<2)throw Error('INSUFFICIENT_BARS');
- const value={bars:bars.map(x=>x.c),last:bars.at(-1).t*1000,volume:bars.map(x=>x.v),currency:result.meta?.currency||null,exchange:result.meta?.exchangeName||null};
+ const value={bars:bars.map(x=>x.c),times:bars.map(x=>x.t),last:bars.at(-1).t*1000,volume:bars.map(x=>x.v),currency,exchange};
  SERIES_CACHE.set(symbol,{at:Date.now(),value});return value;
 }
+function comparableWindow(value,benchmark,n){return value.times.length>n&&[value.times.length-1,value.times.length-1-n].every((i,k)=>new Date(value.times[i]*1000).toISOString().slice(0,10)===new Date(benchmark.times[benchmark.times.length-1-k*n]*1000).toISOString().slice(0,10))}
+
 async function poolLimited(items,limit,fn){let index=0;await Promise.all(Array.from({length:Math.min(limit,items.length)},async()=>{while(index<items.length){const item=items[index++];await fn(item)}}))}
 
 function create(){
@@ -48,32 +65,37 @@ function create(){
  async function loadAnalytics(force=false){
   if(!active||!ctxRef||!ctxRef.publicConnected?.()||analysisBusy)return;
   if(market==='KR'&&period==='1d'&&mode==='day')return;
-  const key=keyFor();if(!force&&analytics.has(key))return;
+  const key=keyFor();if(!force&&analytics.has(key))return;const context=ctxRef;if(force)SERIES_CACHE.clear();
   analysisBusy=true;analysisError='';analysisKey=key;const version=++analysisVersion;draw();
   try{
-   const n=PERIODS[period],benchmarkSymbol=market==='US'?'SPY':'^KS11',benchmark=await series(ctxRef,benchmarkSymbol),base=ret(benchmark.bars,n);
+   const n=PERIODS[period],benchmarkSymbol=market==='US'?'SPY':'^KS11',benchmark=await series(context,benchmarkSymbol),base=ret(benchmark.bars,n);
    if(base===null)throw Error('BENCHMARK_HISTORY_MISSING');
-   const rows=[];
+   if(!active||version!==analysisVersion||keyFor()!==key)return;
+   const rows=[],failures=[];
    if(market==='US'){
-    await poolLimited(US_SECTORS,3,async ([symbol,name])=>{try{const v=await series(ctxRef,symbol);const change=ret(v.bars,n);if(change!==null&&v.currency==='USD')rows.push({symbol,name,change,relative:change-base,asof:v.last,coverage:'ETF',v})}catch{}});
+    await poolLimited(US_SECTORS,3,async ([symbol,name])=>{try{if(!active||version!==analysisVersion||keyFor()!==key)return;const v=await series(context,symbol);const change=ret(v.bars,n);if(change!==null&&v.currency==='USD'&&comparableWindow(v,benchmark,n))rows.push({symbol,name,change,relative:change-base,asof:v.last,coverage:'ETF',v});else failures.push({symbol,reason:change===null?'INSUFFICIENT_HISTORY':'DATE_MISMATCH'})}catch{failures.push({symbol,reason:'SERIES_UNAVAILABLE'})}});
    }else{
+    if((typeof EXT_MASTER==='undefined'||!EXT_MASTER)&&typeof loadExternalMaster==='function')await loadExternalMaster();
     const themes=ranking().slice(0,6);
     await poolLimited(themes,2,async t=>{
+     if(!active||version!==analysisVersion||keyFor()!==key)return;
      const stocks=themeRows(t).slice(0,5),results=[];
      await poolLimited(stocks,2,async stock=>{
-      for(const suffix of ['.KS','.KQ']){try{const v=await series(ctxRef,stock.code+suffix);if(v.currency!=='KRW'||!(/KSC|KOE|KOSPI|KOSDAQ|KRX|SEOUL/i.test(v.exchange||'')))continue;const change=ret(v.bars,n);if(change!==null){results.push({change,symbol:stock.code,name:stock.name,asof:v.last});break}}catch{}}
+      if(!active||version!==analysisVersion||keyFor()!==key)return;
+      const listing=typeof EXT_MASTER!=='undefined'?EXT_MASTER?.byCode?.get(stock.code):null;const suffix=listing?.market==='KOSPI'?'.KS':listing?.market==='KOSDAQ'?'.KQ':null;if(!suffix){failures.push({symbol:stock.code,reason:'IDENTITY_UNKNOWN'});return;}
+      for(const verifiedSuffix of [suffix]){try{const v=await series(context,stock.code+verifiedSuffix);if(v.currency!=='KRW'||!(/KSC|KOE|KOSPI|KOSDAQ|KRX|SEOUL/i.test(v.exchange||'')))continue;const change=ret(v.bars,n);if(change!==null&&comparableWindow(v,benchmark,n)){results.push({change,symbol:stock.code,name:stock.name,asof:v.last});break}else failures.push({symbol:stock.code,reason:change===null?'INSUFFICIENT_HISTORY':'DATE_MISMATCH'})}catch{failures.push({symbol:stock.code,reason:'SERIES_UNAVAILABLE'})}}
      });
      if(results.length>=2){const change=results.reduce((a,x)=>a+x.change,0)/results.length;rows.push({symbol:String(t.no),name:t.name,change,relative:change-base,asof:Math.min(...results.map(x=>x.asof)),coverage:results.length+'/'+stocks.length+'개 구성종목 동일가중 표본',sample:results})}
     });
    }
-   if(!active||version!==analysisVersion)return;
-   analytics.set(key,{rows:rows.sort((a,b)=>b.relative-a.relative),benchmark:base,benchmarkSymbol,received:Date.now(),period,market});
-  }catch(e){if(active&&version===analysisVersion)analysisError='시계열 수신 또는 검증 실패 · 실제 데이터 연결 상태를 확인하세요.'}
+   if(!active||version!==analysisVersion||keyFor()!==key)return;
+   analytics.set(key,{rows:rows.sort((a,b)=>b.relative-a.relative),benchmark:base,benchmarkSymbol,received:Date.now(),period,market,failures});
+  }catch(e){if(active&&version===analysisVersion&&keyFor()===key)analysisError='시계열 수신 또는 검증 실패 · 실제 데이터 연결 상태를 확인하세요.'}
   finally{if(active&&version===analysisVersion){analysisBusy=false;draw();if(keyFor()!==key)void loadAnalytics()}}
  }
  function analyticsView(){
   const key=keyFor(),data=analytics.get(key);
-  if(analysisBusy&&analysisKey===key)list.append(make('p','실제 일봉 데이터 분석 중… 다른 화면은 계속 이용할 수 있습니다.','stv2-status'));
+  if(analysisBusy)list.append(make('p',(analysisKey===key?'실제 일봉 데이터 분석 중…':'이전 요청 정리 후 선택 화면 자료 조회 중…')+' 다른 화면은 계속 이용할 수 있습니다.','stv2-status'));
   if(analysisError&&!data)list.append(make('p',analysisError,'stv2-status'));
   if(!data){if(!analysisBusy)list.append(button('실제 시계열 조회',()=>void loadAnalytics(true)));return}
   const n=PERIODS[period],label=market==='US'?'미국 11개 섹터 ETF 상대강도':'국내 상위 테마 구성종목 표본 분석';
@@ -81,6 +103,8 @@ function create(){
   const table=make('table',undefined,'stv2-table'),head=make('tr');['섹터/테마','기간 수익률','기준 대비','데이터 범위','관측일'].forEach(x=>head.append(make('th',x)));table.append(head);
   for(const row of data.rows){const tr=make('tr');tr.append(make('td',row.name+' ('+row.symbol+')'),make('td',pct(row.change)),make('td',pct(row.relative)),make('td',row.coverage),make('td',new Date(row.asof).toLocaleDateString('ko-KR')));table.append(tr)}
   list.append(table);
+  if(market==='US')list.append(make('p','검증 수신 '+data.rows.length+'/'+US_SECTORS.length+'개 ETF','stv2-muted'));
+  if(data.failures?.length)list.append(make('p','일부 시계열 제외 · '+data.failures.map(x=>x.symbol+' ('+x.reason+')').join(', '),'stv2-status'));
   if(!data.rows.length)list.append(make('p','검증된 시계열 결과가 없습니다. 원천 연결을 확인하세요.','stv2-status'));
   list.append(make('p',market==='US'?'ETF 가격 기반 섹터 대리지표입니다. 개별 미국 테마·구성종목·실제 자금유입 순위가 아닙니다.':'네이버 상위 테마의 일부 구성종목만 사용한 동일가중 표본입니다. 전체 테마 수익률 또는 확정 스윙 순위가 아닙니다.','stv2-muted'));
   if(mode==='swing')list.append(make('p','스윙 관찰: 상대강도와 기간 수익률만 표시. 실적·기관수급·진입/손절 검증 전 매수 추천이 아닙니다.','stv2-muted'));

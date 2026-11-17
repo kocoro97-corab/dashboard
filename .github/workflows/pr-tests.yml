@@ -38,6 +38,7 @@ jobs:
           .venv-browser/bin/python tests/browser_account_inquiry.py
           .venv-browser/bin/python tests/browser_app_shell.py
           .venv-browser/bin/python tests/browser_market_sector_recheck.py
+          .venv-browser/bin/python tests/browser_integration_958.py
           .venv-browser/bin/python tests/browser_work_handoff.py
           .venv-browser/bin/python tests/browser_commit_review.py --extended
           .venv-browser/bin/python tests/browser_external_catalog.py

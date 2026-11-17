@@ -13,9 +13,9 @@ def stock(code,name,rate,value):return {'itemCode':code,'stockName':name,'fluctu
 fixtures={LIST:json.dumps({'groups':[{'no':12,'name':'합성테마 A','changeRate':'4'},{'no':13,'name':'합성테마 B','changeRate':'2'}]}),
  'https://m.stock.naver.com/api/stocks/theme/12?page=1&pageSize=100':json.dumps({'stocks':[stock('005930','삼성전자',2,100),stock('000660','SK하이닉스',-1,300),stock('035720','카카오',0,200)]}),
  'https://m.stock.naver.com/api/stocks/theme/13?page=1&pageSize=100':json.dumps({'stocks':[stock('005930','삼성전자',2,100),stock('344820','KCC글라스',-2,500),stock('352700','씨앤투스',1,400)]})}
-for sym in ['^KS11','^KQ11','^GSPC','^IXIC','^DJI','^SOX','^VIX','^TNX','^IRX','KRW=X','GC=F','CL=F','NQ=F','ES=F','YM=F','344820.KS']:
+for sym in ['^KS11','^KQ11','^GSPC','^IXIC','^DJI','^SOX','^VIX','^TNX','^IRX','KRW=X','GC=F','CL=F','NQ=F','ES=F','YM=F','344820.KS','005930.KS','000660.KS','035720.KS','352700.KQ','SPY','XLK','XLF','XLE','XLV','XLI','XLY','XLP','XLC','XLU','XLB','XLRE']:
  values=[100+i for i in range(70)];stamp=int(time.time())-80*86400
- doc={'chart':{'result':[{'meta':{'symbol':sym,'currency':'KRW' if sym.endswith('.KS') else 'USD','regularMarketPrice':169,'chartPreviousClose':168,'regularMarketTime':stamp+69*86400},'timestamp':[stamp+i*86400 for i in range(70)],'indicators':{'quote':[{'open':values,'high':[x+2 for x in values],'low':[x-2 for x in values],'close':values,'volume':[1000]*70}]}}]}}
+ doc={'chart':{'result':[{'meta':{'symbol':sym,'currency':'KRW' if sym.endswith(('.KS','.KQ')) or sym in ['^KS11','^KQ11'] else 'USD','exchangeName':'KSC' if sym.endswith('.KS') or sym=='^KS11' else 'KOE' if sym.endswith('.KQ') or sym=='^KQ11' else 'PCX','regularMarketPrice':169,'chartPreviousClose':168,'regularMarketTime':stamp+69*86400},'timestamp':[stamp+i*86400 for i in range(70)],'indicators':{'quote':[{'open':values,'high':[x+2 for x in values],'low':[x-2 for x in values],'close':values,'volume':[1000]*70}]}}]}}
  for interval,period in [('1d','1d'),('1d','1y'),('1d','3mo')]:fixtures['https://query1.finance.yahoo.com/v8/finance/chart/'+quote(sym,safe="~()*!.'")+'?interval='+interval+'&range='+period]=json.dumps(doc)
 results=[]
 with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
@@ -48,18 +48,18 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
     def go(name):page.locator('#dashboardNav a[href="#/'+name+'"]').click();page.wait_for_function('(n)=>DashboardShell.getStatus().page===n',arg=name);settled()
     def close():page.locator('.miv-overlay button',has_text='닫기').click()
     try:
-     page.goto(BASE+'index.html#/'+area,wait_until='domcontentloaded');page.wait_for_selector('#devBanner');page.locator('#authId').fill('synthetic');page.locator('#authPw').fill('SYNTHETIC_PRIVATE_PASSWORD');page.locator('#authSubmitBtn').click();page.wait_for_selector('#dashboardNav');settled()
+     page.clock.set_fixed_time('2026-11-17T03:00:00Z');page.goto(BASE+'index.html#/'+area,wait_until='domcontentloaded');page.wait_for_selector('#devBanner');page.locator('#authId').fill('synthetic');page.locator('#authPw').fill('SYNTHETIC_PRIVATE_PASSWORD');page.locator('#authSubmitBtn').click();page.wait_for_selector('#dashboardNav');settled()
      if area=='market':
       def region():
-       page.locator('.miv-top button',has_text='미국장 전환').click();page.wait_for_function('()=>!!Q["NQ=F"]');go('sectors');go('market');assert page.locator('.miv-top .miv-controls button').first.inner_text()=='미국장 표시 · 한국장 전환';assert page.locator('.miv-indicator strong').first.inner_text()=='S&P 500'
-      check('US_REGION_AND_LABEL_AFTER_NAVIGATION',region)
+       page.locator('.miv-top button',has_text='미국장 전환').click();page.wait_for_function('()=>!!Q["NQ=F"]');go('sectors');go('market');assert page.locator('.miv-top .miv-controls button').first.inner_text()=='한국장 표시 · 미국장 전환';assert page.locator('.miv-indicator strong').first.inner_text()=='KOSPI'
+      check('REGION_DEFAULT_REAPPLIED_AFTER_VISIT',region)
       observed=1794805200000;received=1794808800000
       def provenance():
-       page.evaluate('([a,b])=>{Q["^GSPC"]={p:100,prev:99,observedAt:a};SRC["^GSPC"]="Y";QT["^GSPC"]=b}',[observed,received]);page.locator('.miv-market button',has_text='시장 국면').click();row=page.locator('.miv-observation-row').filter(has=page.locator('span',has_text='S&P 500'));text=row.locator('small').inner_text();times=page.evaluate('([a,b])=>[new Date(a).toLocaleString("ko-KR"),new Date(b).toLocaleString("ko-KR")]',[observed,received]);assert '출처: Yahoo' in text and '관측: '+times[0] in text and '수신: '+times[1] in text;page.screenshot(path=str(args.output/(str(width)+'-market-provenance.png')));close()
+       page.evaluate('([a,b])=>{Q["^KS11"]={p:100,prev:99,observedAt:a};SRC["^KS11"]="Y";QT["^KS11"]=b}',[observed,received]);page.locator('.miv-market button',has_text='시장 국면').click();row=page.locator('.miv-observation-row').filter(has=page.locator('span',has_text='KOSPI'));text=row.locator('small').inner_text();times=page.evaluate('([a,b])=>[new Date(a).toLocaleString("ko-KR"),new Date(b).toLocaleString("ko-KR")]',[observed,received]);assert '출처: Yahoo' in text and '관측: '+times[0] in text and '수신: '+times[1] in text;page.screenshot(path=str(args.output/(str(width)+'-market-provenance.png')));close()
       check('SOURCE_OBSERVED_AND_RECEIVED_ARE_DISTINCT',provenance)
       def missing():
        for value in [None,'invalid-time']:
-        page.evaluate('(v)=>{Q["^GSPC"].observedAt=v}',value);page.locator('.miv-market button',has_text='시장 국면').click();row=page.locator('.miv-observation-row').filter(has=page.locator('span',has_text='S&P 500'));assert '관측시각 미확인' in row.inner_text();assert '수신시각 미확인' not in row.inner_text();close()
+        page.evaluate('(v)=>{Q["^KS11"].observedAt=v}',value);page.locator('.miv-market button',has_text='시장 국면').click();row=page.locator('.miv-observation-row').filter(has=page.locator('span',has_text='KOSPI'));assert '관측시각 미확인' in row.inner_text();assert '수신시각 미확인' not in row.inner_text();close()
       check('MISSING_OR_INVALID_OBSERVATION_STAYS_UNKNOWN',missing)
       def units():
        page.locator('.miv-market button',has_text='지표 편집').click();labels=page.locator('.miv-edit-row input').evaluate_all('(a)=>a.map(x=>x.getAttribute("aria-label"))')
@@ -90,10 +90,10 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
        page.locator('.stv2 > div').first.get_by_role('button',name='국내 테마 새로고침',exact=True).click();page.wait_for_function('()=>!THM_BUSY');page.wait_for_selector('.stv2 button:text-is("국내 테마 새로고침")');assert sum(r['url']==LIST for r in requests)==2
       check('EXPLICIT_REFRESH_FETCHES_ONCE',refresh)
       def modes():
-       page.locator('.stv2-tabs button',has_text='미국').click();assert '실제 순위를 표시하지 않습니다' in page.locator('.stv2').inner_text();assert page.locator('.stv2-overview').count()==0
-       page.locator('.stv2-tabs button',has_text='한국').click();page.locator('.stv2-tabs button',has_text='5일').click();assert '당일 점수를 기간별 점수로 재사용하지 않습니다' in page.locator('.stv2').inner_text();assert page.locator('.stv2-overview').count()==0
-       page.locator('.stv2-tabs button',has_text='1일').click();page.locator('.stv2-tabs button',has_text='스윙').click();assert '스윙 추천이 아닙니다' in page.locator('.stv2').inner_text();page.locator('.stv2-tabs button',has_text='단타').click()
-      check('US_LONG_PERIOD_SWING_UNIMPLEMENTED_DISCLOSURES',modes)
+       page.locator('.stv2-tabs button',has_text='미국').click();page.wait_for_function('()=>document.querySelector(".stv2").textContent.includes("미국 11개 섹터 ETF 상대강도")');assert '개별 미국 테마' in page.locator('.stv2').inner_text();assert page.locator('.stv2-overview').count()==0
+       page.locator('.stv2-tabs button',has_text='한국').click();page.locator('.stv2-tabs button',has_text='5일').click();page.wait_for_function('()=>document.querySelector(".stv2").textContent.includes("국내 상위 테마 구성종목 표본 분석")');assert '전체 테마 수익률' in page.locator('.stv2').inner_text();assert page.locator('.stv2-overview').count()==0
+       page.locator('.stv2-tabs button',has_text='1일').click();page.locator('.stv2-tabs button',has_text='스윙').click();page.wait_for_function('()=>document.querySelector(".stv2").textContent.includes("매수 추천이 아닙니다")');page.locator('.stv2-tabs button',has_text='단타').click()
+      check('US_AND_KR_HISTORY_SCOPES_AND_SWING_DISCLOSURES',modes)
       def selection():
        page.locator('.stv2-overview table tr').nth(1).get_by_role('button',name='종목분석',exact=True).click();page.wait_for_function('()=>DashboardShell.getStatus().page==="stocks"');assert page.locator('#stockSearch').input_value()=='344820';page.wait_for_function('()=>document.querySelector(".sva")?.textContent.includes("분석 완료")');assert 'KCC글라스 (344820)' in page.locator('.sva').inner_text();assert any(r['url'] and '344820.KS' in r['url'] for r in requests);go('sectors')
       check('LEADER_CLICK_TO_VERIFIED_STOCK_ANALYSIS',selection)

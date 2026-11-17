@@ -6,16 +6,16 @@
     const c=window.MYINVEST_TRANSPORT_CONFIG,token=LS('invest_session_token');
     if(!c||c.publicMarket!==true||!token||$('appContainer').style.display!=='block')return;
     if(!installed){
-      const read=getTxt;let tail=Promise.resolve(),pending=0;
-      // Queue before the existing per-request timeout starts. Reserve the other
-      // server slot for authentication; never replay a queued read to a new target.
+      const read=getTxt,tails=Array.from({length:c.persistentRelay===true?3:1},()=>Promise.resolve());let cursor=0,pending=0;
+      // Queue before the existing per-request timeout starts. Persistent Workers
+      // reserve one of four slots for auth; temporary relay reserves one of two; never replay a queued read to a new target.
       getTxt=function(url){
         const tk=LS('invest_session_token'),endpoint=c.endpoint;
         if(pending>=48)return Promise.resolve(null);
         pending++;
         const current=()=>c.publicMarket===true&&tk===LS('invest_session_token')&&endpoint===c.endpoint;
-        const job=tail.then(async()=>{if(!current())return null;const value=await read(url);return current()?value:null});
-        tail=job.catch(()=>null);
+        const slot=cursor++%tails.length;const job=tails[slot].then(async()=>{if(!current())return null;const value=await read(url);return current()?value:null});
+        tails[slot]=job.catch(()=>null);
         return job.finally(()=>pending--);
       };
       // Public source adapters are reused. No NH request is attempted, including
