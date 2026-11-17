@@ -1,7 +1,7 @@
 (function(root){
   'use strict';
   function create(){
-    let scope=null,revision=0;const jobs=new Map(),listeners=new Set();
+    let scope=null,revision=0,marketTail=Promise.resolve();const jobs=new Map(),listeners=new Set();
     const emit=()=>listeners.forEach(fn=>{try{fn()}catch{}});
     function synchronize(){const next=LS('invest_session_token');if(scope!==next){scope=next;revision++;jobs.clear()}return scope}
     async function once(key,fn,force=false){
@@ -30,7 +30,11 @@
       error:()=>({status:'error',message:'모듈 처리 실패 · 연결 상태를 확인하세요.'}),
       subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn)},
       clear(){scope=null;revision++;jobs.clear();emit()},
-      market(force=false){return publicConnected()?once('market',()=>refreshMarket(),force):Promise.resolve()},
+      market(force=false,symbols=[]){
+        if(!publicConnected())return Promise.resolve();
+        const token=synchronize(),requested=[...new Set(Array.isArray(symbols)?symbols.filter(x=>typeof x==='string'&&/^[A-Za-z0-9^=.-]{1,32}$/.test(x)).slice(0,24):[])].sort();
+        return once('market:'+requested.join(','),()=>{const job=marketTail.then(()=>{if(token===LS('invest_session_token'))return refreshMarket(requested)});marketTail=job.catch(()=>{});return job},force);
+      },
       chart(force=false){return publicConnected()?once('chart',()=>{if(force&&QX)return loadQ(qrg);if(!QX)return showQ('^KS11','코스피','',1)},force):Promise.resolve()},
       news(force=false){return publicConnected()?once('news',()=>loadNews(),force):Promise.resolve()},
       sectors(force=false){return publicConnected()?once('sectors',()=>{if(force)THM_AT=0;return fetchTopThemes()},force):Promise.resolve()},

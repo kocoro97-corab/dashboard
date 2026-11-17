@@ -41,6 +41,8 @@ async function fillFutures(skip){
       if(p==null||prev==null)throw 0;
       const k=j.kospi200&&nnum(j.kospi200.tradePrice);
       FQ[id]={p:p,prev:prev,basis:k!=null?p-k:null,t:t};FST[id]='';ok++;
+      // Canonical read adapter for the V2 market cards; keep legacy FQ intact.
+      Q[id]={p,prev};SRC[id]='D';QT[id]=Date.now();
     }catch(e){FST[id]='수신 실패 · '+t;fail++}
   }));
   return{ok:ok,fail:fail};
@@ -111,8 +113,8 @@ async function fillNaver(want,fr){
 
 async function quote(s){
   const j=await getJSON('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(s)+'?interval=1d&range=1d');
-  const m=j&&j.chart&&j.chart.result&&j.chart.result[0]&&j.chart.result[0].meta;if(!m||m.regularMarketPrice==null)return null;
-  return{p:m.regularMarketPrice,prev:m.chartPreviousClose!=null?m.chartPreviousClose:m.previousClose};
+  const m=j&&j.chart&&j.chart.result&&j.chart.result[0]&&j.chart.result[0].meta;if(!m||String(m.symbol||'').toUpperCase()!==s.toUpperCase()||!Number.isFinite(m.regularMarketPrice)||m.regularMarketPrice<=0)return null;
+  return{p:m.regularMarketPrice,prev:m.chartPreviousClose!=null?m.chartPreviousClose:m.previousClose,observedAt:Number.isFinite(m.regularMarketTime)?m.regularMarketTime*1000:null};
 }
 const KY={};
 async function quoteKR(c){for(const x of['.KS','.KQ']){const q=await quote(c+x);if(q){KY[c]=c+x;return q}}return null}
@@ -129,16 +131,17 @@ async function fillQuotes(list){
 }
 
 let MK_BUSY=false;
-async function refreshMarket(){   // '시장 종합' 카드(지수·선물·수급)만 갱신
+async function refreshMarket(requested=[]){   // '시장 종합' 카드(지수·선물·수급)만 갱신
   if(MK_BUSY)return;MK_BUSY=true;
   const btn=$('mkBtn'),st=$('mkSt');
   if(btn){btn.disabled=true;btn.textContent='갱신 중...'}
   try{
-    const list=CFG[sess()],want=[...new Set(list.filter(x=>x.y).map(x=>x.y))],fr=new Set();
+    const extra=Array.isArray(requested)?requested.filter(s=>typeof s==='string'&&/^[A-Za-z0-9^=.-]{1,32}$/.test(s)&&!['k3','k4','TICK'].includes(s)).slice(0,24):[];
+    const list=CFG[sess()],want=[...new Set([...list.filter(x=>x.y).map(x=>x.y),...extra])],fr=new Set();
     await fillNaver(want,fr);
     await fillQuotes(want.filter(c=>!fr.has(c)));
     const hasNH=list.some(x=>NHF[x.id]),nh=hasNH?await fillNH():{ok:0,fail:0};
-    const hasFut=list.some(x=>x.fut),fu=hasFut?await fillFutures(new Set(Object.keys(NQ))):{ok:0,fail:0};
+    const hasFut=list.some(x=>x.fut)||Array.isArray(requested)&&requested.includes('k3'),fu=hasFut?await fillFutures(new Set(Object.keys(NQ))):{ok:0,fail:0};
     const got=want.filter(c=>Q[c]).length;
     renderCards();updateTickGauge();generateScenario();
     st.textContent='갱신 '+hms(new Date())+' · 성공 '+got+'/'+want.length+(hasNH?' · 선물 NH '+nh.ok+'/'+(nh.ok+nh.fail):'')+(fu.ok+fu.fail?' · 다음 '+fu.ok+'/'+(fu.ok+fu.fail):'')+' · 출처 '+srcSummary(want);
