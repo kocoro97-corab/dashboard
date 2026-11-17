@@ -7,6 +7,7 @@ from urllib.parse import urlsplit,unquote
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1];sys.path[:0]=[str(ROOT),str(ROOT/'tools'),str(ROOT/'tests')]
 from build_dev_pages import build
+from browser_review_selectors import stock_heading,watch_code_cell
 from relay.app import RelayApp,RelayFault
 from relay.public_dev import PublicDevelopment
 from test_relay import configuration,EXPECTED,request,TOKEN
@@ -16,7 +17,7 @@ for item in source.body:
  if isinstance(item,ast.Assign) and any(isinstance(x,ast.Name) and x.id=='p' for x in item.targets):break
  nodes.append(item)
 fixture_ns={'__file__':str(ROOT/'tests/browser_work_handoff.py')};exec(compile(ast.Module(body=nodes,type_ignores=[]),'reused-browser-fixture','exec'),fixture_ns);Gas=fixture_ns['Gas']
-p=argparse.ArgumentParser();p.add_argument('--published',action='store_true');p.add_argument('--extended',action='store_true');p.add_argument('--output',type=Path,default=Path('/tmp/commit-review'));args=p.parse_args();args.output.mkdir(parents=True,exist_ok=True)
+p=argparse.ArgumentParser();p.add_argument('--published',action='store_true');p.add_argument('--extended',action='store_true');p.add_argument('--only',nargs='+',default=[],help='Run only cases whose names start with these prefixes');p.add_argument('--output',type=Path,default=Path('/tmp/commit-review'));args=p.parse_args();args.output.mkdir(parents=True,exist_ok=True)
 ORIGIN='https://kocoro97-corab.github.io';BASE=ORIGIN+'/dashboard-v2-dev/';HOST='synthetic-review.trycloudflare.com';ENDPOINT='https://'+HOST+'/api';CODE='SYNTHETIC_PRIVATE_REVIEW_CODE'
 INSTRUMENT_CONTEXT="""(()=>{let api;window.__reviewContexts=[];Object.defineProperty(window,'AppContext',{configurable:true,get:()=>api,set:value=>{api={...value,create(){const ctx=value.create(),record={ctx,active:0};window.__reviewContexts.push(record);const subscribe=ctx.subscribe;ctx.subscribe=fn=>{record.active++;const off=subscribe(fn);let active=true;return()=>{if(active){active=false;record.active--;off()}}};return ctx}}}})})()"""
 # Known independent totals: value=2000, cost=1900, profit=100, return=100/1900*100.
@@ -55,6 +56,7 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
    def emit():page.evaluate('window.__reviewContexts[0].ctx.emit()')
    def base():page.evaluate(BASELINE)
    def case(name,fn):
+    if args.only and not name.startswith(tuple(args.only)):return
     try:fn();row={'width':width,'test':name,'status':'PASS'}
     except Exception as error:row={'width':width,'test':name,'status':'FAIL','reason':str(error).splitlines()[0][:240] or type(error).__name__}
     results.append(row);print(json.dumps(row),flush=True)
@@ -80,31 +82,31 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
     base();page.evaluate('()=>{NH_ACCOUNTS=[];EXT_ASSETS=Array.from({length:13},(_,i)=>({accountType:"ISA",code:String(100001+i),name:"Synthetic concentration "+i,quantity:i===12?1000:1,avgPrice:1,source:"manual",match:{status:"matched"}}));EXT_SAVED_ROWS=extRows(EXT_ASSETS);EXT_PRICES=Object.fromEntries(EXT_ASSETS.map(x=>[x.code,{price:1}]));__reviewContexts[0].ctx.emit()}');panel=page.locator('.pv-panel').filter(has=page.get_by_role('heading',name='종목별 평가액 집중도',exact=True));assert '100013' in panel.inner_text(),'largest holding (13th source row) absent from first 12 concentration bars';assert '100013' in panel.locator('.pv-bar-row').first.inner_text();assert '나머지 1개 생략' in panel.inner_text();panel.screenshot(path=str(args.output/(str(width)+'-concentration.png')))
    case('CONCENTRATION_INCLUDES_LARGEST_HOLDING',top_concentration)
    def sector_link():
-    base();go('sectors');page.wait_for_function('()=>!THM_BUSY');assert page.locator('.stv2').get_by_role('cell',name='035720',exact=True).count()==1;assert page.locator('.stv2').get_by_role('cell',name='000660',exact=True).count()==1;assert page.locator('.stv2').get_by_role('cell',name='123456',exact=True).count()==0
+    base();go('sectors');page.wait_for_function('()=>!THM_BUSY');assert watch_code_cell(page,'035720').count()==1;assert watch_code_cell(page,'000660').count()==1;assert watch_code_cell(page,'123456').count()==0
    case('SECTOR_NH_EXTERNAL_ZERO_EXCLUSION',sector_link)
    def sector_reactive():
-    page.evaluate('()=>{EXT_ASSETS=[];EXT_SAVED_ROWS=[];__reviewContexts[0].ctx.emit()}');assert page.locator('.stv2').get_by_role('cell',name='000660',exact=True).count()==0;assert page.locator('.stv2').get_by_role('cell',name='035720',exact=True).count()==1;base();page.evaluate('()=>{EXT_ASSETS[0].quantity=11;__reviewContexts[0].ctx.emit()}');assert page.locator('.stv2').get_by_role('cell',name='000660',exact=True).count()==0
+    page.evaluate('()=>{EXT_ASSETS=[];EXT_SAVED_ROWS=[];__reviewContexts[0].ctx.emit()}');assert watch_code_cell(page,'000660').count()==0;assert watch_code_cell(page,'035720').count()==1;base();page.evaluate('()=>{EXT_ASSETS[0].quantity=11;__reviewContexts[0].ctx.emit()}');assert watch_code_cell(page,'000660').count()==0
    case('SECTOR_CONTEXT_REFRESH_AND_DRAFT_EXCLUSION',sector_reactive)
    base();go('stocks');page.wait_for_selector('#stockSearch');page.evaluate(BAR_SETUP)
    def search(symbol,mode):
     page.evaluate('(m)=>window.__responseMode=m',mode);page.locator('#stockSearch').fill(symbol);page.get_by_role('button',name='종목 분석',exact=True).click();page.wait_for_function('()=>{const s=document.querySelector(".sva").textContent;return s.includes("분석 완료")||s.includes("분석 불가")}')
    def rejected(symbol,mode):search(symbol,mode);assert page.locator('.sva h3').filter(has_text='기술적 분석').count()==0,'invalid response accepted: '+mode
-   case('STOCK_VALID_DOMESTIC_KRW',lambda:(search('035720','valid'),page.wait_for_selector('.sva h3:text-is("035720 · 기술적 분석")')))
+   case('STOCK_VALID_DOMESTIC_KRW',lambda:(search('035720','valid'),stock_heading(page,'035720').wait_for()))
    for mode in ['wrong-symbol','wrong-currency','missing-currency','missing-meta','missing-close','missing-time']:
     case('STOCK_REJECT_'+mode.upper().replace('-','_'),lambda m=mode:rejected('035720',m))
    case('STOCK_UNHELD_DOMESTIC_USD_REJECTED',lambda:rejected('555555','wrong-currency'))
-   def valid_foreign():search('TEST','valid');assert page.locator('.sva h3:text-is("TEST · 기술적 분석")').count()==1;assert '차트 마지막 종가 기준' in page.locator('.sva section.sva-alert').inner_text()
+   def valid_foreign():search('TEST','valid');assert stock_heading(page,'TEST').count()==1;assert '차트 마지막 종가 기준' in page.locator('.sva section.sva-alert').inner_text()
    case('STOCK_FOREIGN_MATCHED_CURRENCY',valid_foreign)
    case('STOCK_FUTURE_TIMESTAMPS_REJECTED',lambda:rejected('GOOG','future'))
    if args.extended:
     for mode in ['duplicate','reverse','zero-price','negative-price','bad-high','bad-low','nonfinite-price','string-epoch']:
      case('STOCK_EXCLUDE_'+mode.upper().replace('-','_'),lambda m=mode:rejected('GOOG',m))
     def mixed(mode,count,last):
-     search('GOOG',mode);assert page.locator('.sva h3:text-is("GOOG · 기술적 분석")').count()==1;assert '일봉 '+str(count)+'개' in page.locator('.sva').inner_text();assert page.locator('.sva-grid .sva-card').first.locator('h3').inner_text()==str(last)
+     search('GOOG',mode);assert stock_heading(page,'GOOG').count()==1;assert '일봉 '+str(count)+'개' in page.locator('.sva').inner_text();assert page.locator('.sva-grid .sva-card').first.locator('h3').inner_text()==str(last)
     for mode,count,last in [('partial-duplicate',69,168),('partial-reverse',69,168),('partial-ohlc',65,164),('partial-future',65,164)]:
      case('STOCK_MIXED_'+mode.upper().replace('-','_'),lambda m=mode,n=count,c=last:mixed(m,n,c))
    def reverse():
-    page.evaluate('window.__responseMode="hold"');page.locator('#stockSearch').fill('AAA');page.get_by_role('button',name='종목 분석',exact=True).click();page.wait_for_function('()=>__pendingResponses.AAA?.length');page.locator('#stockSearch').fill('BBB');page.get_by_role('button',name='종목 분석',exact=True).click();page.wait_for_function('()=>__pendingResponses.BBB?.length');page.evaluate('__resolveBars("BBB")');page.wait_for_selector('.sva h3:text-is("BBB · 기술적 분석")');page.evaluate('__resolveBars("AAA")');assert page.locator('.sva h3:text-is("BBB · 기술적 분석")').count()==1 and page.locator('.sva h3:text-is("AAA · 기술적 분석")').count()==0
+    page.evaluate('window.__responseMode="hold"');page.locator('#stockSearch').fill('AAA');page.get_by_role('button',name='종목 분석',exact=True).click();page.wait_for_function('()=>__pendingResponses.AAA?.length');page.locator('#stockSearch').fill('BBB');page.get_by_role('button',name='종목 분석',exact=True).click();page.wait_for_function('()=>__pendingResponses.BBB?.length');page.evaluate('__resolveBars("BBB")');stock_heading(page,'BBB').wait_for();page.evaluate('__resolveBars("AAA")');assert stock_heading(page,'BBB').count()==1 and stock_heading(page,'AAA').count()==0
    case('STOCK_REVERSED_RESPONSE',reverse)
    def cleanup():
     for _ in range(3):go('sectors');go('stocks');go('accounts')

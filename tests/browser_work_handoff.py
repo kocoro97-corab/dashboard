@@ -5,6 +5,7 @@ from urllib.parse import urlsplit,unquote
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1];sys.path[:0]=[str(ROOT),str(ROOT/'tools'),str(ROOT/'tests')]
 from build_dev_pages import build
+from browser_review_selectors import stock_heading,watch_code_cell
 from relay.app import RelayApp,RelayFault
 from relay.public_dev import PublicDevelopment
 from test_relay import configuration,EXPECTED,request,TOKEN
@@ -54,16 +55,16 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
    # Newly supplied navigation and public-data stock analyzer, preserving account data.
    before=page.evaluate('JSON.stringify(extRows(EXT_ASSETS))');go('sectors');page.wait_for_function('()=>!THM_BUSY');
    if not page.locator('.stv2').get_by_role('cell',name='보유',exact=True).count():findings.append('SECTOR_HOLDINGS_USES_LEGACY_H_ONLY')
-   page.locator('.stv2 input').fill('035720');page.get_by_role('button',name='관심종목 추가',exact=True).click();page.locator('.stv2').get_by_role('button',name='AI 분석',exact=True).click();page.wait_for_function('()=>DashboardShell.getStatus().path==="/stocks"');page.wait_for_selector('.sva h3:text-is("035720 · 기술적 분석")');assert '평균매입가' in page.locator('.sva section.sva-alert').inner_text()
+   page.locator('.stv2 input').fill('035720');page.get_by_role('button',name='관심종목 추가',exact=True).click();page.locator('.stv2').get_by_role('button',name='AI 분석',exact=True).click();page.wait_for_function('()=>DashboardShell.getStatus().path==="/stocks"');stock_heading(page,'035720').wait_for();assert '평균매입가' in page.locator('.sva section.sva-alert').inner_text()
    page.get_by_role('button',name='이 종목으로 투자전략 보기',exact=True).click();page.wait_for_selector('.str4');assert '035720' in page.locator('.str4-nav').inner_text()
    for label,value in [('가정 진입가','100'),('가정 손절가','90'),('가정 목표가','120')]:page.get_by_label(label,exact=True).fill(value)
    assert '1,000주' in page.locator('.str4-cards').inner_text();assert '평균매입가' in page.locator('.str4-output').first.inner_text()
-   page.get_by_role('button',name='AI 종목분석으로 돌아가기',exact=True).click();page.wait_for_selector('#stockSearch');page.locator('#stockSearch').fill('AAPL');page.get_by_role('button',name='종목 분석',exact=True).click();page.wait_for_selector('.sva h3:text-is("AAPL · 기술적 분석")');assert page.locator('#stockSearch').input_value()=='AAPL'
+   page.get_by_role('button',name='AI 종목분석으로 돌아가기',exact=True).click();page.wait_for_selector('#stockSearch');page.locator('#stockSearch').fill('AAPL');page.get_by_role('button',name='종목 분석',exact=True).click();stock_heading(page,'AAPL').wait_for();assert page.locator('#stockSearch').input_value()=='AAPL'
    # Explicit upstream failure produces unavailable state, never fake output.
    gas.chart_fail=True;page.locator('#stockSearch').fill('MSFT');page.get_by_role('button',name='종목 분석',exact=True).click();page.wait_for_selector('.sva-alert:text-is("실제 OHLCV 21봉 이상이 필요합니다. 종목 코드는 상장 종목 원천 확인 후 사용하세요. 가짜 가격이나 점수를 생성하지 않습니다.")');gas.chart_fail=False
    # Probe contract weakness for the ChatGPT owner; no real values or writes.
    gas.mismatch=True;page.locator('#stockSearch').fill('GOOG');page.get_by_role('button',name='종목 분석',exact=True).click();page.wait_for_function('()=>document.querySelector(".sva").textContent.includes("분석 완료")||document.querySelector(".sva").textContent.includes("분석 불가")');
-   if page.locator('.sva').get_by_role('heading',name='GOOG · 기술적 분석',exact=True).count():findings.append('STOCK_RESPONSE_SYMBOL_NOT_VALIDATED')
+   if stock_heading(page,'GOOG').count():findings.append('STOCK_RESPONSE_SYMBOL_NOT_VALIDATED')
    gas.mismatch=False
    page.get_by_role('button',name='투자 캘린더',exact=True).click();dialog=page.get_by_role('dialog',name='투자 일정 캘린더');dialog.wait_for();assert '아직 연동되지' in dialog.inner_text();dialog.get_by_role('button',name='닫기',exact=True).click()
    page.get_by_label('이벤트 날짜',exact=True).fill('2026-11-20');page.get_by_label('이벤트 제목',exact=True).fill('합성 일정 테스트');page.get_by_role('button',name='일정 등록',exact=True).click();assert '합성 일정 테스트' in page.locator('.nev5').inner_text();page.get_by_role('button',name='투자 캘린더',exact=True).click();dialog.wait_for();page.keyboard.press('Escape')
