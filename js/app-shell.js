@@ -42,7 +42,7 @@
     prepare();if(!LS('invest_session_token')||$('appContainer').style.display!=='block')return;
     if(started)return;started=true;clock();startTimers();manualRefresh=()=>refreshPage(true);router.start();
   }
-  function stop(){started=false;revision++;router?.stop();unmount(current?.page);instances.clear();scrolls.clear();current=null;ctx.clear();viewport?.replaceChildren();
+  function stop(){started=false;revision++;root.MYInvestCalendar?.close();root.MYInvestCalendarPending=false;router?.stop();unmount(current?.page);instances.clear();scrolls.clear();current=null;ctx.clear();viewport?.replaceChildren();
     // Detached page views are discarded on logout; original account clear logic
     // remains the authority for holdings, OCR, drafts and server session cleanup.
     for(const id of ['nhAccountSection','externalAssetSection'])if($(id))$(id).hidden=false;

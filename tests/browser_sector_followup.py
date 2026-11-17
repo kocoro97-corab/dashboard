@@ -54,7 +54,7 @@ async def features(browser,artifact,tmp,width):
    assert await h.page.locator('.stv2-status:not([open])').count()>0
   await check(h,'ETF_RESPONSE_REJECTED_FOR_GENERAL_STOCK_MEMBER',bad_identity)
   async def cleanup():
-   await h.page.evaluate('logout()');await h.page.wait_for_function('()=>DashboardShell.getStatus().page===null');assert await h.page.locator('.stv2').count()==0;assert not h.errors;assert not any(r['action'] in ['nhAccounts','nhQuotes','order','saveExternalHoldings','restoreExternalHoldings'] for r in h.requests)
+   await h.page.evaluate('MYInvestCalendar.open()');assert await h.page.get_by_role('dialog',name='투자 일정 캘린더',exact=True).count()==1;await h.page.evaluate('logout()');await h.page.wait_for_function('()=>DashboardShell.getStatus().page===null');assert await h.page.locator('.stv2').count()==0;assert await h.page.get_by_role('dialog').count()==0;assert not h.errors;assert not any(r['action'] in ['nhAccounts','nhQuotes','order','saveExternalHoldings','restoreExternalHoldings'] for r in h.requests)
   await check(h,'LOGOUT_CLEARS_THEME_UI_WITH_ZERO_PRIVATE_WRITES',cleanup)
  finally:await h.close()
 async def boundaries(browser,artifact,tmp):

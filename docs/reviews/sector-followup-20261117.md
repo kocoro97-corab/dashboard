@@ -48,3 +48,7 @@ PLAYWRIGHT_BROWSERS_PATH=/workspace/.cache/myinvest-playwright .venv-ci-https/bi
 ## 다음 담당
 
 Codex: 개발 게시 SHA/파일 해시 확인, 사용자 실제 로그인 중계 수신 확인 후 실패 경로만 후속 분석. 이후 미국 테마 범위 및 구성목록 갱신 방식 확대가 남는다. 현재 범위의 UI 요청은 반영했으므로 ChatGPT에 중복 구현을 요청하지 않는다.
+
+## CI에서 추가 재현한 병렬 변경 결함
+
+`3b7450b`의 전역 캘린더 팝업은 뉴스 페이지 인스턴스 밖으로 이동했지만 대시보드 종료 시 닫는 호출이 빠져 `tests/browser_work_handoff.py:77`의 로그아웃 정리 검사가 실패했다. `js/app-shell.js`의 기존 `stop()`에서 공개 close API 호출과 미완료 UI 열기 플래그 초기화만 추가했다. 인증 코드·이벤트 저장·Calendar API는 변경하지 않았다. 산업·테마에서 전역 팝업을 연 채 로그아웃하는 회귀 검사도 기존 후속 검사에 포함했다.
