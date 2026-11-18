@@ -37,7 +37,7 @@ def verify(client,plan,credentials):
   if not isinstance(token,str) or not re.fullmatch('[a-fA-F0-9]{64}',token) or login.get('mustChangePassword'):raise Stop('AUTH_REQUIRED')
   report['phase']='NH_QUOTE';report['nhQuoteRequests']=1;result=client.call('nhQuotes',items=[{'k':'k4','t':'fut','c':'A06'}]);q=result.get('data',{}).get('k4')
   if q is None:
-   raw=str(result.get('errors',{}).get('k4',''));match=re.match(r'^(NH_(?:CONFIG|TOKEN|HTTP|NETWORK|RSP|NO_PRICE|CONTRACT|OBSERVATION|STALE|UNSUPPORTED))(?: / HTTP [1-5][0-9]{2})?$',raw);raise Stop(match[1] if match else 'NH_NO_PRICE')
+   raw=str(result.get('errors',{}).get('k4',''));match=re.match(r'^(NH_(?:CONFIG|TOKEN|HTTP|NETWORK|RSP|NO_PRICE|CONTRACT|CONTRACT_CODE|CONTRACT_NAME|CONTRACT_EXPIRY|OBSERVATION|STALE|UNSUPPORTED))(?: / HTTP [1-5][0-9]{2})?$',raw);raise Stop(match[1] if match else 'NH_NO_PRICE')
   report.update(status='PARTIAL',quote=validate_quote(q),code='QUOTE_VERIFIED_MARKET_STATE_PENDING')
  except Stop as e:report.update(status='NOT_RUN' if not report['nhQuoteRequests'] else 'FAIL',code=e.code)
  except Exception as e:
@@ -52,10 +52,15 @@ def verify(client,plan,credentials):
  return report
 
 def main():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('--environment',type=Path,required=True);a=p.parse_args()
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('--environment',type=Path,required=True);p.add_argument('--describe',action='store_true',help='Local source/owner-plan comparison only; no network or NH');a=p.parse_args()
  try:
   env=private_path(a.environment,False);plan=json.loads((env/'fresh-plan.json').read_text());target(plan['scriptId']);match=re.fullmatch(r'https://script\.google\.com/macros/s/([A-Za-z0-9_-]+)/exec',plan['url'])
   if not match or match[1] in (OLD_DEPLOYMENT,PRODUCTION_DEPLOYMENT_ID) or plan.get('sheetHash') in (None,PRODUCTION_SHEET_HASH,fingerprint(OLD_SHEET)):raise Stop('ISOLATED_TARGET_REQUIRED')
+  if a.describe:
+   from build_nh_staging import source_digest
+   import subprocess
+   current=subprocess.check_output(['git','rev-parse','HEAD'],cwd=Path(__file__).resolve().parents[1],text=True).strip()
+   revision=plan.get('revision');result={'status':'PASS','mode':'LOCAL_OWNER_PLAN_DESCRIPTION','deployedRevision':revision if isinstance(revision,str) and re.fullmatch('[a-f0-9]{40}',revision) else 'UNKNOWN','checkedOutRevision':current,'gasSourceMatches':plan.get('sourceDigest')==source_digest(),'nhQuoteRequests':0,'accountCalls':0,'orderCalls':0,'storeWrites':False,'credentialsIncluded':False};print(json.dumps(result));return 0
   client=WebApp(plan['url']);client.binding=plan['sheetHash'];result=verify(client,plan,lambda:(getpass.getpass('Existing test user ID (hidden): '),getpass.getpass('Existing test password (hidden): ')))
  except Exception:result={'status':'NOT_RUN','code':'EXISTING_OWNER_ENVIRONMENT_REQUIRED','accountCalls':0,'orderCalls':0,'storeWrites':False,'credentialsIncluded':False}
  print(json.dumps(result));return 0 if result['status'] in ('PASS','PARTIAL') else 1
