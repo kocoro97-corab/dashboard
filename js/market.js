@@ -9,16 +9,25 @@ const FQ={},FST={},NQ={};
 // ----- 나무증권(NH PLUG) 선물 시세: 서버(GAS)가 대신 조회, 로그인 토큰 필요 -----
 async function nhFetch(items){
   const tk=LS('invest_session_token');
-  if(!tk)return{ok:false,msg:'로그인 토큰 없음'};
+  if(!tk)return{ok:false,msg:'로그인 토큰 없음',code:'NH_AUTH_MISSING',layer:'browser'};
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),25000);
   try{
-    const c=new AbortController(),t=setTimeout(()=>c.abort(),25000);
-    const r=await post({action:'nhQuotes',token:tk,items:items},{signal:c.signal});
-    clearTimeout(t);
-    const j=JSON.parse(await r.text());
-    if(!j.success)return{ok:false,msg:SafeDiagnostics.message(j),code:j.code,layer:j.layer,http:r.status};
+    const r=await post({action:'nhQuotes',token:tk,items:items},{signal:controller.signal});
+    const raw=await r.text();let j;
+    try{j=JSON.parse(raw)}catch{return{ok:false,msg:'NH 중계 응답 형식 오류',code:'NH_RESPONSE_INVALID',layer:'relay',http:r.status}}
+    if(!j||typeof j!=='object'||j.success!==true){
+      return{ok:false,msg:SafeDiagnostics.message(j),code:typeof j?.code==='string'?j.code:'NH_RESPONSE_REJECTED',layer:j?.layer||'relay',http:r.status};
+    }
+    if(!j.data||typeof j.data!=='object'||Array.isArray(j.data)){
+      return{ok:false,msg:'NH 선물 응답 데이터 형식 오류',code:'NH_DATA_INVALID',layer:'gas',http:r.status};
+    }
     const errors={};Object.keys(j.errors||{}).filter(k=>items.some(x=>x.k===k)).forEach(k=>{errors[k]=SafeDiagnostics.message(j.errors[k],'NH_UPSTREAM')});
-    return{ok:true,data:j.data||{},errors};
-  }catch(e){return{ok:false,msg:'통신 실패('+(e&&e.name==='AbortError'?'시간 초과':'서버 주소·배포 확인')+')'}}
+    return{ok:true,data:j.data,errors};
+  }catch(e){
+    const timedOut=e&&e.name==='AbortError';
+    return{ok:false,msg:timedOut?'NH 중계 시간 초과':'NH 중계 통신 실패',code:timedOut?'NH_TIMEOUT':'NH_NETWORK_ERROR',layer:'relay'};
+  }finally{clearTimeout(timeout)}
 }
 function rootFutureStatus(id,error){if(!window.ReadStatus)return;if(error===null){ReadStatus.clear('future:'+id);return}const match=/^(NH_[A-Z_]+)/.exec(String(error));ReadStatus.note({code:match?.[1]||'NH_NO_PRICE',verifiedLayer:match?'nh':undefined},{scope:'public',key:'future:'+id})}
 async function fillNH(requested=Object.keys(NHF)){
