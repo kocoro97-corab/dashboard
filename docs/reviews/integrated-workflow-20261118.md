@@ -81,3 +81,5 @@ PLAYWRIGHT_BROWSERS_PATH=/workspace/.cache/myinvest-playwright .venv-ci-https/bi
 - 동시 개발의 `c6e8ed6`, `ca6fd1c`, `a12d3bd`, `3caa099`를 보존했다. k4 수동 설정 이관, 실패 시 오래된 시세 메타데이터 정리, 상품 코드 검증 및 연속선물 참고 차트를 포함한다. 외부 JS 위젯 호출은 현재 CSP와 충돌하므로 기존 허용 iframe 호스트 방식으로 통합했다. 연속선물 차트는 NH 개별 월물 시세와 분리하며 실제 수치 API 수신 PASS로 판정하지 않는다.
 - 공개 참조자료 수동 GitHub Actions 실행 `44228215673`은 ARK 공식 웹사이트의 **HTTP 403**으로 실패했다. 기존 공개 스냅샷은 덮어쓰지 않았다. 로컬에서 실제 공식 자료로 생성한 6개 테마/30종목은 게시됐지만 GitHub runner에서 자동 갱신이 작동한다고 보고하지 않는다. 권한 우회·유료 서비스·반복 실행은 하지 않는다.
 - 최종 게시 SHA는 후속 게시 검증 보고서에 기록한다. 최신 sourceCommit와 주요 파일 SHA256을 실제 Pages에서 다시 비교한다.
+
+실제 K4 참고 위젯 추가 확인: TradingView `KRX:KQI1!` iframe은 HTTP 200이지만 `Invalid symbol / This symbol is only available on TradingView`를 반환했다. 따라서 iframe을 정상 기능으로 제공하지 않고 **외부 위젯 미지원** 안내와 계약 확인 링크만 남겼다. 이전 iframe DOM/정리 PASS는 상품 데이터 수신 PASS가 아니다. NH 시세 미수신을 외부 가격으로 대체하지 않는다.
