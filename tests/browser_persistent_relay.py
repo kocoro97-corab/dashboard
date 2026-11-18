@@ -3,6 +3,7 @@ import json,mimetypes,subprocess,sys,tempfile,urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 from playwright.sync_api import sync_playwright
+from browser_reference_widgets import fulfill_reference_widget
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'tools'))
 from build_dev_pages import build
 ORIGIN='https://kocoro97-corab.github.io';PAGE=ORIGIN+'/dashboard-v2-dev/index.html#/accounts';ENDPOINT='https://myinvest-v2-dev-relay.synthetic.workers.dev/api'
@@ -12,6 +13,7 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
   for width in [1440,690,344]:
    bridge=subprocess.Popen(['node','tests/worker_browser_bridge.mjs'],cwd=ROOT,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True);port=json.loads(bridge.stdout.readline())['port'];context=browser.new_context(viewport={'width':width,'height':960},service_workers='block');errors=[];unexpected=[];posted=[]
    def route(r):
+    if fulfill_reference_widget(r):return
     u=urlsplit(r.request.url)
     if u.hostname=='kocoro97-corab.github.io' and u.path.startswith('/dashboard-v2-dev/'):
      file=artifact/(u.path.removeprefix('/dashboard-v2-dev/') or 'index.html')

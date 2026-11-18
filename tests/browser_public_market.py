@@ -7,6 +7,7 @@ import sys
 import tempfile
 from urllib.parse import urlsplit
 from playwright.sync_api import sync_playwright
+from browser_reference_widgets import fulfill_reference_widget
 
 ROOT=Path(__file__).resolve().parents[1];sys.path[:0]=[str(ROOT),str(ROOT/'tools'),str(ROOT/'tests')]
 from build_dev_pages import build,PAGE
@@ -57,6 +58,7 @@ with tempfile.TemporaryDirectory() as tmp:
                 context=browser.new_context(viewport={'width':width,'height':882},timezone_id='Asia/Seoul',service_workers='block')
                 errors=[];unexpected=[]
                 def route(r):
+                    if fulfill_reference_widget(r):return
                     # Module-only regression; browser_app_shell.py covers routed integration.
                     if '/js/app-shell.js' in r.request.url:
                         r.fulfill(content_type='application/javascript',body='');return

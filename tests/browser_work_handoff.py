@@ -3,6 +3,7 @@ import argparse,ast,copy,json,mimetypes,sys,tempfile,time
 from pathlib import Path
 from urllib.parse import urlsplit,unquote
 from playwright.sync_api import sync_playwright
+from browser_reference_widgets import fulfill_reference_widget
 ROOT=Path(__file__).resolve().parents[1];sys.path[:0]=[str(ROOT),str(ROOT/'tools'),str(ROOT/'tests')]
 from build_dev_pages import build
 from browser_review_selectors import stock_heading,watch_code_cell
@@ -39,6 +40,7 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
    gas=Gas();app=RelayApp(configuration(origins=frozenset({ORIGIN}),public_market=True,account_reads=True),gas);edge=PublicDevelopment(app,BASE,CODE);edge.host=HOST;errors=[];unexpected=[];findings=[]
    context=browser.new_context(viewport={'width':width,'height':900},timezone_id='Asia/Seoul',service_workers='block')
    def route(r):
+    if fulfill_reference_widget(r):return
     u=urlsplit(r.request.url)
     if u.hostname=='kocoro97-corab.github.io' and u.path.startswith('/dashboard-v2-dev/'):
      if args.published:r.continue_();return

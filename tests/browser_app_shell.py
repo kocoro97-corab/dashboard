@@ -4,6 +4,7 @@ from collections import Counter
 from pathlib import Path
 from urllib.parse import urlsplit,unquote
 from playwright.sync_api import sync_playwright
+from browser_reference_widgets import fulfill_reference_widget
 ROOT=Path(__file__).resolve().parents[1];sys.path[:0]=[str(ROOT),str(ROOT/'tools'),str(ROOT/'tests')]
 from build_dev_pages import build
 from relay.app import RelayApp,RelayFault
@@ -47,6 +48,7 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
    gas=Gas();edge=PublicDevelopment(RelayApp(configuration(origins=frozenset({ORIGIN}),public_market=True),gas),ORIGIN+'/dashboard-v2-dev/',CODE);edge.host=HOST
    context=browser.new_context(viewport={'width':width,'height':900},timezone_id='Asia/Seoul',service_workers='block');errors=[];unexpected=[]
    def route(r):
+    if fulfill_reference_widget(r):return
     u=urlsplit(r.request.url)
     if u.hostname=='kocoro97-corab.github.io' and u.path.startswith('/dashboard-v2-dev/'):
      folder=artifact if development else ROOT;file=folder/(u.path.removeprefix('/dashboard-v2-dev/') or 'index.html')

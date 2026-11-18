@@ -5,6 +5,7 @@ import argparse,json,mimetypes,os,subprocess,sys,tempfile,time,urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit,quote
 from playwright.sync_api import sync_playwright
+from browser_reference_widgets import fulfill_reference_widget
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'tools'))
 from build_dev_pages import build
 p=argparse.ArgumentParser();p.add_argument('--widths',nargs='+',type=int,default=[1440,690,344]);p.add_argument('--area',choices=['both','market','sectors'],default='both');p.add_argument('--output',type=Path,default=Path('/tmp/market-sector-recheck'));args=p.parse_args();args.output.mkdir(parents=True,exist_ok=True)
@@ -27,6 +28,7 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
    for area in (['market','sectors'] if args.area=='both' else [args.area]):
     bridge=subprocess.Popen(['node','tests/worker_browser_bridge.mjs'],cwd=ROOT,env=dict(os.environ,MYINVEST_TEST_PUBLIC_FIXTURE=str(fixture)),stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True);port=json.loads(bridge.stdout.readline())['port'];ctx=browser.new_context(viewport={'width':width,'height':1000},timezone_id='Asia/Seoul',service_workers='block');page=ctx.new_page();errors=[];requests=[]
     def route(r):
+     if fulfill_reference_widget(r):return
      u=urlsplit(r.request.url)
      if u.hostname=='kocoro97-corab.github.io' and u.path.startswith('/dashboard-v2-dev/'):
       file=artifact/(u.path.removeprefix('/dashboard-v2-dev/') or 'index.html')
