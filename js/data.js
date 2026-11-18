@@ -7,7 +7,7 @@
 const FUT={k3:'KR4A016C0004'};
 
 /* 나무증권(NH PLUG) 선물: 카드 id → 상품 앞부분 (A01=코스피200 선물, A06=코스닥150 선물). 월물 코드는 서버가 자동 계산.
-   나무증권이 실패하면 코스피200은 위 다음금융 코드로, 코스닥150은 직접 입력으로 대체됨 */
+   나무증권이 실패하면 코스피200은 위 다음금융 코드를 시도. 코스닥150은 검증된 가격이 없으면 미수신 표시(수동/추정 가격 금지) */
 const NHF={k3:'A01',k4:'A06'};
 
 const DEF={
@@ -15,7 +15,7 @@ KR:[
   {id:'k1',name:'코스피',y:'^KS11',tv:'KRX:KOSPI',vis:1},
   {id:'k2',name:'코스닥',y:'^KQ11',tv:'KRX:KOSDAQ',vis:1},
   {id:'k3',name:'코스피200 선물',fut:FUT.k3,vis:1},
-  {id:'k4',name:'코스닥150 선물',m:1,vis:1},
+  {id:'k4',name:'코스닥150 선물',vis:1},
   {id:'k5',name:'S&P 500',y:'^GSPC',tv:'FOREXCOM:SPXUSD',vis:1},
   {id:'k6',name:'나스닥',y:'^IXIC',tv:'FOREXCOM:NSXUSD',vis:1},
   {id:'k7',name:'달러/원',y:'KRW=X',tv:'FX_IDC:USDKRW',t:'fx',vis:1},
