@@ -11,6 +11,7 @@
 | `js/invest-workflow.js` | 공통 테마/보유/직접 검색 선택기, 기존 선택 키 재사용, 1시간 TTL, 공개 메타데이터만 저장, 분석 캐시·진행 요청 중복 방지·로그아웃 무효화 |
 | `js/page-sectors.js`, `js/themes.js` | 중복 관심종목 UI 제거, 국내 상세 기간 조회, 미국 일반종목 6개 테마·30종목 표본, 1/5/20/60일·상대강도·관측값·보유 표기·분석 이동 |
 | `js/page-stocks.js` | 기존 OHLCV 계산 재사용, 공통 선택·근거/조건부 판단, 상하단 전략 버튼, 늦은 이전 응답 무효화 |
+| `js/page-news.js` | 늦게 끝난 뉴스 갱신이 입력 중인 수동 일정 폼을 초기화하지 않도록 최소 수정. Calendar API·저장 로직 변경 없음 |
 | `js/page-strategy.js` | 동일 종목·모드·기준 데이터 연결, 20봉 고점/MA20·저점의 조건부 진입/손절과 1R/2R 목표, 기존 수량/자본·위험 계산기 유지 |
 | `js/read-status.js`, `js/transport.js` | 민감정보 없는 단계/HTTP/코드/시간/요청ID/유형·재연결, 일시적 공개 읽기 최대 1회 재시도, 공개/계좌 오류 분리, 계좌/인증/저장 재시도 없음 |
 | `js/market.js`, `js/page-market.js` | 요청한 k4가 NH 수집 조건에 포함되도록 수정, 검증 NH 결과를 NQ→Q로 전달, 9개 핵심 지표와 TICK 참고 위젯 유지 |
@@ -69,3 +70,5 @@ PLAYWRIGHT_BROWSERS_PATH=/workspace/.cache/myinvest-playwright .venv-ci-https/bi
 
 개발 URL: https://kocoro97-corab.github.io/dashboard-v2-dev/index.html#/sectors
 공유 URL에 인증 토큰·계좌 자료·임의 쿼리 파라미터를 넣지 않는다.
+
+기존 뉴스 캘린더의 Escape 닫기/포커스 복귀는 미구현으로 남는다. 별도 UI 보완 대상이다. 수동 일정 입력 중 뉴스 갱신으로 폼이 지워지는 문제를 재현하여 갱신 종료 시 일정 폼의 불필요한 재생성만 제거했다.

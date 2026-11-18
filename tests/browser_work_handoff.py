@@ -58,7 +58,7 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
    page.evaluate("MYInvestStockSelection.open('035720',{mode:'swing',name:'카카오'})");page.wait_for_function('()=>DashboardShell.getStatus().path==="/stocks"');stock_heading(page,'035720').wait_for();assert '평균매입가' in page.locator('.sva > section.sva-alert').inner_text()
    page.get_by_role('button',name='이 종목 투자전략',exact=True).first.click();page.wait_for_selector('.str4');assert '035720' in page.locator('.str4-nav').inner_text()
    for label,value in [('가정 진입가','100'),('가정 손절가','90'),('가정 목표가','120')]:page.get_by_label(label,exact=True).fill(value)
-   assert '1,000주' in page.locator('.str4-cards').inner_text();assert '평균매입가' in page.locator('.str4-output').first.inner_text()
+   assert '1,000주' in page.locator('.str4-cards').inner_text();assert '평균매입가' in page.locator('.str4-output').filter(has=page.get_by_role('heading',name='계좌별 보유 전략 · 035720',exact=True)).inner_text()
    page.get_by_role('button',name='종목분석 보기',exact=True).click();page.wait_for_selector('#stockSearch');page.locator('#stockSearch').fill('AAPL');page.get_by_role('button',name='종목 분석',exact=True).click();stock_heading(page,'AAPL').wait_for();assert page.locator('#stockSearch').input_value()=='AAPL'
    # Explicit upstream failure produces unavailable state, never fake output.
    gas.chart_fail=True;page.locator('#stockSearch').fill('MSFT');page.get_by_role('button',name='종목 분석',exact=True).click();page.wait_for_selector('.sva-alert:text-is("실제 OHLCV 21봉 이상이 필요합니다. 종목 코드는 상장 종목 원천 확인 후 사용하세요. 가짜 가격이나 점수를 생성하지 않습니다.")');gas.chart_fail=False
