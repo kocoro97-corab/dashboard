@@ -37,9 +37,11 @@ test('future provider must verify instrument identity, expiration and timestamp'
  assert.equal(p.normalizeFutures({...good,observedAt:Date.now()-8*86400000},'KIS'),null);
 });
 test('NYSE TICK cannot accept cumulative symbol or stale observations',()=>{
- const p=adapter(),good={symbol:'USI:TICK.NY',verified:true,value:1120,observedAt:Date.now()};
+ const p=adapter(),good={symbol:'TICK-NYSE',verified:true,value:1120,observedAt:Date.now()};
  assert.ok(p.normalizeTick(good,'IBKR'));
- assert.equal(p.normalizeTick({...good,symbol:'USI:TICK'},'IBKR'),null);
+ assert.equal(p.normalizeTick({...good,symbol:'USI:TICK.NY'},'IBKR'),null);
+ assert.ok(p.normalizeTick({...good,symbol:'$TICK'},'DXFEED'));
+ assert.equal(p.normalizeTick({...good,symbol:'$TICK'},'IBKR'),null);
  assert.equal(p.normalizeTick({...good,value:50000},'IBKR'),null);
  assert.equal(p.normalizeTick({...good,observedAt:Date.now()-20*60000},'IBKR'),null);
 });
