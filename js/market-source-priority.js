@@ -1,7 +1,7 @@
 (function(root){
 'use strict';
 // Read-only, explicit adapter chain. Never copies quotes from TradingView iframes.
-const ORDER=Object.freeze({futures:['NH_FUTURES','KIS','KOSCOM'],tick:['IBKR','DXFEED']});
+const ORDER=Object.freeze({futures:['NH_PLUG_WS','NH_FUTURES','KIS','KOSCOM'],tick:['IBKR','DXFEED']});
 const registry=new Map();
 const dateEpoch=v=>{const n=typeof v==='number'?v:Date.parse(String(v||''));return Number.isFinite(n)?(n>0&&n<1e11?n*1000:n):null};
 const validExpiry=s=>{const t=String(s||'').replace(/-/g,'');if(!/^\d{8}$/.test(t))return false;const y=+t.slice(0,4),m=+t.slice(4,6),d=+t.slice(6,8),utc=Date.UTC(y,m-1,d);return Number.isFinite(utc)&&new Date(utc).toISOString().slice(0,10)===t.slice(0,4)+'-'+t.slice(4,6)+'-'+t.slice(6,8)&&utc>=Date.now()-86400000};
