@@ -17,7 +17,7 @@ const DEFAULT={KR:['^KS11','^KQ11','k3','k4','KRW=X','^SOX','^GSPC','^IXIC','TIC
 const regionAt=(date=new Date())=>{const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(date);const hour=Number(parts.find(p=>p.type==='hour')?.value);return hour>=7&&hour<21?'KR':'US'};
 const byId=id=>ALL.find(x=>x.id===id);
 const unitFor=id=>['k3','k4'].includes(id)&&typeof Q!=='undefined'&&Q[id]?.contractVerified?'지수 포인트 · 단일 계약':({'^TNX':'% (공급자 수익률 표기)','^IRX':'% (공급자 수익률 표기)','GC=F':'USD/트로이온스','CL=F':'USD/배럴','KRW=X':'원/USD','NQ=F':'지수 포인트 · 공급자 연속선물','ES=F':'지수 포인트 · 공급자 연속선물','YM=F':'지수 포인트 · 공급자 연속선물','k3':'지수 포인트 · 계약/만기 미확인','k4':'지수 포인트 · 계약/만기 미확인','^VIX':'변동성 지수 포인트','TICK':'NYSE $TICK 지표값'})[id]||'지수 포인트';
-const timeLabel=(value,missing)=>{if(value==null||value==='')return missing;const t=typeof value==='number'&&value>0&&value<1e11?value*1000:value;const d=new Date(t);return Number.isFinite(d.getTime())?d.toLocaleString('ko-KR'):missing};
+const timeLabel=(value,missing)=>{if(value==null||value==='')return missing;const t=typeof value==='number'&&value>0&&value<1e11?value*1000:value;const d=new Date(t);return Number.isFinite(d.getTime())?d.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hourCycle:'h23',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' KST':missing};
 const contractNote=id=>['NQ=F','ES=F','YM=F','GC=F','CL=F'].includes(id)?'Yahoo 공급자 선물 심볼 · 개별 만기물 아님 / 롤 조정 방식 미확인':['k3','k4'].includes(id)?(typeof Q!=='undefined'&&Q[id]?.contractVerified?'NH 계약 '+Q[id].contractCode+' · 만기 '+Q[id].expiry+' · 단일 계약':'국내 선물 · 계약/만기 식별 미확인'):null;
 const el=(tag,txt,cls)=>{const n=document.createElement(tag);if(txt!==undefined)n.textContent=txt;if(cls)n.className=cls;return n};
 const btn=(txt,fn)=>{const b=el('button',txt);b.type='button';b.addEventListener('click',fn);return b};
@@ -38,14 +38,16 @@ function create(){
  search.addEventListener('input',render);render();panel.append(btn('기본값 복원',()=>{draft.splice(0,draft.length,...DEFAULT[region]);render()}),btn('순서 저장',()=>{if(draft.length<9){alert('메인 표시용 지표를 9개 이상 선택하세요.');return}settings[region]=[...draft];try{localStorage.setItem(KEY,JSON.stringify(settings))}catch{}close();draw();requestVisible()}))}
  const rangeMap={일:['1d','3mo'],주:['1wk','2y'],월:['1mo','5y'],년:['1mo','max']};
  function openChart(id){
-  const d=byId(id),panel=dialog(d.name+' · 확대 차트'),q=quote(id);panel.classList.add('miv-chart-panel');
-  if(contractNote(id))panel.append(el('p',contractNote(id),'mini'));
-  panel.append(el('p',q?format(q.p)+' · '+unitFor(id)+' · 출처 '+q.source+' · 관측 '+q.observed+' · 수신 '+q.received:'현재 시세 미연결','mini'));
+  const d=byId(id),panel=dialog(d.name+' · 확대 차트');panel.classList.add('miv-chart-panel');
+  const contractSummary=el('p',contractNote(id)||'','mini');if(contractNote(id))panel.append(contractSummary);
+  const quoteSummary=el('p','','mini');panel.append(quoteSummary);
+  function updateSummary(){const value=quote(id);contractSummary.textContent=contractNote(id)||'';quoteSummary.textContent=value?format(value.p)+' · '+unitFor(id)+(value.delta!==null?' · 등락 '+(value.delta>0?'+':'')+value.delta.toFixed(2)+'%':' · 등락률 미확인')+' · 출처 '+value.source+' · 관측 '+value.observed+' · 수신 '+value.received:'현재 시세 미연결'}
+  updateSummary();
   if(id==='k4'){
    const note=el('p','1순위 NH 선물 현재가 · 외부 참고 심볼은 TradingView KRX:KQI1! 연속선물입니다. 연속선물은 개별 월물과 가격이 다를 수 있고, 차트 값은 대시보드 카드로 자동 전송되지 않습니다.','mini');
    const widget=el('p','외부 위젯 미지원 · TradingView 임베드가 이 상품을 Invalid symbol로 반환했습니다. 아래 공식 사이트 링크에서 계약·차트 지원 여부를 직접 확인하세요.');widget.className='mini';
    const link=el('a','TradingView에서 코스닥150 선물 계약·차트 확인');link.href='https://kr.tradingview.com/symbols/KRX-KQI1!/contracts/';link.target='_blank';link.rel='noopener noreferrer';
-   const check=btn('코스닥150 선물 조회',async()=>{const cfg=root.MYINVEST_TRANSPORT_CONFIG||{};if(cfg.devSession&&cfg.publicFutures!==true){result.textContent='현재 중계의 선물 조회 기능 미활성 · 기존 격리 GAS 및 승인된 소유자 연결 절차 확인 필요';return}check.disabled=true;result.textContent='코스닥150 선물 한 종목 조회 중…';try{await connectionContext.once('future-inspection:k4',()=>fillNH(['k4']),true);if(!alive||!result.isConnected)return;draw();const value=quote('k4'),contract=typeof Q!=='undefined'?Q.k4:null;result.textContent=value?'NH · 계약 '+contract.contractCode+' · 만기 '+contract.expiry+' · 가격 '+format(value.p)+' · 관측 '+value.observed+' · 수신 '+value.received+' · 장 상태·지연 여부 미확인':'검증된 선물 시세 미수신 · 오류 식별 정보에서 코드 확인'}catch{if(result.isConnected)result.textContent='조회 결과 미확인 · 오류 식별 정보 확인'}finally{if(check.isConnected)check.disabled=false}}),result=el('p','계약·만기·날짜를 포함한 실제 관측시각이 확인된 시세만 표시합니다.','mini');result.setAttribute('role','status');panel.append(check,result,note,widget,link);
+   const check=btn('코스닥150 선물 조회',async()=>{const cfg=root.MYINVEST_TRANSPORT_CONFIG||{};if(cfg.devSession&&cfg.publicFutures!==true){result.textContent='현재 중계의 선물 조회 기능 미활성 · 기존 격리 GAS 및 승인된 소유자 연결 절차 확인 필요';return}check.disabled=true;result.textContent='코스닥150 선물 한 종목 조회 중…';try{await connectionContext.once('future-inspection:k4',()=>fillNH(['k4']),true);if(!alive||!result.isConnected)return;draw();updateSummary();const value=quote('k4'),contract=typeof Q!=='undefined'?Q.k4:null;result.textContent=value?'NH · 계약 '+contract.contractCode+' · 만기 '+contract.expiry+' · 가격 '+format(value.p)+' · 관측 '+value.observed+' · 수신 '+value.received+' · 장 상태·지연 여부 미확인':'검증된 선물 시세 미수신 · 오류 식별 정보에서 코드 확인'}catch{if(result.isConnected)result.textContent='조회 결과 미확인 · 오류 식별 정보 확인'}finally{if(check.isConnected)check.disabled=false}}),result=el('p','계약·만기·날짜를 포함한 실제 관측시각이 확인된 시세만 표시합니다.','mini');result.setAttribute('role','status');panel.append(check,result,el('p','장 상태·지연 여부 미확인 · OHLCV 차트 미연결','mini'),note,widget,link);
 
    return;
   }
