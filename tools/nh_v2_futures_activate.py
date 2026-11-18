@@ -66,6 +66,7 @@ def apply(directory,old,account,token,prepare_only=False):
   if not needed:return {'status':'PASS','changed':False}
   return {**gas.upgrade(directory),'changed':True}
  def prepare_worker():
+  if previous.get('developmentFuturesReadVersion')==2:return
   # New Worker remains bound to the old, verified GAS until that path is proven.
   def old_proof(env,**kwargs):
    expected,digest=gas.historical_bundle(old['revision'],old['scriptId'])
