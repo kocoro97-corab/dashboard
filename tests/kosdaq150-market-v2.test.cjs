@@ -31,7 +31,7 @@ test('k4 default is automatic, including migrated saved configurations',()=>{
  assert.match(market,/else if\(x.id==='k4'\)\{delete x.y;delete x.m/);
 });
 test('verified NH A06 contract reaches shared V2 quote store',async()=>{
- const r=await simulate({ok:true,data:{k4:{p:1200,prev:1190,code:'A066C000',contractVerified:true,expiry:'2026-12-10'}}});
+ const r=await simulate({ok:true,data:{k4:{p:1200,prev:1190,observedAt:Date.now()-30000,code:'A066C000',contractVerified:true,expiry:'2026-12-10'}}});
  assert.equal(r.out.ok,1);assert.equal(r.q.p,1200);assert.equal(r.q.contractCode,'A066C000');assert.equal(r.src,'H');
 });
 test('a mismatched KOSPI contract must never render as KOSDAQ150',async()=>{

@@ -6,7 +6,7 @@ const path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../gas/Nhplug.gs'),'utf8');
 const origin='https://api.nhplug.com:8443',docs='https://www.nhplug.com';
 const canary='SYNTHETIC_PRIVATE_CANARY';
-const inquiryPaths=['/n2/acctinfo','/krstock/inquiry/v1/balance','/gbstock/inquiry/v1/balance','/krstock/quote/v1/currentPrice','/gbstock/quote/v1/current','/krfuture/quote/v1/day'];
+const inquiryPaths=['/n2/acctinfo','/krstock/inquiry/v1/balance','/gbstock/inquiry/v1/balance','/krstock/quote/v1/currentPrice','/gbstock/quote/v1/current','/krfuture/quote/v1/day','/krfuture/quote/v1/dayPeriod'];
 function backend(reply){
   const requests=[],logs=[],props={NHPLUG_APP_KEY:canary+'?key',NHPLUG_APP_SECRET:canary+'&secret'};
   const ctx=vm.createContext({Logger:{log:x=>logs.push(x)},Utilities:{sleep(){},formatDate:()=> 'synthetic timestamp'},

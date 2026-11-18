@@ -23,7 +23,7 @@ function nhHeader_(headers, name) {
 
 // 접근토큰: 24시간 유효. 스크립트 속성에 만료시각과 함께 캐시해 재사용한다(재발급은 보안 알림을 유발).
 // Only locally defined codes and validated HTTP statuses may cross diagnostic boundaries.
-const NH_DIAGNOSTIC_CODES=['NH_OK','NH_TOKEN','NH_CONFIG','NH_NETWORK','NH_JSON','NH_HTTP','NH_RSP','NH_PATH','NH_REFERENCE_UNAVAILABLE','NH_REFERENCE_INVALID','NH_IDENTITY_UNVERIFIED','NH_IDENTITY_AMBIGUOUS','NH_CURRENCY_MISMATCH','NH_SYMBOL_MISMATCH','NH_NO_BLOCK','NH_NO_PRICE','NH_CONTRACT','NH_UNSUPPORTED','NH_UPSTREAM','NH_SPEC_OK','NH_SPEC_FAILED','NH_ACCOUNTS_OK','NH_DOMESTIC_OK','NH_OVERSEAS_OK','NH_FUTURE_OK'];
+const NH_DIAGNOSTIC_CODES=['NH_OK','NH_TOKEN','NH_CONFIG','NH_NETWORK','NH_JSON','NH_HTTP','NH_RSP','NH_PATH','NH_REFERENCE_UNAVAILABLE','NH_REFERENCE_INVALID','NH_IDENTITY_UNVERIFIED','NH_IDENTITY_AMBIGUOUS','NH_CURRENCY_MISMATCH','NH_SYMBOL_MISMATCH','NH_NO_BLOCK','NH_NO_PRICE','NH_CONTRACT','NH_OBSERVATION','NH_STALE','NH_UNSUPPORTED','NH_UPSTREAM','NH_SPEC_OK','NH_SPEC_FAILED','NH_ACCOUNTS_OK','NH_DOMESTIC_OK','NH_OVERSEAS_OK','NH_FUTURE_OK'];
 function nhSafeDiagnostic_(error) {
   const code=error&&NH_DIAGNOSTIC_CODES.indexOf(error.safeCode)>=0?error.safeCode:'NH_UPSTREAM';
   const http=error&&Number.isInteger(error.safeHttp)&&error.safeHttp>=100&&error.safeHttp<=599?error.safeHttp:null;
@@ -186,6 +186,23 @@ function nhFutNorm_(o0, o1) {
   return { p: p, prev: prev, basis: basis, t: String(o0.bsop_hour || ''), name: String(o0.iem_nm || ''), code: String(o0.iem_cd || ''), dir: how };
 }
 
+// The day quote exposes only a clock, not the observation date. Verify A06
+// against the same contract's last dated trade; never use the fetch date as a trade date.
+function nhFutObserved_(requestCode,quote) {
+  const r=nhCall_('/krfuture/quote/v1/dayPeriod',{iem_cd:requestCode,mrkt_div_cls_code:'F',array_cnt:'0001',maxavg:'000',gubun:'7',xtick:'001',today_cls_code:'0',out1_scale_change:'0',out2_scale_change:'0'});
+  if(r.http!==200)throw nhFailure_('NH_HTTP',r.http);
+  const h=r.body&&r.body.Output_0,rows=r.body&&r.body.Output_1;
+  if(!h||h.iem_cd!==requestCode||!Array.isArray(rows)||rows.length!==1)throw nhFailure_('NH_OBSERVATION');
+  const row=rows[0],day=String(row.bsop_date||''),time=String(row.bsop_time||'');
+  if(!/^\d{8}$/.test(day)||!/^\d{6}$/.test(time))throw nhFailure_('NH_OBSERVATION');
+  const y=Number(day.slice(0,4)),m=Number(day.slice(4,6)),d=Number(day.slice(6,8)),hh=Number(time.slice(0,2)),mm=Number(time.slice(2,4)),ss=Number(time.slice(4,6));
+  const date=new Date(Date.UTC(y,m-1,d)),at=Date.UTC(y,m-1,d,hh-9,mm,ss);
+  if(date.toISOString().slice(0,10).replace(/-/g,'')!==day||hh>23||mm>59||ss>59||!isFinite(at)||at>Date.now()+300000)throw nhFailure_('NH_OBSERVATION');
+  if(Date.now()-at>4*86400000)throw nhFailure_('NH_STALE');
+  if(nhNum_(h.prpr)!==quote.p||nhNum_(row.prpr)!==quote.p)throw nhFailure_('NH_OBSERVATION');
+  return at;
+}
+
 // 선물 1종목 조회 (5초 캐시로 연속 호출 보호)
 function nhFutQuote_(prefix) {
   if(!/^(A01|A06)$/.test(prefix))throw nhFailure_('NH_UNSUPPORTED');
@@ -194,7 +211,7 @@ function nhFutQuote_(prefix) {
   // 8-character Output_0.iem_cd. Never mix provider code systems.
   const requestCode='K'+code;
   const cache = CacheService.getScriptCache();
-  const hit = cache.get('nhq_' + code);
+  const hit = cache.get('nhq_dated_v1_' + code);
   if (hit) return JSON.parse(hit);
   const r = nhCall_('/krfuture/quote/v1/day', { iem_cd: requestCode });
   const o0 = r.body && r.body.Output_0;
@@ -207,8 +224,8 @@ function nhFutQuote_(prefix) {
   if(nd.code!==code||!(prefix==='A06'?/코스닥150|KOSDAQ150/i:/코스피200|KOSPI200/i).test(name)||!/^\d{8}$/.test(expiry))throw nhFailure_('NH_CONTRACT');
   const expiryDate=new Date(Date.UTC(Number(expiry.slice(0,4)),Number(expiry.slice(4,6))-1,Number(expiry.slice(6,8))));
   if(expiryDate.toISOString().slice(0,10).replace(/-/g,'')!==expiry||expiry<Utilities.formatDate(new Date(),'Asia/Seoul','yyyyMMdd'))throw nhFailure_('NH_CONTRACT');
-  nd.expiry=expiry;nd.requestCode=requestCode;nd.product=prefix==='A06'?'KOSDAQ150_FUTURE':'KOSPI200_FUTURE';nd.contractVerified=true;nd.observedAt=null;nd.volume=nhNum_(o0.acml_vol);nd.turnover=nhNum_(o0.acml_tr_pbmn);nd.receivedAt=new Date().toISOString();
-  cache.put('nhq_' + code, JSON.stringify(nd), 5);
+  nd.expiry=expiry;nd.requestCode=requestCode;nd.product=prefix==='A06'?'KOSDAQ150_FUTURE':'KOSPI200_FUTURE';nd.contractVerified=true;nd.observedAt=prefix==='A06'?nhFutObserved_(requestCode,nd):null;nd.observationKind=nd.observedAt?'trade':null;nd.marketState='UNVERIFIED';nd.delayStatus='UNVERIFIED';nd.volume=nhNum_(o0.acml_vol);nd.turnover=nhNum_(o0.acml_tr_pbmn);nd.receivedAt=new Date().toISOString();
+  cache.put('nhq_dated_v1_' + code, JSON.stringify(nd), 5);
   return nd;
 }
 
