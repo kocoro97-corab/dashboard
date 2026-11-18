@@ -135,7 +135,7 @@ def deploy(args,api=cloud,runner=run,preflight_fn=preflight,settings_fn=deployme
   plan=json.loads((env_dir/'fresh-plan.json').read_text())
   verified=settings_fn(plan)
   if not (verified.get('status')=='PASS' and verified.get('executeAs')=='USER_DEPLOYING' and verified.get('access')=='ANYONE_ANONYMOUS' and verified.get('versionMatches') is True):raise Stop('ISOLATED_GAS_DEPLOYMENT_NOT_VERIFIED')
-  values=secrets(plan,host)
+  values=secrets(plan,host);values['MYINVEST_PUBLIC_FUTURES']='true' if getattr(args,'public_futures',False) else 'false'
  else:values={'MYINVEST_ENABLED':'false'}
  config=json.loads((ROOT/'relay/worker/wrangler.json').read_text());config['account_id']=args.account_id;config['vars']={'MYINVEST_ROLE':ROLE}
  for name in ['worker.mjs','policy.json']:shutil.copyfile(ROOT/'relay/worker'/name,folder/name)
@@ -154,7 +154,7 @@ def deploy(args,api=cloud,runner=run,preflight_fn=preflight,settings_fn=deployme
  return {'status':'PASS','scope':'PERSISTENT_RELAY_READY','endpoint':endpoint,'page':'https://kocoro97-corab.github.io/dashboard-v2-dev/','isolation':'PASS','publicMarket':True,'accountReads':True,'reviewedStore':True,'developmentCodeRequired':False,'pageActivation':'PENDING_VERIFIED_ENDPOINT_BINDING','actualNhCalls':0,'orderCalls':0,'credentialsIncluded':False}
 
 def main():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('--environment',type=Path,required=True);p.add_argument('--account-id',help='Existing Cloudflare account ID; otherwise read from owner environment or prompt');p.add_argument('--free-plan-confirmed',action='store_true',help='Owner confirms an existing Workers Free account; no paid plan or account is created');p.add_argument('--disable',action='store_true',help='Close existing relay; no GAS operation');p.add_argument('--diagnose-cloudflare',action='store_true',help='Read-only API check: no deployment, Google or NH calls');p.add_argument('--diagnose-public',action='store_true',help='Inspect existing public relay metadata without deploying or querying NH');p.add_argument('--prompt-token',action='store_true',help='Use a fresh hidden prompt instead of any existing token environment variable');args=p.parse_args()
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('--environment',type=Path,required=True);p.add_argument('--account-id',help='Existing Cloudflare account ID; otherwise read from owner environment or prompt');p.add_argument('--free-plan-confirmed',action='store_true',help='Owner confirms an existing Workers Free account; no paid plan or account is created');p.add_argument('--public-futures',action='store_true',help='Enable only authenticated fixed A01/A06 futures quote reads on the existing isolated relay');p.add_argument('--disable',action='store_true',help='Close existing relay; no GAS operation');p.add_argument('--diagnose-cloudflare',action='store_true',help='Read-only API check: no deployment, Google or NH calls');p.add_argument('--diagnose-public',action='store_true',help='Inspect existing public relay metadata without deploying or querying NH');p.add_argument('--prompt-token',action='store_true',help='Use a fresh hidden prompt instead of any existing token environment variable');args=p.parse_args()
  try:
   if not args.account_id:args.account_id=os.environ.get('CLOUDFLARE_ACCOUNT_ID') or input('Cloudflare account ID (32 characters): ').strip()
   result=deploy(args)

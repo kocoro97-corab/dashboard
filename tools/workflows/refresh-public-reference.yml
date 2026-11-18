@@ -1,9 +1,6 @@
 name: Refresh public US reference data
 on:
   workflow_dispatch:
-  schedule:
-    # KST Tuesday-Saturday 10:35, after the preceding US trading session.
-    - cron: '35 1 * * 2-6'
 permissions:
   contents: write
   pages: write

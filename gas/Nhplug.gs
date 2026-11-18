@@ -163,20 +163,20 @@ function nhNum_(v) {
 }
 
 // 선물 시세 응답 → {p 현재가, prev 전일 기준, basis 베이시스, t 시각, name, code, dir 등락 판정 근거}
-// 등락부호(sign)는 상승일 때 빈 값으로 확인됐고 하락일의 값은 아직 모른다.
-// 그래서 sign → 등락폭의 부호 → 기준가(sdpr)와의 비교 순서로 방향을 정하고, 어느 근거를 썼는지 dir에 남긴다.
+// 공식 부호 1·2·6·7 상승 / 4·5·8·9 하락 / 0·3 보합.
+// 부호가 없으면 음수 등락폭 또는 기준가와 비교하며 근거가 없으면 미확인 처리한다.
 function nhFutNorm_(o0, o1) {
   const p = nhNum_(o0.prpr);
   if (p == null || p <= 0) return null;
   const vr = nhNum_(o0.vrss), sd = nhNum_(o0.sdpr);
   const sg = String(o0.sign == null ? '' : o0.sign).trim();
   let dir = 0, how = '';
-  if (/^(4|5|-|▼|하락|하한)$/.test(sg)) { dir = -1; how = 'sign'; }
-  else if (/^(1|2|\+|▲|상승|상한)$/.test(sg)) { dir = 1; how = 'sign'; }
-  else if (sg === '3' || /보합/.test(sg)) { dir = 0; how = 'sign'; }
+  if (/^(4|5|8|9|-|▼|하락|하한)$/.test(sg)) { dir = -1; how = 'sign'; }
+  else if (/^(1|2|6|7|\+|▲|상승|상한)$/.test(sg)) { dir = 1; how = 'sign'; }
+  else if (sg === '3' || sg === '0' || /보합/.test(sg)) { dir = 0; how = 'sign'; }
   else if (vr != null && vr < 0) { dir = -1; how = 'vrss'; }
   else if (sd != null && sd > 0 && Math.abs(p - sd) > 1e-9) { dir = p > sd ? 1 : -1; how = 'sdpr'; }
-  else { dir = 1; how = 'assume'; }
+  else if(vr===0){dir=0;how='vrss'}else return null;
   let prev;
   if (vr != null) prev = (vr === 0) ? p : p - dir * Math.abs(vr);
   else if (sd != null && sd > 0) prev = sd;
@@ -188,17 +188,26 @@ function nhFutNorm_(o0, o1) {
 
 // 선물 1종목 조회 (5초 캐시로 연속 호출 보호)
 function nhFutQuote_(prefix) {
+  if(!/^(A01|A06)$/.test(prefix))throw nhFailure_('NH_UNSUPPORTED');
   const code = nhFutCode_(prefix);
+  // Official N2 PLUG day spec: 9-character request (e.g. KA0169000),
+  // 8-character Output_0.iem_cd. Never mix provider code systems.
+  const requestCode='K'+code;
   const cache = CacheService.getScriptCache();
   const hit = cache.get('nhq_' + code);
   if (hit) return JSON.parse(hit);
-  const r = nhCall_('/krfuture/quote/v1/day', { iem_cd: code });
+  const r = nhCall_('/krfuture/quote/v1/day', { iem_cd: requestCode });
   const o0 = r.body && r.body.Output_0;
   if (r.http !== 200 || !o0 || typeof o0 !== 'object' || o0.prpr == null) {
     throw nhFailure_('NH_HTTP',r.http);
   }
   const nd = nhFutNorm_(o0, r.body.Output_1);
   if (!nd) throw nhFailure_('NH_NO_PRICE');
+  const name=String(o0.iem_nm||'').replace(/\s/g,''),expiry=String(o0.last_tr_date||'');
+  if(nd.code!==code||!(prefix==='A06'?/코스닥150|KOSDAQ150/i:/코스피200|KOSPI200/i).test(name)||!/^\d{8}$/.test(expiry))throw nhFailure_('NH_CONTRACT');
+  const expiryDate=new Date(Date.UTC(Number(expiry.slice(0,4)),Number(expiry.slice(4,6))-1,Number(expiry.slice(6,8))));
+  if(expiryDate.toISOString().slice(0,10).replace(/-/g,'')!==expiry||expiry<Utilities.formatDate(new Date(),'Asia/Seoul','yyyyMMdd'))throw nhFailure_('NH_CONTRACT');
+  nd.expiry=expiry;nd.requestCode=requestCode;nd.product=prefix==='A06'?'KOSDAQ150_FUTURE':'KOSPI200_FUTURE';nd.contractVerified=true;nd.observedAt=null;nd.volume=nhNum_(o0.acml_vol);nd.turnover=nhNum_(o0.acml_tr_pbmn);nd.receivedAt=new Date().toISOString();
   cache.put('nhq_' + code, JSON.stringify(nd), 5);
   return nd;
 }

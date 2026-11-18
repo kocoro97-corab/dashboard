@@ -33,24 +33,26 @@
       headers.Authorization='Bearer '+data.token;delete data.token;
     }
     return root.fetch(c.endpoint,{method:'POST',headers,body:JSON.stringify(data),credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:'strict-origin-when-cross-origin',signal:options.signal}).then(async response=>{
+      if(root.ReadStatus&&['nhAccounts','nhQuotes','nhExternalQuotes','externalHoldings','externalHistory','externalAccounts'].includes(data.action))root.ReadStatus.observeResponse(response,data.action,()=>payload.token===(typeof LS==='function'?LS('invest_session_token'):null));
       if(c.persistentRelay===true&&['saveExternalHoldings','restoreExternalHoldings','saveExternalAccounts'].includes(data.action)){let result;try{result=await response.clone().json()}catch{throw failure('RELAY_WRITE_OUTCOME_UNKNOWN')}if(!result||typeof result.success!=='boolean')throw failure('RELAY_WRITE_OUTCOME_UNKNOWN')}
       return response;
     }).catch(error=>{
+      if(root.ReadStatus&&['nhAccounts','nhQuotes','nhExternalQuotes','externalHoldings','externalHistory','externalAccounts'].includes(data.action))root.ReadStatus.note(error,{scope:data.action==='nhQuotes'?'public':'account',key:'account:'+data.action});
       if(['register','changePassword','approveUser','saveExternalHoldings','restoreExternalHoldings','saveExternalAccounts'].includes(data.action))throw failure('RELAY_WRITE_OUTCOME_UNKNOWN');
       throw error;
     });
   }
   async function publicRead(url,options){
-    if(!isRelay())return root.fetch(MYP()+(MYP().includes('?')?'&':'?')+'url='+encodeURIComponent(url),options);
-    const token=typeof LS==='function'?LS('invest_session_token'):null;
-    const response=await post({action:'publicFetch',url,token},options),data=await response.json();
-    if(!response.ok||!data||data.success!==true||typeof data.text!=='string'){
-      const safe=new Set(['AUTH_REQUIRED','RELAY_PUBLIC_URL_DENIED','RELAY_PUBLIC_FAILED','RELAY_RATE_LIMIT','RELAY_BUSY','RELAY_UPSTREAM_NETWORK','RELAY_REDIRECT_DENIED','RELAY_GAS_ACCESS_REQUIRED','RELAY_TARGET_MISMATCH','RELAY_ACCESS_CLOSED']);
-      const error=failure(safe.has(data?.code)?data.code:'RELAY_PUBLIC_FAILED');
-      if(Number.isInteger(response.status)&&response.status>=100&&response.status<=599)error.http=response.status;
-      throw error;
-    }
-    return {ok:true,status:response.status,text:async()=>data.text};
+    options=options||{};const token=typeof LS==='function'?LS('invest_session_token'):null,current=()=>token===(typeof LS==='function'?LS('invest_session_token'):null);
+    const perform=async()=>{
+      if(!isRelay()){const r=await root.fetch(MYP()+(MYP().includes('?')?'&':'?')+'url='+encodeURIComponent(url),options);if(!r.ok){const e=failure('GAS_HTTP');e.http=r.status;throw e}const text=await r.text();return {ok:true,status:r.status,text:async()=>text}}
+      const response=await post({action:'publicFetch',url,token},options);let data;try{data=await response.json()}catch{const e=failure('RELAY_RESPONSE_INVALID');e.http=response.status;throw e}
+      if(!response.ok||!data||data.success!==true||typeof data.text!=='string'){
+        const safe=new Set(['AUTH_REQUIRED','RELAY_PUBLIC_URL_DENIED','RELAY_PUBLIC_FAILED','RELAY_RATE_LIMIT','RELAY_BUSY','RELAY_UPSTREAM_NETWORK','RELAY_REDIRECT_DENIED','RELAY_GAS_ACCESS_REQUIRED','RELAY_TARGET_MISMATCH','RELAY_ACCESS_CLOSED']);const e=failure(safe.has(data?.code)?data.code:'RELAY_PUBLIC_FAILED');e.http=response.status;if(['relay','gas','nh'].includes(data?.layer))e.verifiedLayer=data.layer;throw e;
+      }
+      return {ok:true,status:response.status,text:async()=>data.text};
+    };
+    return root.ReadStatus?root.ReadStatus.execute(url,perform,{current,signal:options.signal}):perform();
   }
   root.DashboardTransport=Object.freeze({post,publicRead,isRelay});
   if(typeof module==='object'&&module.exports)module.exports=root.DashboardTransport;

@@ -17,7 +17,7 @@ export function configuration(env){
  if(!/^[a-z0-9][a-z0-9-]{0,62}\.[a-z0-9][a-z0-9-]{0,62}\.workers\.dev$/.test(env.MYINVEST_PUBLIC_HOST||''))throw failure('RELAY_CONFIG_INVALID',503);
  for(const k of ['MYINVEST_PUBLIC_MARKET','MYINVEST_ACCOUNT_READS','MYINVEST_EXTERNAL_STORE'])if(!['true','false'].includes(env[k]))throw failure('RELAY_CONFIG_INVALID',503);
  if(env.MYINVEST_EXTERNAL_STORE==='true'&&env.MYINVEST_ACCOUNT_READS!=='true'||!env.GATE)throw failure('RELAY_CONFIG_INVALID',503);
- return {upstream:env.MYINVEST_GAS_URL,host:env.MYINVEST_PUBLIC_HOST,expected,market:env.MYINVEST_PUBLIC_MARKET==='true',accounts:env.MYINVEST_ACCOUNT_READS==='true',store:env.MYINVEST_EXTERNAL_STORE==='true'};
+ return {upstream:env.MYINVEST_GAS_URL,host:env.MYINVEST_PUBLIC_HOST,expected,market:env.MYINVEST_PUBLIC_MARKET==='true',futures:env.MYINVEST_PUBLIC_MARKET==='true'&&env.MYINVEST_PUBLIC_FUTURES==='true',accounts:env.MYINVEST_ACCOUNT_READS==='true',store:env.MYINVEST_EXTERNAL_STORE==='true'};
 }
 export function allowedMarketUrl(value){
  if(typeof value!=='string'||value.length>2048||!/^https:\/\/[^/?#]+\//i.test(value)||/[\x00-\x20\\]/.test(value)||/%(?![a-fA-F0-9]{2})/.test(value))return false;
@@ -78,6 +78,7 @@ function validatePayload(body){
  const action=body.action,keys=['action'];if(action==='login'){keys.push('user','pass');if(typeof body.user!=='string'||body.user.length>64||typeof body.pass!=='string'||body.pass.length>256)throw failure('RELAY_BAD_REQUEST',400)}
  else if(!['appVersion'].includes(action))keys.push('token');
  if(action==='publicFetch'){keys.push('url');if(!allowedMarketUrl(body.url))throw failure('RELAY_PUBLIC_URL_DENIED',403)}
+ if(action==='nhQuotes'){keys.push('items');if(!Array.isArray(body.items)||body.items.length<1||body.items.length>2||new Set(body.items.map(x=>x?.k)).size!==body.items.length||body.items.some(x=>!x||!equalKeys(x,['k','t','c'])||x.t!=='fut'||!({k3:'A01',k4:'A06'}[x.k])||x.c!==({k3:'A01',k4:'A06'}[x.k])))throw failure('RELAY_BAD_REQUEST',403)}
  if(action==='nhExternalQuotes'){keys.push('codes');if(!Array.isArray(body.codes)||body.codes.length<1||body.codes.length>40||body.codes.some(x=>typeof x!=='string'||!/^[A-Z0-9]{6}$/.test(x)))throw failure('INVALID_CODES',403)}
  if(action==='saveExternalAccounts')keys.push('accounts','brokers','expectedRevision','confirmReplace');
  if(action==='saveExternalHoldings'){keys.push('holdings','expectedRevision','confirmReplace');if(body.externalAccountsVersion===1)keys.push('externalAccountsVersion')}
@@ -85,6 +86,7 @@ function validatePayload(body){
  if(!equalKeys(body,keys))throw failure('RELAY_BAD_REQUEST',400);
  if(writes.has(action)&&(body.confirmReplace!==true||typeof body.expectedRevision!=='string'||!body.expectedRevision))throw failure('STORE_CONFIRM',403);
 }
+function futureResult(result,items){if(result?.success!==true)return result;const data={},errors={};for(const item of items){const q=result.data?.[item.k],prefix=item.c,name=String(q?.name||'').replace(/\s/g,'');if(q&&q.contractVerified===true&&/^\d{8}$/.test(q.expiry||'')&&Number.isFinite(q.p)&&q.p>0&&Number.isFinite(q.prev)&&q.prev>0&&new RegExp('^'+prefix+'[0-9][1-9ABC]000$').test(q.code||'')&&(prefix==='A06'?/코스닥150|KOSDAQ150/i:/코스피200|KOSPI200/i).test(name)){data[item.k]={p:q.p,prev:q.prev,basis:Number.isFinite(q.basis)?q.basis:null,code:q.code,name:prefix==='A06'?'코스닥150 선물':'코스피200 선물',t:/^[0-9:]{6,8}$/.test(q.t||'')?q.t:'',expiry:/^\d{8}$/.test(q.expiry||'')?q.expiry:null,contractVerified:q.contractVerified===true&&/^\d{8}$/.test(q.expiry||''),observedAt:null,receivedAt:new Date().toISOString(),volume:Number.isFinite(q.volume)?q.volume:null,turnover:Number.isFinite(q.turnover)?q.turnover:null}}else{const raw=String(result.errors?.[item.k]||''),match=/^(NH_(?:TOKEN|CONFIG|NETWORK|JSON|HTTP|RSP|NO_PRICE|CONTRACT|UNSUPPORTED|UPSTREAM|SYMBOL_MISMATCH))(?: \/ HTTP ([1-5][0-9]{2}))?$/.exec(raw);errors[item.k]=match?match[1]+(match[2]?' / HTTP '+match[2]:''):'NH_NO_PRICE'}}return {success:true,data,errors}}
 export function createHandler({fetcher=fetch,gatewayFactory=createGateway}={}){const proof={};return async function(request,env){
  let lease=null,gate=null,attemptedWrite=false;const origin=request.headers.get('Origin')===ORIGIN;
  const headers={'Content-Type':'application/json;charset=utf-8','Cache-Control':'no-store','Pragma':'no-cache','Vary':'Origin','X-Content-Type-Options':'nosniff','Strict-Transport-Security':'max-age=31536000'};
@@ -105,7 +107,7 @@ export function createHandler({fetcher=fetch,gatewayFactory=createGateway}={}){c
   const declared=request.headers.get('Content-Length');if(declared&&(!/^\d+$/.test(declared)||Number(declared)>65536))throw failure('RELAY_REQUEST_SIZE',413);
   let raw;try{raw=await bounded(request,65536)}catch(error){if(error.code==='RELAY_RESPONSE_TOO_LARGE')throw failure('RELAY_REQUEST_SIZE',413);throw error}let body;try{body=JSON.parse(raw)}catch{throw failure('RELAY_BAD_REQUEST',400)}
   if(!body||Array.isArray(body)||typeof body!=='object'||['token','backendUrl','gasUrl','targetUrl','stagingBinding'].some(k=>k in body))throw failure('RELAY_BAD_REQUEST',400);
-  const action=body.action,allowed=auth.has(action)||config.market&&action==='publicFetch'||config.accounts&&reads.has(action)||config.store&&writes.has(action);
+  const action=body.action,allowed=auth.has(action)||config.market&&action==='publicFetch'||config.futures&&action==='nhQuotes'||config.accounts&&reads.has(action)||config.store&&writes.has(action);
   if(!allowed)throw failure('RELAY_SCOPE_BLOCKED',403);
   const bearer=request.headers.get('Authorization');if(['appVersion','login'].includes(action)){if(bearer)throw failure('RELAY_BAD_REQUEST',400)}else{if(!/^Bearer [a-fA-F0-9]{64}$/.test(bearer||''))throw failure('AUTH_REQUIRED',401);body.token=bearer.slice(7)}
   validatePayload(body);
@@ -116,9 +118,9 @@ export function createHandler({fetcher=fetch,gatewayFactory=createGateway}={}){c
   if(!quota.ok)throw failure(quota.status===429?'RELAY_RATE_LIMIT':'RELAY_BUSY',quota.status);
   lease=(await quota.json()).lease;if(typeof lease!=='string')throw failure('RELAY_CONFIG_INVALID',503);
   const gateway=gatewayFactory(config,fetcher,proof),metadata=await gateway.verify();let result;
-  if(action==='appVersion')result={...metadata,relayProfile:'persistent',developmentPublicMarket:config.market,developmentAccountReads:config.accounts,developmentExternalStore:config.store,developmentExternalTestStore:false};
+  if(action==='appVersion')result={...metadata,relayProfile:'persistent',developmentPublicMarket:config.market,developmentPublicFutures:config.futures,developmentAccountReads:config.accounts,developmentExternalStore:config.store,developmentExternalTestStore:false};
   else if(action==='publicFetch')result={success:true,text:await gateway.public(body.url,body.token)};
-  else{attemptedWrite=writes.has(action);result=await gateway.post(body)}
+  else{attemptedWrite=writes.has(action);result=await gateway.post(body);if(action==='nhQuotes')result=futureResult(result,body.items)}
   if(result.success!==true)result={success:false,code:safeCode.has(result.code)?result.code:'GAS_REJECTED',layer:['gas','storage','nh'].includes(result.layer)?result.layer:'gas',...(safeMessages.has(result.message)?{message:result.message}:{}),mustChangePassword:result.mustChangePassword===true};
   return reply(200,result);
  }catch(error){const code=attemptedWrite?'RELAY_WRITE_OUTCOME_UNKNOWN':publicCodes.has(error.code)?error.code:'RELAY_BAD_RESPONSE';return reply(Number.isInteger(error.status)&&error.status>=400&&error.status<=599?error.status:502,{success:false,code,layer:'relay'})}

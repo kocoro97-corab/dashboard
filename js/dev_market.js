@@ -20,7 +20,7 @@
       };
       // Public source adapters are reused. No NH request is attempted, including
       // the existing automatic futures call inside refreshMarket.
-      fillNH=async()=>{NH_STATUS='미연결 · 개발 환경의 NH 요청 차단';return{ok:0,fail:0}};
+      const readFutures=fillNH;fillNH=async(...args)=>{if(c.publicFutures===true)return readFutures(...args);NH_STATUS='미연결 · 개발 환경의 NH 요청 차단';return{ok:0,fail:0}};
       manualRefresh=()=>window.DashboardShell?DashboardShell.refresh():refreshPublic();
       installed=true;
     }

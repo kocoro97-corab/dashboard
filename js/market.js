@@ -15,19 +15,20 @@ async function nhFetch(items){
     const r=await post({action:'nhQuotes',token:tk,items:items},{signal:c.signal});
     clearTimeout(t);
     const j=JSON.parse(await r.text());
-    if(!j.success)return{ok:false,msg:SafeDiagnostics.message(j)};
+    if(!j.success)return{ok:false,msg:SafeDiagnostics.message(j),code:j.code,layer:j.layer,http:r.status};
     const errors={};Object.keys(j.errors||{}).filter(k=>items.some(x=>x.k===k)).forEach(k=>{errors[k]=SafeDiagnostics.message(j.errors[k],'NH_UPSTREAM')});
     return{ok:true,data:j.data||{},errors};
   }catch(e){return{ok:false,msg:'통신 실패('+(e&&e.name==='AbortError'?'시간 초과':'서버 주소·배포 확인')+')'}}
 }
-async function fillNH(){
-  const ids=Object.keys(NHF),t=hms(new Date());
+function rootFutureStatus(id,error){if(!window.ReadStatus)return;if(error===null){ReadStatus.clear('future:'+id);return}const match=/^(NH_[A-Z_]+)/.exec(String(error));ReadStatus.note({code:match?.[1]||'NH_NO_PRICE',verifiedLayer:match?'nh':undefined},{scope:'public',key:'future:'+id})}
+async function fillNH(requested=Object.keys(NHF)){
+  const ids=[...new Set(requested.filter(id=>Object.prototype.hasOwnProperty.call(NHF,id)))],t=hms(new Date());if(!ids.length)return {ok:0,fail:0};
   const r=await nhFetch(ids.map(id=>({k:id,t:'fut',c:NHF[id]})));
-  if(!r.ok){ids.forEach(id=>delete NQ[id]);NH_STATUS='실패 · '+r.msg+' · '+t;return{ok:0,fail:ids.length}}
+  if(!r.ok){ids.forEach(id=>{delete NQ[id];if(SRC[id]==='H')delete Q[id];window.ReadStatus?.note({code:r.code,http:r.http,verifiedLayer:r.layer},{scope:'public',key:'future:'+id})});NH_STATUS='실패 · '+r.msg+' · '+t;return{ok:0,fail:ids.length}}
   let ok=0;const ds=[],er=[];
   ids.forEach(id=>{const d=r.data[id];
-    if(d&&d.p!=null&&d.prev!=null){NQ[id]={p:d.p,prev:d.prev,basis:d.basis,t:d.t||t,at:t};ok++;ds.push(id+':'+d.code+'('+d.dir+')')}
-    else{delete NQ[id];er.push(id+': '+(r.errors[id]||'응답 없음'))}});
+    if(d&&Number.isFinite(d.p)&&d.p>0&&Number.isFinite(d.prev)&&d.prev>0){NQ[id]={p:d.p,prev:d.prev,basis:d.basis,t:d.t||t,at:t,code:d.code,expiry:d.expiry||null,contractVerified:d.contractVerified===true};Q[id]={p:d.p,prev:d.prev,observedAt:d.observedAt||null,contractCode:d.code||null,expiry:d.expiry||null,contractVerified:d.contractVerified===true,volume:Number.isFinite(d.volume)?d.volume:null,turnover:Number.isFinite(d.turnover)?d.turnover:null};SRC[id]='H';QT[id]=Date.now();rootFutureStatus(id,null);ok++;ds.push(id+':'+d.code+'('+d.dir+')')}
+    else{delete NQ[id];if(SRC[id]==='H')delete Q[id];rootFutureStatus(id,r.errors[id]);er.push(id+': '+(r.errors[id]||'응답 없음'))}});
   NH_STATUS='선물 '+ok+'/'+ids.length+' 성공 · '+t+(ds.length?' · '+ds.join(' '):'')+(er.length?' · 실패 '+er.join(' / '):'');
   return{ok:ok,fail:ids.length-ok};
 }
@@ -140,7 +141,7 @@ async function refreshMarket(requested=[]){   // '시장 종합' 카드(지수·
     const list=CFG[sess()],want=[...new Set([...list.filter(x=>x.y).map(x=>x.y),...extra])],fr=new Set();
     await fillNaver(want,fr);
     await fillQuotes(want.filter(c=>!fr.has(c)));
-    const hasNH=list.some(x=>NHF[x.id]),nh=hasNH?await fillNH():{ok:0,fail:0};
+    const requestedNH=[...new Set([...list.filter(x=>NHF[x.id]).map(x=>x.id),...(Array.isArray(requested)?requested:[]).filter(id=>NHF[id])])],hasNH=requestedNH.length>0,nh=hasNH?await fillNH(requestedNH):{ok:0,fail:0};
     const hasFut=list.some(x=>x.fut)||Array.isArray(requested)&&requested.includes('k3'),fu=hasFut?await fillFutures(new Set(Object.keys(NQ))):{ok:0,fail:0};
     const got=want.filter(c=>Q[c]).length;
     renderCards();updateTickGauge();generateScenario();

@@ -12,7 +12,7 @@ function search(text,limit=20){const q=String(text||'').trim().toLocaleLowerCase
 function resolve(text){const s=String(text||'').trim().toUpperCase();if(lookup(s))return {symbol:s,matches:[lookup(s)]};const found=search(text,30);return found.length===1?{symbol:found[0].symbol,matches:found}:{symbol:null,matches:found}}
 function label(s,fallback){const r=lookup(s);return r?(r.nameKo||r.nameEn)+' ('+s+')':clean(fallback)||s}
 function node(s,fallback){const e=document.createElement('span');e.className='instrument-name';e.dataset.instrumentSymbol=s;e.dataset.instrumentFallback=fallback||s;paint(e);return e}
-function paint(e){const s=e.dataset.instrumentSymbol,r=lookup(s),main=document.createElement('span'),sub=document.createElement('small');main.className='instrument-primary';main.textContent=r?r.nameKo||r.nameEn:e.dataset.instrumentFallback||s;sub.textContent=r?(r.nameKo?r.nameEn+' · ':'')+s+' · '+(r.type==='ETF'?'ETF':r.type==='EQUITY'?'주식':r.exchange):s;e.replaceChildren(main,sub)}
+function paint(e){const s=e.dataset.instrumentSymbol,r=lookup(s),main=document.createElement('span'),sub=document.createElement('small');main.className='instrument-primary';main.textContent=r?r.nameKo||r.nameEn:e.dataset.instrumentFallback||s;sub.textContent=r?(r.nameKo?r.nameEn+' · ':'')+s+' · '+(r.type==='ETF'?'ETF':r.type==='EQUITY'?'주식':r.exchange):(e.dataset.instrumentFallback&&e.dataset.instrumentFallback!==s?s:s+' · 종목명 미확인');e.replaceChildren(main,sub)}
 function repaint(){document.querySelectorAll('[data-instrument-symbol]').forEach(paint)}
 root.InstrumentNames=Object.freeze({load,lookup,ingest,search,resolve,label,node});root.addEventListener('myinvest:instrument-names',repaint);
 })(window);

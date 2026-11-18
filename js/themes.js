@@ -33,7 +33,7 @@ function parseTheme(o){return{
   rate:nsgn(o,nnum(fv(o,['changeRate','fluctuationsRatio','fluctuationRate'],RATE_RE)))}}
 function parseStock(o){
   const code=String(fv(o,['itemCode','stockCode','code','symbolCode'],/code$/i)||'');
-  return{code:code,
+  return{code:code,price:nnum(o.closePrice),observedAt:typeof o.localTradedAt==='string'?o.localTradedAt:null,
     name:String(fv(o,['stockName','itemName','name'],/name/i)||code),
     rate:nsgn(o,nnum(fv(o,['fluctuationsRatio','changeRate','fluctuationRate'],RATE_RE))),
     val:nnum(fv(o,['accumulatedTradingValue','tradingValue','accumulatedTradingAmount','amount'],/(trading|accum).*(value|amount)/i)),

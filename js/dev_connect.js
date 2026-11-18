@@ -71,6 +71,7 @@
       if(!response.ok||data.success!==true)reject(known(data.code)?data.code:'DEV_REJECTED');
       if(data.freshTestEnvironment!==true||data.testEnvironment!=='nh-staging'||data.gatewayVersion!==2||data.storeEngine!=='account-store-v2')reject('DEV_METADATA_MISMATCH');
       config.publicMarket=data.developmentPublicMarket===true;
+      config.publicFutures=config.publicMarket&&data.developmentPublicFutures===true;
       config.accountReads=data.developmentAccountReads===true;
       config.externalTestStore=config.accountReads&&data.developmentExternalTestStore===true;
       config.externalStore=config.accountReads&&data.developmentExternalStore===true;
