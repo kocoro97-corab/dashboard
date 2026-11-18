@@ -12,6 +12,16 @@ from build_nh_staging import build,source_digest,ROOT
 from nh_staging_test import WebApp
 
 class Stop(Exception):pass
+SAFE_CODES={'OLD_SOURCE_PROOF_FAILED','AUTH_MANIFEST_CHANGED_STOP','UNRELATED_GAS_CHANGE_STOP','EXISTING_CLOUDFLARE_ACCOUNT_ID_REQUIRED','EXISTING_WORKER_REQUIRED','EXISTING_WORKERS_SUBDOMAIN_REQUIRED','EXISTING_CLOUDFLARE_ACCESS_REQUIRED','PERSISTENT_WORKER_COMMAND_FAILED','PERSISTENT_PUBLIC_PROBE_FAILED','PERSISTENT_TARGET_NOT_VERIFIED','ISOLATED_GAS_DEPLOYMENT_NOT_VERIFIED','CAPABILITIES_NOT_VERIFIED','CONCURRENT_GAS_CHANGE_STOP','ROLLBACK_PROOF_FAILED','ROLLBACK_READBACK_FAILED'}
+def safe_error(error):
+ code=str(error);out={'code':code if code in SAFE_CODES else 'OWNER_FUTURES_ACTIVATION_PREFLIGHT_FAILED'}
+ diagnostic=getattr(error,'diagnostic',{})
+ if isinstance(diagnostic,dict):
+  http=diagnostic.get('http')
+  if isinstance(http,int) and 100<=http<=599:out['http']=http
+  stage=diagnostic.get('stage')
+  if stage in {'WORKERS_SUBDOMAIN','WORKER_SETTINGS','PUBLIC_RELAY'}:out['stage']=stage
+ return out
 
 def plan_for(directory):
  directory=private_path(directory,False);old=json.loads((directory/'fresh-plan.json').read_text());target(old['scriptId']);before,digest=gas.historical_bundle(old['revision'],old['scriptId'])
@@ -24,18 +34,19 @@ def plan_for(directory):
  if set(changed)-allowed:raise Stop('UNRELATED_GAS_CHANGE_STOP')
  return directory,old,{'status':'PASS','mode':'LOCAL_FUTURES_CONNECTION_PLAN','gasModules':[x for x in changed if x!='StagingBridge'],'metadataUpdate':'StagingBridge' in changed,'authManifestUnchanged':True,'newProject':False,'newAuthentication':False,'nhCalls':0,'accountCalls':0,'orderCalls':0,'storeWrites':False,'credentialsIncluded':False}
 
-def coordinated(upgrade,deploy,restore,verify):
- changed=False;deploy_attempted=False
+def coordinated(upgrade,deploy,restore,verify,prepare=lambda:None):
+ changed=False;stage='WORKER_PREPARE'
  try:
-  step=upgrade()
+  prepare();stage='ISOLATED_GAS';step=upgrade()
   if step.get('status')!='PASS':return {'status':'FAIL','phase':'ISOLATED_GAS','recovery':step.get('recovery','NOT_NEEDED')}
-  changed=step.get('changed',True);deploy_attempted=True;deploy();verify();return {'status':'PASS','phase':'ISOLATED_FUTURES_CONNECTION_READY','recovery':'NOT_NEEDED'}
- except Exception:
-  if not deploy_attempted:return {'status':'FAIL','phase':'ISOLATED_GAS','recovery':'UPGRADE_TOOL_RESULT_REQUIRED'}
-  try:restore(changed);return {'status':'FAIL','phase':'CONNECTION_ACTIVATION','recovery':'PASS_PREVIOUS_CONNECTION_RESTORED'}
-  except Exception:return {'status':'FAIL','phase':'CONNECTION_ACTIVATION','recovery':'OWNER_REVIEW_REQUIRED'}
+  changed=step.get('changed',True);stage='BINDING_UPDATE';deploy();stage='PUBLIC_READBACK';verify();return {'status':'PASS','phase':'ISOLATED_FUTURES_CONNECTION_READY','recovery':'NOT_NEEDED'}
+ except Exception as error:
+  failure={'status':'FAIL','phase':'CONNECTION_ACTIVATION','failureStage':stage,**safe_error(error)}
+  if stage=='ISOLATED_GAS':return {**failure,'recovery':'UPGRADE_TOOL_RESULT_REQUIRED'}
+  try:restore(changed);return {**failure,'recovery':'PASS_PREVIOUS_CONNECTION_RESTORED'}
+  except Exception:return {**failure,'recovery':'OWNER_REVIEW_REQUIRED'}
 
-def apply(directory,old,account,token):
+def apply(directory,old,account,token,prepare_only=False):
  if not re.fullmatch('[a-f0-9]{32}',account):raise Stop('EXISTING_CLOUDFLARE_ACCOUNT_ID_REQUIRED')
  root='/accounts/'+account;settings=edge.cloud(root+'/workers/scripts/'+edge.NAME+'/settings',token)
  if not any(x.get('name')=='MYINVEST_ROLE' and x.get('text')==edge.ROLE for x in settings.get('bindings',[])):raise Stop('EXISTING_WORKER_REQUIRED')
@@ -52,12 +63,27 @@ def apply(directory,old,account,token):
  def upgrade():
   if not needed:return {'status':'PASS','changed':False}
   return {**gas.upgrade(directory),'changed':True}
+ def prepare_worker():
+  # New Worker remains bound to the old, verified GAS until that path is proven.
+  def old_proof(env,**kwargs):
+   expected,digest=gas.historical_bundle(old['revision'],old['scriptId'])
+   if logical(directory/'bundle')!=expected or digest!=old['sourceDigest']:raise Stop('OLD_SOURCE_PROOF_FAILED')
+   gas.check_metadata(WebApp(old['url']).call('appVersion'),old)
+  args=SimpleNamespace(environment=directory,account_id=account,free_plan_confirmed=True,public_futures=previous.get('developmentPublicFutures') is True,disable=False,diagnose_public=False,diagnose_cloudflare=False,prompt_token=False)
+  edge.deploy(args,cf_token=token,preflight_fn=old_proof)
  def deploy():
-  args=SimpleNamespace(environment=directory,account_id=account,free_plan_confirmed=True,public_futures=True,disable=False,diagnose_public=False,diagnose_cloudflare=False,prompt_token=False)
-  edge.deploy(args,cf_token=token)
+  current=json.loads((directory/'fresh-plan.json').read_text());values=edge.secrets(current,host);values['MYINVEST_PUBLIC_FUTURES']='true';folder=directory/'persistent-worker';edge.run(['secret','bulk','--config',str(folder/'wrangler.json')],folder,runtime,json.dumps(values))
  def verify():
-  current=json.loads((directory/'fresh-plan.json').read_text());m=edge.public_request(endpoint,{'action':'appVersion'});edge.verify_metadata(m,current)
-  if m.get('developmentPublicFutures') is not True or m.get('developmentIndustryMarket') is not True:raise Stop('CAPABILITIES_NOT_VERIFIED')
+  current=json.loads((directory/'fresh-plan.json').read_text())
+  for attempt in range(6):
+   try:
+    m=edge.public_request(endpoint,{'action':'appVersion'});edge.verify_metadata(m,current)
+    if m.get('developmentPublicFutures') is not True or m.get('developmentIndustryMarket') is not True:raise Stop('CAPABILITIES_NOT_VERIFIED')
+    return
+   except Exception as error:
+    transient=isinstance(error,edge.Stop) and (str(error)=='PERSISTENT_TARGET_NOT_VERIFIED' or error.diagnostic.get('http') in (502,503,504))
+    if not transient or attempt==5:raise
+    time.sleep(2)
  def restore(changed):
   current=json.loads((directory/'fresh-plan.json').read_text());bundle=directory/'bundle'
   if changed:
@@ -78,16 +104,23 @@ def apply(directory,old,account,token):
    except Exception:
     if attempt==5:raise
     time.sleep(2)
- return {**coordinated(upgrade,deploy,restore,verify),'newProject':False,'authScopesChanged':False,'nhCalls':0,'accountCalls':0,'orderCalls':0,'storeWrites':False,'credentialsIncluded':False}
+ if prepare_only:
+  try:prepare_worker();out={'status':'PASS','phase':'WORKER_PREPARED_NO_GAS_CHANGE','gasCodeChanged':False}
+  except Exception as error:
+   out={'status':'FAIL','phase':'WORKER_PREPARE',**safe_error(error)}
+   try:restore(False);out['recovery']='PASS_PREVIOUS_CONNECTION_RESTORED'
+   except Exception:out['recovery']='OWNER_REVIEW_REQUIRED'
+ else:out=coordinated(upgrade,deploy,restore,verify,prepare_worker)
+ return {**out,'newProject':False,'authScopesChanged':False,'nhCalls':0,'accountCalls':0,'orderCalls':0,'storeWrites':False,'credentialsIncluded':False}
 
 def main():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('--environment',type=Path,required=True);p.add_argument('--apply',action='store_true');p.add_argument('--free-plan-confirmed',action='store_true');a=p.parse_args()
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('--environment',type=Path,required=True);p.add_argument('--apply',action='store_true');p.add_argument('--prepare-relay-only',action='store_true');p.add_argument('--free-plan-confirmed',action='store_true');a=p.parse_args()
  try:
   directory,old,report=plan_for(a.environment)
   if a.apply:
    if not a.free_plan_confirmed:raise Stop('EXISTING_FREE_PLAN_CONFIRMATION_REQUIRED')
    config=directory/'persistent-worker/wrangler.json';account=json.loads(config.read_text()).get('account_id') if config.exists() else None
-   account=account or os.environ.get('CLOUDFLARE_ACCOUNT_ID') or input('Existing Cloudflare account ID: ').strip();token=edge.clean_token(os.environ.get('CLOUDFLARE_API_TOKEN') or getpass.getpass('Existing Cloudflare API token (hidden): '));report=apply(directory,old,account,token)
- except Exception:report={'status':'NOT_RUN','code':'OWNER_FUTURES_ACTIVATION_PREFLIGHT_FAILED','nhCalls':0,'accountCalls':0,'orderCalls':0,'storeWrites':False,'credentialsIncluded':False}
+   account=account or os.environ.get('CLOUDFLARE_ACCOUNT_ID') or input('Existing Cloudflare account ID: ').strip();token=edge.clean_token(os.environ.get('CLOUDFLARE_API_TOKEN') or getpass.getpass('Existing Cloudflare API token (hidden): '));report=apply(directory,old,account,token,a.prepare_relay_only)
+ except Exception as error:report={'status':'NOT_RUN',**safe_error(error),'nhCalls':0,'accountCalls':0,'orderCalls':0,'storeWrites':False,'credentialsIncluded':False}
  print(json.dumps(report));return 0 if report.get('status')=='PASS' else 1
 if __name__=='__main__':raise SystemExit(main())

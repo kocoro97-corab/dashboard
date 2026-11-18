@@ -18,3 +18,11 @@ class Tests(unittest.TestCase):
   for failure in ['deploy','verify']:
    c,r=self.run_steps(failure);self.assertEqual(c[-1],'restore');self.assertEqual(r['recovery'],'PASS_PREVIOUS_CONNECTION_RESTORED')
 if __name__=='__main__':unittest.main()
+
+class RelayPreparationTests(unittest.TestCase):
+ def test_relay_prepare_failure_never_upgrades_gas_and_never_echoes_secret(self):
+  calls=[]
+  def prepare():calls.append('prepare');raise RuntimeError('SYNTHETIC_SECRET')
+  def restore(changed):calls.append(('restore',changed))
+  r=coordinated(lambda:calls.append('GAS'),lambda:None,restore,lambda:None,prepare)
+  self.assertEqual(calls,['prepare',('restore',False)]);self.assertEqual(r['failureStage'],'WORKER_PREPARE');self.assertNotIn('SYNTHETIC_SECRET',str(r))
