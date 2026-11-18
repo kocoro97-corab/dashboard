@@ -199,7 +199,9 @@ function nhFutObserved_(requestCode,quote) {
   const date=new Date(Date.UTC(y,m-1,d)),at=Date.UTC(y,m-1,d,hh-9,mm,ss);
   if(date.toISOString().slice(0,10).replace(/-/g,'')!==day||hh>23||mm>59||ss>59||!isFinite(at)||at>Date.now()+300000)throw nhFailure_('NH_OBSERVATION');
   if(Date.now()-at>4*86400000)throw nhFailure_('NH_STALE');
-  if(nhNum_(h.prpr)!==quote.p||nhNum_(row.prpr)!==quote.p)throw nhFailure_('NH_OBSERVATION');
+  const trade=nhFutNorm_({prpr:h.prpr,vrss:h.prdy_vrss,sign:h.prdy_vrss_sign}, {unas_prpr:h.unas_prpr});
+  if(!trade||nhNum_(row.prpr)!==trade.p||Math.abs(trade.prev-quote.prev)>0.011)throw nhFailure_('NH_OBSERVATION');
+  quote.p=trade.p;quote.prev=trade.prev;quote.basis=trade.basis;quote.volume=nhNum_(h.acml_vol);quote.turnover=nhNum_(h.acml_tr_pbmn);
   return at;
 }
 
@@ -226,7 +228,7 @@ function nhFutQuote_(prefix) {
   if(!/^\d{8}$/.test(expiry))throw nhFailure_('NH_CONTRACT_EXPIRY');
   const expiryDate=new Date(Date.UTC(Number(expiry.slice(0,4)),Number(expiry.slice(4,6))-1,Number(expiry.slice(6,8))));
   if(expiryDate.toISOString().slice(0,10).replace(/-/g,'')!==expiry||expiry<Utilities.formatDate(new Date(),'Asia/Seoul','yyyyMMdd'))throw nhFailure_('NH_CONTRACT_EXPIRY');
-  nd.expiry=expiry;nd.requestCode=requestCode;nd.product=prefix==='A06'?'KOSDAQ150_FUTURE':'KOSPI200_FUTURE';nd.contractVerified=true;nd.observedAt=prefix==='A06'?nhFutObserved_(requestCode,nd):null;nd.observationKind=nd.observedAt?'trade':null;nd.marketState='UNVERIFIED';nd.delayStatus='UNVERIFIED';nd.volume=nhNum_(o0.acml_vol);nd.turnover=nhNum_(o0.acml_tr_pbmn);nd.receivedAt=new Date().toISOString();
+  nd.expiry=expiry;nd.requestCode=requestCode;nd.product=prefix==='A06'?'KOSDAQ150_FUTURE':'KOSPI200_FUTURE';nd.contractVerified=true;nd.observedAt=null;nd.observationKind=null;nd.marketState='UNVERIFIED';nd.delayStatus='UNVERIFIED';nd.volume=nhNum_(o0.acml_vol);nd.turnover=nhNum_(o0.acml_tr_pbmn);if(prefix==='A06'){nd.observedAt=nhFutObserved_(requestCode,nd);nd.observationKind='trade'}nd.receivedAt=new Date().toISOString();
   cache.put('nhq_dated_v1_' + code, JSON.stringify(nd), 5);
   return nd;
 }
