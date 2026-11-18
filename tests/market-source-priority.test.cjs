@@ -15,13 +15,19 @@ test('fallback priorities are ordered and never call unconfigured providers',asy
  const r=await p.resolve('futures');
  assert.deepEqual(called,['NH_FUTURES','KIS']);
  assert.equal(r.quote.provider,'KIS');
- assert.deepEqual(r.attempts.map(x=>x.status),['FAILED','OK']);
+ assert.deepEqual(r.attempts.map(x=>x.status),['NOT_CONFIGURED','FAILED','OK']);
+});
+test('NH PLUG real-time provider wins before newly contracted providers',async()=>{
+ const p=adapter(),called=[];
+ p.register('futures','NH_PLUG_WS',async()=>{called.push('NH_PLUG_WS');return {product:'KOSDAQ150_FUT',verified:true,price:1201,previousClose:1190,contractCode:'A066C000',expiry:expiry(30),observedAt:Date.now()}});
+ p.register('futures','NH_FUTURES',async()=>{called.push('NH_FUTURES');throw Error('must not run')});
+ const r=await p.resolve('futures');assert.equal(r.quote.provider,'NH_PLUG_WS');assert.deepEqual(called,['NH_PLUG_WS']);
 });
 test('invalid first provider advances to the next validated contract',async()=>{
  const p=adapter();
  p.register('futures','NH_FUTURES',async()=>({product:'KOSDAQ150',price:1200,verified:true}));
  p.register('futures','KIS',async()=>({product:'KOSDAQ150_FUT',verified:true,price:1200,previousClose:1190,contractCode:'A066C000',expiry:expiry(21),observedAt:Date.now()}));
- const r=await p.resolve('futures');assert.equal(r.quote.provider,'KIS');assert.equal(r.attempts[0].status,'INVALID_OR_STALE');
+ const r=await p.resolve('futures');assert.equal(r.quote.provider,'KIS');assert.equal(r.attempts[1].status,'INVALID_OR_STALE');
 });
 test('future provider must verify instrument identity, expiration and timestamp',()=>{
  const p=adapter(),good={product:'KOSDAQ150_FUT',verified:true,price:1200,previousClose:1190,contractCode:'A066C000',expiry:expiry(30),observedAt:Date.now()};
