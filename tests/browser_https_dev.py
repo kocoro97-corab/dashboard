@@ -33,6 +33,10 @@ def inspect_screens(page):
 
 
 def inspect_screen_controls(page):
+    # Compact header keeps secondary tools behind a disclosure on small screens.
+    tools = page.locator('.dense-header-tools')
+    if tools.count() and not tools.evaluate('e=>e.open'):
+        tools.locator('summary').click()
     assert page.locator('#cards .card').count() > 0
     assert '미조회' in page.locator('#status').inner_text()
     assert '미조회' in page.locator('#nhAccountRows').inner_text()

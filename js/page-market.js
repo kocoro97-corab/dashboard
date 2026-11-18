@@ -46,8 +46,7 @@ function create(){
    const widget=el('div');widget.style.height='420px';widget.style.width='100%';
    const link=el('a','TradingView에서 코스닥150 선물 계약·차트 확인');link.href='https://kr.tradingview.com/symbols/KRX-KQI1!/contracts/';link.target='_blank';link.rel='noopener noreferrer';
    panel.append(note,widget,link);
-   if(typeof embed==='function')embed(widget,'advanced-chart',{autosize:true,symbol:'KRX:KQI1!',interval:'D',timezone:'Asia/Seoul',theme:'dark',style:'1',locale:'kr',hide_side_toolbar:true,allow_symbol_change:false,calendar:false,details:false,hotlist:false,withdateranges:false},ok=>{if(!ok&&widget.isConnected)widget.textContent='외부 차트 로딩 실패 · 위 링크에서 직접 확인하세요.'});
-   else widget.textContent='차트 위젯 미지원 · 위 링크에서 직접 확인하세요.';
+   const frame=el('iframe');frame.title='코스닥150 연속선물 외부 참고 차트';frame.src='https://s.tradingview.com/widgetembed/?symbol='+encodeURIComponent('KRX:KQI1!')+'&interval=D&theme=dark&timezone=Asia%2FSeoul';frame.setAttribute('sandbox','allow-scripts allow-same-origin');frame.referrerPolicy='no-referrer';frame.style.cssText='width:100%;height:100%;border:0';widget.append(frame);modalCleanups.push(()=>{frame.remove()});
    return;
   }
   const periods=el('div',undefined,'miv-controls'),controls=el('div',undefined,'miv-controls'),graph=el('div','차트 데이터를 불러오는 중…','miv-graph'),info=el('p','','mini'),countLabel=el('span','','mini');
