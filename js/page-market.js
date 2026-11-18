@@ -47,8 +47,7 @@ function create(){
   }else{
    if(!tickWidgetNode){
     tickWidgetNode=el('div');tickWidgetNode.style.cssText='width:100%;min-height:75px;overflow:hidden';
-    if(typeof embed==='function')embed(tickWidgetNode,'single-quote',{symbol:'USI:TICK.NY',width:'100%',colorTheme:'dark',isTransparent:true,locale:'kr'});
-    else tickWidgetNode.textContent='TradingView 시세 위젯 미지원';
+    const frame=el('iframe');frame.title='NYSE $TICK TradingView 참고 위젯';frame.src='https://s.tradingview.com/embed-widget/single-quote/?locale=kr#'+encodeURIComponent(JSON.stringify({symbol:'USI:TICK.NY',width:'100%',colorTheme:'dark',isTransparent:true,locale:'kr'}));frame.loading='lazy';frame.referrerPolicy='no-referrer';frame.setAttribute('sandbox','allow-scripts allow-same-origin');frame.style.cssText='width:100%;height:96px;border:0;display:block';tickWidgetNode.append(frame);
    }
    c.append(tickWidgetNode);
    c.append(el('small','TradingView 위젯 참고 수치 · 자동 판정용 데이터 연동 전'));

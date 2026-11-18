@@ -30,3 +30,7 @@ Direct read-only Worker appVersion verification: success=true; developmentPublic
 ## Remaining / next assignee
 
 Codex: confirm authenticated actual development page card/detail rendering with the owner's existing session; investigate OHLCV read support using the existing approved provider if needed. No speculative futures substitute, no live-state/delay claim, no production GAS modification. The user can already click Global Market > KOSDAQ150 futures > 코스닥150 선물 조회 without a DevTools snippet or shell command.
+
+## Concurrent source integration
+
+Preserved 13 remote commits through `f69edd2` (approved provider adapter order and NYSE TICK source-symbol validation). These are registration adapters, not newly connected paid/broker feeds. No IBKR/dxFeed/KIS/Koscom credentials or live adapters were registered by this work. The new TICK card attempted an external bootstrap script blocked by existing Pages CSP; replaced only its loader with the already allowed s.tradingview.com iframe, without loosening CSP or extracting iframe data. Unknown numerical feed remains unknown. Late fallback responses are discarded when the session changes. Merged futures UI browser regression: 3 widths PASS; provider/transport/session tests PASS.

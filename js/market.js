@@ -46,12 +46,12 @@ async function fillNH(requested=Object.keys(NHF)){
 // NH PLUG remains the primary futures source. No quote is copied from a visual iframe.
 let MARKET_SOURCE_ATTEMPTS={futures:[],tick:[]};
 async function fillAuthorizedMarketSources(needFuture=true){
- const resolver=window.MyInvestMarketSourcePriority;
+ const scope=LS('invest_session_token'),resolver=window.MyInvestMarketSourcePriority;
  if(!resolver)return;
  if(needFuture){
   if(['W','F','K','C'].includes(SRC.k4)){delete Q.k4;delete SRC.k4;delete QT.k4}
   if(!Q.k4){
-  const r=await resolver.resolve('futures');
+  const r=await resolver.resolve('futures');if(scope!==LS('invest_session_token'))return;
   MARKET_SOURCE_ATTEMPTS.futures=r.attempts;
   if(r.quote){
    const d=r.quote;Q.k4={p:d.p,prev:d.prev,observedAt:d.observedAt,contractCode:d.contractCode,expiry:d.expiry,contractVerified:true,delayed:d.delayed,stale:d.stale};
@@ -59,7 +59,7 @@ async function fillAuthorizedMarketSources(needFuture=true){
   }
   }
  }
- const tick=await resolver.resolve('tick');
+ const tick=await resolver.resolve('tick');if(scope!==LS('invest_session_token'))return;
  MARKET_SOURCE_ATTEMPTS.tick=tick.attempts;
  if(tick.quote&&!tick.quote.stale){
   Q.TICK={p:tick.quote.p,observedAt:tick.quote.observedAt,delayed:tick.quote.delayed};

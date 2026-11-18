@@ -54,7 +54,8 @@ test('NYSE TICK signal respects extreme thresholds and avoids false trading cert
 });
 test('market card shows raw instant TICK widget without unauthorized iframe extraction',()=>{
  assert.match(page,/USI:TICK\.NY/);
- assert.match(page,/'single-quote'/);
+ assert.match(page,/s\.tradingview\.com\/embed-widget\/single-quote\//);
+ assert.ok(!/embed\(tickWidgetNode/.test(page),'Pages CSP does not permit the external widget bootstrap script');
  assert.match(page,/tickContext/);
  assert.ok(!/contentDocument|contentWindow\.(?:document|body)/.test(page));
  assert.match(market,/fillAuthorizedMarketSources/);
