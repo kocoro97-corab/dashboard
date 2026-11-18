@@ -7,8 +7,9 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'tools'))
 from build_dev_pages import build
-from public_integration_support import Harness,synthetic_feeds,history_url,ENDPOINT
+from public_integration_support import Harness,synthetic_feeds,history_url,ENDPOINT,US_STOCKS
 p=argparse.ArgumentParser();p.add_argument('--widths',type=int,nargs='+',default=[1440,690,344]);p.add_argument('--output',type=Path,default=Path('/tmp/sector-followup'));p.add_argument('--published',action='store_true');p.add_argument('--public-feeds',type=Path);args=p.parse_args();args.output.mkdir(parents=True,exist_ok=True);results=[]
+UNIVERSE=json.loads((ROOT/'data/us-theme-instruments.json').read_text());THEME_COUNT=len(UNIVERSE['themes']);MAX_MEMBERS=max(len(t['instruments']) for t in UNIVERSE['themes'])
 async def check(h,name,fn):
  try:await fn();row={'test':name,'width':h.width,'status':'PASS'}
  except Exception as e:
@@ -39,18 +40,18 @@ async def features(browser,artifact,tmp,width):
    assert 'DATE_MISMATCH' not in await h.page.locator('.stv2').text_content();assert '공통 관측일' in await h.page.locator('.stv2').inner_text();await h.page.screenshot(path=str(args.output/(str(width)+'-kr-shared-date.png')))
   await check(h,'NULL_LATEST_INDEX_CLOSE_USES_REAL_COMMON_DATES',common_dates)
   async def us_equities():
-   await region(h,'US');await h.page.get_by_role('button',name='단타',exact=True).click();await settled(h,1);assert await h.page.locator('.stv2-us-themes .stv2-card').count()==5;assert not await h.page.locator('.stv2-etfs').get_attribute('open')
+   await region(h,'US');await h.page.get_by_role('button',name='단타',exact=True).click();await settled(h,1);assert await h.page.locator('.stv2-us-themes .stv2-card').count()==THEME_COUNT;assert not await h.page.locator('.stv2-etfs').get_attribute('open')
    assert '일반종목 표본' in await h.page.locator('.stv2').inner_text();assert '구성 기준 2026-11-17' in await h.page.locator('.stv2-us-themes').inner_text()
-   await h.page.locator('.stv2-us-themes .stv2-card').first.click();assert await h.page.locator('.stv2-us-members tr').count()==6;cells=await h.page.locator('.stv2-us-members tr').nth(1).locator('td').all_text_contents();assert not any('('+s+')' in cells[0] for s in ['XLK','XLV','SPY']);assert abs(float(cells[1].replace('%',''))-(199/198-1)*100)<.011
-   symbol=re.search(r'\(([A-Z]+)\)',cells[0])[1];await h.page.locator('.stv2-us-members').get_by_role('button',name='종목분석',exact=True).first.click();await h.page.wait_for_selector('#stockSearch');assert await h.page.locator('#stockSearch').input_value()==symbol;await h.go('sectors');await region(h,'US')
+   await h.page.locator('.stv2-us-themes .stv2-card').first.click();assert await h.page.locator('.stv2-us-members tr').count()==MAX_MEMBERS+1;cells=await h.page.locator('.stv2-us-members tr').nth(1).locator('td').all_text_contents();assert not any('('+s+')' in cells[0] for s in ['XLK','XLV','SPY']);assert abs(float(cells[1].replace('%',''))-(199/198-1)*100)<.011
+   symbol=next(x for x in US_STOCKS if x in cells[0].split());await h.page.locator('.stv2-us-members').get_by_role('button',name='종목분석',exact=True).first.click();await h.page.wait_for_selector('#stockSearch');assert await h.page.locator('#stockSearch').input_value()==symbol;await h.go('sectors');await region(h,'US')
    for days in [5,20,60]:
     if days==5:await h.page.get_by_role('button',name='스윙',exact=True).click()
-    await h.page.get_by_role('button',name=str(days)+'일',exact=True).click();await settled(h,days);assert await h.page.locator('.stv2-us-themes .stv2-card').count()==5;expected=(199/(199-days)-1)*100
+    await h.page.get_by_role('button',name=str(days)+'일',exact=True).click();await settled(h,days);assert await h.page.locator('.stv2-us-themes .stv2-card').count()==THEME_COUNT;expected=(199/(199-days)-1)*100
     for card in await h.page.locator('.stv2-us-themes .stv2-card').all():assert ('수익률 +'+format(expected,'.2f')+'%') in await card.inner_text()
    await h.page.screenshot(path=str(args.output/(str(width)+'-us-equity-themes.png')))
   await check(h,'FIVE_US_THEMES_REAL_EQUITY_MEMBERS_AND_STOCK_LINK',us_equities)
   async def bad_identity():
-   bad=json.loads(feeds[history_url('TSLA')]);bad['chart']['result'][0]['meta']['instrumentType']='ETF';h.overrides[history_url('TSLA')]={'text':json.dumps(bad)};await h.page.get_by_role('button',name='테마 데이터 새로고침',exact=True).click();await h.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("TSLA (SERIES_UNAVAILABLE)")');assert '확인 4/5종목' in await h.page.locator('.stv2-us-themes').inner_text()
+   bad=json.loads(feeds[history_url('TSLA')]);bad['chart']['result'][0]['meta']['instrumentType']='ETF';h.overrides[history_url('TSLA')]={'text':json.dumps(bad)};await h.page.get_by_role('button',name='테마 데이터 새로고침',exact=True).click();await h.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("TSLA (SERIES_UNAVAILABLE)")');assert '확인 '+str(MAX_MEMBERS-1)+'/'+str(MAX_MEMBERS)+'종목' in await h.page.locator('.stv2-us-themes').inner_text()
    assert await h.page.locator('.stv2-status:not([open])').count()>0
   await check(h,'ETF_RESPONSE_REJECTED_FOR_GENERAL_STOCK_MEMBER',bad_identity)
   async def cleanup():
@@ -81,7 +82,7 @@ async def public_equities(browser,artifact,tmp,width):
     if n==5:await h.page.get_by_role('button',name='스윙',exact=True).click()
     if n>1:await h.page.get_by_role('button',name=str(n)+'일',exact=True).click()
     await settled(h,n);dates=list(benchmark)[-n-1:];base=(benchmark[dates[-1]]/benchmark[dates[0]]-1)*100
-    cards=await h.page.locator('.stv2-us-themes .stv2-card').all();assert len(cards)==5
+    cards=await h.page.locator('.stv2-us-themes .stv2-card').all();assert len(cards)==len(universe['themes'])
     for t in universe['themes']:
      expected=[]
      for stock in t['instruments']:

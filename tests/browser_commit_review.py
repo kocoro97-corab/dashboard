@@ -82,11 +82,11 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
     base();page.evaluate('()=>{NH_ACCOUNTS=[];EXT_ASSETS=Array.from({length:13},(_,i)=>({accountType:"ISA",code:String(100001+i),name:"Synthetic concentration "+i,quantity:i===12?1000:1,avgPrice:1,source:"manual",match:{status:"matched"}}));EXT_SAVED_ROWS=extRows(EXT_ASSETS);EXT_PRICES=Object.fromEntries(EXT_ASSETS.map(x=>[x.code,{price:1}]));__reviewContexts[0].ctx.emit()}');panel=page.locator('.pv-panel').filter(has=page.get_by_role('heading',name='종목별 평가액 집중도',exact=True));assert '100013' in panel.inner_text(),'largest holding (13th source row) absent from first 12 concentration bars';assert '100013' in panel.locator('.pv-bar-row').first.inner_text();assert '나머지 1개 생략' in panel.inner_text();panel.screenshot(path=str(args.output/(str(width)+'-concentration.png')))
    case('CONCENTRATION_INCLUDES_LARGEST_HOLDING',top_concentration)
    def sector_link():
-    base();go('sectors');page.wait_for_function('()=>!THM_BUSY');assert watch_code_cell(page,'035720').count()==1;assert watch_code_cell(page,'000660').count()==1;assert watch_code_cell(page,'123456').count()==0
-   case('SECTOR_NH_EXTERNAL_ZERO_EXCLUSION',sector_link)
+    base();go('sectors');page.wait_for_function('()=>!THM_BUSY');assert page.locator('.stv2 input').count()==0;assert page.get_by_role('heading',name='내 보유·관심종목 연계',exact=True).count()==0
+   case('SECTOR_MANAGEMENT_UI_REMOVED',sector_link)
    def sector_reactive():
-    page.evaluate('()=>{EXT_ASSETS=[];EXT_SAVED_ROWS=[];__reviewContexts[0].ctx.emit()}');assert watch_code_cell(page,'000660').count()==0;assert watch_code_cell(page,'035720').count()==1;base();page.evaluate('()=>{EXT_ASSETS[0].quantity=11;__reviewContexts[0].ctx.emit()}');assert watch_code_cell(page,'000660').count()==0
-   case('SECTOR_CONTEXT_REFRESH_AND_DRAFT_EXCLUSION',sector_reactive)
+    page.evaluate('()=>{EXT_ASSETS=[];EXT_SAVED_ROWS=[];__reviewContexts[0].ctx.emit()}');assert page.locator('.stv2 input').count()==0;base();page.evaluate('()=>{EXT_ASSETS[0].quantity=11;__reviewContexts[0].ctx.emit()}');assert page.locator('.stv2 input').count()==0
+   case('SECTOR_MANAGEMENT_UI_STAYS_REMOVED_AFTER_CONTEXT_REFRESH',sector_reactive)
    base();go('stocks');page.wait_for_selector('#stockSearch');page.evaluate(BAR_SETUP)
    def search(symbol,mode):
     page.evaluate('(m)=>window.__responseMode=m',mode);page.locator('#stockSearch').fill(symbol);page.get_by_role('button',name='종목 분석',exact=True).click();page.wait_for_function('()=>{const s=document.querySelector(".sva").textContent;return s.includes("분석 완료")||s.includes("분석 불가")}')

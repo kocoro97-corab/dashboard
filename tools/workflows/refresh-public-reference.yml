@@ -1,0 +1,60 @@
+name: Refresh public US reference data
+on:
+  workflow_dispatch:
+  schedule:
+    # KST Tuesday-Saturday 10:35, after the preceding US trading session.
+    - cron: '35 1 * * 2-6'
+permissions:
+  contents: write
+  pages: write
+concurrency:
+  group: development-public-reference
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: dev-pages
+          path: site
+      - name: Read verified frontend source revision
+        id: source
+        run: |
+          python3 - <<'PY'
+          import json,os,re
+          value=json.load(open('site/development-only.json'))['sourceCommit']
+          assert re.fullmatch('[0-9a-f]{40}',value)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('sha='+value+'\n')
+          PY
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: kocoro97-corab/dashboard
+          ref: ${{ steps.source.outputs.sha }}
+          persist-credentials: false
+          path: source
+      - name: Refresh official public listings and theme samples
+        run: python3 source/tools/refresh_public_reference.py --output-root site/data
+      - name: Update public asset digests
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,pathlib
+          root=pathlib.Path('site');file=root/'asset-manifest.json';doc=json.loads(file.read_text())
+          for name in ['data/us-instruments.json','data/us-theme-instruments.json']:
+              doc[name]=hashlib.sha256((root/name).read_bytes()).hexdigest()
+          file.write_text(json.dumps(doc,sort_keys=True))
+          PY
+      - name: Save data-only changes to existing development branch
+        working-directory: site
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/us-instruments.json data/us-theme-instruments.json asset-manifest.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Refresh verified public US company names and theme samples'
+          git push origin HEAD:dev-pages
+      - name: Request existing development Pages build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST repos/${{ github.repository }}/pages/builds > /dev/null

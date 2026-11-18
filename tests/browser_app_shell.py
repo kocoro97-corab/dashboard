@@ -61,7 +61,8 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
      if r.request.method=='POST':data=gas.post(json.loads(r.request.post_data or '{}'));r.fulfill(content_type='application/json',body=json.dumps(data))
      else:
       from urllib.parse import parse_qs
-      r.fulfill(content_type='text/plain',body=gas.public(parse_qs(u.query)['url'][0],TOKEN))
+      try:r.fulfill(content_type='text/plain',body=gas.public(parse_qs(u.query)['url'][0],TOKEN))
+      except RelayFault:r.fulfill(status=401,content_type='application/json',body=json.dumps({'success':False,'error':'AUTH_REQUIRED'}))
      return
     if not development and u.hostname=='s3.tradingview.com':r.fulfill(content_type='application/javascript',body='');return
     unexpected.append(u.hostname);r.abort()
@@ -88,8 +89,8 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
    for path in ['/market','/sectors','/stocks','/strategy','/news','/settings','/accounts']:
     go(path);page.wait_for_function("()=>!DashboardShell.getStatus().pages.some(p=>p.status==='loading')",timeout=30000)
     assert page.evaluate("LS('invest_session_token')")==token
-    assert page.locator('#pageViewport>.page-content,#pageViewport>.miv-legacy-details>.page-content').count()==1
-    if path=='/market':assert page.locator('.miv-legacy-details').get_attribute('open') is None
+    assert page.locator('#pageViewport .page-content').count()==1
+    if path=='/market':assert not page.locator('#marketSection').is_visible()
    go('/accounts/ocr');assert page.evaluate('EXT_ASSETS.length')==count and page.locator('#externalAssetSection').is_visible()
    for sub in ['overview','nh','special','holdings','analysis']:
     go('/accounts/'+sub);assert page.evaluate('EXT_ASSETS.length')==count
@@ -109,8 +110,8 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
     page.evaluate("LS('invest_external_settings',{auto:true,minutes:10})");go('/accounts');assert page.evaluate('EXT_AUTO_TIMER!==null');go('/home');assert page.evaluate('EXT_AUTO_TIMER===null')
    before=Counter(gas.reads);go('/market');go('/home');page.wait_for_timeout(100);assert Counter(gas.reads)==before
    if development:
-    go('/market');page.locator('.miv-legacy-details > summary').click();macro=page.locator('#workMacroLivePreview');macro.get_by_role('button',name='거시경제 분석 · 실제 시세로 열기',exact=True).click();page.wait_for_function("()=>document.querySelectorAll('#workMacroLivePreview .macro-card').length>0",timeout=60000)
-    go('/home');assert macro.locator('.work-macro').count()==0
+    go('/market');assert not page.locator('#marketSection').is_visible();page.get_by_role('button',name='거시경제 분석',exact=True).click();macro=page.locator('#workMacroLivePreview');macro.get_by_role('button',name='거시경제 분석 · 실제 시세로 열기',exact=True).click();page.wait_for_function("()=>document.querySelectorAll('#workMacroLivePreview .macro-card').length>0",timeout=60000)
+    page.locator('.miv-overlay').get_by_role('button',name='✕ 닫기',exact=True).click();go('/home');assert macro.locator('.work-macro').count()==0
    page.go_back();page.wait_for_function("()=>DashboardShell.getStatus().path==='/market'");page.go_forward();page.wait_for_function("()=>DashboardShell.getStatus().path==='/home'")
    page.reload(wait_until='domcontentloaded');page.wait_for_function("()=>DashboardShell.getStatus().path==='/home'");assert page.evaluate("LS('invest_session_token')")==token
    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')

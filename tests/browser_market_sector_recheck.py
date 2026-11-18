@@ -78,11 +78,11 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
       check('MARKET_LAYOUT_AND_NO_SCRIPT_ERRORS',layout)
      else:
       def loaded():
-       page.wait_for_function('()=>!THM_BUSY&&THM.length===2');assert sum(r['url']==LIST for r in requests)==1;assert page.locator('.stv2-overview .stv2-card').count()==2
+       page.wait_for_function('()=>!THM_BUSY&&THM.length===2');assert sum(r['url']==LIST for r in requests)==1;assert page.locator('.stv2-ranks .stv2-card').count()==2
       check('FIRST_ENTRY_LOADS_DOMESTIC_THEMES_ONCE',loaded)
       def metrics():
        for name,text in [('합성테마 A','상승 1 / 하락 1 / 보합 1'),('합성테마 B','상승 2 / 하락 1 / 보합 0')]:
-        card=page.locator('.stv2-overview .stv2-card').filter(has=page.locator('strong',has_text=name));assert text in card.inner_text();assert ('33.3%' if name.endswith('A') else '66.7%') in card.inner_text()
+        card=page.locator('.stv2-ranks .stv2-card').filter(has=page.locator('strong',has_text=name));assert text in card.inner_text();assert ('33.3%' if name.endswith('A') else '66.7%') in card.inner_text()
        values=page.evaluate('THM.map(t=>({name:t.name,sc:t.sc}))');assert values==[{'name':'합성테마 B','sc':45},{'name':'합성테마 A','sc':35}]
       check('BREADTH_COUNTS_RATIO_AND_STRENGTH',metrics)
       def leaders():

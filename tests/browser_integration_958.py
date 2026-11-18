@@ -115,7 +115,7 @@ async def sectors_checks(browser,artifact,tmp,width):
   if await h.page.get_by_role('button',name='시장 전환: 현재 미국',exact=True).count():await h.page.get_by_role('button',name='시장 전환: 현재 미국',exact=True).click()
   await h.page.wait_for_function('()=>!THM_BUSY&&THM.length>0');first=round((time.perf_counter()-started)*1000)
   async def day():
-   assert await h.page.locator('.stv2-overview .stv2-card').count()>0;rows=h.page.locator('.stv2-overview table tr');labels=await rows.locator('td:first-child').all_text_contents();assert len(labels)==len(set(labels));values=[float(s.replace(',','')) for s in await rows.locator('td:nth-child(4)').all_text_contents()];assert values==sorted(values,reverse=True)
+   assert await h.page.locator('.stv2-ranks .stv2-card').count()>0;rows=h.page.locator('.stv2-overview table tr');labels=await rows.locator('td:first-child').all_text_contents();assert len(labels)==len(set(labels));values=[float(s.replace(',','')) for s in await rows.locator('td:nth-child(4)').all_text_contents()];assert values==sorted(values,reverse=True)
   await case(h,'KR_DAY_THEME_BREADTH_LEADERS_MAINTAINED',day)
   async def us():
    await h.page.get_by_role('button',name='시장 전환: 현재 한국',exact=True).click()

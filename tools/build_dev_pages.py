@@ -40,7 +40,7 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
         '<meta http-equiv="Content-Security-Policy" content="default-src \'self\'; '
         'script-src \'self\' \'unsafe-inline\' \'wasm-unsafe-eval\'; style-src \'self\' \'unsafe-inline\'; '
         'img-src \'self\' data:; connect-src \'self\' data: https://*.trycloudflare.com; '
-        'frame-src \'none\'; worker-src \'self\'; form-action \'none\'; base-uri \'none\'">')
+        'frame-src https://s.tradingview.com; worker-src \'self\'; form-action \'none\'; base-uri \'none\'">')
     if relay_endpoint:
         from urllib.parse import urlsplit
         text=text.replace("https://*.trycloudflare.com;","https://*.trycloudflare.com "+urlsplit(relay_endpoint).scheme+'://'+urlsplit(relay_endpoint).netloc+';')
@@ -70,6 +70,7 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
     (output / 'data').mkdir()
     shutil.copyfile(root / 'data/krx-instruments.json', output / 'data/krx-instruments.json')
     shutil.copyfile(root / 'data/us-theme-instruments.json', output / 'data/us-theme-instruments.json')
+    shutil.copyfile(root / 'data/us-instruments.json', output / 'data/us-instruments.json')
     shutil.copyfile(root / 'data/account-test-holdings.json', output / 'data/account-test-holdings.json')
     ocr = root / 'vendor/ocr'
     pinned = json.loads((ocr / 'manifest.json').read_text())

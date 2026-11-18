@@ -54,8 +54,8 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
    go('market');page.locator('.miv-indicator').first.click();chart=page.get_by_role('dialog');chart.locator('canvas').wait_for();chart.get_by_role('button',name='월',exact=True).click();chart.locator('canvas').wait_for();chart.get_by_role('button',name='✕ 닫기',exact=True).click();assert any('range=3mo' in x for x in gas.reads) and any('range=5y' in x for x in gas.reads)
    # Newly supplied navigation and public-data stock analyzer, preserving account data.
    before=page.evaluate('JSON.stringify(extRows(EXT_ASSETS))');go('sectors');page.wait_for_function('()=>!THM_BUSY');
-   if not page.locator('.stv2').get_by_role('cell',name='보유',exact=True).count():findings.append('SECTOR_HOLDINGS_USES_LEGACY_H_ONLY')
-   page.locator('.stv2 input').fill('035720');page.get_by_role('button',name='관심종목 추가',exact=True).click();page.locator('.stv2').get_by_role('button',name='AI 분석',exact=True).click();page.wait_for_function('()=>DashboardShell.getStatus().path==="/stocks"');stock_heading(page,'035720').wait_for();assert '평균매입가' in page.locator('.sva section.sva-alert').inner_text()
+   assert page.locator('.stv2 input').count()==0
+   page.evaluate("MYInvestStockSelection.open('035720',{mode:'swing',name:'카카오'})");page.wait_for_function('()=>DashboardShell.getStatus().path==="/stocks"');stock_heading(page,'035720').wait_for();assert '평균매입가' in page.locator('.sva section.sva-alert').inner_text()
    page.get_by_role('button',name='이 종목으로 투자전략 보기',exact=True).click();page.wait_for_selector('.str4');assert '035720' in page.locator('.str4-nav').inner_text()
    for label,value in [('가정 진입가','100'),('가정 손절가','90'),('가정 목표가','120')]:page.get_by_label(label,exact=True).fill(value)
    assert '1,000주' in page.locator('.str4-cards').inner_text();assert '평균매입가' in page.locator('.str4-output').first.inner_text()
