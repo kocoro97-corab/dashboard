@@ -3,7 +3,7 @@ let CFG=LS('invest_cfg_v4')||JSON.parse(JSON.stringify(DEF)),MAN=LS('invest_man'
 // 이전에 저장된 설정에도 선물 항목을 새 방식으로 맞춤
 ['KR','US'].forEach(s=>CFG[s].forEach(x=>{
   if(FUT[x.id]){x.fut=FUT[x.id];x.name='코스피200 선물';delete x.y;delete x.m}
-  else if(x.id==='k4'&&x.y==='KQ24.KQ'){delete x.y;x.m=1;x.name='코스닥150 선물'}
+  else if(x.id==='k4'){delete x.y;delete x.m;delete x.fut;x.name='코스닥150 선물'}
 }));
 const FQ={},FST={},NQ={};
 // ----- 나무증권(NH PLUG) 선물 시세: 서버(GAS)가 대신 조회, 로그인 토큰 필요 -----
@@ -24,11 +24,11 @@ function rootFutureStatus(id,error){if(!window.ReadStatus)return;if(error===null
 async function fillNH(requested=Object.keys(NHF)){
   const ids=[...new Set(requested.filter(id=>Object.prototype.hasOwnProperty.call(NHF,id)))],t=hms(new Date());if(!ids.length)return {ok:0,fail:0};
   const r=await nhFetch(ids.map(id=>({k:id,t:'fut',c:NHF[id]})));
-  if(!r.ok){ids.forEach(id=>{delete NQ[id];if(SRC[id]==='H')delete Q[id];window.ReadStatus?.note({code:r.code,http:r.http,verifiedLayer:r.layer},{scope:'public',key:'future:'+id})});NH_STATUS='실패 · '+r.msg+' · '+t;return{ok:0,fail:ids.length}}
+  if(!r.ok){ids.forEach(id=>{delete NQ[id];if(SRC[id]==='H'){delete Q[id];delete SRC[id];delete QT[id]};window.ReadStatus?.note({code:r.code,http:r.http,verifiedLayer:r.layer},{scope:'public',key:'future:'+id})});NH_STATUS='실패 · '+r.msg+' · '+t;return{ok:0,fail:ids.length}}
   let ok=0;const ds=[],er=[];
   ids.forEach(id=>{const d=r.data[id];
     if(d&&Number.isFinite(d.p)&&d.p>0&&Number.isFinite(d.prev)&&d.prev>0){NQ[id]={p:d.p,prev:d.prev,basis:d.basis,t:d.t||t,at:t,code:d.code,expiry:d.expiry||null,contractVerified:d.contractVerified===true};Q[id]={p:d.p,prev:d.prev,observedAt:d.observedAt||null,contractCode:d.code||null,expiry:d.expiry||null,contractVerified:d.contractVerified===true,volume:Number.isFinite(d.volume)?d.volume:null,turnover:Number.isFinite(d.turnover)?d.turnover:null};SRC[id]='H';QT[id]=Date.now();rootFutureStatus(id,null);ok++;ds.push(id+':'+d.code+'('+d.dir+')')}
-    else{delete NQ[id];if(SRC[id]==='H')delete Q[id];rootFutureStatus(id,r.errors[id]);er.push(id+': '+(r.errors[id]||'응답 없음'))}});
+    else{delete NQ[id];if(SRC[id]==='H'){delete Q[id];delete SRC[id];delete QT[id]};rootFutureStatus(id,r.errors[id]);er.push(id+': '+(r.errors[id]||'응답 없음'))}});
   NH_STATUS='선물 '+ok+'/'+ids.length+' 성공 · '+t+(ds.length?' · '+ds.join(' '):'')+(er.length?' · 실패 '+er.join(' / '):'');
   return{ok:ok,fail:ids.length-ok};
 }
@@ -186,15 +186,16 @@ function renderCards(){
       const f=FQ[x.id];
       if(f){const df=f.p-f.prev,pc=df/f.prev*100;d=df>0?1:df<0?-1:0;v=nf(f.p);c=(pc>=0?'+':'')+nf(pc)+'%'+(f.basis!=null?' · 베이시스 '+(f.basis>=0?'+':'')+nf(f.basis):'')+' · '+(FST[x.id]||f.t)}
       else c=FST[x.id]||'불러오는 중';
-    }else if(x.m){v=MAN[x.id]||'입력';c='직접 입력'}
+    }else if(NHF[x.id]){c='NH 선물 시세 미수신 · 연결 진단에서 사유 확인'}
+    else if(x.m){v=MAN[x.id]||'입력';c='직접 입력'}
     else{
       const q=Q[x.y];if(q){const df=q.p-q.prev,pc=df/q.prev*100;d=df>0?1:df<0?-1:0;
       if(x.t==='yld'){v=nf(q.p)+'%';c=(df>=0?'+':'')+nf(df)+'p'}
       else if(x.t==='fx'){v=nf(q.p);c=(df>=0?'+':'')+nf(df)+' ('+nf(pc)+'%)'}
       else{v=nf(q.p);c=(pc>=0?'+':'')+nf(pc)+'%'}}
     }
-    const tag=x.inv?(INV?'네이버':''):NQ[x.id]?'NH 나무증권 · '+NQ[x.id].at:x.fut?(FQ[x.id]?'다음':''):x.m?'수동 입력':srcTag(x.y,true);
-    return `<div class="card" style="cursor:pointer" onclick="${x.inv||x.fut||NQ[x.id]?'':x.m?`manIn('${x.id}')`:`openQ('${x.id}')`}"><div class="cl"><span>${x.name}</span><span>${x.inv||x.fut||NQ[x.id]?'':x.m?'✎':'📈'}</span></div><div class="value">${v}</div><div class="change ${d>0?'up':d<0?'down':'neutral'}">${c}</div>${srcLine(tag)}</div>`
+    const tag=x.inv?(INV?'네이버':''):NQ[x.id]?'NH 나무증권 · '+NQ[x.id].at:x.fut?(FQ[x.id]?'다음':''):NHF[x.id]?'NH 선물 미수신':x.m?'수동 입력':srcTag(x.y,true);
+    return `<div class="card" style="cursor:pointer" onclick="${x.inv||x.fut||NHF[x.id]||NQ[x.id]?'':x.m?`manIn('${x.id}')`:`openQ('${x.id}')`}"><div class="cl"><span>${x.name}</span><span>${x.inv||x.fut||NQ[x.id]?'':x.m?'✎':'📈'}</span></div><div class="value">${v}</div><div class="change ${d>0?'up':d<0?'down':'neutral'}">${c}</div>${srcLine(tag)}</div>`
   }).join('')
 }
 
