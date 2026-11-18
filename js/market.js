@@ -31,13 +31,14 @@ async function nhFetch(items){
 }
 function rootFutureStatus(id,error){if(!window.ReadStatus)return;if(error===null){ReadStatus.clear('future:'+id);return}const match=/^(NH_[A-Z_]+)/.exec(String(error));ReadStatus.note({code:match?.[1]||'NH_NO_PRICE',verifiedLayer:match?'nh':undefined},{scope:'public',key:'future:'+id})}
 async function fillNH(requested=Object.keys(NHF)){
+  const validContract=d=>{if(d?.contractVerified!==true||!/^\d{8}$/.test(d.expiry||''))return false;const y=Number(d.expiry.slice(0,4)),m=Number(d.expiry.slice(4,6)),day=Number(d.expiry.slice(6,8)),date=new Date(Date.UTC(y,m-1,day)),today=new Date(Date.now()+9*3600000).toISOString().slice(0,10).replace(/-/g,'');return date.toISOString().slice(0,10).replace(/-/g,'')===d.expiry&&d.expiry>=today&&String(y%10)===d.code?.[3]&&'123456789ABC'[m-1]===d.code?.[4]};
   const ids=[...new Set(requested.filter(id=>Object.prototype.hasOwnProperty.call(NHF,id)))],t=hms(new Date());if(!ids.length)return {ok:0,fail:0};
-  const r=await nhFetch(ids.map(id=>({k:id,t:'fut',c:NHF[id]})));
+  const scope=LS('invest_session_token'),r=await nhFetch(ids.map(id=>({k:id,t:'fut',c:NHF[id]})));if(scope!==LS('invest_session_token'))return {ok:0,fail:0,discarded:true};
   if(!r.ok){ids.forEach(id=>{delete NQ[id];if(SRC[id]==='H'){delete Q[id];delete SRC[id];delete QT[id]};window.ReadStatus?.note({code:r.code,http:r.http,verifiedLayer:r.layer},{scope:'public',key:'future:'+id})});NH_STATUS='실패 · '+r.msg+' · '+t;return{ok:0,fail:ids.length}}
   let ok=0;const ds=[],er=[];
   ids.forEach(id=>{const d=r.data[id],validObservation=d&&Number.isFinite(d.observedAt)&&d.observedAt>0&&d.observedAt<=Date.now()+300000&&Date.now()-d.observedAt<=4*86400000;
-    if(d&&(id!=='k4'||validObservation)&&Number.isFinite(d.p)&&d.p>0&&Number.isFinite(d.prev)&&d.prev>0&&typeof d.code==='string'&&new RegExp('^'+NHF[id]+'[0-9][1-9ABC]000$').test(d.code)){NQ[id]={p:d.p,prev:d.prev,basis:d.basis,t:d.t||t,at:t,code:d.code,expiry:d.expiry||null,contractVerified:d.contractVerified===true};Q[id]={p:d.p,prev:d.prev,observedAt:d.observedAt||null,contractCode:d.code||null,expiry:d.expiry||null,contractVerified:d.contractVerified===true,observationKind:d.observationKind||null,marketState:d.marketState||'UNVERIFIED',delayStatus:d.delayStatus||'UNVERIFIED',volume:Number.isFinite(d.volume)?d.volume:null,turnover:Number.isFinite(d.turnover)?d.turnover:null};SRC[id]='H';QT[id]=Date.now();rootFutureStatus(id,null);ok++;ds.push(id+':'+d.code+'('+d.dir+')')}
-    else{delete NQ[id];if(SRC[id]==='H'){delete Q[id];delete SRC[id];delete QT[id]};rootFutureStatus(id,(r.errors||{})[id]||(id==='k4'&&!validObservation?'NH_OBSERVATION':'NH_CONTRACT_UNVERIFIED'));er.push(id+': '+((r.errors||{})[id]||(d?'계약·관측시각 또는 시세 검증 실패':'응답 없음')))}});
+    if(d&&(id!=='k4'||validObservation&&validContract(d))&&Number.isFinite(d.p)&&d.p>0&&Number.isFinite(d.prev)&&d.prev>0&&typeof d.code==='string'&&new RegExp('^'+NHF[id]+'[0-9][1-9ABC]000$').test(d.code)){NQ[id]={p:d.p,prev:d.prev,basis:d.basis,t:d.t||t,at:t,code:d.code,expiry:d.expiry||null,contractVerified:d.contractVerified===true};Q[id]={p:d.p,prev:d.prev,observedAt:d.observedAt||null,contractCode:d.code||null,expiry:d.expiry||null,contractVerified:d.contractVerified===true,observationKind:d.observationKind||null,marketState:d.marketState||'UNVERIFIED',delayStatus:d.delayStatus||'UNVERIFIED',volume:Number.isFinite(d.volume)?d.volume:null,turnover:Number.isFinite(d.turnover)?d.turnover:null};SRC[id]='H';QT[id]=Date.now();rootFutureStatus(id,null);ok++;ds.push(id+':'+d.code+'('+d.dir+')')}
+    else{delete NQ[id];if(SRC[id]==='H'){delete Q[id];delete SRC[id];delete QT[id]};rootFutureStatus(id,(r.errors||{})[id]||(id==='k4'&&!validObservation?'NH_OBSERVATION':'NH_CONTRACT'));er.push(id+': '+((r.errors||{})[id]||(d?'계약·관측시각 또는 시세 검증 실패':'응답 없음')))}});
   NH_STATUS='선물 '+ok+'/'+ids.length+' 성공 · '+t+(ds.length?' · '+ds.join(' '):'')+(er.length?' · 실패 '+er.join(' / '):'');
   return{ok:ok,fail:ids.length-ok};
 }
@@ -265,7 +266,7 @@ const ago=d=>{const m=(Date.now()-d)/60000;return m<1?'방금':m<60?Math.floor(m
 async function fetchNews(q){
   const x=await getTxt('https://news.google.com/rss/search?q='+encodeURIComponent(q)+'&hl=ko&gl=KR&ceid=KR:ko');if(!x)return null;
   const d=new DOMParser().parseFromString(x,'text/xml');if(d.querySelector('parsererror')||!d.querySelector('rss,feed'))return null;
-  return[...d.querySelectorAll('item')].map(i=>{const g=t=>{const e=i.querySelector(t);return e?e.textContent:''};return{t:g('title'),l:g('link'),s:g('source'),d:new Date(g('pubDate')||0)}})
+  return[...d.querySelectorAll('item')].map(i=>{const g=t=>{const e=i.querySelector(t);return e?e.textContent:''};return{t:g('title'),l:g('link'),s:g('source'),d:new Date(g('pubDate')||NaN)}})
 }
 
 async function loadNews(){
@@ -276,7 +277,7 @@ async function loadNews(){
     if(!Array.isArray(list)){$(el).replaceChildren();$(stEl).textContent='뉴스 수신 실패 · 미확인';return}
     const m={};list.forEach(a=>{const k=a.t.replace(/\s-\s[^-]+$/,'');if(!m[k]||a.d>m[k].d)m[k]={t:k,l:a.l,s:a.s,d:a.d}});
     const arr=Object.values(m).sort((a,b)=>b.d-a.d).slice(0,6);
-    $(el).innerHTML=arr.length?arr.map(a=>`<div class="news"><strong><a href="${escA(/^https:\/\//i.test(String(a.l))?a.l:'#')}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${esc(a.t)}</a></strong><span class="mini">${esc(a.s)} · ${ago(a.d)}</span></div>`).join(''):'<div class="mini">기사 없음</div>';
+    $(el).innerHTML=arr.length?arr.map(a=>`<div class="news" data-news-published="${Number.isFinite(a.d.getTime())&&a.d.getTime()<=Date.now()+300000?a.d.toISOString():''}"><strong><a href="${escA(/^https:\/\//i.test(String(a.l))?a.l:'#')}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${esc(a.t)}</a></strong><span class="mini">${esc(a.s)} · ${Number.isFinite(a.d.getTime())&&a.d.getTime()<=Date.now()+300000?esc(a.d.toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}))+' KST':'게시시각 미확인'}</span></div>`).join(''):'<div class="mini">기사 없음</div>';
     $(stEl).textContent=arr.length?arr.length+'건':'없음';
   };
   renderN(mks,'nl_mk','nst_mk');renderN(hds,'nl_hd','nst_hd');

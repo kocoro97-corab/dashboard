@@ -37,7 +37,7 @@
       if(c.persistentRelay===true&&['saveExternalHoldings','restoreExternalHoldings','saveExternalAccounts'].includes(data.action)){let result;try{result=await response.clone().json()}catch{throw failure('RELAY_WRITE_OUTCOME_UNKNOWN')}if(!result||typeof result.success!=='boolean')throw failure('RELAY_WRITE_OUTCOME_UNKNOWN')}
       return response;
     }).catch(error=>{
-      if(root.ReadStatus&&['nhAccounts','nhQuotes','nhExternalQuotes','externalHoldings','externalHistory','externalAccounts'].includes(data.action))root.ReadStatus.note(error,{scope:data.action==='nhQuotes'?'public':'account',key:'account:'+data.action});
+      if(root.ReadStatus&&payload.token===(typeof LS==='function'?LS('invest_session_token'):null)&&['nhAccounts','nhQuotes','nhExternalQuotes','externalHoldings','externalHistory','externalAccounts'].includes(data.action))root.ReadStatus.note(error,{scope:data.action==='nhQuotes'?'public':'account',key:'account:'+data.action});
       if(['register','changePassword','approveUser','saveExternalHoldings','restoreExternalHoldings','saveExternalAccounts'].includes(data.action))throw failure('RELAY_WRITE_OUTCOME_UNKNOWN');
       throw error;
     });

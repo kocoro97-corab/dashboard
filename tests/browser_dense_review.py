@@ -24,12 +24,13 @@ async def main():
       h=await Harness(b,artifact,feeds,math.floor(width/scale),a.published,height=math.floor(1000/scale),device_scale=scale).start_browser(tmp)
       if a.artifact:h.endpoint=re.search(r'https://[a-z0-9.-]+\.workers\.dev/api',(artifact/'index.html').read_text())[0]
       try:
-       await h.page.clock.set_fixed_time('2026-11-18T03:00:00Z');await h.login('home')
-       await h.page.evaluate('''()=>{NH_ACCOUNTS=[{accountKey:'a'.repeat(64),domestic:{holdings:[{code:'035720',name:'합성 국내 종목',currency:'KRW',quantity:123,avgPrice:15000,currentPrice:18000,evalAmount:2214000,profit:369000}]},overseas:{holdings:[{code:'AAPL',name:'AAPL',instrumentId:'US:XNAS:AAPL',currency:'USD',quantity:1234,avgPrice:123.45,currentPrice:178.9,evalAmount:300000000,profit:10000000}]},errors:[]}];EXT_ASSETS=[];EXT_SAVED_ROWS=[];NH_ACCOUNT_UPDATED=new Date().toISOString()}''')
+       await h.page.clock.set_fixed_time('2026-11-18T03:00:00Z');await h.login('accounts');await h.page.wait_for_function('()=>DashboardShell.getStatus().running===0')
+       await h.page.evaluate('''()=>{NH_ACCOUNTS=[{accountKey:'a'.repeat(64),domestic:{holdings:[{code:'035720',name:'합성 국내 종목',currency:'KRW',quantity:123,avgPrice:15000,currentPrice:18000,evalAmount:2214000,profit:369000}]},overseas:{holdings:[{code:'AAPL',name:'AAPL',instrumentId:'US:XNAS:AAPL',currency:'USD',quantity:1234,avgPrice:123.45,currentPrice:178.9,evalAmount:300000000,profit:10000000}]},errors:[]}];EXT_ASSETS=[];EXT_SAVED_ROWS=[];NH_ACCOUNT_UPDATED=new Date().toISOString();NH_ACCOUNT_SESSION=LS('invest_session_token');NH_ACCOUNT_FETCHED_AT=Date.now()}''')
        for page in a.pages or PAGES:
         status='PASS';reason=''
         try:
          await h.page.evaluate('(p)=>DashboardShell.navigate("/"+p)',page);await h.page.wait_for_function('(p)=>DashboardShell.getStatus().path==="/"+p',arg=page);await h.page.wait_for_timeout(150)
+         if page=='accounts/holdings':assert '합성 국내 종목' in await h.page.locator('.account-report').inner_text()
          if page=='stocks':await h.page.locator('#stockSearch').fill('AAPL');await h.page.get_by_role('button',name='종목 분석',exact=True).click();await h.page.wait_for_function('()=>document.querySelector(".sva")?.textContent.includes("분석 완료")')
          metrics=await h.page.evaluate('''()=>{const v=document.getElementById('pageViewport'),box=v.getBoundingClientRect(),visible=e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&r.bottom>box.top&&r.top<box.bottom};return {viewportHeight:Math.round(box.height),documentOverflow:document.documentElement.scrollWidth>innerWidth+1,contentOverflow:v.scrollWidth>v.clientWidth+1,visibleData:[...v.querySelectorAll('.miv-indicator,.stv2-card,.sva-card,.pv-kpi,table tr,.summary-grid>.card,.news')].filter(visible).length,marketCards:v.querySelectorAll('.miv-indicator').length,details:v.querySelectorAll('details').length}}''')
          if not a.capture_only:
