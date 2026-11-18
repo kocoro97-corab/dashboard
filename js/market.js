@@ -49,13 +49,13 @@ async function fillAuthorizedMarketSources(needFuture=true){
  const resolver=window.MyInvestMarketSourcePriority;
  if(!resolver)return;
  if(needFuture){
-  if(['F','K','C'].includes(SRC.k4)){delete Q.k4;delete SRC.k4;delete QT.k4}
+  if(['W','F','K','C'].includes(SRC.k4)){delete Q.k4;delete SRC.k4;delete QT.k4}
   if(!Q.k4){
   const r=await resolver.resolve('futures');
   MARKET_SOURCE_ATTEMPTS.futures=r.attempts;
   if(r.quote){
    const d=r.quote;Q.k4={p:d.p,prev:d.prev,observedAt:d.observedAt,contractCode:d.contractCode,expiry:d.expiry,contractVerified:true,delayed:d.delayed,stale:d.stale};
-   SRC.k4=({NH_FUTURES:'F',KIS:'K',KOSCOM:'C'})[d.provider];QT.k4=Date.now();rootFutureStatus('k4',null);
+   SRC.k4=({NH_PLUG_WS:'W',NH_FUTURES:'F',KIS:'K',KOSCOM:'C'})[d.provider];QT.k4=Date.now();rootFutureStatus('k4',null);
   }
   }
  }
@@ -127,7 +127,7 @@ const narr=j=>Array.isArray(j)?j:j?(j.datas||j.result||j.data||j.items||Object.v
 let INV=null;const SRC={};
 // ----- 시세 출처 표시: N=네이버 · Y=Yahoo · D=다음 · H=NH(나무증권) · M=수동 -----
 const QT={};   // 종목별 마지막 수신 시각
-const SRC_NAME={N:'네이버',Y:'Yahoo',D:'다음',H:'NH 나무증권',F:'NH선물',K:'한국투자증권',C:'코스콤',I:'IBKR',X:'dxFeed',M:'수동'},SRC_SHORT={N:'네',Y:'Y',D:'다',H:'NH',F:'NH선물',K:'KIS',C:'코스콤',I:'IBKR',X:'dx',M:'수'};
+const SRC_NAME={N:'네이버',Y:'Yahoo',D:'다음',H:'NH 나무증권',W:'NH PLUG 실시간',F:'NH선물',K:'한국투자증권',C:'코스콤',I:'IBKR',X:'dxFeed',M:'수동'},SRC_SHORT={N:'네',Y:'Y',D:'다',H:'NH',W:'NH-WSS',F:'NH선물',K:'KIS',C:'코스콤',I:'IBKR',X:'dx',M:'수'};
 let NH_STATUS='아직 연결 전';   // 나무증권 연동 상태 (🩺 진단에 표시)
 const srcTag=(k,full)=>{const s=SRC[k];if(!s||!Q[k])return '';return full?(SRC_NAME[s]||s)+(QT[k]?' · '+hms(new Date(QT[k])):''):(SRC_SHORT[s]||s)};
 const srcSummary=keys=>{const c={};keys.forEach(k=>{const s=SRC[k];if(Q[k]&&s)c[s]=(c[s]||0)+1});return Object.keys(c).map(s=>(SRC_NAME[s]||s)+' '+c[s]).join(' · ')||'수신 없음'};
