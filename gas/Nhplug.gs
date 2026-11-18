@@ -23,7 +23,7 @@ function nhHeader_(headers, name) {
 
 // 접근토큰: 24시간 유효. 스크립트 속성에 만료시각과 함께 캐시해 재사용한다(재발급은 보안 알림을 유발).
 // Only locally defined codes and validated HTTP statuses may cross diagnostic boundaries.
-const NH_DIAGNOSTIC_CODES=['NH_OK','NH_TOKEN','NH_CONFIG','NH_NETWORK','NH_JSON','NH_HTTP','NH_RSP','NH_PATH','NH_REFERENCE_UNAVAILABLE','NH_REFERENCE_INVALID','NH_IDENTITY_UNVERIFIED','NH_IDENTITY_AMBIGUOUS','NH_CURRENCY_MISMATCH','NH_SYMBOL_MISMATCH','NH_NO_BLOCK','NH_NO_PRICE','NH_CONTRACT','NH_OBSERVATION','NH_STALE','NH_UNSUPPORTED','NH_UPSTREAM','NH_SPEC_OK','NH_SPEC_FAILED','NH_ACCOUNTS_OK','NH_DOMESTIC_OK','NH_OVERSEAS_OK','NH_FUTURE_OK'];
+const NH_DIAGNOSTIC_CODES=['NH_OK','NH_TOKEN','NH_CONFIG','NH_NETWORK','NH_JSON','NH_HTTP','NH_RSP','NH_PATH','NH_REFERENCE_UNAVAILABLE','NH_REFERENCE_INVALID','NH_IDENTITY_UNVERIFIED','NH_IDENTITY_AMBIGUOUS','NH_CURRENCY_MISMATCH','NH_SYMBOL_MISMATCH','NH_NO_BLOCK','NH_NO_PRICE','NH_CONTRACT','NH_CONTRACT_CODE','NH_CONTRACT_NAME','NH_CONTRACT_EXPIRY','NH_OBSERVATION','NH_STALE','NH_UNSUPPORTED','NH_UPSTREAM','NH_SPEC_OK','NH_SPEC_FAILED','NH_ACCOUNTS_OK','NH_DOMESTIC_OK','NH_OVERSEAS_OK','NH_FUTURE_OK'];
 function nhSafeDiagnostic_(error) {
   const code=error&&NH_DIAGNOSTIC_CODES.indexOf(error.safeCode)>=0?error.safeCode:'NH_UPSTREAM';
   const http=error&&Number.isInteger(error.safeHttp)&&error.safeHttp>=100&&error.safeHttp<=599?error.safeHttp:null;
@@ -183,7 +183,7 @@ function nhFutNorm_(o0, o1) {
   else return null;
   const unas = o1 ? nhNum_(o1.unas_prpr) : null;
   const basis = unas != null ? p - unas : nhNum_(o0.mrkt_basis);
-  return { p: p, prev: prev, basis: basis, t: String(o0.bsop_hour || ''), name: String(o0.iem_nm || ''), code: String(o0.iem_cd || ''), dir: how };
+  return { p: p, prev: prev, basis: basis, t: String(o0.bsop_hour || ''), name: String(o0.iem_nm || ''), code: String(o0.iem_cd || '').trim(), dir: how };
 }
 
 // The day quote exposes only a clock, not the observation date. Verify A06
@@ -220,10 +220,12 @@ function nhFutQuote_(prefix) {
   }
   const nd = nhFutNorm_(o0, r.body.Output_1);
   if (!nd) throw nhFailure_('NH_NO_PRICE');
-  const name=String(o0.iem_nm||'').replace(/\s/g,''),expiry=String(o0.last_tr_date||'');
-  if(nd.code!==code||!(prefix==='A06'?/코스닥150|KOSDAQ150/i:/코스피200|KOSPI200/i).test(name)||!/^\d{8}$/.test(expiry))throw nhFailure_('NH_CONTRACT');
+  const name=String(o0.iem_nm||'').replace(/\s/g,''),expiry=String(o0.last_tr_date||'').trim();
+  if(nd.code!==code)throw nhFailure_('NH_CONTRACT_CODE');
+  if(!(prefix==='A06'?/코스닥150|KOSDAQ150/i:/코스피200|KOSPI200/i).test(name))throw nhFailure_('NH_CONTRACT_NAME');
+  if(!/^\d{8}$/.test(expiry))throw nhFailure_('NH_CONTRACT_EXPIRY');
   const expiryDate=new Date(Date.UTC(Number(expiry.slice(0,4)),Number(expiry.slice(4,6))-1,Number(expiry.slice(6,8))));
-  if(expiryDate.toISOString().slice(0,10).replace(/-/g,'')!==expiry||expiry<Utilities.formatDate(new Date(),'Asia/Seoul','yyyyMMdd'))throw nhFailure_('NH_CONTRACT');
+  if(expiryDate.toISOString().slice(0,10).replace(/-/g,'')!==expiry||expiry<Utilities.formatDate(new Date(),'Asia/Seoul','yyyyMMdd'))throw nhFailure_('NH_CONTRACT_EXPIRY');
   nd.expiry=expiry;nd.requestCode=requestCode;nd.product=prefix==='A06'?'KOSDAQ150_FUTURE':'KOSPI200_FUTURE';nd.contractVerified=true;nd.observedAt=prefix==='A06'?nhFutObserved_(requestCode,nd):null;nd.observationKind=nd.observedAt?'trade':null;nd.marketState='UNVERIFIED';nd.delayStatus='UNVERIFIED';nd.volume=nhNum_(o0.acml_vol);nd.turnover=nhNum_(o0.acml_tr_pbmn);nd.receivedAt=new Date().toISOString();
   cache.put('nhq_dated_v1_' + code, JSON.stringify(nd), 5);
   return nd;

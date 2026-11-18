@@ -23,3 +23,15 @@ python3 tools/nh_v2_futures_probe.py --environment "$HOME/myinvest-v2-fresh-priv
 ```
 
 This reads the existing private plan locally and emits only public source revisions, the source-match boolean and zero-operation counters. `gasSourceMatches: false` means the checked-out futures source has not yet been applied to that isolated deployment; it is not a diagnosis of the operating relay.
+
+## Coordinated existing-GAS / existing-Worker activation
+
+The currently working Worker checks the GAS source fingerprint. Do not upgrade GAS alone. `nh_v2_futures_activate.py` defaults to a **local plan**, comparing the owner's deployed revision with the proposed bundle. It refuses unrelated GAS changes and any manifest/auth-scope change. Only `Nhplug`, `NhGatewayV2` and generated `StagingBridge` metadata may differ.
+
+```sh
+python3 tools/nh_v2_futures_activate.py --environment "$HOME/myinvest-v2-fresh-private-r2"
+```
+
+After reviewing that plan, the already-authorized development activation uses the same tool with `--apply --free-plan-confirmed`. It reads the existing Worker account ID from its private wrangler configuration and prompts for the existing API token locally if needed. It verifies the existing Worker role, old GAS/Worker isolation and a Worker dry build **before** any GAS change. It then reuses the existing code-only isolated upgrade and persistent relay procedures; enables only fixed futures reads and the verified public industry routes. No projects, authentication settings, OAuth scopes, account queries, holdings writes or NH calls are created/run.
+
+If activation/readback fails after the GAS upgrade, it checks for concurrent changes, restores the previous immutable isolated GAS version/source/private plan, restores the old Worker fingerprint settings and verifies metadata. A failed recovery reports `OWNER_REVIEW_REQUIRED`; it never claims the connection recovered without readback. The actual owner runtime remains NOT_RUN until executed there; mock tests prove orchestration only. The old/new handover is a development change and may briefly require a page retry; it is not a production or zero-downtime deployment mechanism.
