@@ -16,17 +16,17 @@ async function nhFetch(items){
     const r=await post({action:'nhQuotes',token:tk,items:items},{signal:controller.signal});
     const raw=await r.text();let j;
     try{j=JSON.parse(raw)}catch{return{ok:false,msg:'NH 중계 응답 형식 오류',code:'NH_RESPONSE_INVALID',layer:'relay',http:r.status}}
-    if(!j||typeof j!=='object'||j.success!==true){
+    if(!j||typeof j!=='object'||j.success!==true||r.ok===false){
       return{ok:false,msg:SafeDiagnostics.message(j),code:typeof j?.code==='string'?j.code:'NH_RESPONSE_REJECTED',layer:j?.layer||'relay',http:r.status};
     }
     if(!j.data||typeof j.data!=='object'||Array.isArray(j.data)){
-      return{ok:false,msg:'NH 선물 응답 데이터 형식 오류',code:'NH_DATA_INVALID',layer:'gas',http:r.status};
+      return{ok:false,msg:'NH 선물 응답 데이터 형식 오류',code:'NH_DATA_INVALID',layer:'unknown',http:r.status};
     }
     const errors={};Object.keys(j.errors||{}).filter(k=>items.some(x=>x.k===k)).forEach(k=>{errors[k]=SafeDiagnostics.message(j.errors[k],'NH_UPSTREAM')});
     return{ok:true,data:j.data,errors};
   }catch(e){
     const timedOut=e&&e.name==='AbortError';
-    return{ok:false,msg:timedOut?'NH 중계 시간 초과':'NH 중계 통신 실패',code:timedOut?'NH_TIMEOUT':'NH_NETWORK_ERROR',layer:'relay'};
+    return{ok:false,msg:timedOut?'NH 중계 시간 초과':'NH 중계 통신 실패',code:timedOut?'NH_TIMEOUT':'NH_NETWORK_ERROR',layer:'browser'};
   }finally{clearTimeout(timeout)}
 }
 function rootFutureStatus(id,error){if(!window.ReadStatus)return;if(error===null){ReadStatus.clear('future:'+id);return}const match=/^(NH_[A-Z_]+)/.exec(String(error));ReadStatus.note({code:match?.[1]||'NH_NO_PRICE',verifiedLayer:match?'nh':undefined},{scope:'public',key:'future:'+id})}

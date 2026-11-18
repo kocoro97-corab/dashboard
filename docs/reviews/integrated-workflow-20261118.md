@@ -83,3 +83,10 @@ PLAYWRIGHT_BROWSERS_PATH=/workspace/.cache/myinvest-playwright .venv-ci-https/bi
 - 최종 게시 SHA는 후속 게시 검증 보고서에 기록한다. 최신 sourceCommit와 주요 파일 SHA256을 실제 Pages에서 다시 비교한다.
 
 실제 K4 참고 위젯 추가 확인: TradingView `KRX:KQI1!` iframe은 HTTP 200이지만 `Invalid symbol / This symbol is only available on TradingView`를 반환했다. 따라서 iframe을 정상 기능으로 제공하지 않고 **외부 위젯 미지원** 안내와 계약 확인 링크만 남겼다. 이전 iframe DOM/정리 PASS는 상품 데이터 수신 PASS가 아니다. NH 시세 미수신을 외부 가격으로 대체하지 않는다.
+
+## 병렬 뉴스·진단 보존 및 마지막 통합 보완
+
+- `f55cf9b` 수동 공개 뉴스 브리핑과 `5ac3f4d` NH 타임아웃/응답 정리를 함께 보존했다. 브리핑의 자동 AI 전달은 미연결이다. 수동 공개 텍스트·30일 이력만 브라우저에 보관하며 실제 계좌·API 키를 입력하지 않는다.
+- 보유종목별 반복문 안에서 브리핑 패널이 생성되던 통합 결함을 수정해 mount에서 한 번만 생성한다. 모의 PC1440/Fold344/690에서 다중 보유자료에서도 단일 패널, 직접 등록·날짜 이동·삭제·문자 그대로 렌더링 3 PASS. `tests/browser_public_briefing.py`로 재현 가능하다.
+- NH 전송 오류는 타임아웃·네트워크·형식·인증을 구분하되 데이터 형식 오류를 GAS 장애로 단정하지 않는다. 관련 Node 테스트 PASS.
+- GitHub runner CI의 `/workspace` 출력 경로 오류를 시스템 임시 디렉터리로 바꿨다. 테스트 경로 생성 검증 PASS. 기존 전체 CI는 자동으로 다시 실행되며 이전 실패를 전체 PASS로 보고하지 않는다.
