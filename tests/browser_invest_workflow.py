@@ -5,7 +5,7 @@ from playwright.async_api import async_playwright
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'tools'))
 from build_dev_pages import build
 from public_integration_support import Harness,synthetic_feeds,history,history_url,ENDPOINT
-p=argparse.ArgumentParser();p.add_argument('--published',action='store_true');p.add_argument('--output',type=Path,default=Path('/workspace/output/invest-workflow'));a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True);results=[]
+p=argparse.ArgumentParser();p.add_argument('--published',action='store_true');p.add_argument('--output',type=Path,default=Path(tempfile.gettempdir())/'myinvest-invest-workflow');a=p.parse_args();a.output.mkdir(parents=True,exist_ok=True);results=[]
 async def main():
  with tempfile.TemporaryDirectory() as tmp:
   artifact=Path(tmp)/'public';build(artifact,relay_endpoint=ENDPOINT);feeds=synthetic_feeds()
