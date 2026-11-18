@@ -12,7 +12,7 @@ function normalizeFutures(data,provider){
  return {p,prev,observedAt:at,expiry:String(data.expiry).replace(/-/g,''),contractCode:data.contractCode,contractVerified:true,provider,delayed:data.delayed===true,stale:now-at>15*60000};
 }
 function normalizeTick(data,provider){
- if(!data||!['TICK-NYSE','USI:TICK.NY'].includes(String(data.symbol||''))||data.verified!==true)return null;
+ if(!data||data.verified!==true||!((provider==='IBKR'&&data.symbol==='TICK-NYSE')||(provider==='DXFEED'&&data.symbol==='$TICK')))return null;
  const p=Number(data.value),at=dateEpoch(data.observedAt),now=Date.now();
  if(!Number.isInteger(p)||Math.abs(p)>5000||!at||at>now+60000||at<now-10*60000)return null;
  return {p,observedAt:at,provider,delayed:data.delayed===true,stale:now-at>120000};
