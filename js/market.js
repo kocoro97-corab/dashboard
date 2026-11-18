@@ -42,6 +42,29 @@ async function fillNH(requested=Object.keys(NHF)){
   NH_STATUS='선물 '+ok+'/'+ids.length+' 성공 · '+t+(ds.length?' · '+ds.join(' '):'')+(er.length?' · 실패 '+er.join(' / '):'');
   return{ok:ok,fail:ids.length-ok};
 }
+// Read-only fallback priority: only adapters backed by approved provider credentials are attempted.
+// NH PLUG remains the primary futures source. No quote is copied from a visual iframe.
+let MARKET_SOURCE_ATTEMPTS={futures:[],tick:[]};
+async function fillAuthorizedMarketSources(needFuture=true){
+ const resolver=window.MyInvestMarketSourcePriority;
+ if(!resolver)return;
+ if(needFuture&&!Q.k4){
+  const r=await resolver.resolve('futures');
+  MARKET_SOURCE_ATTEMPTS.futures=r.attempts;
+  if(r.quote){
+   const d=r.quote;Q.k4={p:d.p,prev:d.prev,observedAt:d.observedAt,contractCode:d.contractCode,expiry:d.expiry,contractVerified:true,delayed:d.delayed,stale:d.stale};
+   SRC.k4=({NH_FUTURES:'F',KIS:'K',KOSCOM:'C'})[d.provider];QT.k4=Date.now();rootFutureStatus('k4',null);
+  }
+ }
+ const tick=await resolver.resolve('tick');
+ MARKET_SOURCE_ATTEMPTS.tick=tick.attempts;
+ if(tick.quote&&!tick.quote.stale){
+  Q.TICK={p:tick.quote.p,observedAt:tick.quote.observedAt,delayed:tick.quote.delayed};
+  SRC.TICK=tick.quote.provider==='IBKR'?'I':'X';QT.TICK=Date.now();
+ }else if(SRC.TICK==='I'||SRC.TICK==='X'){
+  delete Q.TICK;delete SRC.TICK;delete QT.TICK;
+ }
+}
 async function fillFutures(skip){
   let ok=0,fail=0;
   await Promise.all(Object.keys(FUT).filter(id=>!(skip&&skip.has(id))).map(async id=>{
@@ -101,7 +124,7 @@ const narr=j=>Array.isArray(j)?j:j?(j.datas||j.result||j.data||j.items||Object.v
 let INV=null;const SRC={};
 // ----- 시세 출처 표시: N=네이버 · Y=Yahoo · D=다음 · H=NH(나무증권) · M=수동 -----
 const QT={};   // 종목별 마지막 수신 시각
-const SRC_NAME={N:'네이버',Y:'Yahoo',D:'다음',H:'NH 나무증권',M:'수동'},SRC_SHORT={N:'네',Y:'Y',D:'다',H:'NH',M:'수'};
+const SRC_NAME={N:'네이버',Y:'Yahoo',D:'다음',H:'NH 나무증권',F:'NH선물',K:'한국투자증권',C:'코스콤',I:'IBKR',X:'dxFeed',M:'수동'},SRC_SHORT={N:'네',Y:'Y',D:'다',H:'NH',F:'NH선물',K:'KIS',C:'코스콤',I:'IBKR',X:'dx',M:'수'};
 let NH_STATUS='아직 연결 전';   // 나무증권 연동 상태 (🩺 진단에 표시)
 const srcTag=(k,full)=>{const s=SRC[k];if(!s||!Q[k])return '';return full?(SRC_NAME[s]||s)+(QT[k]?' · '+hms(new Date(QT[k])):''):(SRC_SHORT[s]||s)};
 const srcSummary=keys=>{const c={};keys.forEach(k=>{const s=SRC[k];if(Q[k]&&s)c[s]=(c[s]||0)+1});return Object.keys(c).map(s=>(SRC_NAME[s]||s)+' '+c[s]).join(' · ')||'수신 없음'};
@@ -153,6 +176,7 @@ async function refreshMarket(requested=[]){   // '시장 종합' 카드(지수·
     await fillQuotes(want.filter(c=>!fr.has(c)));
     const requestedNH=[...new Set([...list.filter(x=>NHF[x.id]).map(x=>x.id),...(Array.isArray(requested)?requested:[]).filter(id=>NHF[id])])],hasNH=requestedNH.length>0,nh=hasNH?await fillNH(requestedNH):{ok:0,fail:0};
     const hasFut=list.some(x=>x.fut)||Array.isArray(requested)&&requested.includes('k3'),fu=hasFut?await fillFutures(new Set(Object.keys(NQ))):{ok:0,fail:0};
+    await fillAuthorizedMarketSources(requestedNH.includes('k4'));
     const got=want.filter(c=>Q[c]).length;
     renderCards();updateTickGauge();generateScenario();
     st.textContent='갱신 '+hms(new Date())+' · 성공 '+got+'/'+want.length+(hasNH?' · 선물 NH '+nh.ok+'/'+(nh.ok+nh.fail):'')+(fu.ok+fu.fail?' · 다음 '+fu.ok+'/'+(fu.ok+fu.fail):'')+' · 출처 '+srcSummary(want);
@@ -172,6 +196,7 @@ async function refresh(){
   await fillQuotes(all.filter(c=>!fr.has(c)));
   const nh=await fillNH();
   const fu=await fillFutures(new Set(Object.keys(NQ)));
+  await fillAuthorizedMarketSources(true);
   const got=all.filter(c=>Q[c]).length;
   renderCards();fetchTopThemes();renderThemes();updateTickGauge();generateScenario();
   $('status').textContent='시세 갱신 '+hms(new Date())+' · 성공 '+got+' · 실패 '+(all.length-got)+'건 · 선물 NH '+nh.ok+'/'+(nh.ok+nh.fail)+(fu.ok+fu.fail?' · 다음 '+fu.ok+'/'+(fu.ok+fu.fail):'')+' · 출처 '+srcSummary(all);
@@ -196,7 +221,7 @@ function renderCards(){
       const f=FQ[x.id];
       if(f){const df=f.p-f.prev,pc=df/f.prev*100;d=df>0?1:df<0?-1:0;v=nf(f.p);c=(pc>=0?'+':'')+nf(pc)+'%'+(f.basis!=null?' · 베이시스 '+(f.basis>=0?'+':'')+nf(f.basis):'')+' · '+(FST[x.id]||f.t)}
       else c=FST[x.id]||'불러오는 중';
-    }else if(NHF[x.id]){c='NH 선물 시세 미수신 · 연결 진단에서 사유 확인'}
+    }else if(NHF[x.id]){const q=Q[x.id];if(q&&Number.isFinite(q.p)&&Number.isFinite(q.prev)&&q.prev>0){v=nf(q.p);const pc=(q.p/q.prev-1)*100;d=pc>0?1:pc<0?-1:0;c=(pc>=0?'+':'')+nf(pc)+'% · '+(q.stale?'마지막 관측(지연 가능)':'관측 시각 확인')}else c='선물 시세 미수신 · 연결 진단에서 사유 확인'}
     else if(x.m){v=MAN[x.id]||'입력';c='직접 입력'}
     else{
       const q=Q[x.y];if(q){const df=q.p-q.prev,pc=df/q.prev*100;d=df>0?1:df<0?-1:0;
@@ -204,7 +229,7 @@ function renderCards(){
       else if(x.t==='fx'){v=nf(q.p);c=(df>=0?'+':'')+nf(df)+' ('+nf(pc)+'%)'}
       else{v=nf(q.p);c=(pc>=0?'+':'')+nf(pc)+'%'}}
     }
-    const tag=x.inv?(INV?'네이버':''):NQ[x.id]?'NH 나무증권 · '+NQ[x.id].at:x.fut?(FQ[x.id]?'다음':''):NHF[x.id]?'NH 선물 미수신':x.m?'수동 입력':srcTag(x.y,true);
+    const tag=x.inv?(INV?'네이버':''):NQ[x.id]?'NH 나무증권 · '+NQ[x.id].at:x.fut?(FQ[x.id]?'다음':''):NHF[x.id]?(SRC_NAME[SRC[x.id]]||'NH 선물 미수신'):x.m?'수동 입력':srcTag(x.y,true);
     return `<div class="card" style="cursor:pointer" onclick="${x.inv||x.fut||NHF[x.id]||NQ[x.id]?'':x.m?`manIn('${x.id}')`:`openQ('${x.id}')`}"><div class="cl"><span>${x.name}</span><span>${x.inv||x.fut||NQ[x.id]?'':x.m?'✎':'📈'}</span></div><div class="value">${v}</div><div class="change ${d>0?'up':d<0?'down':'neutral'}">${c}</div>${srcLine(tag)}</div>`
   }).join('')
 }
