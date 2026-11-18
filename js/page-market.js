@@ -21,7 +21,7 @@ const timeLabel=(value,missing)=>{if(value==null||value==='')return missing;cons
 const contractNote=id=>['NQ=F','ES=F','YM=F','GC=F','CL=F'].includes(id)?'Yahoo 공급자 선물 심볼 · 개별 만기물 아님 / 롤 조정 방식 미확인':['k3','k4'].includes(id)?'국내 선물 · 계약/만기 식별 미확인':null;
 const el=(tag,txt,cls)=>{const n=document.createElement(tag);if(txt!==undefined)n.textContent=txt;if(cls)n.className=cls;return n};
 const btn=(txt,fn)=>{const b=el('button',txt);b.type='button';b.addEventListener('click',fn);return b};
-function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(!x||typeof x!=='object')return structuredClone(DEFAULT);return Object.fromEntries(['KR','US'].map(k=>[k,Array.isArray(x[k])?Array.from(new Set(x[k].filter(id=>byId(id)))).slice(0,ALL.length):[...DEFAULT[k]]]))}catch{return {KR:[...DEFAULT.KR],US:[...DEFAULT.US]}}}
+function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(!x||typeof x!=='object')return structuredClone(DEFAULT);return Object.fromEntries(['KR','US'].map(k=>[k,Array.isArray(x[k])?Array.from(new Set([...x[k].filter(id=>byId(id)),...DEFAULT[k]])).slice(0,ALL.length):[...DEFAULT[k]]]))}catch{return {KR:[...DEFAULT.KR],US:[...DEFAULT.US]}}}
 function quote(id){const q=typeof Q!=='undefined'&&Q[id];if(!q||typeof q.p!=='number'||!Number.isFinite(q.p))return null;const p=q.p,prev=typeof q.prev==='number'?q.prev:null;return {p,delta:Number.isFinite(prev)&&prev!==0?(p-prev)/prev*100:null,source:typeof SRC!=='undefined'?({N:'Naver',Y:'Yahoo',D:'Daum',H:'NH',M:'수동'}[SRC[id]]||'출처 미확인'):'출처 미확인',observed:timeLabel(q.observedAt,'관측시각 미확인'),received:typeof QT!=='undefined'?timeLabel(QT[id],'수신시각 미확인'):'수신시각 미확인'}}
 function format(v){return Number.isFinite(v)?v.toLocaleString('ko-KR',{maximumFractionDigits:3}):'미연결'}
 function create(){
