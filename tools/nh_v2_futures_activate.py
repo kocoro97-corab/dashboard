@@ -19,8 +19,10 @@ def safe_error(error):
  if isinstance(diagnostic,dict):
   http=diagnostic.get('http')
   if isinstance(http,int) and 100<=http<=599:out['http']=http
+  codes=diagnostic.get('providerCodes')
+  if isinstance(codes,list):out['providerCodes']=[c for c in codes[:10] if type(c) is int and 0<=c<=99999999]
   stage=diagnostic.get('stage')
-  if stage in {'WORKERS_SUBDOMAIN','WORKER_SETTINGS','PUBLIC_RELAY'}:out['stage']=stage
+  if stage in {'WORKERS_SUBDOMAIN','WORKER_SETTINGS','PUBLIC_RELAY','WORKER_BUILD','WORKER_UPLOAD','SECRET_BINDINGS','WORKER_CLI'}:out['stage']=stage
  return out
 
 def plan_for(directory):

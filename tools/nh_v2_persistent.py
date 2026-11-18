@@ -55,7 +55,13 @@ def cloud(path,token,optional=False):
 
 def run(args,folder,env,secret=None):
  result=subprocess.run(['npx','--yes',WRANGLER,*args],cwd=folder,env=env,input=secret,text=True,capture_output=True,timeout=240)
- if result.returncode:raise Stop('PERSISTENT_WORKER_COMMAND_FAILED')
+ if result.returncode:
+  # Only numeric provider/status codes cross this boundary. Never CLI output.
+  stage='WORKER_BUILD' if '--dry-run' in args else 'WORKER_UPLOAD' if args[:1]==['deploy'] else 'SECRET_BINDINGS' if args[:2]==['secret','bulk'] else 'WORKER_CLI'
+  text=(result.stderr or '')+'\n'+(result.stdout or '');codes=[int(x) for x in re.findall(r'\[code:\s*([0-9]{3,8})\]',text)[:10]];match=re.search(r'(?:HTTP(?: Error)?|status(?: code)?)[ :]+([45][0-9]{2})\b',text,re.I)
+  diagnostic={'stage':stage,'exitCode':result.returncode,'providerCodes':codes}
+  if match:diagnostic['http']=int(match[1])
+  raise Stop('PERSISTENT_WORKER_COMMAND_FAILED',diagnostic)
  return result.stdout
 
 PUBLIC_CODES=frozenset(['RELAY_ACCESS_CLOSED','RELAY_CONFIG_INVALID','RELAY_ISOLATION_REQUIRED','RELAY_PATH_DENIED','RELAY_ORIGIN_DENIED','DEV_PAGE_REQUIRED','RELAY_RATE_LIMIT','RELAY_BUSY','RELAY_GAS_ACCESS_REQUIRED','RELAY_REDIRECT_DENIED','RELAY_UPSTREAM_HTTP','RELAY_UPSTREAM_NETWORK','RELAY_NON_JSON','RELAY_RESPONSE_INVALID','RELAY_RESPONSE_TOO_LARGE','RELAY_TARGET_MISMATCH','RELAY_BAD_RESPONSE','RELAY_SCOPE_BLOCKED'])
