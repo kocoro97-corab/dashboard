@@ -48,12 +48,15 @@ let MARKET_SOURCE_ATTEMPTS={futures:[],tick:[]};
 async function fillAuthorizedMarketSources(needFuture=true){
  const resolver=window.MyInvestMarketSourcePriority;
  if(!resolver)return;
- if(needFuture&&!Q.k4){
+ if(needFuture){
+  if(['F','K','C'].includes(SRC.k4)){delete Q.k4;delete SRC.k4;delete QT.k4}
+  if(!Q.k4){
   const r=await resolver.resolve('futures');
   MARKET_SOURCE_ATTEMPTS.futures=r.attempts;
   if(r.quote){
    const d=r.quote;Q.k4={p:d.p,prev:d.prev,observedAt:d.observedAt,contractCode:d.contractCode,expiry:d.expiry,contractVerified:true,delayed:d.delayed,stale:d.stale};
    SRC.k4=({NH_FUTURES:'F',KIS:'K',KOSCOM:'C'})[d.provider];QT.k4=Date.now();rootFutureStatus('k4',null);
+  }
   }
  }
  const tick=await resolver.resolve('tick');
