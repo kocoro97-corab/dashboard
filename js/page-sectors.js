@@ -136,7 +136,7 @@ function create(){
   const n=PERIODS[period],label=market==='US'?'미국 11개 섹터 ETF 상대강도':(category==='industry'?'국내 산업 구성종목 표본 분석':'국내 상위 테마 구성종목 표본 분석');
   if(market==='US'&&category==='theme')renderUSThemes(data);
   const target=market==='US'&&category==='theme'?make('details',undefined,'stv2-etfs'):list;if(market==='US'&&category==='theme'){target.append(make('summary','참고: 11개 섹터 ETF 상대강도 펼치기'));list.append(target)}
-  target.append(make('h3',label),make('p','기간 '+n+'거래일 · 기준 '+data.benchmarkSymbol+' '+pct(data.benchmark)+' · 수신 '+new Date(data.received).toLocaleString('ko-KR')+' · 공통 관측일 '+new Date(data.asof).toLocaleDateString('ko-KR')+' · 종가 기준 (실시간 아님)','stv2-muted'));
+  const titleBar=make('div',undefined,'stv2-industry-head');titleBar.append(make('h3',label));if(market==='KR'&&category==='industry'){const refresh=button(industryBusy||analysisBusy?'갱신 중…':'국내 섹터 갱신',refreshCurrent);refresh.disabled=industryBusy||analysisBusy;titleBar.append(refresh)}target.append(titleBar,make('p','기간 '+n+'거래일 · 기준 '+data.benchmarkSymbol+' '+pct(data.benchmark)+' · 수신 '+new Date(data.received).toLocaleString('ko-KR')+' · 공통 관측일 '+new Date(data.asof).toLocaleDateString('ko-KR')+' · 종가 기준 (실시간 아님)','stv2-muted'));
   const table=make('table',undefined,'stv2-table'),head=make('tr');['섹터/테마','기간 수익률','기준 대비','데이터 범위','관측일'].forEach(x=>head.append(make('th',x)));table.append(head);
   for(const row of data.rows){const tr=make('tr');tr.append(make('td',row.name+' ('+row.symbol+')'),make('td',pct(row.change)),make('td',pct(row.relative)),make('td',row.coverage),make('td',new Date(row.asof).toLocaleDateString('ko-KR')));table.append(tr)}
   target.append(table);if(category==='industry')renderInsights(data,target);
