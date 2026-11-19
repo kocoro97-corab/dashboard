@@ -34,9 +34,9 @@
 #pageViewport .pv-kpis{gap:7px}#pageViewport .pv-kpi{padding:8px}#pageViewport .pv-kpi strong{font-size:clamp(16px,1.6vw,23px);white-space:nowrap}
 #pageViewport .news{padding:6px 0}#pageViewport .nev5-layout{gap:7px}#pageViewport .nev5-layout>section{padding:8px}
 #pageViewport .dense-search-results{display:grid;gap:4px;margin:4px 0}#pageViewport .dense-search-results button{text-align:left;white-space:normal}
-@media(max-width:900px){#pageViewport .miv-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#pageViewport .nev5-layout{grid-template-columns:1fr}.dashboard-nav a{padding:6px 8px}}
-@media(max-width:600px){body{padding:6px}.dashboard-nav{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}.dashboard-nav a{padding:5px 2px;font-size:11px}#appContainer header{padding:7px;gap:5px}.brand{font-size:14px}#pageViewport .miv-indicator>div{font-size:15px}#pageViewport .miv-indicator{min-height:102px;padding:7px}#pageViewport .miv-grid{gap:5px}#pageViewport .stv2-grid{grid-template-columns:1fr}#pageViewport .sva-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#pageViewport .sva-card{padding:7px}#pageViewport .sva-card h3{font-size:13px}#pageViewport .dense-stacked tbody{grid-template-columns:1fr}}
-@media(max-width:300px){#pageViewport .miv-grid,#pageViewport .sva-grid{grid-template-columns:1fr}.dashboard-nav{grid-template-columns:repeat(4,minmax(0,1fr));font-size:9px}}
+@media(max-width:900px){#pageViewport .miv-grid{grid-template-columns:repeat(3,minmax(0,1fr))}#pageViewport .nev5-layout{grid-template-columns:1fr}.dashboard-nav a{padding:6px 8px}}
+@media(max-width:600px){body{padding:6px}.dashboard-nav{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}.dashboard-nav a{padding:5px 2px;font-size:11px}#appContainer header{padding:7px;gap:5px}.brand{font-size:14px}#pageViewport .miv-indicator>div{font-size:15px}#pageViewport .miv-indicator{min-height:94px;padding:6px 5px}#pageViewport .miv-grid{gap:5px}#pageViewport .stv2-grid{grid-template-columns:1fr}#pageViewport .sva-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#pageViewport .sva-card{padding:7px}#pageViewport .sva-card h3{font-size:13px}#pageViewport .dense-stacked tbody{grid-template-columns:1fr}}
+@media(max-width:300px){#pageViewport .sva-grid{grid-template-columns:1fr}.dashboard-nav{grid-template-columns:repeat(4,minmax(0,1fr));font-size:9px}}
 
 #pageViewport>:is(.sva,.nev5,.str4)>h2{display:none}
 /* Secondary header controls stay available without covering market data. */
@@ -52,3 +52,6 @@
 #readConnectionStatus{margin:3px 0;padding:6px 8px;border:1px solid var(--amber);border-radius:7px;max-width:100%;overflow-wrap:anywhere}#readConnectionStatus details{max-height:180px;overflow:auto}#readConnectionStatus p{font-size:11px;margin:3px 0}#readConnectionStatus button{min-height:38px}
 
 #pageViewport .workflow-selector input{min-width:0;max-width:100%;min-height:40px;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--text)}#pageViewport .workflow-selector button{min-height:40px;border:1px solid var(--line);border-radius:6px;padding:6px 9px;background:var(--panel);color:var(--text)}#pageViewport .workflow-selector .sva-tabs{display:flex;flex-wrap:wrap;gap:5px;margin:4px 0}#pageViewport .workflow-selector .sva-tabs button[aria-pressed=true]{border-color:#72b5ff;background:#264365}#pageViewport .workflow-selector form{display:flex;flex-wrap:wrap;gap:5px}
+
+/* Core market cards keep 3 x 3 on Fold; detailed units and provenance open on tap. */
+#pageViewport .miv-indicator>.miv-value{font-size:clamp(11px,3.5vw,18px);white-space:nowrap;letter-spacing:-.3px}
