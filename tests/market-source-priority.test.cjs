@@ -60,3 +60,16 @@ test('market card shows raw instant TICK widget without unauthorized iframe extr
  assert.ok(!/contentDocument|contentWindow\.(?:document|body)/.test(page));
  assert.match(market,/fillAuthorizedMarketSources/);
 });
+
+test('TICK missing and non-numeric values never become a flat zero reading',()=>{
+ const p=adapter(),good={symbol:'TICK-NYSE',verified:true,observedAt:Date.now()};
+ for(const value of [undefined,null,'',' ',false,true,[],{},'not-a-number'])assert.equal(p.normalizeTick({...good,value},'IBKR'),null);
+ assert.equal(p.normalizeTick({...good,value:0},'IBKR').p,0);
+ assert.equal(p.normalizeTick({...good,value:'-25'},'IBKR').p,-25);
+});
+test('stale primary TICK advances to fresh secondary rather than masking it',async()=>{
+ const p=adapter(),calls=[];
+ p.register('tick','IBKR',async()=>{calls.push('IBKR');return {symbol:'TICK-NYSE',verified:true,value:99,observedAt:Date.now()-180000}});
+ p.register('tick','DXFEED',async()=>{calls.push('DXFEED');return {symbol:'$TICK',verified:true,value:-700,observedAt:Date.now()}});
+ const r=await p.resolve('tick');assert.equal(r.quote.provider,'DXFEED');assert.equal(r.quote.p,-700);assert.deepEqual(calls,['IBKR','DXFEED']);assert.equal(r.attempts[0].status,'INVALID_OR_STALE');
+});

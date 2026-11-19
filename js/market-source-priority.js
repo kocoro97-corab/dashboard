@@ -13,6 +13,7 @@ function normalizeFutures(data,provider){
 }
 function normalizeTick(data,provider){
  if(!data||data.verified!==true||!((provider==='IBKR'&&data.symbol==='TICK-NYSE')||(provider==='DXFEED'&&data.symbol==='$TICK')))return null;
+ if(!(typeof data.value==='number'||typeof data.value==='string'&&data.value.trim()!==''))return null;
  const p=Number(data.value),at=dateEpoch(data.observedAt),now=Date.now();
  if(!Number.isInteger(p)||Math.abs(p)>5000||!at||at>now+60000||at<now-10*60000)return null;
  return {p,observedAt:at,provider,delayed:data.delayed===true,stale:now-at>120000};
@@ -40,7 +41,7 @@ async function resolve(kind){
   try{
    const result=await fn();
    const quote=kind==='futures'?normalizeFutures(result,provider):normalizeTick(result,provider);
-   if(quote){attempts.push({provider,status:'OK'});return {quote,attempts}}
+   if(quote&&!(kind==='tick'&&quote.stale)){attempts.push({provider,status:'OK'});return {quote,attempts}}
    attempts.push({provider,status:'INVALID_OR_STALE'});
   }catch(e){attempts.push({provider,status:'FAILED',code:/^[A-Z0-9_]{3,60}$/.test(String(e?.code||''))?e.code:'PROVIDER_ERROR'})}
  }
