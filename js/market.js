@@ -259,20 +259,18 @@ const hms=d=>{if(!d)return'—';const p=n=>String(n).padStart(2,'0');return p(d.
 function tickStatus(){
   const el=$('tickSt');if(!el)return;
   const c=ok=>ok===true?'#4ade80':ok===false?'var(--red)':'var(--amber)';
-  const wo=TS.w==='ok'?true:TS.w==='fail'?false:null,wl=wo===true?'성공':wo===false?'실패':'대기';
+  const wo=TS.w==='ok'?true:TS.w==='fail'?false:null,wl=wo===true?'프레임 수신':wo===false?'실패':'대기';
   const g=TS.g;
-  el.innerHTML='실시간 위젯 <b style="color:'+c(wo)+'">'+wl+'</b> · '+hms(TS.wAt)+'<br>게이지 <b style="color:'+c(g?g.ok:null)+'">'+(g?(g.ok?'성공':'실패'):'대기')+'</b> · '+(g?g.src:'')+' · '+hms(TS.gAt);
+  el.innerHTML='참고 위젯 <b style="color:'+c(wo)+'">'+wl+'</b> · '+hms(TS.wAt)+'<br>게이지 <b style="color:'+c(g?g.ok:null)+'">'+(g?(g.src==='직접 입력'?'수동 입력':g.ok?'관측 확인':'미연결'):'미확인')+'</b> · '+(g?g.src:'')+' · '+hms(TS.gAt);
 }
 function updateTickGauge(){
-  if($('tin').value)return;   // 직접 입력값이 있으면 입력값 우선
-  const qN=Q['^IXIC'],qS=Q['^GSPC'];let tv=null,src='';
-  if(qN&&qN.prev){tv=Math.round((qN.p/qN.prev-1)*100*450);src='나스닥 등락률로 추정'}
-  else if(qS&&qS.prev){tv=Math.round((qS.p/qS.prev-1)*100*550);src='S&P500 등락률로 추정'}
-  TS.gAt=new Date();
-  if(tv==null||isNaN(tv)){TS.g={ok:false,src:'지수 시세 없음'};$('tl2').textContent='데이터 없음';tickStatus();return}
-  TS.g={ok:true,src:src};
-  $('tm').style.left='calc('+((Math.max(-1000,Math.min(1000,tv))+1000)/20)+'% - 1px)';
-  $('tl2').textContent='추정: '+(tv>=600?'매수 우위':tv<=-600?'매도 우위':'중립권')+' ('+tv+')';
+  if($('tin').value)return; // Manual entries remain explicit and are never copied to Q.TICK.
+  const q=Q.TICK,source=({I:'IBKR',X:'dxFeed'})[SRC.TICK],at=q?.observedAt,now=Date.now();
+  const valid=source&&Number.isInteger(q?.p)&&Math.abs(q.p)<=5000&&Number.isFinite(at)&&at>0&&at<=now+60000&&now-at<=120000;
+  if(!valid){TS.g={ok:false,src:'숫자 API 미연결 · TradingView 참고용'};TS.gAt=null;$('tm').hidden=true;$('tl2').textContent='실제 TICK 수치 미연결';tickStatus();return}
+  TS.g={ok:true,src:source+' · 검증된 관측값'};TS.gAt=new Date(at);$('tm').hidden=false;
+  $('tm').style.left='calc('+((Math.max(-1000,Math.min(1000,q.p))+1000)/20)+'% - 1px)';
+  $('tl2').textContent='관측값: '+q.p+' · '+(q.p>=600?'매수 우위':q.p<=-600?'매도 우위':'±600 범위 안');
   tickStatus();
 }
 
@@ -315,7 +313,7 @@ function setTick(){
   const v=parseFloat($('tin').value);LS('invest_tick',$('tin').value);
   if(isNaN(v)){updateTickGauge();return}
   $('tm').style.left='calc('+((Math.max(-1000,Math.min(1000,v))+1000)/20)+'% - 1px)';   // tv → v 수정
-  $('tl2').textContent='입력값: '+v;TS.g={ok:true,src:'직접 입력'};TS.gAt=new Date();tickStatus();
+  $('tm').hidden=false;$('tl2').textContent='입력값: '+v;TS.g={ok:true,src:'직접 입력'};TS.gAt=new Date();tickStatus();
 }
 
 let cur='KR';

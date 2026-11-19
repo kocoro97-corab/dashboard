@@ -33,3 +33,21 @@ test('late fallback provider responses cannot repopulate a changed session',asyn
   assert.equal(vm.runInContext('Q.k4',f.ctx),undefined);assert.equal(vm.runInContext('Q.TICK',f.ctx),undefined);
  }
 });
+
+test('legacy TICK gauge never estimates market breadth from index price changes',()=>{
+ const f=setup();f.ctx.$('tin').value='';f.ctx.$('tm').style={};
+ vm.runInContext('Q["^IXIC"]={p:150,prev:100};Q["^GSPC"]={p:120,prev:100};updateTickGauge()',f.ctx);
+ assert.equal(vm.runInContext('TS.g.ok',f.ctx),false);assert.equal(f.ctx.$('tm').hidden,true);assert.match(f.ctx.$('tl2').textContent,/미연결/);
+});
+test('legacy TICK gauge accepts dated verified provider values including zero, and clears stale samples',()=>{
+ const f=setup();f.ctx.$('tin').value='';f.ctx.$('tm').style={};
+ vm.runInContext('Q.TICK={p:-700,observedAt:Date.now()};SRC.TICK="X";updateTickGauge()',f.ctx);
+ assert.match(f.ctx.$('tl2').textContent,/-700/);assert.match(vm.runInContext('TS.g.src',f.ctx),/dxFeed/);assert.equal(f.ctx.$('tm').hidden,false);
+ vm.runInContext('Q.TICK.p=0;updateTickGauge()',f.ctx);assert.match(f.ctx.$('tl2').textContent,/관측값: 0/);
+ vm.runInContext('Q.TICK.observedAt=Date.now()-121000;updateTickGauge()',f.ctx);assert.equal(vm.runInContext('TS.g.ok',f.ctx),false);assert.equal(f.ctx.$('tm').hidden,true);
+ vm.runInContext('Q.TICK.observedAt=Date.now();SRC.TICK="M";updateTickGauge()',f.ctx);assert.equal(vm.runInContext('TS.g.ok',f.ctx),false);
+});
+test('manual TICK remains explicit and does not become an authenticated provider observation',()=>{
+ const f=setup();f.ctx.$('tin').value='125';f.ctx.$('tm').style={};f.ctx.$('tm').hidden=true;f.ctx.setTick();
+ assert.equal(f.ctx.$('tm').hidden,false);assert.match(f.ctx.$('tl2').textContent,/입력값: 125/);assert.equal(vm.runInContext('Q.TICK',f.ctx),undefined);
+});

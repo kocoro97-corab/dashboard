@@ -30,3 +30,13 @@ Screenshots/evidence: `/workspace/output/tick-check-20261119/` (actual public wi
 ## Next assignee
 
 Codex: establish whether an existing approved TICK provider and entitlement are available, then connect the authenticated read path if authorized. Do not activate a new paid subscription/service or scrape the reference iframe into the application. Until then, retain reference-only display and unavailable automated judgment. No ChatGPT UI handoff is required for this connection task.
+
+## Reference-only mode confirmed by owner
+
+The owner confirms there is no existing numerical provider and that the current connection is TradingView. Keep the current free reference arrangement; do not create a broker/data account, subscription or credentials.
+
+Further inspection found the legacy `updateTickGauge` still multiplied NASDAQ/S&P500 percentage changes to infer a TICK gauge. Those values were labeled estimates but are not NYSE TICK observations. Removed this inference. The legacy gauge now accepts only a bounded, timestamped current `Q.TICK` from the existing IBKR/dxFeed adapter codes; otherwise it shows unavailable and hides its pointer rather than implying zero. Explicit manual entries remain labeled manual and are never copied into the numerical provider model. Widget bootstrap/load status is labeled reference/frame receipt, not realtime data success. The existing chart dialog explains that reference widget values are not ingested into automated analysis. The compact 3x3 cards remain unchanged.
+
+Verification: related transport/provider Node suites PASS, including new regression cases for strong index moves without TICK, valid negative/zero TICK, stale/unapproved-source rejection, and manual entry separation. PC 1440 / Fold-sized 690 / 344 synthetic browser checks PASS; market source/unit/region/cleanup browser regression 18 PASS. No live NH/account/order/storage calls or paid service activation. The earlier guessed public NH US-stock specification URL returned 404; that is not evidence of either NH TICK support or non-support, and no authenticated NH probe was attempted.
+
+This completes the reference-only TICK consistency work. Numerical automated TICK remains intentionally unconnected while there is no authorized provider. Next Codex task: integrate and verify the latest industry/theme controls and actual public-series behavior; do not repeatedly request nonexistent TICK credentials.
