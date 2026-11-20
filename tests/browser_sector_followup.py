@@ -15,9 +15,16 @@ async def check(h,name,fn):
  except Exception as e:
   row={'test':name,'width':h.width,'status':'FAIL','reason':(str(e).splitlines() or [type(e).__name__])[0][:250]};await h.page.screenshot(path=str(args.output/(str(h.width)+'-'+name+'-FAIL.png')))
  results.append(row);print(json.dumps(row),flush=True)
+async def selected_market(h):
+ tabs=h.page.locator('.stv2-toolbar .stv2-tabs').first
+ for code,label in [('KR','한국'),('US','미국'),('MIX','한국+미국')]:
+  if await tabs.get_by_role('button',name=label,exact=True).get_attribute('aria-pressed')=='true':return code
+ return None
 async def region(h,target):
- other='미국' if target=='KR' else '한국';b=h.page.get_by_role('button',name='시장 전환: 현재 '+other,exact=True)
- if await b.count():await b.click()
+ label={'KR':'한국','US':'미국','MIX':'한국+미국'}[target]
+ b=h.page.locator('.stv2-toolbar .stv2-tabs').first.get_by_role('button',name=label,exact=True)
+ if await b.get_attribute('aria-pressed')!='true':await b.click()
+ assert await selected_market(h)==target
 async def settled(h,n=5):await h.page.wait_for_function('(n)=>document.querySelector(".stv2")?.textContent.includes("기간 "+n+"거래일")',arg=n)
 async def features(browser,artifact,tmp,width):
  feeds=synthetic_feeds();d=json.loads(feeds[history_url('^KS11')]);d['chart']['result'][0]['indicators']['quote'][0]['close'][-1]=None;feeds[history_url('^KS11')]=json.dumps(d)
@@ -25,13 +32,13 @@ async def features(browser,artifact,tmp,width):
  try:
   await h.page.clock.set_fixed_time('2026-11-17T03:00:00Z');await h.login('sectors');await h.page.wait_for_function('()=>!THM_BUSY&&THM.length>0')
   async def toolbar():
-   assert await h.page.locator('.stv2-region').count()==1;assert await h.page.get_by_role('button',name='5일',exact=True).count()==0
-   heading=await h.page.locator('.stv2-heading h2').bounding_box();refresh=await h.page.get_by_role('button',name='테마 데이터 새로고침',exact=True).bounding_box();assert refresh['x']>heading['x'];assert abs(refresh['y']-heading['y'])<20
+   assert await selected_market(h)=='KR';assert await h.page.locator('.stv2-toolbar .stv2-tabs').count()==2;assert await h.page.get_by_role('button',name='5일',exact=True).count()==0
+   heading=await h.page.locator('.stv2-heading h2').bounding_box();refresh=await h.page.get_by_role('button',name='현재 시장 섹터·테마 새로고침',exact=True).bounding_box();assert refresh['x']>heading['x'];assert abs(refresh['y']-heading['y'])<20
    await h.page.get_by_role('button',name='스윙',exact=True).click();assert await h.page.get_by_role('button',name='5일',exact=True).get_attribute('aria-pressed')=='true';await h.page.get_by_role('button',name='20일',exact=True).click();await h.page.get_by_role('button',name='단타',exact=True).click();assert await h.page.get_by_role('button',name='60일',exact=True).count()==0;await h.page.get_by_role('button',name='스윙',exact=True).click();assert await h.page.get_by_role('button',name='5일',exact=True).get_attribute('aria-pressed')=='true';assert await h.page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
   await check(h,'COMPACT_TOOLBAR_AND_SWING_DEFAULT_5_DAYS',toolbar)
   async def common_dates():
    for days in [5,20,60]:
-    await h.page.get_by_role('button',name=str(days)+'일',exact=True).click();await settled(h,days);rows=await h.page.locator('.stv2 table').first.locator('tr').all();assert len(rows)==3
+    await h.page.get_by_role('button',name=str(days)+'일',exact=True).click();await settled(h,days);await h.page.wait_for_function('()=>document.querySelector(".stv2 .stv2-table")?.rows.length===3');rows=await h.page.locator('.stv2 .stv2-table').first.locator('tr').all();assert len(rows)==3
     # Stock latest close is 199; benchmark latest close was removed, so both
     # use the previous common observation (stock 198, index 298).
     expected=(198/(198-days)-1)*100;base=(298/(298-days)-1)*100
@@ -51,7 +58,7 @@ async def features(browser,artifact,tmp,width):
    await h.page.screenshot(path=str(args.output/(str(width)+'-us-equity-themes.png')))
   await check(h,'FIVE_US_THEMES_REAL_EQUITY_MEMBERS_AND_STOCK_LINK',us_equities)
   async def bad_identity():
-   bad=json.loads(feeds[history_url('TSLA')]);bad['chart']['result'][0]['meta']['instrumentType']='ETF';h.overrides[history_url('TSLA')]={'text':json.dumps(bad)};await h.page.get_by_role('button',name='테마 데이터 새로고침',exact=True).click();await h.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("TSLA (SERIES_UNAVAILABLE)")');assert '확인 '+str(MAX_MEMBERS-1)+'/'+str(MAX_MEMBERS)+'종목' in await h.page.locator('.stv2-us-themes').inner_text()
+   bad=json.loads(feeds[history_url('TSLA')]);bad['chart']['result'][0]['meta']['instrumentType']='ETF';h.overrides[history_url('TSLA')]={'text':json.dumps(bad)};await h.page.get_by_role('button',name='현재 시장 섹터·테마 새로고침',exact=True).click();await h.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("TSLA (SERIES_UNAVAILABLE)")');assert '확인 '+str(MAX_MEMBERS-1)+'/'+str(MAX_MEMBERS)+'종목' in await h.page.locator('.stv2-us-themes').inner_text()
    assert await h.page.locator('.stv2-status:not([open])').count()>0
   await check(h,'ETF_RESPONSE_REJECTED_FOR_GENERAL_STOCK_MEMBER',bad_identity)
   async def cleanup():
@@ -64,9 +71,9 @@ async def boundaries(browser,artifact,tmp):
   try:
    await h.page.clock.install(time=stamp);await h.login('sectors')
    async def boundary():
-    label='한국' if initial=='KR' else '미국';assert await h.page.get_by_role('button',name='시장 전환: 현재 '+label,exact=True).count()==1;await h.page.clock.fast_forward(3000)
-    wanted='한국' if target=='KR' else '미국';assert await h.page.get_by_role('button',name='시장 전환: 현재 '+wanted,exact=True).count()==1
-    await region(h,initial);await h.page.clock.fast_forward(61000);assert await h.page.get_by_role('button',name='시장 전환: 현재 '+label,exact=True).count()==1;await h.go('news');await h.go('sectors');assert await h.page.get_by_role('button',name='시장 전환: 현재 '+wanted,exact=True).count()==1;assert await h.page.get_by_role('button',name='단타',exact=True).get_attribute('aria-pressed')=='true';assert await h.page.get_by_role('button',name='5일',exact=True).count()==0
+    assert await selected_market(h)==initial;await h.page.clock.fast_forward(3000)
+    wanted='한국' if target=='KR' else '미국';await h.page.wait_for_function('(label)=>document.querySelector(".stv2-toolbar .stv2-tabs button[aria-pressed=true]")?.textContent===label',arg=wanted);assert await selected_market(h)==target
+    await region(h,initial);await h.page.clock.fast_forward(61000);assert await selected_market(h)==initial;await h.go('news');await h.go('sectors');assert await selected_market(h)==initial;assert await h.page.get_by_role('button',name='단타',exact=True).get_attribute('aria-pressed')=='true';assert await h.page.get_by_role('button',name='5일',exact=True).count()==0
    await check(h,'KST_BOUNDARY_'+initial+'_TO_'+target+'_MANUAL_OVERRIDE_REENTRY',boundary)
   finally:await h.close()
 def observed_prices(feeds,symbol):
