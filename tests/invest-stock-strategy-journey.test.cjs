@@ -7,7 +7,7 @@ const read=name=>fs.readFileSync(path.join(__dirname,'..','js',name),'utf8');
 const sources={workflow:read('invest-workflow.js'),stocks:read('page-stocks.js'),strategy:read('page-strategy.js')};
 
 class Node {
- constructor(tag='div'){this.tagName=tag.toUpperCase();this.children=[];this.parent=null;this.attrs={};this.dataset={};this.listeners={};this.style={};this.className='';this.classList={add(){} };this.value='';this.textContent='';this.type='';this.hidden=false}
+ constructor(tag='div'){this.tagName=tag.toUpperCase();this.children=[];this.parent=null;this.attrs={};this.dataset={};this.listeners={};this.style={};this.className='';this.classList={add(){} };this._value='';Object.defineProperty(this,'value',{get(){return this._value},set(v){this._value=String(v)}});this.textContent='';this.type='';this.hidden=false}
  append(...items){for(const c of items){if(c instanceof Node)c.parent=this;this.children.push(c)}}
  prepend(...items){for(const c of items){if(c instanceof Node)c.parent=this}this.children.unshift(...items)}
  replaceChildren(...items){this.children=[];this.append(...items)}
