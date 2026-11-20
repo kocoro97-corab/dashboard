@@ -41,19 +41,21 @@ function environment(){
  const DashboardPages={register:(id,create)=>{pages[id]=create},legacy:()=>({mount(){},unmount(){},refresh:async()=>{}})};
  const getJSON=async url=>{
   const symbol=decodeURIComponent(url.split('/chart/')[1].split('?')[0]);
-  const base=symbol==='AAPL'?200:10,now=Math.floor(Date.now()/1000),timestamp=[],open=[],high=[],low=[],close=[],volume=[];
+  const kr=/^000660\.(KS|KQ)$/.test(symbol),base=kr?200000:symbol==='AAPL'?200:10,now=Math.floor(Date.now()/1000),timestamp=[],open=[],high=[],low=[],close=[],volume=[];
   for(let i=0;i<85;i++){const c=base+i*.11,t=now-(86-i)*86400;timestamp.push(t);open.push(c-.05);high.push(c+.8);low.push(c-.8);close.push(c);volume.push(100000+i*400)}
-  return{chart:{result:[{timestamp,meta:{symbol,currency:'USD',exchangeName:'NMS',instrumentType:'EQUITY',longName:symbol==='AAPL'?'Apple Inc.':'Serve Robotics'},indicators:{quote:[{open,high,low,close,volume}]}}]}};
+  return{chart:{result:[{timestamp,meta:{symbol,currency:kr?'KRW':'USD',exchangeName:kr?'KSC':'NMS',instrumentType:'EQUITY',longName:kr?'SK hynix':symbol==='AAPL'?'Apple Inc.':'Serve Robotics'},indicators:{quote:[{open,high,low,close,volume}]}}]}};
  };
  const THM=[{name:'국내 테마',rows:[{code:'000660',name:'SK하이닉스'}]}];
+ const EXT_MASTER={byCode:new Map([['000660',{code:'000660',market:'KOSPI',name:'SK하이닉스'}]])};
+ const loadExternalMaster=async()=>{};
  for(const src of [sources.workflow,sources.stocks,sources.strategy]){
-  new Function('window','document','sessionStorage','localStorage','Event','DashboardPages','getJSON','showQ','THM','fetch',src)(
+  new Function('window','document','sessionStorage','localStorage','Event','DashboardPages','getJSON','showQ','THM','fetch','EXT_MASTER','loadExternalMaster',src)(
     root,document,sessionStorage,localStorage,Event,DashboardPages,getJSON,()=>{},THM,
-    async()=>({ok:true,json:async()=>({schemaVersion:1,themes:[{name:'미국 로봇',instruments:[{symbol:'SERV',name:'Serve Robotics'}]}]})})
+    async()=>({ok:true,json:async()=>({schemaVersion:1,themes:[{name:'미국 로봇',instruments:[{symbol:'SERV',name:'Serve Robotics'}]}]})}),EXT_MASTER,loadExternalMaster
   );
  }
  const ctx={
-  snapshot:()=>({details:[{code:'SERV',name:'Serve Robotics',market:'overseas',currency:'USD',instrumentId:'NH:XNAS:SERV',draft:false,quantity:172,avgPrice:7.5,broker:'NH',accountLabel:'일반계좌'}],result:{rows:[{identity:true,issues:[],returnPct:12.4}]}}),
+  snapshot:()=>({details:[{code:'SERV',name:'Serve Robotics',market:'overseas',currency:'USD',instrumentId:'NH:XNAS:SERV',draft:false,quantity:172,avgPrice:7.5,broker:'NH',accountLabel:'일반계좌'},{code:'000660',name:'SK하이닉스',market:'domestic',currency:'KRW',draft:false,quantity:12,avgPrice:180000,broker:'NH',accountLabel:'국내계좌'}],result:{rows:[{identity:true,issues:[],returnPct:12.4},{identity:true,issues:[],returnPct:4.2}]}}),
   subscribe:()=>()=>{},chart:async()=>{},sectors:async()=>{}
  };
  function mount(page){const container=new Node('main'),instance=pages[page]();instance.mount(container,ctx);return{container,instance}}
@@ -111,4 +113,37 @@ test('theme selector loads both US and Korean groups even if KR was already regi
  assert.ok(button);button.click();
  assert.equal(selected.at(-1).symbol,'SERV');assert.equal(selected.at(-1).theme,'미국 로봇');
  picker.destroy();
+});
+
+test('domestic industry stock keeps its 5-day sector context and verified holdings through strategy',async()=>{
+ const x=environment();
+ assert.equal(x.root.MYInvestStockSelection.open('000660',{name:'SK하이닉스',industry:'반도체',mode:'swing',period:'5d',source:'industry'}),true);
+ const stock=x.mount('stocks');await flush();
+ assert.equal(stock.instance.getStatus().symbol,'000660');
+ assert.match(texts(stock.container),/산업 반도체/);
+ assert.match(texts(stock.container),/선택기간 5일/);
+ assert.match(texts(stock.container),/종합 판단/);
+ byButton(stock.container,'이 종목 투자전략').click();
+ assert.equal(x.root.InvestWorkflow.current().symbol,'000660');
+ assert.equal(x.root.InvestWorkflow.current().period,'5d');
+ stock.instance.unmount();
+ const strategy=x.mount('strategy');await flush();
+ assert.match(texts(strategy.container),/스윙 5일 관찰/);
+ assert.match(texts(strategy.container),/선택 종목: SK하이닉스 \(000660\)/);
+ assert.match(texts(strategy.container),/기존 보유종목 관리/);
+ assert.match(texts(strategy.container),/평균매입가 180,000 KRW/);
+ strategy.instance.unmount();
+});
+test('verified holdings are selectable directly without an extra manual ticker entry',()=>{
+ const x=environment(),picked=[];
+ const selector=x.root.InvestWorkflow.selector({ctx:x.ctx,onSelect:s=>picked.push(s)});
+ byButton(selector.element,'내 보유종목').click();
+ assert.match(texts(selector.element),/Serve Robotics/);
+ assert.match(texts(selector.element),/SK하이닉스/);
+ const choice=desc(selector.element).find(n=>n.tagName==='BUTTON'&&n.textContent.includes('SK하이닉스 (000660)'));
+ assert.ok(choice);
+ choice.click();
+ assert.equal(picked.at(-1).symbol,'000660');
+ assert.equal(picked.at(-1).source,'holding');
+ selector.destroy();
 });
