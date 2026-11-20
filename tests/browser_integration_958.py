@@ -106,19 +106,24 @@ def returns(symbol,n,benchmark=None):
   close=[values[day] for day in dates]
  else:close=list(values.values())
  return (close[-1]/close[-1-n]-1)*100 if len(close)>n else None
+async def select_sector_market(h,market):
+ label={'KR':'한국','US':'미국'}[market]
+ tab=h.page.locator('.stv2-toolbar .stv2-tabs').first.get_by_role('button',name=label,exact=True)
+ if await tab.get_attribute('aria-pressed')!='true':await tab.click()
+ assert await tab.get_attribute('aria-pressed')=='true'
 async def sectors_checks(browser,artifact,tmp,width):
  h=await Harness(browser,artifact,feeds,width,args.published).start_browser(tmp)
  try:
 
   if not args.public_feeds:await h.page.clock.set_fixed_time('2026-11-17T03:00:00Z')
   started=time.perf_counter();await h.login('sectors');
-  if await h.page.get_by_role('button',name='시장 전환: 현재 미국',exact=True).count():await h.page.get_by_role('button',name='시장 전환: 현재 미국',exact=True).click()
+  await select_sector_market(h,'KR')
   await h.page.wait_for_function('()=>!THM_BUSY&&THM.length>0');first=round((time.perf_counter()-started)*1000)
   async def day():
    assert await h.page.locator('.stv2-ranks .stv2-card').count()>0;rows=h.page.locator('.stv2-overview table tr');labels=await rows.locator('td:first-child').all_text_contents();assert len(labels)==len(set(labels));values=[float(s.replace(',','')) for s in await rows.locator('td:nth-child(4)').all_text_contents()];assert values==sorted(values,reverse=True)
   await case(h,'KR_DAY_THEME_BREADTH_LEADERS_MAINTAINED',day)
   async def us():
-   await h.page.get_by_role('button',name='시장 전환: 현재 한국',exact=True).click()
+   await select_sector_market(h,'US')
    for days in [1,5,20,60]:
     if days==5:await h.page.locator('.stv2-tabs button',has_text='스윙').click()
     if days!=1:await h.page.locator('.stv2-tabs button').filter(has_text=re.compile('^'+str(days)+'일$')).click()
@@ -130,7 +135,7 @@ async def sectors_checks(browser,artifact,tmp,width):
    await h.page.screenshot(path=str(args.output/(str(width)+'-us-sector.png')))
   await case(h,'US_11_ETFS_SPY_1_5_20_60_RETURNS_AND_RS',us)
   async def kr():
-   await h.page.get_by_role('button',name='시장 전환: 현재 미국',exact=True).click();await h.page.locator('.stv2-tabs button',has_text='스윙').click()
+   await select_sector_market(h,'KR');await h.page.locator('.stv2-tabs button',has_text='스윙').click()
    for days in [5,20,60]:
     await h.page.locator('.stv2-tabs button').filter(has_text=re.compile('^'+str(days)+'일$')).click();await h.page.wait_for_function('(n)=>document.querySelector(".stv2")?.textContent.includes("기간 "+n+"거래일")',arg=days)
     rows=await h.page.locator('.stv2 table').first.locator('tr').all();assert len(rows)>1
@@ -148,11 +153,11 @@ async def sectors_checks(browser,artifact,tmp,width):
   await case(h,'KR_REGISTERED_EXCHANGES_SAMPLE_5_20_60_RETURNS_RS',kr)
   async def partial():
    if args.public_feeds:return
-   h.overrides[history_url('XLE')]={'text':json.dumps({'chart':{'result':[]}})};await h.page.get_by_role('button',name='시장 전환: 현재 한국',exact=True).click();await h.page.locator('.stv2-tabs button',has_text='단타').click();await h.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click();await h.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("XLE (SERIES_UNAVAILABLE)")');assert '검증 수신 10/11개 ETF' in await h.page.locator('.stv2').text_content();assert await h.page.locator('.stv2-etfs table tr').count()==11
+   h.overrides[history_url('XLE')]={'text':json.dumps({'chart':{'result':[]}})};await select_sector_market(h,'US');await h.page.locator('.stv2-tabs button',has_text='단타').click();await h.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click();await h.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("XLE (SERIES_UNAVAILABLE)")');assert '검증 수신 10/11개 ETF' in await h.page.locator('.stv2').text_content();assert await h.page.locator('.stv2-etfs table tr').count()==11
   if not args.public_feeds:await case(h,'API_FAILURE_IS_SEPARATE_FROM_VALID_ROWS',partial)
   async def rapid():
    if args.public_feeds:return
-   h.overrides[history_url('SPY')]={'text':feeds[history_url('SPY')],'delayMs':400};h.overrides[history_url('XLE')]={'text':feeds[history_url('XLE')]};await h.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click();await h.page.get_by_role('button',name='시장 전환: 현재 미국',exact=True).click();await h.page.locator('.stv2-tabs button',has_text='단타').click();await h.page.get_by_role('button',name='시장 전환: 현재 한국',exact=True).click();await h.page.locator('.stv2-tabs button',has_text='스윙').click();await h.page.locator('.stv2-tabs button').filter(has_text=re.compile('^20일$')).click();await h.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("미국 11개 섹터 ETF 상대강도")&&document.querySelector(".stv2")?.textContent.includes("기간 20거래일")');assert '국내 상위 테마 구성종목 표본 분석' not in await h.page.locator('.stv2').inner_text();await h.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click();await h.go('news');assert await h.page.locator('.stv2').count()==0
+   h.overrides[history_url('SPY')]={'text':feeds[history_url('SPY')],'delayMs':400};h.overrides[history_url('XLE')]={'text':feeds[history_url('XLE')]};await h.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click();await select_sector_market(h,'KR');await h.page.locator('.stv2-tabs button',has_text='단타').click();await select_sector_market(h,'US');await h.page.locator('.stv2-tabs button',has_text='스윙').click();await h.page.locator('.stv2-tabs button').filter(has_text=re.compile('^20일$')).click();await h.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("미국 11개 섹터 ETF 상대강도")&&document.querySelector(".stv2")?.textContent.includes("기간 20거래일")');assert '국내 상위 테마 구성종목 표본 분석' not in await h.page.locator('.stv2').inner_text();await h.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click();await h.go('news');assert await h.page.locator('.stv2').count()==0
   if not args.public_feeds:await case(h,'RAPID_SELECTION_AND_NAVIGATION_DURING_LOAD',rapid)
   assert not h.errors,h.errors;assert not any(r['action'] in ['nhAccounts','nhQuotes','order','saveExternalHoldings'] for r in h.requests)
   timings.append({'area':'sectors','width':width,'mode':MODE,'firstDisplayMs':first,'firstFrameMs':h.first_frame_ms,'initialDataMs':h.initial_data_ms,'initialRenderSettleMs':h.initial_render_ms,'requestCount':len(h.requests),'lastResponseMs':max((r.get('endMs',0) for r in h.requests),default=0)})
