@@ -12,7 +12,7 @@ function harness(fetcher){
  const seen={errors:new Map([['future:k3','NH_NO_PRICE']]),calls:[]};
  const Q={},SRC={},QT={},FQ={},FST={};
  const rootFutureStatus=(id,error)=>{seen.calls.push({id,error});if(error===null)seen.errors.delete('future:'+id);else seen.errors.set('future:'+id,error)};
- const nnum=v=>Number.isFinite(Number(v))?Number(v):null;
+ const nnum=v=>v==null||v===''?null:Number.isFinite(Number(v))?Number(v):null;
  const fn=new Function('getJSON','FUT','nnum','hms','FQ','FST','Q','SRC','QT','rootFutureStatus',functionCode+';return fillFutures')(
   fetcher,{k3:'KR4A016C0004'},nnum,()=>'18:05:00',FQ,FST,Q,SRC,QT,rootFutureStatus);
  return{fn,seen,Q,SRC,QT,FQ,FST};
