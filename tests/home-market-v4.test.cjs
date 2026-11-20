@@ -60,18 +60,18 @@ test('unverified or missing quote stays missing, not zero or fabricated',()=>{
  assert.equal(p.quote('^KS11',{'^KS11':{p:100,prev:null}}, {}, {},now).delta,null);
 });
 test('home removes duplicate six-page menu, exposes region control and segregates assets',()=>{
- assert.match(homeSource,/\\['AUTO','자동'\\]/);
- assert.match(homeSource,/marketRegime\\(region,Q,SRC,QT\\)/);
+ assert.ok(homeSource.includes("['AUTO','자동']"));
+ assert.ok(homeSource.includes('marketRegime(region,Q,SRC,QT)'));
  assert.match(homeSource,/homev4-assets/);
  assert.match(homeSource,/homev4-main/);
  assert.ok(!homeSource.includes('주도 산업 TOP 3·경제 이벤트'));
- assert.match(homeSource,/if\\(changed\\)void legacy.refresh/);
+ assert.ok(homeSource.includes('if(changed)void legacy.refresh'));
 });
 test('error banner displays the safe code and whitelisted target without expansion',()=>{
- assert.match(diagSource,/safeTarget\\(latest\\[0\\]\\)/);
- assert.match(diagSource,/\\+' · '\\+value.code/);
+ assert.ok(diagSource.includes('safeTarget(latest[0])'));
+ assert.ok(diagSource.includes("' · '+value.code"));
  assert.match(diagSource,/future:k4/);
- assert.match(diagSource,/timeKST\\(item.at\\)/);
+ assert.ok(diagSource.includes('timeKST(item.at)'));
  assert.match(shellCss,/read-status-compact/);
  assert.ok(!diagSource.includes('JSON.stringify(error)'));
 });
