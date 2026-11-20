@@ -25,6 +25,9 @@ test('KST automatic session boundaries are exact at 07:00 and 21:00',()=>{
 test('Korean and US home lead with their own major indices',()=>{
  const p=policy();
  assert.deepEqual(p.MAIN.KR.slice(0,3).map(x=>x[0]),['^KS11','^KQ11','k3']);
+ assert.equal(p.MAIN.KR[3][0],'k4');
+ assert.ok(!p.SECONDARY.KR.some(x=>x[0]==='k4'));
+ assert.equal(p.MAIN.KR.filter(x=>x[0]==='k4').length,1);
  assert.deepEqual(p.MAIN.US.slice(0,3).map(x=>x[0]),['^GSPC','^IXIC','^DJI']);
  assert.ok(!p.MAIN.KR.some(x=>x[0]==='TICK'));
 });
