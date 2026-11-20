@@ -11,7 +11,7 @@ const dir=v=>v===null?'market-flat':v>0?'market-up':v<0?'market-down':'market-fl
 const unit=id=>id==='KRW=X'?' 원/USD':id==='^TNX'?' %':'';
 const act=(label,path)=>{const b=node('button',label);b.type='button';b.addEventListener('click',()=>{root.location.hash='#/'+path});return b};
 DashboardPages.register('home',()=>{
- let scope='AUTO',timer=null,active=false,viewRef=null,ctxRef=null;
+ let scope='AUTO',timer=null,active=false,viewRef=null,ctxRef=null,lastRegion=null;
  const effective=()=>scope==='AUTO'?root.HomeMarketPolicy.regionAt(new Date()):scope;
  function card(id,name){
   const m=root.HomeMarketPolicy.quote(id,Q,SRC,QT),el=node('dl',null,'homev4-quote');
@@ -49,7 +49,7 @@ DashboardPages.register('home',()=>{
    const top=node('div',null,'homev4-top'),titles=node('div'),buttons=node('div',null,'homev4-switch');
    titles.append(node('h2','한국장 중심 · 핵심 지수','homev4-title'),node('p',null,'homev4-sub'));
    for(const [id,label] of [['AUTO','자동'],['KR','한국'],['US','미국']]){
-    const b=node('button',label);b.type='button';b.dataset.region=id;b.addEventListener('click',()=>{scope=id;render(view,ctxRef)});buttons.append(b);
+    const b=node('button',label);b.type='button';b.dataset.region=id;b.addEventListener('click',()=>{scope=id;render(view,ctxRef);void legacy.refresh(ctxRef,true).catch(()=>{})});buttons.append(b);
    }
    top.append(titles,buttons);
    const main=node('div',null,'homev4-main'),support=node('div',null,'homev4-support'),bottom=node('div',null,'homev4-bottom'),summary=node('section',null,'homev4-panel homev4-summary'),assets=node('section',null,'homev4-panel homev4-assets');
@@ -64,9 +64,9 @@ DashboardPages.register('home',()=>{
   },
   update(view,ctx){ctxRef=ctx;render(view,ctx)}
  });
- function tick(){if(!active)return;const delay=60000-Date.now()%60000+50;timer=setTimeout(()=>{if(active){if(scope==='AUTO')render(viewRef,ctxRef);tick()}},delay)}
+ function tick(){if(!active)return;const delay=60000-Date.now()%60000+50;timer=setTimeout(()=>{if(active){const region=effective(),changed=scope==='AUTO'&&region!==lastRegion;lastRegion=region;if(scope==='AUTO')render(viewRef,ctxRef);if(changed)void legacy.refresh(ctxRef,true).catch(()=>{});tick()}},delay)}
  return {
-  mount(container,ctx){active=true;ctxRef=ctx;legacy.mount(container,ctx);tick()},
+  mount(container,ctx){active=true;ctxRef=ctx;lastRegion=effective();legacy.mount(container,ctx);tick()},
   refresh:(ctx,force)=>legacy.refresh(ctx,force),
   unmount(){active=false;if(timer!==null){clearTimeout(timer);timer=null}ctxRef=null;viewRef=null;legacy.unmount()},
   getStatus:()=>({...legacy.getStatus(),market:effective(),scope})
