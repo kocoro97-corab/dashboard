@@ -80,6 +80,9 @@ async function fillFutures(skip){
       FQ[id]={p:p,prev:prev,basis:k!=null?p-k:null,t:t};FST[id]='';ok++;
       // Canonical read adapter for the V2 market cards; keep legacy FQ intact.
       Q[id]={p,prev};SRC[id]='D';QT[id]=Date.now();
+       // NH can fail before the verified Daum fallback succeeds: clear the resolved visible quote error.
+       // Contract/expiry remain unverified and source remains Daum (never claim NH recovery).
+       rootFutureStatus(id,null);
     }catch(e){FST[id]='수신 실패 · '+t;fail++}
   }));
   return{ok:ok,fail:fail};
