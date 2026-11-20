@@ -2,11 +2,11 @@
 (function(root){
 'use strict';
 const MAIN=Object.freeze({
- KR:Object.freeze([['^KS11','KOSPI'],['^KQ11','KOSDAQ'],['k3','KOSPI 200 선물'],['KRW=X','달러/원'],['^SOX','SOX'],['^GSPC','S&P 500']]),
+ KR:Object.freeze([['^KS11','KOSPI'],['^KQ11','KOSDAQ'],['k3','KOSPI 200 선물'],['k4','KOSDAQ 150 선물'],['KRW=X','달러/원'],['^SOX','SOX'],['^GSPC','S&P 500']]),
  US:Object.freeze([['^GSPC','S&P 500'],['^IXIC','NASDAQ'],['^DJI','DOW'],['^SOX','SOX'],['NQ=F','나스닥 선물'],['^VIX','VIX']])
 });
 const SECONDARY=Object.freeze({
- KR:Object.freeze([['^IXIC','NASDAQ'],['k4','KOSDAQ 150 선물'],['^VIX','VIX']]),
+ KR:Object.freeze([['^IXIC','NASDAQ'],['^VIX','VIX'],['^TNX','미국 10년물']]),
  US:Object.freeze([['KRW=X','달러/원'],['^TNX','미국 10년물'],['^KS11','KOSPI']])
 });
 const SOURCE=Object.freeze({N:'네이버',Y:'Yahoo',D:'Daum',H:'NH',W:'NH PLUG',F:'NH선물',K:'KIS',C:'코스콤',I:'IBKR',X:'dxFeed'});
