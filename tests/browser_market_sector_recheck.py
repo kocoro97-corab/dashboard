@@ -91,11 +91,11 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
        rows=page.locator('.stv2-overview table tr').all()[1:];codes=[r.locator('td').first.inner_text() for r in rows];assert codes==['KCC글라스 (344820)','씨앤투스 (352700)','SK하이닉스 (000660)','카카오 (035720)','삼성전자 (005930)'];assert [r.locator('td').nth(3).inner_text() for r in rows]==['500','400','300','200','100'];page.screenshot(path=str(args.output/(str(width)+'-sectors-leaders.png')))
       check('LEADERS_TURNOVER_ORDER_DEDUP_AND_NAMES',leaders)
       def refresh():
-       page.get_by_role('button',name='테마 데이터 새로고침',exact=True).click();page.wait_for_function('()=>!THM_BUSY');page.wait_for_selector('.stv2-heading button:not([disabled])');assert sum(r['url']==LIST for r in requests)==2
+       page.get_by_role('button',name='현재 시장 섹터·테마 새로고침',exact=True).click();page.wait_for_function('()=>!THM_BUSY');page.wait_for_selector('.stv2-heading button:not([disabled])');assert sum(r['url']==LIST for r in requests)==2
       check('EXPLICIT_REFRESH_FETCHES_ONCE',refresh)
       def modes():
-       page.get_by_role('button',name='시장 전환: 현재 한국',exact=True).click();page.wait_for_function('()=>document.querySelector(".stv2").textContent.includes("미국 11개 섹터 ETF 상대강도")');assert '개별 미국 테마' in page.locator('.stv2').text_content();assert page.locator('.stv2-overview').count()==0
-       page.get_by_role('button',name='시장 전환: 현재 미국',exact=True).click();page.locator('.stv2-tabs button',has_text='스윙').click();page.locator('.stv2-tabs button',has_text='5일').click();page.wait_for_function('()=>document.querySelector(".stv2").textContent.includes("국내 상위 테마 구성종목 표본 분석")');assert '전체 테마 수익률' in page.locator('.stv2').inner_text();assert page.locator('.stv2-overview').count()==0
+       page.locator('.stv2-toolbar .stv2-tabs').first.get_by_role('button',name='미국',exact=True).click();page.wait_for_function('()=>document.querySelector(".stv2").textContent.includes("미국 11개 섹터 ETF 상대강도")');assert '개별 미국 테마' in page.locator('.stv2').text_content();assert page.locator('.stv2-overview').count()==0
+       page.locator('.stv2-toolbar .stv2-tabs').first.get_by_role('button',name='한국',exact=True).click();page.locator('.stv2-tabs button',has_text='스윙').click();page.locator('.stv2-tabs button',has_text='5일').click();page.wait_for_function('()=>document.querySelector(".stv2").textContent.includes("국내 상위 테마 구성종목 표본 분석")');assert '전체 테마 수익률' in page.locator('.stv2').inner_text();assert page.locator('.stv2-overview').count()==0
        page.wait_for_function('()=>document.querySelector(".stv2").textContent.includes("매수 추천이 아닙니다")');page.locator('.stv2-tabs button',has_text='단타').click()
       check('US_AND_KR_HISTORY_SCOPES_AND_SWING_DISCLOSURES',modes)
       def selection():
