@@ -9,6 +9,8 @@ function snapshot(){return [...errors.values()].map(x=>({...x}))}
 // Only fixed, non-sensitive target names are exposed. Unknown keys stay unnamed.
 const SAFE_TARGETS=Object.freeze({'future:k3':'KOSPI 200 선물','future:k4':'KOSDAQ 150 선물','account:nhQuotes':'NH 시세 중계','account:sessionInfo':'인증 상태'});
 const TYPE_MESSAGE=Object.freeze({SERVER:'서버·중계 장애',ACCESS:'인증·권한 확인 필요',TIMEOUT:'응답 시간 초과',NETWORK:'네트워크·원천 연결 확인',FORMAT:'응답 형식·데이터 검증 실패',GAS:'GAS 중계 실패',NH:'증권사 시세 조회 실패'});
+const CODE_MESSAGE=Object.freeze({NH_NO_PRICE:'NH 선물 가격 미수신 · 계약·원천 응답 확인 필요',NH_CONTRACT:'선물 계약·만기 식별 확인 필요',NH_OBSERVATION:'실제 시세 관측시각 미확인'});
+const issueMessage=value=>CODE_MESSAGE[value.code]||TYPE_MESSAGE[value.type]||'원인 미확인';
 const safeTarget=key=>SAFE_TARGETS[key]||'요청 범위 미확인';
 const timeKST=value=>{const d=new Date(value);return Number.isFinite(d.getTime())?d.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hourCycle:'h23',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' KST':'발생시각 미확인'};
 function render(){
@@ -23,13 +25,13 @@ function render(){
  panel.replaceChildren();
  const entries=[...errors.entries()],latest=entries.at(-1),value=latest[1];
  const heading=document.createElement('strong');
- heading.textContent=(value.scope==='public'?'공개 시장':'계좌 읽기')+' 연결 상태 확인 필요 · '+safeTarget(latest[0])+' · '+(TYPE_MESSAGE[value.type]||'원인 미확인')+' · '+value.code;
+ heading.textContent=(value.scope==='public'?'공개 시장':'계좌 읽기')+' 연결 상태 확인 필요 · '+safeTarget(latest[0])+' · '+issueMessage(value)+' · '+value.code;
  panel.append(heading);
  const detail=document.createElement('details'),summary=document.createElement('summary');
  summary.textContent='안전한 오류 식별 정보 '+entries.length+'건 · 코드·발생시각 보기';detail.append(summary);
  for(const [key,item] of entries){
   const line=document.createElement('p');
-  line.textContent=(item.scope==='public'?'공개 시장':'계좌 읽기')+' · '+safeTarget(key)+' · '+(TYPE_MESSAGE[item.type]||'원인 미확인')+
+  line.textContent=(item.scope==='public'?'공개 시장':'계좌 읽기')+' · '+safeTarget(key)+' · '+issueMessage(item)+
    ' · '+item.code+(item.http?' · HTTP '+item.http:'')+
    ' · '+(item.layer==='unknown'?'발생 구간 미확인':item.layer+' 구간')+' · '+timeKST(item.at)+
    ' · 요청 ID '+item.id+' · '+(item.retryable?'재시도 가능':'연결/권한 점검 필요');
