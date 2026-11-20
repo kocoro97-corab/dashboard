@@ -27,3 +27,13 @@
 #pageViewport .market-flat,#pageViewport .change-flat{
   color:var(--market-unchanged)!important
 }
+
+/* Compact, safe read diagnostics: code is visible without expanding the detail list. */
+#readConnectionStatus.read-status-compact{display:grid;gap:5px;padding:8px 11px;border-color:#946e32;margin:4px 0}
+#readConnectionStatus.read-status-compact>strong{font-size:12px;line-height:1.35;overflow-wrap:anywhere}
+#readConnectionStatus.read-status-compact details{font-size:11px}
+#readConnectionStatus.read-status-compact summary{cursor:pointer;display:list-item;padding:2px 0}
+#readConnectionStatus.read-status-compact details p{margin:5px 0;padding:6px;border-top:1px solid var(--line);overflow-wrap:anywhere}
+#readConnectionStatus .read-status-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+#readConnectionStatus .read-status-actions button{min-height:30px;padding:4px 10px}
+#readConnectionStatus .read-status-actions small{font-size:10px;line-height:1.3;color:var(--muted)}
