@@ -45,6 +45,7 @@ test('selected 20-day period and combined market survive remount',()=>{
 });
 test('domestic industry refresh is right of its heading in day and swing mode',()=>{
  const h=setup().mount();
+ h.button('한국').click(); // Explicit session-independent market selection.
  h.button('분석: 테마 → 산업').click();
  let heading=h.findHeading('국내 산업 · 네이버 업종 분류');
  assert.ok(heading);
