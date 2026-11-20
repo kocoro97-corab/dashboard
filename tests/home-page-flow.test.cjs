@@ -65,9 +65,12 @@ test('home controls switch markets without changing account settings',async()=>{
  assert.equal(x.instance.getStatus().market,x.policy.regionAt(new Date()));
  x.instance.unmount();
 });
-test('home supporting KOSDAQ150 futures remains missing without fabricated quote',()=>{
+test('home primary KOSDAQ150 card remains visible and explicitly missing without fabricated quote',()=>{
  const x=setup();x.findButton('한국').click();
- const support=x.find('homev4-support');
- assert.ok(support.children.some(x=>x.children[0].textContent==='KOSDAQ 150 선물'&&x.children[1].textContent==='미수신'));
+ const main=x.find('homev4-main');
+ const cards=main.children.filter(n=>n.children[0]?.textContent==='KOSDAQ 150 선물');
+ assert.equal(cards.length,1);
+ assert.equal(cards[0].children[1].textContent,'미수신');
+ assert.match(cards[0].children[3].textContent,/NH 코스닥150 선물 계약\/시세 확인 필요/);
  x.instance.unmount();
 });
