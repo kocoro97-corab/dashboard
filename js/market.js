@@ -29,7 +29,17 @@ async function nhFetch(items){
     return{ok:false,msg:timedOut?'NH 중계 시간 초과':'NH 중계 통신 실패',code:timedOut?'NH_TIMEOUT':'NH_NETWORK_ERROR',layer:'browser'};
   }finally{clearTimeout(timeout)}
 }
-function rootFutureStatus(id,error){if(!window.ReadStatus)return;if(error===null){ReadStatus.clear('future:'+id);return}const match=/^(NH_[A-Z_]+)/.exec(String(error));ReadStatus.note({code:match?.[1]||'NH_NO_PRICE'},{scope:'public',key:'future:'+id})}
+const FUTURE_SAFE_CODES=new Set('NH_NO_PRICE NH_CONTRACT NH_CONTRACT_CODE NH_CONTRACT_NAME NH_CONTRACT_EXPIRY NH_OBSERVATION NH_STALE NH_TOKEN NH_RSP NH_HTTP NH_NETWORK NH_TIMEOUT NH_UPSTREAM NH_IDENTITY_UNVERIFIED NH_IDENTITY_AMBIGUOUS NH_SYMBOL_MISMATCH NH_REFERENCE_UNAVAILABLE NH_REFERENCE_INVALID NH_NO_BLOCK NH_UNSUPPORTED NH_PATH NH_CURRENCY_MISMATCH'.split(' '));
+function futureErrorCode(value){
+ const raw=typeof value==='string'?value:typeof value?.code==='string'?value.code:typeof value?.diagnostic?.code==='string'?value.diagnostic.code:'';
+ const code=/^(?:nh\s*\/\s*)?(NH_[A-Z_]+)(?:\s*\/\s*HTTP\s*[1-5][0-9]{2})?$/.exec(raw.trim())?.[1];
+ return code&&FUTURE_SAFE_CODES.has(code)?code:'NH_NO_PRICE';
+}
+function rootFutureStatus(id,error){
+ if(!window.ReadStatus)return;
+ if(error===null){ReadStatus.clear('future:'+id);return}
+ ReadStatus.note({code:futureErrorCode(error)},{scope:'public',key:'future:'+id});
+}
 async function fillNH(requested=Object.keys(NHF)){
   const validContract=d=>{if(d?.contractVerified!==true||!/^\d{8}$/.test(d.expiry||''))return false;const y=Number(d.expiry.slice(0,4)),m=Number(d.expiry.slice(4,6)),day=Number(d.expiry.slice(6,8)),date=new Date(Date.UTC(y,m-1,day)),today=new Date(Date.now()+9*3600000).toISOString().slice(0,10).replace(/-/g,'');return date.toISOString().slice(0,10).replace(/-/g,'')===d.expiry&&d.expiry>=today&&String(y%10)===d.code?.[3]&&'123456789ABC'[m-1]===d.code?.[4]};
   const ids=[...new Set(requested.filter(id=>Object.prototype.hasOwnProperty.call(NHF,id)))],t=hms(new Date());if(!ids.length)return {ok:0,fail:0};
@@ -38,7 +48,7 @@ async function fillNH(requested=Object.keys(NHF)){
   let ok=0;const ds=[],er=[];
   ids.forEach(id=>{const d=r.data[id],validObservation=d&&Number.isFinite(d.observedAt)&&d.observedAt>0&&d.observedAt<=Date.now()+300000&&Date.now()-d.observedAt<=4*86400000;
     if(d&&(id!=='k4'||validObservation&&validContract(d))&&Number.isFinite(d.p)&&d.p>0&&Number.isFinite(d.prev)&&d.prev>0&&typeof d.code==='string'&&new RegExp('^'+NHF[id]+'[0-9][1-9ABC]000$').test(d.code)){NQ[id]={p:d.p,prev:d.prev,basis:d.basis,t:d.t||t,at:t,code:d.code,expiry:d.expiry||null,contractVerified:d.contractVerified===true};Q[id]={p:d.p,prev:d.prev,observedAt:d.observedAt||null,contractCode:d.code||null,expiry:d.expiry||null,contractVerified:d.contractVerified===true,observationKind:d.observationKind||null,marketState:d.marketState||'UNVERIFIED',delayStatus:d.delayStatus||'UNVERIFIED',volume:Number.isFinite(d.volume)?d.volume:null,turnover:Number.isFinite(d.turnover)?d.turnover:null};SRC[id]='H';QT[id]=Date.now();rootFutureStatus(id,null);ok++;ds.push(id+':'+d.code+'('+d.dir+')')}
-    else{delete NQ[id];if(SRC[id]==='H'){delete Q[id];delete SRC[id];delete QT[id]};rootFutureStatus(id,(r.errors||{})[id]||(id==='k4'&&!validObservation?'NH_OBSERVATION':'NH_CONTRACT'));er.push(id+': '+((r.errors||{})[id]||(d?'계약·관측시각 또는 시세 검증 실패':'응답 없음')))}});
+    else{delete NQ[id];if(SRC[id]==='H'){delete Q[id];delete SRC[id];delete QT[id]};rootFutureStatus(id,(r.errors||{})[id]||(!d?'NH_NO_PRICE':id==='k4'&&!validObservation?'NH_OBSERVATION':id==='k4'&&!validContract(d)?'NH_CONTRACT':'NH_NO_PRICE'));er.push(id+': '+((r.errors||{})[id]||(d?'계약·관측시각 또는 시세 검증 실패':'응답 없음')))}});
   NH_STATUS='선물 '+ok+'/'+ids.length+' 성공 · '+t+(ds.length?' · '+ds.join(' '):'')+(er.length?' · 실패 '+er.join(' / '):'');
   return{ok:ok,fail:ids.length-ok};
 }
