@@ -6,7 +6,44 @@ const known=new Set('AUTH_REQUIRED RELAY_PUBLIC_URL_DENIED RELAY_PUBLIC_FAILED R
 const identity=()=>root.crypto?.randomUUID?.()||'read-'+Date.now().toString(36)+'-'+(++serial);
 function classify(error,meta={}){const http=Number.isInteger(error?.http)&&error.http>=100&&error.http<=599?error.http:null,code=known.has(error?.code)?error.code:error?.name==='AbortError'?'READ_TIMEOUT':error?.name==='SyntaxError'?'READ_FORMAT':'READ_NETWORK';let type=[502,503,504].includes(http)?'SERVER':[401,403].includes(http)?'ACCESS':['READ_TIMEOUT','NH_TIMEOUT'].includes(code)?'TIMEOUT':['READ_FORMAT','RELAY_RESPONSE_INVALID','NH_RESPONSE_INVALID','NH_DATA_INVALID'].includes(code)?'FORMAT':code==='NH_AUTH_MISSING'?'ACCESS':code==='NH_NETWORK_ERROR'?'NETWORK':code.startsWith('NH_')?'NH':code.startsWith('GAS_')?'GAS':'NETWORK';const retryable=![401,403].includes(http)&&([502,503,504].includes(http)||['RELAY_BUSY','RELAY_UPSTREAM_NETWORK','READ_NETWORK','READ_TIMEOUT'].includes(code));return {id:meta.id||identity(),at:new Date().toISOString(),scope:meta.scope==='account'?'account':'public',layer:layers.has(error?.verifiedLayer)?error.verifiedLayer:'unknown',http,code,type,retryable,attempts:meta.attempts||1}}
 function snapshot(){return [...errors.values()].map(x=>({...x}))}
-function render(){if(typeof document==='undefined')return;const viewport=document.getElementById('pageViewport');if(!viewport)return;let panel=document.getElementById('readConnectionStatus');if(!errors.size){panel?.remove();return}if(!panel){panel=document.createElement('section');panel.id='readConnectionStatus';panel.className='page-note';panel.setAttribute('role','status');viewport.before(panel)}panel.replaceChildren();const detail=document.createElement('details'),summary=document.createElement('summary');summary.textContent='안전한 오류 식별 정보 '+errors.size+'건';detail.append(summary);const latest=snapshot().at(-1),heading=document.createElement('strong');heading.textContent=(latest.scope==='public'?'공개 시장':'계좌 읽기')+' 연결 상태 확인 필요 · 기존 선택 유지';panel.append(heading);for(const value of snapshot()){const line=document.createElement('p'),message={SERVER:'서버 또는 중계 연결 장애',ACCESS:'인증·접근 권한 확인 필요',TIMEOUT:'서버 응답 지연',NETWORK:'인터넷 연결 또는 원천 연결 확인',FORMAT:'응답 데이터 검증 실패',GAS:'데이터 중계 실패',NH:'증권사 API 요청 실패'}[value.type];line.textContent=(value.scope==='public'?'공개 시장':'계좌 읽기')+' · '+message+' · '+(value.layer==='unknown'?'발생 구간·원인 미확인':value.layer+' 응답 · 원인 미확인')+' · '+value.code+(value.http?' · HTTP '+value.http:'')+' · '+value.at+' · 요청 '+value.id+' · 재시도 '+(value.retryable?'가능':'확인 필요');detail.append(line)}panel.append(detail);const button=document.createElement('button');button.type='button';button.textContent='재연결';button.onclick=()=>{void root.DashboardShell?.refresh()};panel.append(button)}
+// Only fixed, non-sensitive target names are exposed. Unknown keys stay unnamed.
+const SAFE_TARGETS=Object.freeze({'future:k3':'KOSPI 200 선물','future:k4':'KOSDAQ 150 선물','account:nhQuotes':'NH 시세 중계','account:sessionInfo':'인증 상태'});
+const TYPE_MESSAGE=Object.freeze({SERVER:'서버·중계 장애',ACCESS:'인증·권한 확인 필요',TIMEOUT:'응답 시간 초과',NETWORK:'네트워크·원천 연결 확인',FORMAT:'응답 형식·데이터 검증 실패',GAS:'GAS 중계 실패',NH:'증권사 시세 조회 실패'});
+const safeTarget=key=>SAFE_TARGETS[key]||'요청 범위 미확인';
+const timeKST=value=>{const d=new Date(value);return Number.isFinite(d.getTime())?d.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hourCycle:'h23',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' KST':'발생시각 미확인'};
+function render(){
+ if(typeof document==='undefined')return;
+ const viewport=document.getElementById('pageViewport');if(!viewport)return;
+ let panel=document.getElementById('readConnectionStatus');
+ if(!errors.size){panel?.remove();return}
+ if(!panel){
+  panel=document.createElement('section');panel.id='readConnectionStatus';panel.className='page-note read-status-compact';
+  panel.setAttribute('role','status');viewport.before(panel);
+ }
+ panel.replaceChildren();
+ const entries=[...errors.entries()],latest=entries.at(-1),value=latest[1];
+ const heading=document.createElement('strong');
+ heading.textContent=(value.scope==='public'?'공개 시장':'계좌 읽기')+' 연결 상태 확인 필요 · '+safeTarget(latest[0])+' · '+(TYPE_MESSAGE[value.type]||'원인 미확인')+' · '+value.code;
+ panel.append(heading);
+ const detail=document.createElement('details'),summary=document.createElement('summary');
+ summary.textContent='안전한 오류 식별 정보 '+entries.length+'건 · 코드·발생시각 보기';detail.append(summary);
+ for(const [key,item] of entries){
+  const line=document.createElement('p');
+  line.textContent=(item.scope==='public'?'공개 시장':'계좌 읽기')+' · '+safeTarget(key)+' · '+(TYPE_MESSAGE[item.type]||'원인 미확인')+
+   ' · '+item.code+(item.http?' · HTTP '+item.http:'')+
+   ' · '+(item.layer==='unknown'?'발생 구간 미확인':item.layer+' 구간')+' · '+timeKST(item.at)+
+   ' · 요청 ID '+item.id+' · '+(item.retryable?'재시도 가능':'연결/권한 점검 필요');
+  detail.append(line);
+ }
+ panel.append(detail);
+ const actions=document.createElement('div');actions.className='read-status-actions';
+ const button=document.createElement('button');button.type='button';button.textContent='재연결';
+ button.onclick=()=>{void root.DashboardShell?.refresh()};
+ actions.append(button);
+ const hint=document.createElement('small');
+ hint.textContent='코드와 발생 구간만 표시하며 인증정보·계좌번호·원문 응답은 표시하지 않습니다.';
+ actions.append(hint);panel.append(actions);
+}
 function emit(){render();root.dispatchEvent?.(new Event('myinvest:read-status'))}
 function note(error,meta={}){const key=meta.key||meta.scope||'public';errors.set(key,classify(error,meta));while(errors.size>20)errors.delete(errors.keys().next().value);emit()}
 function clear(key){if(key==null)errors.clear();else errors.delete(key);emit()}
