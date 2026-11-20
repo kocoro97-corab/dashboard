@@ -151,7 +151,7 @@ test('verified holdings are selectable directly without an extra manual ticker e
 test('clicking a Korean theme constituent in the sectors page opens the selected stock',async()=>{
  const x=environment();
  const sectors=x.mount('sectors');
- const theme=byButton(sectors.container,'1위 · 국내 테마');
+ const theme=desc(sectors.container).find(n=>n.tagName==='BUTTON'&&texts(n).includes('1위 · 국내 테마'));
  assert.ok(theme,'the source sector theme card must be actionable');
  theme.click();
  const company=byButton(sectors.container,'SK하이닉스 (000660)');
