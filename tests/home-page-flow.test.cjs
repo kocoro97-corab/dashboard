@@ -43,10 +43,10 @@ function setup(){
  const container=node('main'),instance=pages.home();instance.mount(container,ctx);
  return{container,instance,ctx,root,policy:root.HomeMarketPolicy,findButton:t=>descendants(container).find(x=>x.tagName==='BUTTON'&&x.textContent===t),find:cls=>descendants(container).find(x=>x.className.split(' ').includes(cls))};
 }
-test('home renders six top priorities, actual changes, partial asset label and regime',()=>{
+test('home renders market-specific priorities, actual changes, partial asset label and regime',()=>{
  const x=setup(),mode=x.instance.getStatus().market;
  const cards=x.find('homev4-main').children;
- assert.equal(cards.length,6);
+ assert.equal(cards.length,mode==='KR'?7:6);
  assert.equal(cards[0].children[0].textContent,mode==='KR'?'KOSPI':'S&P 500');
  assert.match(text(x.container),/조회 자산/);
  assert.match(text(x.container),/부분 조회/);
