@@ -17,7 +17,7 @@ DashboardPages.register('home',()=>{
   const m=root.HomeMarketPolicy.quote(id,Q,SRC,QT),el=node('dl',null,'homev4-quote');
   const value=node('dd',m.valid?num(m.price,id==='KRW=X'?2:2)+unit(id):'미수신');
   const change=node('div',m.valid?pct(m.delta):'등락률 미확인','homev4-percent '+dir(m.delta??null));
-  const provenance=node('small',m.valid?m.source+' · '+(m.observedAt?'원천 '+time(m.observedAt):'원천 관측시각 미제공')+' · '+(m.receivedAt?'수신 '+time(m.receivedAt):'수신시각 미확인')+(m.stale?' · 오래된 자료 가능':''):'조회된 시세 없음','homev4-provenance');
+  const provenance=node('small',m.valid?m.source+' · '+(m.observedAt?'원천 '+time(m.observedAt):'원천 관측시각 미제공')+' · '+(m.receivedAt?'수신 '+time(m.receivedAt):'수신시각 미확인')+(m.stale?' · 오래된 자료 가능':''):'조회된 시세 없음'+(id==='k4'?' · NH 코스닥150 선물 계약/시세 확인 필요':id==='k3'?' · NH/Daum 선물 시세 미수신':''),'homev4-provenance');
   el.append(node('dt',name),value,change,provenance);return el;
  }
  function render(view,ctx){
