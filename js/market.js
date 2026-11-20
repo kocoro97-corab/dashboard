@@ -29,7 +29,7 @@ async function nhFetch(items){
     return{ok:false,msg:timedOut?'NH 중계 시간 초과':'NH 중계 통신 실패',code:timedOut?'NH_TIMEOUT':'NH_NETWORK_ERROR',layer:'browser'};
   }finally{clearTimeout(timeout)}
 }
-function rootFutureStatus(id,error){if(!window.ReadStatus)return;if(error===null){ReadStatus.clear('future:'+id);return}const match=/^(NH_[A-Z_]+)/.exec(String(error));ReadStatus.note({code:match?.[1]||'NH_NO_PRICE',verifiedLayer:match?'nh':undefined},{scope:'public',key:'future:'+id})}
+function rootFutureStatus(id,error){if(!window.ReadStatus)return;if(error===null){ReadStatus.clear('future:'+id);return}const match=/^(NH_[A-Z_]+)/.exec(String(error));ReadStatus.note({code:match?.[1]||'NH_NO_PRICE'},{scope:'public',key:'future:'+id})}
 async function fillNH(requested=Object.keys(NHF)){
   const validContract=d=>{if(d?.contractVerified!==true||!/^\d{8}$/.test(d.expiry||''))return false;const y=Number(d.expiry.slice(0,4)),m=Number(d.expiry.slice(4,6)),day=Number(d.expiry.slice(6,8)),date=new Date(Date.UTC(y,m-1,day)),today=new Date(Date.now()+9*3600000).toISOString().slice(0,10).replace(/-/g,'');return date.toISOString().slice(0,10).replace(/-/g,'')===d.expiry&&d.expiry>=today&&String(y%10)===d.code?.[3]&&'123456789ABC'[m-1]===d.code?.[4]};
   const ids=[...new Set(requested.filter(id=>Object.prototype.hasOwnProperty.call(NHF,id)))],t=hms(new Date());if(!ids.length)return {ok:0,fail:0};
