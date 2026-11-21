@@ -26,7 +26,7 @@ function validBars(bars){
  if(!Array.isArray(bars)||bars.length>5000)return false;
  for(let i=0;i<bars.length;i++){
   const b=bars[i];if(!b||!Number.isSafeInteger(b.t)||b.t<=0||
-   i>0&&b.t<=bars[i-1].t||![b.o,b.h,b.l,b.c].every(positive)||
+   i>0&&(b.t<=bars[i-1].t||b.t-bars[i-1].t<18*3600000)||![b.o,b.h,b.l,b.c].every(positive)||
    b.l>Math.min(b.o,b.c)||b.h<Math.max(b.o,b.c)||b.h<b.l||
    b.v!=null&&(!finite(b.v)||b.v<0))return false;
  }
