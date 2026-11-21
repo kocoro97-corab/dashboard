@@ -108,7 +108,7 @@ function inspect(input={}){
  facts.largePriceJumpExamples=suspicious;facts.wideRangeExamples=wideRanges;facts.longGapExamples=gaps;
  const status=errors.length?'block':flags.length?'review':'structurally_ready';
  return {status,version:VERSION,errors,flags,facts,
-  eligibleForProvisionalBacktest:errors.length===0,
+  eligibleForProvisionalBacktest:errors.length===0&&flags.length===0,
   realSourceVerified:false,
   verification:'OFFLINE_STRUCTURE_ONLY',
   warnings:['원천 가격의 진위·분할/배당 조정 여부는 이 함수로 검증할 수 없습니다.',
