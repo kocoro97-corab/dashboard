@@ -32,9 +32,14 @@ class Cloud:
         self.fault = None
         self.probes = 0
         self.uploads = [{'id': OLD, 'number': 1}]
+        self.content = {'body': b'// synthetic code', 'contentType': 'application/javascript', 'entrypoint': 'worker.mjs'}
 
     def __call__(self, method, path, body=None, mime=None):
         self.calls.append((method, path, body))
+        if path.endswith('/content/v2'):
+            if self.fault == 'concurrent-during-content':
+                self.uploads.append({'id': OTHER, 'number': 3})
+            return self.content
         if path.endswith('/workers/subdomain'):
             return {'subdomain': 'kocoro97'}
         if path.endswith('/settings'):
@@ -60,9 +65,13 @@ class Cloud:
                 self.uploads.append({'id': OTHER, 'number': 3})
             if self.fault == 'concurrent':
                 self.version = OTHER
+            if self.fault == 'annotations':
+                self.settings['annotations'] = {'workers/message': 'new version annotation'}
             return {'id': NEW}
         if path.endswith('/versions/' + OLD):
             return {'id': OLD}
+        if path.endswith('/versions/' + NEW):
+            return {'id': NEW}
         raise AssertionError('UNEXPECTED_API')
 
     def probe(self):
@@ -81,6 +90,114 @@ class Cloud:
 
 
 class CodeOnlyTests(unittest.TestCase):
+    def make_pending(self, c, folder):
+        m.private_checkpoint(folder / 'before.json', {'worker': m.NAME,
+            'deployment': {'id': 'deployment-' + OLD, 'version': OLD},
+            'settings': copy.deepcopy(c.settings)})
+        c.uploads.append({'id': NEW, 'number': 2})
+        c.settings['annotations'] = {'workers/message': 'version upload'}
+
+    def test_resume_verifies_code_and_activates_without_reuploading(self):
+        c = Cloud()
+        with tempfile.TemporaryDirectory() as tmp:
+            self.make_pending(c, Path(tmp))
+            result = m.resume_pending(c, 'a' * 32, Path(tmp), public_probe=c.probe, code=b'// synthetic code')
+        self.assertEqual(result['status'], 'PASS')
+        self.assertTrue(result['candidateCodeVerified'])
+        self.assertFalse(result['codeUploadAttempted'])
+        posts = [path for method, path, _ in c.calls if method == 'POST']
+        self.assertEqual(len(posts), 1)
+        self.assertTrue(posts[0].endswith('/deployments'))
+
+    def test_resume_code_mismatch_never_activates(self):
+        c = Cloud()
+        c.content['body'] = b'WRONG_CODE'
+        with tempfile.TemporaryDirectory() as tmp:
+            self.make_pending(c, Path(tmp))
+            with self.assertRaises(m.Stop) as e:
+                m.resume_pending(c, 'a' * 32, Path(tmp), public_probe=c.probe, code=b'// synthetic code')
+        self.assertEqual(e.exception.code, 'PENDING_CANDIDATE_CODE_MISMATCH')
+        self.assertTrue(all(method == 'GET' for method, _, _ in c.calls))
+
+    def test_resume_changed_limit_never_activates(self):
+        c = Cloud()
+        with tempfile.TemporaryDirectory() as tmp:
+            self.make_pending(c, Path(tmp))
+            c.settings['limits']['cpu_ms'] = 99
+            with self.assertRaises(m.Stop) as e:
+                m.resume_pending(c, 'a' * 32, Path(tmp), public_probe=c.probe, code=b'// synthetic code')
+        self.assertEqual(e.exception.code, 'PENDING_BASELINE_CHANGED')
+        self.assertTrue(all(method == 'GET' for method, _, _ in c.calls))
+
+    def test_resume_rechecks_lineage_after_content_download(self):
+        c = Cloud()
+        c.fault = 'concurrent-during-content'
+        with tempfile.TemporaryDirectory() as tmp:
+            self.make_pending(c, Path(tmp))
+            with self.assertRaises(m.Stop) as e:
+                m.resume_pending(c, 'a' * 32, Path(tmp), public_probe=c.probe, code=b'// synthetic code')
+        self.assertEqual(e.exception.code, 'CONCURRENT_CHANGE_NO_ACTIVATION')
+        self.assertTrue(all(method == 'GET' for method, _, _ in c.calls))
+
+    def test_multipart_code_is_exact_and_additional_modules_rejected(self):
+        body, kind = m.multipart({'main_module': 'worker.mjs'}, b'// reviewed code')
+        content = {'body': body, 'contentType': kind}
+        self.assertTrue(m.candidate_source_matches(content, b'// reviewed code'))
+        self.assertFalse(m.candidate_source_matches(content, b'// other code'))
+        self.assertFalse(m.candidate_source_matches({**content, 'entrypoint': 'unknown.mjs'}, b'// reviewed code'))
+        body = body.replace(b'\r\nContent-Disposition: form-data; name="worker.mjs"; filename="worker.mjs"', b'\r\nContent-Disposition: form-data; name="unknown.mjs"; filename="unknown.mjs"')
+        self.assertFalse(m.candidate_source_matches({'body': body, 'contentType': kind}, b'// reviewed code'))
+
+    def test_annotations_are_not_configuration_but_all_other_changes_still_fail(self):
+        a = Cloud().settings
+        b = copy.deepcopy(a)
+        b['annotations'] = {'workers/message': 'only version description'}
+        b['bindings'].reverse()
+        self.assertTrue(m.settings_equivalent(a, b))
+        b['bindings'][0]['namespace_id'] = 'different'
+        self.assertFalse(m.settings_equivalent(a, b))
+        b = copy.deepcopy(a)
+        b['observability']['enabled'] = True
+        self.assertFalse(m.settings_equivalent(a, b))
+
+    def test_normal_upload_annotation_change_does_not_false_positive(self):
+        c = Cloud()
+        c.fault = 'annotations'
+        result, _ = self.run_deploy(c)
+        self.assertEqual(result['status'], 'PASS')
+
+    def test_post_activation_failure_reports_safe_original_cause_and_restores(self):
+        c = Cloud()
+        c.fault = 'capability'
+        result, _ = self.run_deploy(c)
+        self.assertEqual(result['code'], 'POST_ACTIVATION_CAPABILITIES_CHANGED')
+        self.assertEqual(result['rollback'], 'PASS_PREVIOUS_VERSION_RESTORED')
+
+    def test_readback_allows_short_marker_propagation_without_repeating_activation(self):
+        c = Cloud()
+        original = c.probe
+        reads = []
+        def probe():
+            doc, exposed = original()
+            if c.version == NEW:
+                reads.append(1)
+                if len(reads) < 3:
+                    doc.pop('developmentReadResilienceVersion', None)
+                    exposed = False
+            return doc, exposed
+        with patch.object(m.time, 'sleep') as pause:
+            result = m.deploy(c, 'a' * 32, lambda _: None, public_probe=probe, code=b'//test')
+        self.assertEqual(result['status'], 'PASS')
+        self.assertEqual(pause.call_count, 2)
+        self.assertEqual(sum(method == 'POST' and path.endswith('/deployments') for method, path, _ in c.calls), 1)
+
+    def test_binary_content_client_does_not_parse_script_as_json(self):
+        with patch.object(m.urllib.request, 'build_opener') as opener:
+            response = opener.return_value.open.return_value.__enter__.return_value
+            response.read.return_value = b'// script bytes'
+            response.headers = {'Content-Type': 'application/javascript', 'cf-entrypoint': 'worker.mjs'}
+            content = m.api_client('SYNTHETIC_TOKEN')('GET', '/accounts/synthetic/workers/scripts/synthetic/content/v2')
+        self.assertTrue(m.candidate_source_matches(content, b'// script bytes'))
     def test_pending_inspection_reports_order_only_without_values_or_writes(self):
         c = Cloud()
         original = copy.deepcopy(c.settings)

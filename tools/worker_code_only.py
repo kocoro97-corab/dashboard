@@ -11,9 +11,12 @@ import os
 from pathlib import Path
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 import uuid
+from email.parser import BytesParser
+from email.policy import default as email_policy
 
 ROOT = Path(__file__).resolve().parents[1]
 NAME = 'myinvest-v2-dev-relay'
@@ -39,6 +42,8 @@ class Stop(Exception):
 def request_stage(method, path):
     if path.endswith('/workers/subdomain'):
         return 'ACCOUNT_SUBDOMAIN_READ'
+    if path.endswith('/content/v2'):
+        return 'CANDIDATE_CODE_READ'
     if path.endswith('/settings'):
         return 'WORKER_SETTINGS_READ'
     if path.endswith('/deployments'):
@@ -85,12 +90,14 @@ def api_client(token):
         data = json.dumps(body).encode() if isinstance(body, dict) else body
         req = urllib.request.Request('https://api.cloudflare.com/client/v4' + path,
             data=data, method=method, headers={'Authorization': 'Bearer ' + token,
-            'Accept': 'application/json', 'Content-Type': content_type})
+            'Accept': '*/*' if path.endswith('/content/v2') else 'application/json', 'Content-Type': content_type})
         try:
             with urllib.request.build_opener(NoRedirect()).open(req, timeout=60) as r:
                 raw = r.read(2 * 1024 * 1024 + 1)
                 if len(raw) > 2 * 1024 * 1024:
                     raise Stop('CLOUDFLARE_RESPONSE_TOO_LARGE')
+                if path.endswith('/content/v2'):
+                    return {'body': raw, 'contentType': r.headers.get('Content-Type', ''), 'entrypoint': r.headers.get('cf-entrypoint')}
                 doc = json.loads(raw)
         except urllib.error.HTTPError as e:
             status = e.code
@@ -239,13 +246,82 @@ def settings_difference(before, after):
             not (changed - {'bindings', 'annotations'}) and old is not None and new is not None and old == new}
 
 
-def inspect_pending(api, account, checkpoint_dir):
+def settings_equivalent(before, after):
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        return False
+    def normalize(settings):
+        value = {k: v for k, v in settings.items() if k != 'annotations'}
+        rows = value.get('bindings')
+        if not isinstance(rows, list) or any(not isinstance(row, dict) or not isinstance(row.get('name'), str) for row in rows):
+            raise Stop('BINDINGS_INVALID')
+        if len({row['name'] for row in rows}) != len(rows):
+            raise Stop('BINDINGS_INVALID')
+        value['bindings'] = sorted(rows, key=lambda row: row['name'])
+        return value
+    # Only per-version annotations and unordered binding-list representation are
+    # normalized. Every binding field and all other settings remain exact.
+    return normalize(before) == normalize(after)
+
+
+def candidate_source_matches(content, expected):
+    body, kind = content.get('body'), content.get('contentType', '')
+    if not isinstance(body, bytes) or len(body) > 2 * 1024 * 1024:
+        return False
+    entrypoint = content.get('entrypoint')
+    if entrypoint not in (None, 'worker.mjs'):
+        return False
+    if kind.lower().startswith('multipart/'):
+        msg = BytesParser(policy=email_policy).parsebytes(('Content-Type: ' + kind + '\r\nMIME-Version: 1.0\r\n\r\n').encode() + body)
+        if not msg.is_multipart() or msg.defects:
+            return False
+        modules = []
+        for part in msg.iter_parts():
+            name = part.get_filename() or part.get_param('name', header='content-disposition')
+            if name == 'metadata':
+                continue
+            if part.is_multipart() or name != 'worker.mjs' or part.defects:
+                return False
+            modules.append(part.get_payload(decode=True))
+        if len(modules) != 1:
+            return False
+        body = modules[0]
+    return body == expected
+
+
+def resume_pending(api, account, checkpoint_dir, public_probe=probe, code=None):
     if not re.fullmatch(r'[a-fA-F0-9]{32}', account):
         raise Stop('ACCOUNT_ID_INVALID')
     base = '/accounts/' + account + '/workers/scripts/' + NAME
-    current = active(api, base)
+    before = active(api, base)
+    checkpoint = find_checkpoint(checkpoint_dir, before)
+    settings = checkpoint['settings']
+    if before != checkpoint['deployment'] or not settings_equivalent(settings, api('GET', base + '/settings')):
+        raise Stop('PENDING_BASELINE_CHANGED')
+    verified_settings(settings)
+    if api('GET', '/accounts/' + account + '/workers/subdomain').get('subdomain') != 'kocoro97':
+        raise Stop('EXISTING_SUBDOMAIN_MISMATCH')
     history = recent_versions(api, base)
-    settings = api('GET', base + '/settings')
+    if len(history) < 2 or history[0]['id'] == before['version'] or history[1]['id'] != before['version']:
+        raise Stop('SINGLE_PENDING_CANDIDATE_REQUIRED')
+    candidate = history[0]['id']
+    if api('GET', base + '/versions/' + candidate).get('id') != candidate:
+        raise Stop('PENDING_VERSION_UNCONFIRMED')
+    expected = bundle() if code is None else code
+    content = api('GET', base + '/content/v2')
+    if not candidate_source_matches(content, expected):
+        raise Stop('PENDING_CANDIDATE_CODE_MISMATCH')
+    old, _ = public_probe()
+    if old.get('freshTestEnvironment') is not True or old.get('testEnvironment') != 'nh-staging':
+        raise Stop('ISOLATED_GAS_METADATA_REQUIRED')
+    history = recent_versions(api, base)
+    if len(history) < 2 or [row['id'] for row in history[:2]] != [candidate, before['version']] or active(api, base) != before or not settings_equivalent(settings, api('GET', base + '/settings')):
+        raise Stop('CONCURRENT_CHANGE_NO_ACTIVATION')
+    result = activate_candidate(api, base, before, settings, old, candidate, public_probe)
+    result.update(candidateCodeVerified=True, codeUploadAttempted=False)
+    return result
+
+
+def find_checkpoint(checkpoint_dir, current):
     checkpoint = None
     # Checkpoints belong to the owner; no paths, settings, binding names or values
     # are printed. Reject symlinks and cap parsing. No checkpoint is rewritten.
@@ -263,6 +339,17 @@ def inspect_pending(api, account, checkpoint_dir):
             continue
     if checkpoint is None:
         raise Stop('MATCHING_OWNER_CHECKPOINT_REQUIRED')
+    return checkpoint
+
+
+def inspect_pending(api, account, checkpoint_dir):
+    if not re.fullmatch(r'[a-fA-F0-9]{32}', account):
+        raise Stop('ACCOUNT_ID_INVALID')
+    base = '/accounts/' + account + '/workers/scripts/' + NAME
+    current = active(api, base)
+    history = recent_versions(api, base)
+    settings = api('GET', base + '/settings')
+    checkpoint = find_checkpoint(checkpoint_dir, current)
     return {'status': 'PASS', 'phase': 'PENDING_CANDIDATE_INSPECTION_READ_ONLY',
         'deploymentAttempted': False, 'activeVersionUnchanged': True,
         'deploymentIdUnchanged': current['id'] == checkpoint['deployment']['id'],
@@ -303,7 +390,7 @@ def deploy(api, account, save, public_probe=probe, code=None, diagnose=False):
     if 'usage_model' in settings:
         metadata['usage_model'] = settings['usage_model']
     save({'worker': NAME, 'deployment': before, 'settings': settings})
-    if recent_versions(api, base)[0]['id'] != before['version'] or active(api, base) != before or api('GET', base + '/settings') != settings:
+    if recent_versions(api, base)[0]['id'] != before['version'] or active(api, base) != before or not settings_equivalent(settings, api('GET', base + '/settings')):
         raise Stop('CONCURRENT_CHANGE_NO_UPLOAD')
     body, mime = multipart(metadata, code)
     uploaded = api('POST', base + '/versions?bindings_inherit=strict', body, mime)
@@ -313,8 +400,12 @@ def deploy(api, account, save, public_probe=probe, code=None, diagnose=False):
     history = recent_versions(api, base)
     if len(history) < 2 or [row['id'] for row in history[:2]] != [candidate, before['version']]:
         raise Stop('CONCURRENT_UPLOAD_NO_ACTIVATION')
-    if active(api, base) != before or api('GET', base + '/settings') != settings:
+    if active(api, base) != before or not settings_equivalent(settings, api('GET', base + '/settings')):
         raise Stop('CONCURRENT_CHANGE_NO_ACTIVATION')
+    return activate_candidate(api, base, before, settings, old, candidate, public_probe)
+
+
+def activate_candidate(api, base, before, settings, old, candidate, public_probe):
     deployment = lambda version: {'strategy': 'percentage', 'versions': [{'version_id': version, 'percentage': 100}]}
     try:
         api('POST', base + '/deployments', deployment(candidate))
@@ -322,14 +413,20 @@ def deploy(api, account, save, public_probe=probe, code=None, diagnose=False):
             raise Stop('ACTIVATION_UNCONFIRMED')
         after_settings = api('GET', base + '/settings')
         # No settings mutation is allowed, including secrets, logging and limits.
-        if after_settings != settings:
+        if not settings_equivalent(settings, after_settings):
             raise Stop('SETTINGS_CHANGED')
-        new, exposed = public_probe()
-        if any(new.get(k) != old.get(k) for k in CAPABILITIES) or new.get('developmentReadResilienceVersion') != 1 or not exposed:
-            raise Stop('POST_ACTIVATION_VERIFICATION_FAILED')
+        for attempt in range(3):
+            new, exposed = public_probe()
+            if any(new.get(k) != old.get(k) for k in CAPABILITIES):
+                raise Stop('POST_ACTIVATION_CAPABILITIES_CHANGED')
+            if new.get('developmentReadResilienceVersion') == 1 and exposed:
+                break
+            if attempt == 2:
+                raise Stop('POST_ACTIVATION_MARKER_UNCONFIRMED')
+            time.sleep(attempt + 1)
         return {'status': 'PASS', 'phase': 'WORKER_CODE_ONLY_ACTIVE', 'version': candidate,
             'previousVersion': before['version'], 'rollback': 'NOT_NEEDED'}
-    except Exception:
+    except Exception as activation_error:
         # A timed-out activation may have succeeded. Check its result before any
         # rollback; never overwrite a different actor's concurrent deployment.
         try:
@@ -338,20 +435,25 @@ def deploy(api, account, save, public_probe=probe, code=None, diagnose=False):
                 api('POST', base + '/deployments', deployment(before['version']))
             elif current != before['version']:
                 raise Stop('CONCURRENT_DEPLOYMENT_MANUAL_RECOVERY_REQUIRED')
-            if active(api, base)['version'] != before['version'] or api('GET', base + '/settings') != settings:
+            if active(api, base)['version'] != before['version'] or not settings_equivalent(settings, api('GET', base + '/settings')):
                 raise Stop('ROLLBACK_VERIFICATION_FAILED')
             restored, _ = public_probe()
             if any(restored.get(k) != old.get(k) for k in CAPABILITIES) or restored.get('developmentReadResilienceVersion') != old.get('developmentReadResilienceVersion'):
                 raise Stop('ROLLBACK_VERIFICATION_FAILED')
         except Exception:
             raise Stop('ACTIVATION_FAILED_MANUAL_RECOVERY_REQUIRED') from None
-        return {'status': 'FAIL', 'phase': 'WORKER_CODE_ONLY_ACTIVATION', 'rollback': 'PASS_PREVIOUS_VERSION_RESTORED'}
+        result = {'status': 'FAIL', 'phase': 'WORKER_CODE_ONLY_ACTIVATION', 'rollback': 'PASS_PREVIOUS_VERSION_RESTORED', 'code': activation_error.code if isinstance(activation_error, Stop) else 'ACTIVATION_RESULT_UNCONFIRMED'}
+        if isinstance(activation_error, Stop) and activation_error.stage:
+            result.update(requestStage=activation_error.stage, providerCodes=activation_error.provider_codes, providerHints=activation_error.hints)
+        return result
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--diagnose', action='store_true', help='Read-only existing Worker/version preflight; no upload or activation')
-    parser.add_argument('--inspect-pending', action='store_true', help='Read-only compare the owner checkpoint and current pending candidate; never upload or activate')
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument('--diagnose', action='store_true', help='Read-only existing Worker/version preflight; no upload or activation')
+    modes.add_argument('--inspect-pending', action='store_true', help='Read-only compare the owner checkpoint and current pending candidate; never upload or activate')
+    modes.add_argument('--resume-pending', action='store_true', help='Verify existing pending candidate bytes and activate it; no code upload')
     args = parser.parse_args()
     try:
         account = os.environ.get('CLOUDFLARE_ACCOUNT_ID') or input('Cloudflare Account ID: ').strip()
@@ -359,7 +461,12 @@ def main():
         checkpoint_dir = Path.home() / '.myinvest-worker-rollback'
         checkpoint = checkpoint_dir / (uuid.uuid4().hex + '.json')
         api = api_client(token.strip())
-        result = inspect_pending(api, account.strip(), checkpoint_dir) if args.inspect_pending else deploy(api, account.strip(), lambda doc: private_checkpoint(checkpoint, doc), diagnose=args.diagnose)
+        if args.inspect_pending:
+            result = inspect_pending(api, account.strip(), checkpoint_dir)
+        elif args.resume_pending:
+            result = resume_pending(api, account.strip(), checkpoint_dir)
+        else:
+            result = deploy(api, account.strip(), lambda doc: private_checkpoint(checkpoint, doc), diagnose=args.diagnose)
     except Stop as e:
         result = {'status': 'FAIL' if e.code == 'ACTIVATION_FAILED_MANUAL_RECOVERY_REQUIRED' else 'NOT_RUN', 'code': e.code}
         if e.http:

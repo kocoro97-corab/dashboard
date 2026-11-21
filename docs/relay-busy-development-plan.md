@@ -148,3 +148,40 @@ The actual owner difference must be inspected before a recovery change is chosen
 
 Official settings model distinguishes per-version annotations from configuration:
 https://github.com/cloudflare/cloudflare-python/blob/main/src/cloudflare/types/workers/scripts/script_and_version_setting_get_response.py
+
+### Confirmed annotation-only guard false positive and resume
+
+Owner inspection confirmed active version and deployment ID unchanged, one
+pending candidate directly after active, all binding names/values unchanged, and
+only `annotations` different. The raw settings comparison was a false positive:
+the SDK explicitly defines annotations as Worker-version metadata which is not
+inherited by an upload. This was a runner defect, not evidence of a concurrent
+configuration change.
+
+Settings comparison now excludes only version annotations and normalizes binding
+list order. Every binding descriptor/value and every other setting, including
+unknown fields, limits, observability, compatibility and tags, must still match.
+
+`--resume-pending` reuses the uploaded candidate without another code upload:
+
+- Require a matching private owner checkpoint, exact old deployment ID, equivalent
+  settings, the existing isolated role/subdomain and one immediate pending version.
+- Read the latest script via the official `/workers/scripts/{name}/content/v2`
+  content API. Its sole module must equal the exact reviewed, hash-pinned bundled
+  bytes. Raw and multipart responses are supported; extra/unknown modules or a
+  mismatch prevent activation. Content and configuration values are never printed.
+- Recheck version history, deployment and settings after reading content. Only
+  then switch traffic to the existing candidate. There is no upload/secret/settings
+  write or migration. No other pending code is trusted merely by its version ID.
+- Verify settings and isolated capabilities after activation. Permit three short
+  metadata reads (1s/2s waits) for marker propagation; mutations are not replayed.
+  Failure preserves safe cause codes and uses the existing checked rollback path.
+
+Source/code verification remains a real owner-execution check, not a claim from
+the synthetic suite. The assistant environment still has no Cloudflare token.
+37 runner regressions cover normalization, actual-setting changes, raw/multipart
+code verification, resume without reupload, concurrent upload rejection, propagation
+and rollback. The Worker candidate/hash and development Pages remain unchanged.
+
+Official content API implementation:
+https://github.com/cloudflare/cloudflare-python/blob/main/src/cloudflare/resources/workers/scripts/content.py
