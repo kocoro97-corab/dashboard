@@ -93,7 +93,7 @@ function create(){
    const market=requestedMarket;
   if(!active||!ctxRef||!ctxRef.publicConnected?.()||analysisBusy||(market==='KR'&&loading))return;
   if(market==='KR'&&period==='1d'&&mode==='day'){if(category==='industry'&&!industryRows.length)void loadIndustries(force);return;}
-  const key=keyFor(market);if(!force&&analytics.has(key))return;const context=ctxRef;if(force)SERIES_CACHE.clear();
+  const key=keyFor(market),viewKey=keyFor();if(!force&&analytics.has(key))return;const context=ctxRef;if(force)SERIES_CACHE.clear();
   analysisBusy=true;analysisError='';analysisKey=key;const version=++analysisVersion;draw();
   try{
    if(market==='KR'&&category==='industry'&&!industryRows.length){await loadIndustries(force);if(!industryRows.length)throw Error('INDUSTRY_UNAVAILABLE')}
@@ -131,7 +131,7 @@ function create(){
    if(category==='industry')root.InvestWorkflow?.registerThemes(rows.map((r,i)=>({kind:'industry',proxy:market==='US'?'ETF':null,market,name:r.name,rank:i+1,themeReturn:r.change,relativeStrength:r.relative,themeReceivedAt:Date.now(),observedAt:r.asof,benchmark:benchmarkSymbol,dataScope:market==='US'?'us_sector_etf':'kr_industry_sample',coveragePct:r.quality?.coverage==null?null:r.quality.coverage*100,stocks:r.v?[{symbol:r.symbol,name:r.name,market,stockReturn:r.change,stockRelativeStrength:r.relative}]:(r.sample||[]).map(x=>({symbol:x.symbol,name:x.name,market,stockReturn:x.change,stockRelativeStrength:x.relative}))})));else root.InvestWorkflow?.registerThemes(market==='US'?themes.sort((a,b)=>b.relative-a.relative).map((t,i)=>({name:t.name,market:'US',rank:i+1,strength:null,themeReturn:t.change,relativeStrength:t.relative,themeReceivedAt:Date.now(),observedAt:t.asof,benchmark:'SPY',dataScope:'us_theme_sample',coveragePct:t.quality?.coverage==null?null:t.quality.coverage*100,stocks:t.sample.map(r=>({symbol:r.symbol,name:r.name,market:'US',stockReturn:r.change,stockRelativeStrength:r.relative}))})):ranking().map((t,i)=>({name:t.name,market:'KR',rank:i+1,strength:t.sc,themeReturn:t.rate,themeReceivedAt:typeof THM_AT!=='undefined'?THM_AT:null,benchmark:'^KS11',dataScope:'kr_theme_daily',stocks:themeRows(t).map(r=>({symbol:r.code,name:r.name,market:'KR',stockReturn:safeNumber(r.rate)}))})));
    analytics.set(key,{category,benchmarkSeries:benchmark,rows:rows.sort((a,b)=>b.relative-a.relative),benchmark:base,benchmarkSymbol,received:Date.now(),period,market,failures,themes:themes.sort((a,b)=>b.relative-a.relative),asof:benchmark.last});
   }catch(e){if(active&&version===analysisVersion&&keyFor()===key)analysisError='시계열 수신 또는 검증 실패 · 실제 데이터 연결 상태를 확인하세요.'}
-  finally{if(active&&version===analysisVersion){analysisBusy=false;draw();if(keyFor(market)!==key)void loadAnalytics()}}
+  finally{if(active&&version===analysisVersion){analysisBusy=false;draw();if(keyFor()!==viewKey)void loadAnalytics()}}
  }
  function analyticsView(){
   const key=keyFor(),data=analytics.get(key);

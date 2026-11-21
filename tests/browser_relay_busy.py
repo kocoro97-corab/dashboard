@@ -59,6 +59,23 @@ async def main():
      await check('ROUTE_LOGOUT_CANCEL_PENDING_ZERO_NH_WRITES',cleanup)
      counts={phase:{'requests':sum(r.get('phase')==phase for r in h.requests),'public':sum(r.get('phase')==phase and r['action']=='publicFetch' for r in h.requests),'maxPublicConcurrency':h.maxRead} for phase in sorted({r.get('phase','other') for r in h.requests})};a.output.joinpath(str(width)+'-requests.json').write_text(json.dumps({'scope':'SYNTHETIC_WORKER_GAS_AND_FEEDS','counts':counts,'requests':h.requests},indent=2))
     finally:await h.close()
+   # A queued country switch must start its own history after the old country
+   # finishes. Capture the visible key, including MIX, rather than comparing
+   # only the local requested-country key in the completed operation.
+   feeds=synthetic_feeds();feeds[history_url('SPY')]={'text':feeds[history_url('SPY')],'delayMs':1500}
+   h=await Harness(browser,artifact,feeds,1440).start_browser(tmp)
+   try:
+    await h.ctx.add_init_script('localStorage.setItem("myinvest_sectors_display_v3",JSON.stringify({market:"US",mode:"swing",period:"5d",category:"theme"}))')
+    await h.page.clock.set_fixed_time('2026-11-17T03:00:00Z');await h.login('sectors')
+    await h.page.locator('.stv2-toolbar .stv2-tabs').first.get_by_role('button',name='한국',exact=True).click()
+    await h.page.wait_for_function('()=>document.querySelector(".stv2 .stv2-table")?.rows.length===3')
+    assert any(r.get('url')==history_url('005930.KS') for r in h.requests)
+    assert await h.page.locator('.stv2-toolbar .stv2-tabs').first.get_by_role('button',name='한국',exact=True).get_attribute('aria-pressed')=='true'
+    assert not h.errors;assert not any(r['action'] in ['nhQuotes','nhAccounts','order'] for r in h.requests)
+    rows.append({'width':1440,'test':'IN_FLIGHT_US_TO_KR_SWING_STARTS_CURRENT_COUNTRY','status':'PASS'})
+   except Exception as e:
+    rows.append({'width':1440,'test':'IN_FLIGHT_US_TO_KR_SWING_STARTS_CURRENT_COUNTRY','status':'FAIL','reason':str(e)[:250]})
+   finally:await h.close()
    await browser.close()
  a.output.joinpath('results.json').write_text(json.dumps(rows,indent=2));return int(any(x['status']=='FAIL' for x in rows))
 raise SystemExit(asyncio.run(main()))
