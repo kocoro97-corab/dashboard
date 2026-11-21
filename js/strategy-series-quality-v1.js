@@ -97,8 +97,8 @@ function inspect(input={}){
   (input.observedAt<bars.at(-1).t||input.observedAt>now+300000))
   errors.push(issue('INCONSISTENT_SOURCE_OBSERVATION'));
  if(input.purpose==='current'&&bars.length){
-  const last=bars.at(-1).t,age=(now-last)/86400000;
-  if(age>7)flags.push(issue('CURRENT_SERIES_MAY_BE_STALE',{ageDays:Math.round(age*10)/10}));
+  const last=bars.at(-1)?.t,age=Number.isSafeInteger(last)?(now-last)/86400000:null;
+  if(age!==null&&age>7)flags.push(issue('CURRENT_SERIES_MAY_BE_STALE',{ageDays:Math.round(age*10)/10}));
  }
  facts.barCount=bars.length;facts.firstAt=bars[0]?.t??null;facts.lastAt=bars.at(-1)?.t??null;
  facts.exchangeTimeZone=market.zone;facts.missingVolumeBars=missingVolumes;
