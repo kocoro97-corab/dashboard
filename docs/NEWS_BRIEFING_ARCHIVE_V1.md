@@ -126,3 +126,5 @@ GAS의 시각별 실행기 + 공개 시장 데이터 수집 + 별도 AI API로 �
 - 운영 `main`, `release/pages`, 운영 GAS/Properties/Sheets 변경 금지
 
 **이 문서는 현재 Codex 지시문이 아니다.** 사용자가 후에 명시적으로 요청할 때만 그 시점의 코드·브랜치 상태에 맞춰 지시문을 새로 작성한다.
+
+CI 검증 메모: `fix/news-briefing-archive-isolated`는 `fix/**` push-only 회귀 검증용 보조 브랜치다. Codex PR 및 실제 NH 스테이징 작업을 실행하지 않는다.
