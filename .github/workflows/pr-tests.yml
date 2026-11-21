@@ -45,6 +45,7 @@ jobs:
           .venv-browser/bin/python tests/browser_names_review.py
           .venv-browser/bin/python tests/browser_invest_workflow.py
           .venv-browser/bin/python tests/browser_public_briefing.py
+          .venv-browser/bin/python tests/browser_news_briefing_panel_v1.py
           .venv-browser/bin/python tests/browser_final_integration.py
           .venv-browser/bin/python tests/browser_dense_review.py --widths 1440 344 --scales 1 1.5 --output /tmp/dense-ci
           .venv-browser/bin/python tests/browser_work_handoff.py
@@ -53,7 +54,7 @@ jobs:
           .venv-browser/bin/python tests/browser_accounts_profile.py
   nh-staging-live:
     # Security/preflight preparation branches never consume live credentials in CI.
-    if: github.event_name == 'pull_request' && github.head_ref != 'fix/issue-4-safe-diagnostics' && github.head_ref != 'fix/4b1-safety-checks' && github.head_ref != 'feat/nh-integration-v2' && github.event.pull_request.head.repo.full_name == github.repository && vars.NH_STAGING_ENABLED == 'true'
+    if: github.event_name == 'pull_request' && github.head_ref != 'fix/issue-4-safe-diagnostics' && github.head_ref != 'fix/4b1-safety-checks' && github.head_ref != 'feat/nh-integration-v2' && github.head_ref != 'feat/news-briefing-panel-v1-sandbox' && github.head_ref != 'fix/news-briefing-panel-v1-ci' && github.event.pull_request.head.repo.full_name == github.repository && vars.NH_STAGING_ENABLED == 'true'
     needs: regression
     runs-on: ubuntu-24.04
     timeout-minutes: 15
