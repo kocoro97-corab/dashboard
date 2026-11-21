@@ -64,7 +64,7 @@ test('P4 price gap anomaly is a review flag rather than an invented split conclu
  assert.equal(x.status,'review');
  assert.ok(codes(x.flags).includes('LARGE_PRICE_JUMP_POSSIBLE_CORPORATE_ACTION'));
  assert.ok(x.facts.largePriceJumpExamples[0].changePct<0);
- assert.equal(x.eligibleForProvisionalBacktest,true);
+ assert.equal(x.eligibleForProvisionalBacktest,false);
 });
 test('P4 flags missing volume and price convention separately and never fabricates values',()=>{
  const b=rows();b[30].v=null;b[31].v=0;
