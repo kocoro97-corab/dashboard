@@ -19,7 +19,7 @@ function benchmark(ohlc){
  let p=100;
  return ohlc.map((b,i)=>{
   if(i>=50&&i<=89)p*=1.01;
-  if(i>=90&&i<=119)p*=0.99;
+  if(i>=90&&i<=119)p*=0.985;
   return {t:b.t,c:p};
  });
 }
