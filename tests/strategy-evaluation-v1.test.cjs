@@ -81,6 +81,7 @@ test('P4 validates OHLCV, exact date split and daily-only scope',()=>{
  assert.equal(run(b,{feeBps:-1}).code,'INVALID_CONFIGURATION');
  assert.equal(run(b,{testStartAt:b[21].t+1}).code,'INVALID_TEST_START');
  assert.equal(run(b.slice(0,20)).status,'insufficient');
+ const intraday=b.map((row,i)=>({...row,t:BASE+i*60000}));assert.equal(run(intraday).code,'INVALID_BARS');
  b[7].t=b[6].t;assert.equal(run(b).code,'INVALID_BARS');
  b[7].t=BASE+7*DAY;b[21].h=106;
  assert.equal(run(b).code,'INVALID_BARS');
