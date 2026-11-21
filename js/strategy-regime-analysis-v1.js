@@ -48,6 +48,10 @@ function validateBenchmark(benchmark,series,now){
   // normalize exchange-local sessions but must not silently align different days.
   if(!b||!s||!Number.isSafeInteger(b.t)||b.t!==s.t||!positive(b.c))
    return 'BENCHMARK_DAILY_ALIGNMENT_OR_CLOSE_INVALID';
+  // A discontinuity may be a split, a bad tick or an exceptional market move.
+  // Never guess which: require external confirmation before stratification.
+  if(i>0&&Math.abs(b.c/benchmark.bars[i-1].c-1)*100>=40)
+   return 'BENCHMARK_PRICE_DISCONTINUITY_REVIEW_REQUIRED';
  }
  return null;
 }
