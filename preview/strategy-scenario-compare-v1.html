@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>MY INVEST V2 — 단타·스윙 독립 비교 미리보기 (합성 데이터)</title>
+<style>
+:root{color-scheme:dark}
+html{min-width:0;min-height:100%;background:#091522;color:#eaf1fa}
+body{margin:0;padding:clamp(10px,2vw,22px);font-family:system-ui,sans-serif}
+main{margin:auto;max-width:1160px}
+#preview-note{font-size:12px;line-height:1.6;color:#bbcad9;max-width:1100px;margin:12px auto}
+</style>
+</head>
+<body>
+<main>
+<div id="scenario-preview"></div>
+<p id="preview-note">독립 개발 브랜치의 합성 테스트 화면입니다. 시세·계좌정보 자동 연결, 주문, 브리핑 또는 운영 서비스와 무관합니다. 새로고침하면 초기값으로 되돌아갑니다.</p>
+</main>
+<script src="../js/market-evidence-gate-v1.js"></script>
+<script src="../js/market-session-context-v1.js"></script>
+<script src="../js/strategy-risk-capacity-v1.js"></script>
+<script src="../js/strategy-scenario-compare-v1.js"></script>
+<script src="../js/strategy-scenario-compare-panel-v1.js"></script>
+<script>
+(function(){
+ 'use strict';
+ var area=document.getElementById('scenario-preview');
+ var result=window.MYInvestScenarioComparePanelV1?.mount?.(area);
+ if(!result?.ok){
+  var warning=document.createElement('p');
+  warning.textContent='오프라인 비교 화면을 표시할 수 없습니다: '+(result?.code||'DEPENDENCY_UNAVAILABLE');
+  area.replaceChildren(warning);
+ }
+})();
+</script>
+</body>
+</html>
