@@ -10,8 +10,8 @@ const explanation=require('../js/investment-evidence-explanation-v1.js');
 const NOW=Date.parse('2026-11-23T09:00:00+09:00');
 const DATES=['2026-11-18','2026-11-19','2026-11-20'];
 const dateTime=(date,market,clock)=>{
- const tz=market==='US'?'05:00':'09:00';
- return Date.parse(date+'T'+clock+'-'+tz);
+ const offset=market==='US'?'-05:00':'+09:00';
+ return Date.parse(date+'T'+clock+offset);
 };
 const copy=x=>JSON.parse(JSON.stringify(x));
 const metadata=Object.freeze({
@@ -309,7 +309,7 @@ test('non-increasing capture timestamps are invalid even with correctly sorted a
 test('capture before its purported market-local observation day is rejected',()=>{
  const f=fixture();
  f.records[1].capturedAt=dateTime('2026-11-18','US','17:10:00');
- assert.equal(compiled(f).code,'INVALID_OR_UNSORTED_RECORD');
+ assert.equal(compiled(f).code,'CAPTURE_BEFORE_LOCAL_OBSERVATION_DATE');
  const single={market:'US',mode:'swing',now:NOW,records:[prepared('2026-11-20')]};
  single.records[0].capturedAt=dateTime('2026-11-19','US','17:00:00');
  assert.equal(compiled(single).code,'CAPTURE_BEFORE_LOCAL_OBSERVATION_DATE');
