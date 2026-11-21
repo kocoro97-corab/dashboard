@@ -43,7 +43,9 @@ async def exercise():
       assert '단타·스윙 가상 시나리오 비교' in await page.locator('.msc1').inner_text()
       assert await page.locator('[data-result="day"]').count()==1
       assert await page.locator('[data-result="swing"]').count()==1
-      assert '수량 차이' in await page.locator('[data-result="comparison"]').inner_text()
+      assert await page.get_by_label('day · 진입가',exact=True).input_value()==''
+      assert await page.get_by_label('공통 · 가상 총자본',exact=True).input_value()==''
+      assert '입력값을 확인' in await page.locator('[data-result="comparison"]').inner_text()
       assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth+1'),width
       # Standalone tool does not use API, account snapshot or app storage.
       assert len(harness.requests)==before_requests
@@ -54,13 +56,13 @@ async def exercise():
       await page.get_by_label('day · 손절가').fill('50000')
       await page.get_by_role('button',name='가상 수량·손익 비교').click()
       assert '입력 확인' in await page.locator('[data-result="day"]').inner_text()
-      assert '가상 수량' in await page.locator('[data-result="swing"]').inner_text()
+      assert '입력 확인' in await page.locator('[data-result="swing"]').inner_text()
       await disclosure.locator('summary').click()
       await page.wait_for_function('()=>document.querySelector(".msc1")===null')
       assert not await disclosure.evaluate('(el)=>el.open')
       await disclosure.locator('summary').click()
       await page.locator('.msc1').wait_for()
-      assert await page.get_by_label('day · 손절가').input_value()=='48000'
+      assert await page.get_by_label('day · 손절가').input_value()==''
       await harness.go('home')
       assert await page.locator('.str4-compare-disclosure').count()==0
       await harness.go('strategy')

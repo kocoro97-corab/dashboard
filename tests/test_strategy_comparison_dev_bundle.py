@@ -13,6 +13,7 @@ MODULES=[
  'market-session-context-v1.js',
  'strategy-risk-capacity-v1.js',
  'strategy-scenario-compare-v1.js',
+ 'strategy-market-link-v1.js',
  'strategy-scenario-compare-panel-v1.js'
 ]
 

@@ -1,5 +1,5 @@
-/* MY INVEST V2 — isolated manual day/swing comparison screen.
- * No live data, API, storage, accounts, orders, HTML injection or navigation.
+/* MY INVEST V2 — day/swing comparison with optional public-analysis projection.
+ * No direct API, storage, accounts, orders, HTML injection or navigation.
  */
 (function(root){
 'use strict';
@@ -33,7 +33,7 @@ const CSS='.msc1{max-width:1120px;margin:auto;display:grid;gap:12px;color:#e8edf
 const number=text=>text.trim()===''?NaN:Number(text);
 const format=(value,currency,digits=0)=>Number.isFinite(value)?
  value.toLocaleString('ko-KR',{maximumFractionDigits:digits})+(currency==='KRW'?'원':'달러'):'미계산';
-function mount(host){
+function mount(host,{linked=false}={}){
  if(!host||typeof host.replaceChildren!=='function'||!host.ownerDocument)
   return {ok:false,code:'INVALID_MOUNT_TARGET'};
  const doc=host.ownerDocument,inputs={},modeInputs={day:{},swing:{}};
@@ -48,13 +48,17 @@ function mount(host){
  const header=make('header');
  header.append(make('h1','단타·스윙 가상 시나리오 비교'),
   make('p','직접 입력한 숫자로 단타와 스윙을 각각 비교합니다. 같은 자본에 대한 대안이며 두 포지션을 동시에 보유한 것으로 계산하지 않습니다.','muted'),
-  make('p','초기 입력은 합성 예시입니다. 실제 시세·계좌·주문 데이터는 연결하지 않았습니다.','warning'));
+  make('p',linked?'선택 종목의 공개 일봉을 연결합니다. 자본·현금·기존 배분·미청산 위험은 직접 입력하세요. 비용·위험 비율은 가정이며 계좌·주문은 연결하지 않습니다.':'초기 입력은 합성 예시입니다. 실제 시세·계좌·주문 데이터는 연결하지 않았습니다.','warning'));
  page.append(header);
+ const linkArea=make('section',undefined,'msc1-frame'),linkText=make('p'),caseSelect=make('select'),applyMarket=make('button','수신 일봉 조건 다시 적용');
+ caseSelect.setAttribute('aria-label','일봉 스윙 조건');applyMarket.type='button';
+ if(linked){linkArea.dataset.marketLink='unavailable';linkText.textContent='선택 종목의 공개 일봉 미연결 · 위에서 종목을 선택하세요.';linkArea.append(linkText,caseSelect,applyMarket);page.append(linkArea)}
  const shared=make('section',undefined,'msc1-frame');
  shared.append(make('h2','1. 공통 자본·비용 가정'));
  const sharedGrid=make('div',undefined,'shared'),marketWrap=make('label');
  marketWrap.append(make('span','시장 · 통화'));
  const market=make('select');market.setAttribute('aria-label','시장 · 통화');
+ market.disabled=linked;
  for(const [value,text] of [['KR','한국 · KRW'],['US','미국 · USD']]){
   const option=make('option',text);option.value=value;market.append(option);
  }
@@ -63,7 +67,7 @@ function mount(host){
   const wrap=make('label');
   wrap.append(make('span',label),make('small',unit));
   const entry=make('input');entry.type='number';entry.inputMode='decimal';
-  entry.step=key==='lotSize'?'1':'any';entry.value=String(value);
+  entry.step=key==='lotSize'?'1':'any';entry.value=linked&&((group!=='공통'&&['entry','stop','target'].includes(key))||['capital','cashAvailable','usedExposure','usedOpenRisk'].includes(key))?'':String(value);
   entry.setAttribute('aria-label',group+' · '+label);
   wrap.append(entry);parent.append(wrap);
   return entry;
@@ -73,7 +77,7 @@ function mount(host){
  shared.append(sharedGrid);
  const calc=make('button','가상 수량·손익 비교');
  calc.type='button';calc.setAttribute('data-action','compare');
- const reset=make('button','합성 예시 초기화');
+ const reset=make('button',linked?'입력 초기화':'합성 예시 초기화');
  reset.type='button';reset.setAttribute('data-action','reset');
  shared.append(calc,reset);page.append(shared);
  const modes=make('div',undefined,'modes'),outputs={};
@@ -92,7 +96,7 @@ function mount(host){
  difference.setAttribute('data-result','comparison');page.append(difference);
  page.append(make('p','시장 시간대는 기기 현재 시각으로만 계산합니다. 실제 거래소 운영·실시간 호가·종목 상장 여부·세금·유동성은 검증하지 않습니다. 가상 계산은 주문 승인과 무관합니다.','muted'));
  host.replaceChildren(page);
- let disposed=false,last=null;
+ let disposed=false,last=null,marketState=null,lastIdentity='',priceDirty=false;
  const unit=()=>market.value==='KR'?'KRW':'USD';
  function snapshot(){
   const common={market:market.value,currency:unit(),now:Date.now()};
@@ -151,7 +155,7 @@ function mount(host){
  }
  function calculate(){
   if(disposed)return {status:'invalid',code:'UNMOUNTED'};
-  const result=root.MYInvestStrategyScenarioCompareV1?.compare?.(snapshot())||
+  const result=(linked&&(marketState?.status!=='ready'||market.value!==marketState.market)?{status:'invalid',code:'MARKET_LINK_UNAVAILABLE'}:root.MYInvestStrategyScenarioCompareV1?.compare?.(snapshot()))||
    {status:'invalid',code:'COMPARE_ENGINE_MISSING'};
   last=result;
   drawMode('day',result.day);drawMode('swing',result.swing);
@@ -160,17 +164,54 @@ function mount(host){
  }
  function resetAll(){
   if(disposed)return;
+  if(linked){
+   for(const [key] of COMMON)inputs[key].value=['capital','cashAvailable','usedExposure','usedOpenRisk'].includes(key)?'':String(DEFAULT.common[key]);
+   for(const mode of ['day','swing'])for(const key of ['riskPct','allocationPct','stressGapPct'])modeInputs[mode][key].value=String(DEFAULT[mode][key]);
+   priceDirty=false;clearPrices();if(marketState?.status==='ready')applyReference();else calculate();return;
+  }
   market.value='KR';
   for(const [key] of COMMON)inputs[key].value=String(DEFAULT.common[key]);
   for(const mode of ['day','swing'])
    for(const [key] of MODE_FIELDS)modeInputs[mode][key].value=String(DEFAULT[mode][key]);
   calculate();
  }
+ function clearPrices(){for(const mode of ['day','swing'])for(const key of ['entry','stop','target'])modeInputs[mode][key].value=''}
+ function applyReference(){
+  if(disposed||marketState?.status!=='ready')return;
+  clearPrices();modeInputs.day.entry.value=String(marketState.lastClose);
+  const choice=marketState.cases[Number(caseSelect.value)];
+  if(choice){for(const key of ['entry','stop','target'])modeInputs.swing[key].value=String(choice[key])}
+  else modeInputs.swing.entry.value=String(marketState.lastClose);
+  priceDirty=false;calculate();
+ }
+ function updateMarket(state){
+  if(disposed||!linked)return;
+  if(!state||state.status!=='ready'){
+   marketState=null;clearPrices();priceDirty=false;caseSelect.replaceChildren();caseSelect.disabled=true;applyMarket.disabled=true;
+   linkArea.dataset.marketLink=state?.status||'unavailable';
+   linkText.textContent=state?.status==='loading'?'공개 일봉 조회 중 · 이전 가격 조건을 정리했습니다.':'공개 일봉 미연결 또는 검증 실패 · 종목·통화·출처·봉 기준시각을 확인하고 페이지를 갱신하세요.';
+   calculate();return;
+  }
+  const identity=state.market+':'+state.symbol+':'+state.currency;
+  if(lastIdentity&&lastIdentity!==identity){clearPrices();priceDirty=false}
+  if(market.value!==state.market||(marketState&&marketState.currency!==state.currency)||(lastIdentity&&lastIdentity.split(':').at(-1)!==state.currency))
+   for(const key of ['capital','cashAvailable','usedExposure','usedOpenRisk'])inputs[key].value='';
+  lastIdentity=identity;marketState=state;market.value=state.market;
+  linkArea.dataset.marketLink='ready';
+  const fmtTime=t=>new Date(t).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+' KST';
+  linkText.textContent=state.name+' ('+state.symbol+') · '+state.exchange+' · 일봉 기준 가격 '+format(state.lastClose,state.currency,4)+' · '+state.source+' · 봉 기준 '+fmtTime(state.barAt)+' (봉 시작 기준·종가 확정 미검증) · 수신 '+fmtTime(state.receivedAt)+' · 실시간 현재가 아님. 단타 손절·목표는 분봉 미연결로 직접 입력합니다. 스윙은 기존 일봉 조건부 계산입니다.';
+  const oldChoice=caseSelect.value;caseSelect.replaceChildren();
+  state.cases.forEach((s,i)=>{const option=make('option',s.name);option.value=String(i);caseSelect.append(option)});
+  caseSelect.value=/^\d+$/.test(oldChoice)&&state.cases[Number(oldChoice)]?oldChoice:'0';caseSelect.disabled=!state.cases.length;applyMarket.disabled=false;
+  if(!priceDirty)applyReference();else calculate();
+ }
+ for(const mode of ['day','swing'])for(const key of ['entry','stop','target'])modeInputs[mode][key].addEventListener('input',()=>{priceDirty=true});
+ applyMarket.addEventListener('click',applyReference);caseSelect.addEventListener('change',applyReference);
  calc.addEventListener('click',calculate);
  reset.addEventListener('click',resetAll);
  market.addEventListener('change',calculate);
  calculate();
- return {ok:true,calculate,reset:resetAll,
+ return {ok:true,calculate,reset:resetAll,updateMarket,
   status:()=>last?.status||'unavailable',
   destroy:()=>{disposed=true;host.replaceChildren()}};
 }

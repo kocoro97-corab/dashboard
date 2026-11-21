@@ -35,7 +35,31 @@ function create(){
  if(owned.length)conditional.append(make('p','보유 관리: 각 계좌 평단을 유지합니다. 추세 유지 시 보유 조건 관찰, 지지 이탈 시 비중 축소/손절 기준 재검토, 목표 도달 시 분할익절 검토. 추가매수·확대는 시장/테마·위험한도 확인 전 확정하지 않습니다.','str4-muted'));else conditional.append(make('p','보유 자료가 없거나 미조회일 수 있습니다. 후보 조건은 실제 매수 권유·주문이 아니며 자금유입·실적·뉴스 검증이 필요합니다.','str4-muted'));
  conditional.append(button('보유종목 관리 보기',()=>{root.location.hash='#/accounts/holdings'}));
  }
- async function loadStrategy(force=false){const selection=readSelection(),version=++requestVersion;latestData=null;if(!selection||!active)return;const key=selection.symbol+':'+selection.mode;if(key!==lastSelectionKey){lastSelectionKey=key;for(const field of ['entry','stop','target'])if(inputs[field])inputs[field].value='';calculate()}conditional.replaceChildren(make('p','동일 종목의 검증된 일봉 분석을 준비하는 중…'));try{const data=await root.InvestWorkflow.ensure(selection,force);if(!active||version!==requestVersion||readSelection()?.symbol!==selection.symbol)return;latestData=data;drawConditional(data,selection);const cases=root.InvestWorkflow.scenarios(data,selection);if(cases.length&&!inputs.entry.value){inputs.entry.value=cases[0].entry;inputs.stop.value=cases[0].stop;inputs.target.value=cases[0].target2;calculate()}renderHolding()}catch{if(active&&version===requestVersion)conditional.replaceChildren(make('p','전략 판단 불가 · 실제 일봉 자료의 수신·식별자·통화를 확인하세요. 이전 종목 조건값은 사용하지 않습니다.'))}}
+ function syncComparison(phase='ready'){
+  if(!compareInstance?.updateMarket)return;
+  const selection=readSelection();
+  if(phase!=='ready'){compareInstance.updateMarket({status:phase,symbol:selection?.symbol,market:selection?.market});return}
+  const scenarios=latestData&&selection?root.InvestWorkflow.scenarios(latestData,{...selection,mode:'swing'}):[];
+  const projected=root.MYInvestStrategyMarketLinkV1?.project(latestData,selection,{scenarios})||{status:'unavailable',code:'LINK_MODULE_UNAVAILABLE'};
+  compareInstance.updateMarket(projected);
+ }
+ async function loadStrategy(force=false){
+  const selection=readSelection(),version=++requestVersion;latestData=null;syncComparison('loading');
+  if(!selection||!active)return;
+  const key=selection.symbol+':'+selection.mode;
+  if(key!==lastSelectionKey){lastSelectionKey=key;for(const field of ['entry','stop','target'])if(inputs[field])inputs[field].value='';calculate()}
+  conditional.replaceChildren(make('p','동일 종목의 검증된 일봉 분석을 준비하는 중…'));
+  try{
+   const data=await root.InvestWorkflow.ensure(selection,force);
+   if(!active||version!==requestVersion||readSelection()?.symbol!==selection.symbol)return;
+   latestData=data;syncComparison();drawConditional(data,selection);
+   const cases=root.InvestWorkflow.scenarios(data,selection);
+   if(cases.length&&!inputs.entry.value){inputs.entry.value=cases[0].entry;inputs.stop.value=cases[0].stop;inputs.target.value=cases[0].target2;calculate()}
+   renderHolding();
+  }catch{
+   if(active&&version===requestVersion){latestData=null;syncComparison('error');conditional.replaceChildren(make('p','전략 판단 불가 · 실제 일봉 자료의 수신·식별자·통화를 확인하세요. 이전 종목 조건값은 사용하지 않습니다.'))}
+  }
+ }
  function cleanupComparison(){
   try{compareInstance?.destroy?.()}catch{}
   compareInstance=null;
@@ -45,19 +69,19 @@ function create(){
   if(!active||!compareDisclosure||!compareHost)return;
   cleanupComparison();
   if(!compareDisclosure.open)return;
-  // Deliberately do NOT pass ctxRef or account holdings to this manual-only tool.
+  // Pass only the validated public-analysis projection; never account context.
   const panel=root.MYInvestScenarioComparePanelV1;
   if(!panel||typeof panel.mount!=='function'){
    compareHost.append(make('p','이 개발 빌드에는 가상 비교 모듈이 없습니다. 원래 투자전략 계산기를 계속 사용하세요.','str4-muted'));
    return;
   }
   try{
-   const instance=panel.mount(compareHost);
+   const instance=panel.mount(compareHost,{linked:true});
    if(!instance?.ok){
     compareHost.replaceChildren(make('p','비교 계산기를 준비하지 못했습니다. 입력 내용은 저장되지 않았습니다.','str4-muted'));
     return;
    }
-   compareInstance=instance;
+   compareInstance=instance;syncComparison();
   }catch{
    compareHost.replaceChildren(make('p','비교 계산기 연결 실패 · 기존 투자전략 기능은 계속 사용할 수 있습니다.','str4-muted'));
   }
@@ -68,7 +92,7 @@ function create(){
  // Opt-in, offline comparison: do not change existing strategy math or holdings.
  compareDisclosure=make('details',undefined,'str4-compare-disclosure');
  compareDisclosure.setAttribute('data-module','strategy-scenario-compare-v1');
- const summary=make('summary','단타·스윙 위험예산 비교 (가상 · 수동 입력)');
+ const summary=make('summary','단타·스윙 위험예산 비교 (공개 일봉 연동)');
  compareHost=make('div',undefined,'str4-compare-host');
  compareDisclosure.append(summary,compareHost);
  compareDisclosure.addEventListener('toggle',toggleComparison);

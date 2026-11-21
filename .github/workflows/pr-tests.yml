@@ -51,6 +51,7 @@ jobs:
           .venv-browser/bin/python tests/browser_strategy_scenario_compare_v1.py
           .venv-browser/bin/python tests/browser_strategy_compare_route_v1.py
           .venv-browser/bin/python tests/browser_news_strategy_integration.py
+          .venv-browser/bin/python tests/browser_strategy_market_link.py
           .venv-browser/bin/python tests/browser_final_integration.py
           .venv-browser/bin/python tests/browser_dense_review.py --widths 1440 344 --scales 1 1.5 --output /tmp/dense-ci
           .venv-browser/bin/python tests/browser_work_handoff.py

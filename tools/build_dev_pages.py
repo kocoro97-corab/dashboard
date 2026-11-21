@@ -61,6 +61,7 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
         'market-session-context-v1.js',
         'strategy-risk-capacity-v1.js',
         'strategy-scenario-compare-v1.js',
+        'strategy-market-link-v1.js',
         'strategy-scenario-compare-panel-v1.js',
     )
     compare_scripts = ''.join('<script src="js/' + name + '?v=1"></script>\n'
