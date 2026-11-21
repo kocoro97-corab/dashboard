@@ -52,7 +52,7 @@ async def main():
        await h.page.get_by_role('button',name='KOSPI 200 선물 제외',exact=True).click()
        await h.page.get_by_role('button',name='VIX 추가',exact=True).click()
        assert await h.page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
-       await h.page.get_by_role('button',name='저장',exact=True).click()
+       await h.page.locator('.homev4-editor-actions').get_by_role('button',name='저장',exact=True).click()
        await h.page.wait_for_function('()=>document.querySelector(".homev4-main .homev4-quote dt")?.textContent==="KOSDAQ"')
        saved=await h.page.evaluate('JSON.parse(localStorage.getItem("myinvest_home_priorities_v1"))')
        assert saved['KR'][0]=='^KQ11' and 'k3' not in saved['KR'] and '^VIX' in saved['KR']
