@@ -63,7 +63,7 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
         'strategy-scenario-compare-v1.js',
         'strategy-scenario-compare-panel-v1.js',
     )
-    compare_scripts = ''.join('<script src="js/' + name + '?v=1"></script>\\n'
+    compare_scripts = ''.join('<script src="js/' + name + '?v=1"></script>\n'
                               for name in strategy_optional_modules)
     text = text.replace(strategy_anchor, compare_scripts + strategy_anchor)
     text = re.sub(r'(src="js/[^"?]+\?[^" ]+)(")', lambda m: m[1] + '&dev=' + revision[:12] + m[2], text)
