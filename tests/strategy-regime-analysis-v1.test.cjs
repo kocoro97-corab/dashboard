@@ -74,7 +74,7 @@ test('P4: partitioned regime PnL and trade counts reconcile to independently sim
 test('P4: changing benchmark future bars never reclassifies an earlier signal',()=>{
  const f=fixture(),baseline=regime.analyze(f),original=baseline.classification.find(x=>x.index===60);
  const modified=structuredClone(f);
- for(let i=61;i<modified.benchmark.bars.length;i++)modified.benchmark.bars[i].c*=20;
+ for(let i=61;i<modified.benchmark.bars.length;i++)modified.benchmark.bars[i].c*=1.05;
  const changed=regime.analyze(modified);
  assert.equal(changed.status,'descriptive_only');
  assert.deepEqual(changed.classification.find(x=>x.index===60),original);
@@ -132,6 +132,13 @@ test('P4: strict timestamp matching blocks shifted and missing benchmark daily b
  assert.equal(code(regime.analyze(x)),'BENCHMARK_WINDOW_OR_LENGTH_MISMATCH');
  x=structuredClone(f);x.benchmark.bars[60].c=NaN;
  assert.equal(code(regime.analyze(x)),'BENCHMARK_DAILY_ALIGNMENT_OR_CLOSE_INVALID');
+});
+test('P4: a benchmark 40 percent one-day jump is a review blocker, not an invented new trend',()=>{
+ const f=fixture();
+ for(let i=61;i<f.benchmark.bars.length;i++)f.benchmark.bars[i].c*=20;
+ const x=regime.analyze(f);
+ assert.equal(x.status,'blocked');
+ assert.equal(x.code,'BENCHMARK_PRICE_DISCONTINUITY_REVIEW_REQUIRED');
 });
 test('P4: missing/invalid source observation cannot be confused with real benchmark provenance',()=>{
  const f=fixture(),x=structuredClone(f);
