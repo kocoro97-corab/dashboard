@@ -56,6 +56,8 @@ test('P4 review rejects switched bars, manipulated trade fills, missing ledger o
  assert.equal(review.audit({bars:original.bars,simulation:s2}).code,'EQUITY_RECONCILIATION_FAILED');
  const s3=structuredClone(original.simulation);s3.trades[0].decisionIndex=s3.trades[0].entryIndex;
  assert.equal(review.audit({bars:original.bars,simulation:s3}).code,'TRADE_LEDGER_INVALID');
+ const altered=breakout();altered[22]={...altered[22],h:121,c:120};
+ assert.equal(review.audit({bars:altered,simulation:original.simulation}).code,'SIMULATION_REPLAY_MISMATCH');
 });
 
 test('P4 review confines evaluation period to eligible next-open fills, warmup excluded',()=>{
