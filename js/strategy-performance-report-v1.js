@@ -27,13 +27,13 @@ function median(arr){
  return sorted.length%2?sorted[m]:(sorted[m-1]+sorted[m])/2;
 }
 function estimateExecutionDrag(trades,slip){
- let fees=0,slippage=0,grossNet=0;
+ let fees=0,slippage=0;
  for(const t of trades){
   const opening=t.entryOpen,rawExit=t.exitFill/(1-slip);
   const f=t.entryFee+t.exitFee;
   // This is a fill-price distance, NOT a no-slippage counterfactual P&L.
   slippage+=t.quantity*((t.entryFill-opening)+(rawExit-t.exitFill));
-  fees+=f;grossNet+=t.netPnl;
+  fees+=f;
  }
  return {feeCost:fees,fillDistanceSlippageEstimate:slippage,
   feeAndFillDistanceSum:fees+slippage,
@@ -61,7 +61,8 @@ function summarizeCase(value,now,deps){
  if(config==null||typeof config!=='object'||Array.isArray(config)){
   response.reason='INVALID_STRATEGY_CONFIGURATION';return response;
  }
- const simulated=deps.engine.simulate({interval:'1d',bars:value.series.bars,...config});
+ // A caller-supplied strategy cannot replace bars, interval or provenance.
+ const simulated=deps.engine.simulate({...config,interval:'1d',bars:value.series.bars});
  if(simulated.status!=='ok'){response.reason='STRATEGY_SIMULATION_'+(simulated.code||simulated.status);return response}
  const checked=deps.review.audit({bars:value.series.bars,simulation:simulated});
  if(checked.status!=='ok'){response.reason='REVIEW_RECONCILIATION_'+(checked.code||checked.status);return response}
