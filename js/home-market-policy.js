@@ -9,6 +9,34 @@ const SECONDARY=Object.freeze({
  KR:Object.freeze([['^IXIC','NASDAQ'],['^VIX','VIX'],['^TNX','미국 10년물']]),
  US:Object.freeze([['KRW=X','달러/원'],['^TNX','미국 10년물'],['^KS11','KOSPI']])
 });
+// Home-only presentation preferences. Reuse the market page's verified symbol catalog,
+ // not arbitrary user-entered URLs or order/quote sources. TICK remains a separate widget.
+const STORAGE_KEY='myinvest_home_priorities_v1';
+const CATALOG=Object.freeze([
+ ['^KS11','KOSPI'],['^KQ11','KOSDAQ'],['k3','KOSPI 200 선물'],['k4','KOSDAQ 150 선물'],
+ ['^GSPC','S&P 500'],['^IXIC','NASDAQ'],['^DJI','DOW'],['^SOX','SOX'],
+ ['^VIX','VIX'],['KRW=X','달러/원'],['^TNX','미국 10년물'],['^IRX','미국 단기금리'],
+ ['GC=F','금 선물'],['CL=F','WTI 원유'],['NQ=F','NASDAQ 선물'],
+ ['ES=F','S&P 500 선물'],['YM=F','DOW 선물']
+].map(item=>Object.freeze(item)));
+const LABELS=Object.freeze(Object.fromEntries(CATALOG));
+function selections(saved){
+ const list=region=>{
+  const values=Array.isArray(saved?.[region])?saved[region]:MAIN[region].map(([id])=>id);
+  return [...new Set(values.filter(id=>typeof id==='string'&&Object.prototype.hasOwnProperty.call(LABELS,id)))].slice(0,CATALOG.length);
+ };
+ return {KR:list('KR'),US:list('US')};
+}
+function display(region,saved){return selections(saved)[region].map(id=>[id,LABELS[id]])}
+function editSelection(saved,region,action,id){
+ const result=selections(saved),items=result[region];if(!items||!Object.prototype.hasOwnProperty.call(LABELS,id))return result;
+ const at=items.indexOf(id);
+ if(action==='add'&&at<0)items.push(id);
+ if(action==='remove'&&at>=0)items.splice(at,1);
+ if(action==='up'&&at>0)[items[at-1],items[at]]=[items[at],items[at-1]];
+ if(action==='down'&&at>=0&&at<items.length-1)[items[at],items[at+1]]=[items[at+1],items[at]];
+ return result;
+}
 const SOURCE=Object.freeze({N:'네이버',Y:'Yahoo',D:'Daum',H:'NH',W:'NH PLUG',F:'NH선물',K:'KIS',C:'코스콤',I:'IBKR',X:'dxFeed'});
 function kstHour(date=new Date()){
  return Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Seoul',hour:'2-digit',hourCycle:'h23'}).format(date));
@@ -41,5 +69,5 @@ function marketRegime(region,quotes,sources,received,now=Date.now()){
  if(sox.valid&&sox.timely&&sox.delta!==null)notes.push('SOX '+(sox.delta>0?'+':'')+sox.delta.toFixed(2)+'%');
  return {status:'observed',title,basis:details.join(' · '),notes};
 }
-root.HomeMarketPolicy=Object.freeze({MAIN,SECONDARY,regionAt,kstHour,quote,marketRegime});
+root.HomeMarketPolicy=Object.freeze({MAIN,SECONDARY,CATALOG,STORAGE_KEY,selections,display,editSelection,regionAt,kstHour,quote,marketRegime});
 })(window);
