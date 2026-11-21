@@ -1,0 +1,35 @@
+name: Isolated strategy comparison route regression
+on:
+  push:
+    branches:
+      - feat/strategy-scenario-integration-isolated
+permissions:
+  contents: read
+jobs:
+  offline-dev:
+    name: Strategy UI regression, synthetic accounts only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Syntax and full Node regression suite (no live keys)
+        run: |
+          node --check js/page-strategy.js
+          node --check js/strategy-scenario-compare-panel-v1.js
+          python3 -m py_compile tools/build_dev_pages.py tests/browser_strategy_compare_route_v1.py
+          for file in tests/*.test.cjs; do node "$file" || exit 1; done
+      - name: Python tests including isolated dev build asset security
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Install Playwright browser for synthetic-only UI tests
+        run: |
+          python3 -m venv .venv-browser
+          .venv-browser/bin/python -m pip install playwright==1.56.0
+          .venv-browser/bin/python -m playwright install --with-deps chromium
+      - name: Standalone synthetic PC and Fold compare
+        run: .venv-browser/bin/python tests/browser_strategy_scenario_compare_v1.py
+      - name: Existing strategy flow synthetic regression
+        run: .venv-browser/bin/python tests/browser_invest_workflow.py
+      - name: Dashboard strategy route synthetic integration
+        run: .venv-browser/bin/python tests/browser_strategy_compare_route_v1.py --widths 1440 690 344
