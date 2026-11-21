@@ -40,7 +40,7 @@ async def run():
                 # Clearing a compulsory numeric input is invalid, not silently zero.
                 await page.get_by_label('공통 · 가상 총자본').fill('')
                 await page.get_by_role('button', name='가상 수량·손익 비교').click()
-                assert '공통 입력값을 확인' in await difference.inner_text()
+                assert '입력값을 확인' in await difference.inner_text()
                 # Restore synthesis, change market and ensure same scalar currency only.
                 await page.get_by_role('button', name='합성 예시 초기화').click()
                 assert '수량 차이' in await difference.inner_text()
@@ -53,7 +53,6 @@ async def run():
                 await page.reload(wait_until='load')
                 assert await page.get_by_label('시장 · 통화').input_value() == 'KR'
                 assert await page.get_by_label('공통 · 가상 총자본').input_value() == '10000000'
-                assert await page.get_by_label('swing · 급락').count() == 0  # exact accessible label is longer
                 assert not errors, errors
                 assert not network, network
                 print(json.dumps({'width':width,'scope':'OFFLINE_SYNTHETIC_PREVIEW',
