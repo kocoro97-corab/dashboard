@@ -203,6 +203,21 @@ test('sector missing real source clock or missing membership provenance blocks',
  const y=fixture();y.sectors[0].members[1].observedAt=null;
  assert.equal(run(y).code,'SECTOR_MEMBER_EVIDENCE_INVALID');
 });
+test('same-date future sector member quote is rejected despite a matching date',()=>{
+ const x=fixture();x.sectors[0].members[0].observedAt=NOW+360000;
+ assert.equal(run(x).code,'SECTOR_MEMBER_EVIDENCE_INVALID');
+});
+test('sector member quote cannot occur after its source receipt',()=>{
+ const x=fixture();
+ x.sectors[0].members[0].observedAt=x.sectors[0].evidence.receivedAt+600000;
+ assert.equal(run(x).code,'SECTOR_MEMBER_EVIDENCE_INVALID');
+});
+test('extra secret fields in a technical output are rejected without being echoed',()=>{
+ const x=fixture();x.stocks[0].technical.token='PRIVATE_TECH_TOKEN';
+ const y=run(x);
+ assert.equal(y.code,'STOCK_TECHNICAL_SNAPSHOT_MISMATCH');
+ assert.equal(JSON.stringify(y).includes('PRIVATE_TECH_TOKEN'),false);
+});
 test('sector members from wrong trading date cannot be used as breadth',()=>{
  const x=fixture();x.sectors[0].members[1].asOf='2026-11-19';
  assert.equal(run(x).code,'SECTOR_MEMBER_EVIDENCE_INVALID');
