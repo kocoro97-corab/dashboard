@@ -8,6 +8,7 @@ const K=Object.freeze(['now','market','mode','benchmark','marketBreadth','sector
 const E=Object.freeze(['source','asOf','phase','observedAt','receivedAt']);
 const S=Object.freeze(['times','bars','volume']);
 const B=Object.freeze(['universe','expectedCount','observedCount','advancers','evidence']);
+const T=Object.freeze(['status','mode','asOf','trend','fast','slow','momentumPct','atr','support','resistance','volumeRatio','turnoverRatio','signal','evidence','risks','plan']);
 const LIMIT=Object.freeze({sectors:25,stocks:60,members:300,maxBars:300});
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const exact=(x,keys)=>obj(x)&&Object.keys(x).length===keys.length&&keys.every(k=>Object.hasOwn(x,k));
@@ -131,6 +132,8 @@ function prepare(input,libs){
      /^[0-9]{6}$/.test(member.symbol):/^[A-Z][A-Z0-9.-]{0,12}$/.test(member.symbol))||
     !num(member.change)||!num(member.relative)||
     !time(member.observedAt)||day(member.observedAt,market)!==bench.evidence.asOf||
+    member.observedAt>now+300000||now-member.observedAt>96*3600000||
+    member.observedAt>row.evidence.receivedAt+300000||
     member.asOf!==bench.evidence.asOf||typeof member.source!=='string'||
     !/^[A-Z][A-Z0-9_-]{0,15}$/.test(member.source))
     return blocked('SECTOR_MEMBER_EVIDENCE_INVALID',[{index:i}]);
@@ -159,7 +162,7 @@ function prepare(input,libs){
   symbols.add(row.symbol);
   const m=windowMetrics(insights.metrics(row.series,bench.series),row.evidence);
   const tech=row.technical;
-  if(!m||!obj(tech)||tech.status!=='ok'||tech.mode!=='swing'||
+  if(!m||!exact(tech,T)||tech.status!=='ok'||tech.mode!=='swing'||
    !time(tech.asOf)||tech.asOf!==row.series.times.at(-1)*1000||
    !num(tech.momentumPct)||!num(tech.volumeRatio)||
    !num(tech.turnoverRatio)||tech.volumeRatio<0||tech.turnoverRatio<0||
