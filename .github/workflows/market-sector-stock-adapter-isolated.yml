@@ -1,0 +1,27 @@
+name: Market-sector-stock reuse adapter (isolated)
+on:
+  push:
+    branches:
+      - feat/market-sector-stock-adapter-isolated
+permissions:
+  contents: read
+jobs:
+  synthetic-only:
+    name: Reuse existing SectorInsights and swing technicals, offline only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check syntax
+        run: |
+          node --check js/sector-insights.js
+          node --check js/work-trading-strategy.js
+          node --check js/market-sector-stock-alignment-v1.js
+          node --check js/market-sector-stock-adapter-v1.js
+          node --check tests/market-sector-stock-adapter-v1.test.cjs
+      - name: Run prior evidence-alignment tests (39)
+        run: node tests/market-sector-stock-alignment-v1.test.cjs
+      - name: Run existing analytics reuse and strict adapter tests (43)
+        run: node tests/market-sector-stock-adapter-v1.test.cjs
