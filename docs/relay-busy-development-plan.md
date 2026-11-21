@@ -46,3 +46,42 @@ No Worker deployment, environment-variable/secret update, logging setting change
 - Actual public capture: 65 successful payloads (58 Yahoo histories plus Naver data), one Daum futures HTTP 403, no retry/bypass. This is provider-direct reception, not authenticated relay reception. Actual NH calls 0. Independent public-response Chromium replay: US equity themes 1/5/20/60 returns and SPY-relative values PASS at all three widths; all 11 ETF return/relative values and theme → analysis → strategy provenance/1R/2R/reload PASS at all three widths. Strict public-only fixture mode was used for the latter (no synthetic price fallback). KR public replay confirms 79 industry rates/breadth and one received top theme with one rankable 5/20/60 sample row; uncollected member responses remain unavailable, not synthetic. These use synthetic login and cannot establish live authenticated relay success.
 
 No frontend publication before required CI PASS. Worker code candidate needs separate owner approval even if frontend/CI pass.
+
+## Owner approval and code-only runner
+
+Owner approved the above code-only rollout in chat. This assistant environment still
+has no Cloudflare credential binding or access to the owner's Cloud Shell.
+Public metadata remains HTTP 200 with no resilience marker; no actual upload has
+been attempted here.
+
+`tools/worker_code_only.py` is the owner-run path for this already-approved update.
+It uses only Python standard-library HTTPS calls. Account ID and the existing token
+are read from the owner environment or a local hidden token prompt, never command
+arguments or chat. It requires the existing Worker/role/subdomain/GATE and one
+100% active version. A split deployment is refused.
+
+- Source and unchanged policy hashes are pinned to the reviewed candidate. The
+  JSON policy is embedded locally; no npm installation or external build is needed.
+- A mode-0600 rollback record is saved in `$HOME/.myinvest-worker-rollback/` before
+  upload. All binding names (including secrets and GATE) use Cloudflare `inherit`
+  pinned to that exact active version, with `bindings_inherit=strict`.
+- The versions API uploads a candidate without activation. The runner rechecks
+  deployment/settings for concurrent changes before the deployment API switches
+  100% to it. No PUT/PATCH/DELETE/settings/secret/migration/plan API is used.
+- Compatibility and usage model are preserved. Exact settings, isolated metadata,
+  capability values and the marker/CORS exposure are checked after activation.
+  Failure restores the captured version and verifies it. A third party's newer
+  deployment is never overwritten, and rollback never uses `force`.
+- Cloudflare API access requires the existing account's Worker script read/edit
+  permissions. API/metadata failures emit only fixed codes and numeric HTTP
+  status; they never print response bodies, tokens or account details.
+- Twelve synthetic regressions cover pinned inheritance, preservation, rollback,
+  uncertain activation, concurrent updates, preflight refusals and private files.
+  These are not evidence of a successful Cloudflare upload. Actual owner execution
+  is still required; real NH/account/order/store calls remain zero.
+
+The owner command extracts only the runner and reviewed code/policy from a pinned,
+CI-passing source commit into a temporary directory using `git archive`. It does
+not merge/reset/stash or change the owner's working tree. The private rollback
+record survives temporary directory cleanup. Do not use the older
+`nh_v2_persistent.py` deploy command for this code-only scope: it bulk-writes secrets.
