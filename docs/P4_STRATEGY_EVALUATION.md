@@ -63,7 +63,7 @@ Setting `testStartAt` creates an explicit evaluation subperiod and excludes entr
 
 ## Tests required before integration
 
-- Strict monotonic timestamps and OHLCV validity, bound configuration, daily-only behavior.
+- Strict monotonic timestamps, daily spacing (at least 18 hours between bars, permitting DST-adjusted days), OHLCV validity, bound configuration, daily-only behavior.
 - A signal cannot fill at same-bar close; fill must occur on next bar.
 - Changing subsequent candles cannot change previous signal evidence.
 - Both stop and target in one bar uses stop first.
