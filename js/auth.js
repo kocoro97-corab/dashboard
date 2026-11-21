@@ -126,7 +126,8 @@ function renderSession(){
   if(left<=0){logout();return}
   const sec=Math.ceil(left/1000);
   const m=String(Math.floor(sec/60)).padStart(2,'0'),s=String(sec%60).padStart(2,'0');
-  $('sessionTimeTxt').textContent=`${m}:${s}`;
+  const h=String(Math.floor(sec/3600)).padStart(2,'0'),hm=String(Math.floor(sec%3600/60)).padStart(2,'0');
+  $('sessionTimeTxt').textContent=SESSION_MS>=3600000?`${h}:${hm}:${s}`:`${m}:${s}`;
   $('sessionFill').style.width=(left/SESSION_MS*100)+'%';
 }
 
