@@ -150,18 +150,21 @@ function examine(input){
    automaticOrders:false,realTimeVerified:false});
  const {market,mode,now}=input;
  const marketRow=marketEvidence(input.marketSnapshot,market,now);
- const allSectors=[],sectorMap=new Map(),sectorIds=new Set();
+ const sectorCounts=new Map();
+ for(const value of input.sectors){
+  if(obj(value)&&sectorId(value.id))
+   sectorCounts.set(value.id,(sectorCounts.get(value.id)||0)+1);
+ }
+ const allSectors=[],sectorMap=new Map();
  for(const value of input.sectors){
   const row=sectorEvidence(value,market,now,marketRow.asOf);
-  if(row.id!==null){
-   if(sectorIds.has(row.id)){row.status='blocked';row.posture='unavailable';row.issues.push('DUPLICATE_SECTOR_ID')}
-   sectorIds.add(row.id);
-   sectorMap.set(row.id,row);
+  if(row.id!==null&&sectorCounts.get(row.id)>1){
+   row.status='blocked';row.posture='unavailable';row.issues.push('DUPLICATE_SECTOR_ID');
   }
-  allSectors.push(Object.freeze({...row,issues:Object.freeze([...new Set(row.issues)])}));
+  const locked=Object.freeze({...row,issues:Object.freeze([...new Set(row.issues)])});
+  allSectors.push(locked);
+  if(locked.id)sectorMap.set(locked.id,locked);
  }
- // Use final list only; duplicates cannot accidentally leave a valid sector mapped.
- for(const row of allSectors)if(row.id)sectorMap.set(row.id,row);
  const seenSymbols=new Set(),candidates=[];
  for(const value of input.candidates){
   const row=stockEvidence(value,market,now,marketRow.asOf);
