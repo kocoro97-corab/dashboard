@@ -12,7 +12,7 @@ const KEYS={
   'generatedAt','observedAt','retrievedAt','rawText','sections','sources'],
  source:['id','title','url','publishedAt'],
  section:['kind','heading','body','sourceIds'],
- legacy:['date','text','at','generatedAt','observedAt','retrievedAt']
+ legacy:['date','text','at','generatedAt','observedAt','retrievedAt','source']
 };
 const bad=(code)=>({ok:false,code,records:null,storageModified:false});
 const isObj=o=>o!==null&&typeof o==='object'&&!Array.isArray(o);
@@ -119,7 +119,7 @@ function parseLegacyJSON(text,{now}={}){
  if(!Array.isArray(rows)||rows.length>30)return bad('INVALID_LEGACY_COLLECTION');
  const out=[];
  for(const row of rows){
-  if(!keysAllowed(row,'legacy'))return bad('INVALID_LEGACY_ROW');
+  if(!keysAllowed(row,'legacy')||(row.source!==undefined&&row.source!=='user'))return bad('INVALID_LEGACY_ROW');
   const n=dependency().legacy(row,{now});
   if(!n.ok)return bad('INVALID_LEGACY_'+n.code);
   const inspected=inspectRecord(n.record,{now});
