@@ -7,5 +7,25 @@ function metrics(value,benchmark){const windows=Object.fromEntries(periods.map(n
 function summarize(values,benchmark){if(!values?.length)return metrics(null,benchmark);const all=values.map(v=>metrics(v,benchmark)),windows={};for(const n of periods){const rows=all.map(m=>m.windows[n]);windows[n]=rows.every(Boolean)?{change:rows.reduce((s,x)=>s+x.change,0)/rows.length,relative:rows.reduce((s,x)=>s+x.relative,0)/rows.length,asof:rows[0].asof}:null}const vols=all.map(x=>x.volumeChange),short=windows[5]?.relative,long=windows[20]?.relative;return {windows,volumeChange:vols.every(Number.isFinite)?vols.reduce((a,b)=>a+b,0)/vols.length:null,rotation:short==null||long==null?'자료 부족':long>0?(short>long?'상대강도 확대':'상대강도 둔화'):(short>0?'단기 회복 관찰':'상대 약세')}}
 function basket(items){if(!Array.isArray(items)||!items.length)return null;const maps=items.map(x=>new Map(x.times.map((t,i)=>[day(t),{t,c:x.bars[i],v:x.volume?.[i]}]))),common=[...maps[0].keys()].filter(d=>maps.every(m=>m.has(d)&&Number.isFinite(m.get(d).c)&&m.get(d).c>0)).sort();if(common.length<2)return null;const bases=maps.map(m=>m.get(common[0]).c);return {times:common.map(d=>maps[0].get(d).t),bars:common.map(d=>maps.reduce((sum,m,i)=>sum+m.get(d).c/bases[i],0)/maps.length),volume:[]}}
 function correlation(a,b,max=60,min=20){if(!a||!b)return null;const returns=value=>new Map(value.times.slice(1).map((t,i)=>[day(t),{prev:day(value.times[i]),v:value.bars[i]>0?value.bars[i+1]/value.bars[i]-1:null}])),x=returns(a),y=returns(b),pairs=[...x.entries()].filter(([d,v])=>y.has(d)&&v.prev===y.get(d).prev&&Number.isFinite(v.v)&&Number.isFinite(y.get(d).v)).slice(-max);if(pairs.length<min)return null;const av=pairs.reduce((s,[,v])=>s+v.v,0)/pairs.length,bv=pairs.reduce((s,[d])=>s+y.get(d).v,0)/pairs.length;let cov=0,va=0,vb=0;for(const [d,v] of pairs){const dx=v.v-av,dy=y.get(d).v-bv;cov+=dx*dy;va+=dx*dx;vb+=dy*dy}if(va<=0||vb<=0)return null;return {value:Math.max(-1,Math.min(1,cov/Math.sqrt(va*vb))),count:pairs.length,from:pairs[0][0],to:pairs.at(-1)[0]}}
-root.SectorInsights=Object.freeze({aligned,metrics,summarize,basket,correlation});
+// Qualify equal-weight theme samples without treating incomplete coverage as a market-wide rank.
+function sampleBreadth(sample,expected){
+ const count=Number.isInteger(expected)&&expected>0?expected:Array.isArray(sample)?sample.length:0;
+ const seen=new Set(),rows=(Array.isArray(sample)?sample:[]).filter(row=>{
+  if(!row||!Number.isFinite(row.change)||!Number.isFinite(row.relative))return false;
+  const id=String(row.symbol||row.code||'');if(!id||seen.has(id))return false;seen.add(id);return true;
+ });
+ const observed=rows.length,up=rows.filter(x=>x.change>0).length,down=rows.filter(x=>x.change<0).length,
+  outperform=rows.filter(x=>x.relative>0).length,positiveLeaders=rows.filter(x=>x.change>0&&x.relative>0).length;
+ const coverage=count>0&&observed<=count?observed/count:null;
+ return {expected:count,observed,up,down,flat:observed-up-down,outperform,positiveLeaders,
+  coverage,breadth:observed?up/observed*100:null,rankable:observed>=2&&coverage!==null&&coverage>=0.6};
+}
+function leaderClass(row){
+ if(!Number.isFinite(row?.change)||!Number.isFinite(row?.relative))return '비교 자료 부족';
+ if(row.change>0&&row.relative>0)return '기간 상대강세 후보';
+ if(row.change>0)return '상승 · 기준지수 후행';
+ if(row.relative>0)return '하락·보합 · 상대방어';
+ return '기간 상대약세 관찰';
+}
+root.SectorInsights=Object.freeze({aligned,metrics,summarize,basket,correlation,sampleBreadth,leaderClass});
 })(window);
