@@ -98,6 +98,7 @@ function simulate(options={}){
   if(position){
    exposed++;
    if(b.o<=position.stop)settle(i,b.o,'stop_gap');
+   else if(b.o>=position.target)settle(i,position.target,'target_gap_capped');
    else if(b.l<=position.stop&&b.h>=position.target)settle(i,position.stop,'stop_first_ambiguous',true);
    else if(b.l<=position.stop)settle(i,position.stop,'stop');
    else if(b.h>=position.target)settle(i,position.target,b.o>=position.target?'target_gap_capped':'target');
@@ -121,7 +122,7 @@ function simulate(options={}){
   statistics:{trades:trades.length,wins:wins.length,losses:losses.length,
    winRatePct:trades.length?wins.length/trades.length*100:null,
    initialCapital:c.initialCapital,finalEquity:cashEquity,netPnl:cashEquity-c.initialCapital,
-   netReturnPct:(cashEquity/c.initialCapital-1)*100,grossPnl:grossProfit,feesAndSlippageExcludedFromGross:false,
+   netReturnPct:(cashEquity/c.initialCapital-1)*100,grossPnl:grossProfit,grossIncludesSlippage:true,grossExcludesFees:true,
    feeCost:totalCosts,maxRealizedDrawdownPct:maxDD,exposureBars:exposed,
    meanNetR:trades.length?mean(trades.map(t=>t.netR)):null,
    profitFactor:lossAbs>0?winTotal/lossAbs:null},
