@@ -6,7 +6,7 @@
  */
 (function(root){
 'use strict';
-const LIMITS=Object.freeze({records:90,candidates:60,recordBytes:196608,
+const LIMITS=Object.freeze({records:90,candidates:60,recordChars:196608,
  gapDays:7,maxCoverageShiftPoints:15,graceMs:300000});
 const ROOT_KEYS=Object.freeze(['market','mode','now','records']);
 const RECORD_KEYS=Object.freeze(['asOf','capturedAt','adapterOutput']);
@@ -41,7 +41,6 @@ const fail=code=>Object.freeze({
  archiveReady:false,automaticTrading:false,orderApproved:false,
  marketPriceVerified:false,accountAccessed:false,providerCalls:0
 });
-const freezeList=x=>Object.freeze(x.map(Object.freeze));
 function dependencies(){
  if(typeof module==='object'&&module.exports)return {
   explanation:require('./investment-evidence-explanation-v1.js'),
@@ -62,7 +61,7 @@ function normalize(record,market,mode,now,previousDay,previousCaptured,deps){
   (previousDay!==null&&record.asOf<=previousDay)||
   (previousCaptured!==null&&record.capturedAt<=previousCaptured)||
   cleanSize(record.adapterOutput)===null||
-  cleanSize(record.adapterOutput)>LIMITS.recordBytes)
+  cleanSize(record.adapterOutput)>LIMITS.recordChars)
   return {error:'INVALID_OR_UNSORTED_RECORD'};
  const dateAtCapture=deps.alignment.localDay(record.capturedAt,market);
  if(!dateAtCapture||dateAtCapture<record.asOf)
@@ -96,7 +95,7 @@ function normalize(record,market,mode,now,previousDay,previousCaptured,deps){
   !Array.isArray(explanation.candidates)||
   explanation.candidates.length>LIMITS.candidates)
   return {error:'INCONSISTENT_ARCHIVED_REPORT'};
- const candidates=[];
+ const candidates=[],seenSymbols=new Set();
  for(const x of explanation.candidates){
   if(!obj(x)||!['blocked','manual-context-review'].includes(x.readiness)||
    x.tradeSignal!==null||x.ranking!==null||x.probability!==null||
@@ -105,8 +104,14 @@ function normalize(record,market,mode,now,previousDay,previousCaptured,deps){
    !(x.sectorId===null||(typeof x.sectorId==='string'&&
     /^[A-Za-z0-9][A-Za-z0-9_-]{0,27}$/.test(x.sectorId)))||
    !Array.isArray(x.evidence)||x.evidence.length>3||
-   !Array.isArray(x.alerts)||x.alerts.length>20)
+   !Array.isArray(x.alerts)||x.alerts.length>20||
+   (x.readiness==='manual-context-review'&&
+    (x.symbol===null||x.sectorId===null)))
    return {error:'INVALID_ARCHIVED_CANDIDATE'};
+  if(x.symbol!==null){
+   if(seenSymbols.has(x.symbol))return {error:'DUPLICATE_ARCHIVED_STOCK_ID'};
+   seenSymbols.add(x.symbol);
+  }
   const blockers=x.readiness==='blocked';
   if((blockers&&x.hypotheticalRiskCeilingPct!==null)||
    (!blockers&&(!Object.hasOwn(POSTURE,x.observation)||
