@@ -111,7 +111,7 @@ async function approveUser(targetId){
 // Development-only usability: one-hour inactivity in the isolated Pages session.
 // The operating site remains at 5 minutes. GAS must independently enforce its
 // staging-only 60-minute idle limit; changing this client timer alone is insufficient.
-const SESSION_MS=window.MYINVEST_TRANSPORT_CONFIG?.devSession===true?60*60*1000:5*60*1000;
+const SESSION_MS=typeof window!=='undefined'&&window.MYINVEST_TRANSPORT_CONFIG?.devSession===true?60*60*1000:5*60*1000;
 let sessionInterval=null,sessionBound=false,lastWrite=0;
 const lastActive=()=>Number(AUTH_STORAGE.getItem('invest_last_active'))||0;
 function touchActive(force){
