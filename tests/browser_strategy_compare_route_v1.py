@@ -45,6 +45,8 @@ async def exercise():
       assert await page.locator('[data-result="swing"]').count()==1
       assert await page.get_by_label('day · 진입가',exact=True).input_value()==''
       assert await page.get_by_label('공통 · 가상 총자본',exact=True).input_value()==''
+      assert '공개 일봉 연결을 먼저 확인' in await page.locator('[data-result="day"]').inner_text()
+      assert 'ENGINE_UNAVAILABLE' not in await page.locator('.msc1').inner_text()
       assert '입력값을 확인' in await page.locator('[data-result="comparison"]').inner_text()
       assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth+1'),width
       # Standalone tool does not use API, account snapshot or app storage.

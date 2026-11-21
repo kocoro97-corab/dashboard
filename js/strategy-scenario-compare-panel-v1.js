@@ -113,10 +113,11 @@ function mount(host,{linked=false}={}){
   const item=make('div',undefined,'stat');
   item.append(make('small',label),make('strong',value));parent.append(item);
  }
- function drawMode(mode,result){
+ function drawMode(mode,result,reason){
   const out=outputs[mode];out.replaceChildren();
   if(!result||result.status==='invalid'){
-   out.append(make('p','입력 확인: '+(result?.reason||'ENGINE_UNAVAILABLE'),'warning'));
+   const messages={MARKET_LINK_UNAVAILABLE:'선택 종목의 공개 일봉 연결을 먼저 확인하세요.',INVALID_CAPITAL_OR_LONG_PRICE:'자본·현금·가격을 확인하세요. 손절가 < 진입가 < 목표가가 필요합니다.',INVALID_RISK_ASSUMPTIONS:'비용·위험 비율과 정수 거래단위를 확인하세요.',INVALID_MODE_MARKET_CURRENCY:'선택 종목의 시장·통화를 확인하세요.'};
+   out.append(make('p','입력 확인: '+(messages[result?.reason||reason]||'계산 입력값과 모듈 연결을 확인하세요.'),'warning'));
    return;
   }
   out.append(make('h3',result.status==='hypothetical'?'가상 계획 산출':'조건 재검토 필요'));
@@ -158,7 +159,7 @@ function mount(host,{linked=false}={}){
   const result=(linked&&(marketState?.status!=='ready'||market.value!==marketState.market)?{status:'invalid',code:'MARKET_LINK_UNAVAILABLE'}:root.MYInvestStrategyScenarioCompareV1?.compare?.(snapshot()))||
    {status:'invalid',code:'COMPARE_ENGINE_MISSING'};
   last=result;
-  drawMode('day',result.day);drawMode('swing',result.swing);
+  drawMode('day',result.day,result.code);drawMode('swing',result.swing,result.code);
   drawDifference(result);
   return result;
  }
