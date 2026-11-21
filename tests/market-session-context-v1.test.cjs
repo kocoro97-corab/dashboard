@@ -144,6 +144,20 @@ test('weekend reference local zone includes both correct market clocks',()=>{
  assert.equal(x.regions.KR.localDate,'2026-11-21');
  assert.equal(x.regions.US.localDate,'2026-11-20');
 });
+test('weekend and supplied closures never expose hypothetical regular-session instants',()=>{
+ const weekend=session.context({now:Date.parse('2026-03-08T15:00:00+09:00')});
+ assert.equal(weekend.regions.US.localDate,'2026-03-08');
+ assert.equal(weekend.regions.US.window,'weekend');
+ assert.equal(weekend.regions.US.referenceKst.opening,null);
+ assert.equal(weekend.regions.US.referenceKst.closing,null);
+ const closed=session.context({
+  now:Date.parse('2026-11-20T11:00:00+09:00'),
+  calendar:{KR:{'2026-11-20':'closed'}}
+ });
+ assert.equal(closed.regions.KR.window,'calendar-supplied-closed');
+ assert.equal(closed.regions.KR.referenceKst.opening,null);
+ assert.equal(closed.regions.KR.referenceKst.closing,null);
+});
 test('invalid timestamp is explicit failure without consulting Date.now',()=>{
  for(const now of [undefined,NaN,0,Infinity,-1,'2026-11-20']){
   const value=session.context({now});
