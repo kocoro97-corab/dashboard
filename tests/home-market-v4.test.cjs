@@ -78,3 +78,42 @@ test('error banner displays the safe code and whitelisted target without expansi
  assert.match(shellCss,/read-status-compact/);
  assert.ok(!diagSource.includes('JSON.stringify(error)'));
 });
+
+test('home index preferences use a fixed catalogue and preserve explicit removals',()=>{
+ const p=policy(),base=p.selections();
+ assert.equal(p.display('KR',base).length,7);
+ assert.ok(!p.CATALOG.some(([id])=>id==='TICK'));
+ let configured=p.editSelection(base,'KR','remove','^KQ11');
+ configured=p.editSelection(configured,'KR','up','k4');
+ configured=p.editSelection(configured,'KR','add','^VIX');
+ configured=p.editSelection(configured,'KR','add','http://arbitrary.url');
+ assert.ok(!configured.KR.includes('^KQ11'));
+ assert.ok(configured.KR.includes('^VIX'));
+ assert.ok(!configured.KR.includes('http://arbitrary.url'));
+ assert.deepEqual(configured.US,base.US);
+ assert.deepEqual(p.selections({KR:['^VIX','^VIX','NOT_REAL'],US:[]}),{KR:['^VIX'],US:[]});
+});
+test('market regime identifies last observed close and rejects mismatched observation days',()=>{
+ const p=policy(),weekend=samples(102,101),observed=now-2*86400000;
+ weekend.quotes['^KS11'].observedAt=observed;
+ weekend.quotes['^KQ11'].observedAt=observed+3600000;
+ let result=p.marketRegime('KR',weekend.quotes,weekend.sources,weekend.timestamps,now);
+ assert.equal(result.status,'last-close');assert.match(result.title,/최근 확인 종가 기준/);
+ assert.ok(result.notes.some(x=>x.includes('실시간')));
+ weekend.quotes['^KQ11'].observedAt=now-4*86400000;
+ result=p.marketRegime('KR',weekend.quotes,weekend.sources,weekend.timestamps,now);
+ assert.equal(result.status,'insufficient');
+ assert.match(result.basis,/관측일/);
+});
+test('receipt-only regime flags unverified origin timestamp instead of claiming real-time',()=>{
+ const p=policy(),s=samples(102,101);
+ const result=p.marketRegime('KR',s.quotes,s.sources,s.timestamps,now);
+ assert.equal(result.status,'observed');
+ assert.ok(result.notes.some(x=>x.includes('원천 관측시각 미제공')));
+});
+test('sanitized NH futures diagnostics enumerate supported verified failures',()=>{
+ for(const code of ['NH_NO_PRICE','NH_CONTRACT_EXPIRY','NH_SYMBOL_MISMATCH','NH_IDENTITY_UNVERIFIED','NH_REFERENCE_INVALID']){
+  assert.ok(diagSource.includes(code),code);
+ }
+ assert.ok(!diagSource.includes('error?.body'));
+});
