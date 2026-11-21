@@ -239,6 +239,7 @@ test('output candidate events are sorted by symbol and independent of input cand
 });
 test('changes in a constituent layer are distinguished from overall posture change',()=>{
  const f=fixture();
+ f.records[1].adapterOutput=copy(f.records[1].adapterOutput);
  const day=f.records[1].adapterOutput.context;
  day.marketContext.posture='mixed';
  day.marketContext.breadthPct=50;
@@ -373,6 +374,7 @@ test('blocked record detail containing account information is rejected',()=>{
 });
 test('a forged classification context cannot be used as a time series',()=>{
  const f=fixture();
+ f.records[1].adapterOutput=copy(f.records[1].adapterOutput);
  f.records[1].adapterOutput.context.candidates[0].posture='aligned-watch';
  f.records[1].adapterOutput.context.candidates[0].riskMultiplierIllustration=0.5;
  assert.equal(compiled(f).code,'INCONSISTENT_ARCHIVED_REPORT');
