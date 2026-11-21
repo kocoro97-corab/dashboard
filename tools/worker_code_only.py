@@ -43,8 +43,8 @@ def request_stage(method, path):
         return 'WORKER_SETTINGS_READ'
     if path.endswith('/deployments'):
         return 'VERSION_ACTIVATE' if method == 'POST' else 'DEPLOYMENTS_READ'
-    if '/versions?' in path:
-        return 'VERSION_UPLOAD'
+    if path.split('?', 1)[0].endswith('/versions'):
+        return 'VERSION_UPLOAD' if method == 'POST' else 'VERSIONS_LIST_READ'
     if '/versions/' in path:
         return 'ACTIVE_VERSION_READ'
     return 'CLOUDFLARE_API'
@@ -145,6 +145,23 @@ def active(api, base):
     return {'id': row['id'], 'version': versions[0]['version_id']}
 
 
+def recent_versions(api, base):
+    doc = api('GET', base + '/versions')
+    rows = doc.get('items') if isinstance(doc, dict) else doc
+    if not isinstance(rows, list) or not rows:
+        raise Stop('VERSION_HISTORY_REQUIRED')
+    ids, numbers = set(), set()
+    for row in rows:
+        if not isinstance(row, dict) or not UUID.fullmatch(row.get('id', '')):
+            raise Stop('VERSION_HISTORY_INVALID')
+        n = row.get('number')
+        if type(n) not in (int, float) or n < 1 or n != int(n) or row['id'] in ids or n in numbers:
+            raise Stop('VERSION_HISTORY_INVALID')
+        ids.add(row['id'])
+        numbers.add(n)
+    return sorted(rows, key=lambda row: row['number'], reverse=True)
+
+
 def verified_settings(settings):
     if not isinstance(settings, dict) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', settings.get('compatibility_date', '')):
         raise Stop('EXISTING_SETTINGS_REQUIRED')
@@ -207,23 +224,33 @@ def deploy(api, account, save, public_probe=probe, code=None, diagnose=False):
     if old.get('freshTestEnvironment') is not True or old.get('testEnvironment') != 'nh-staging':
         raise Stop('ISOLATED_GAS_METADATA_REQUIRED')
     api('GET', base + '/versions/' + before['version'])
+    # The legacy /workers/scripts/.../versions API accepts only "latest" for
+    # inherit.version_id; UUID inheritance is supported by a different Workers
+    # API, not this existing script. Refuse an unactivated latest upload.
+    if recent_versions(api, base)[0]['id'] != before['version']:
+        raise Stop('LATEST_VERSION_NOT_ACTIVE')
     if diagnose:
         return {'status': 'PASS', 'phase': 'WORKER_CODE_ONLY_PREFLIGHT_READ_ONLY',
                 'deploymentAttempted': False}
     code = bundle() if code is None else code
-    # Preserve runtime compatibility and pin ALL inherited bindings, including
-    # secrets and GATE, to the exact active version rather than latest upload.
+    # At this point latest is the active version. Strict inheritance prevents
+    # unresolved bindings being silently dropped; lineage is checked afterward.
     metadata = {'main_module': 'worker.mjs', 'compatibility_date': settings['compatibility_date'],
         'compatibility_flags': settings.get('compatibility_flags', []),
-        'bindings': [{'name': b['name'], 'type': 'inherit', 'version_id': before['version']} for b in bindings]}
+        'bindings': [{'name': b['name'], 'type': 'inherit', 'version_id': 'latest'} for b in bindings]}
     if 'usage_model' in settings:
         metadata['usage_model'] = settings['usage_model']
     save({'worker': NAME, 'deployment': before, 'settings': settings})
+    if recent_versions(api, base)[0]['id'] != before['version'] or active(api, base) != before or api('GET', base + '/settings') != settings:
+        raise Stop('CONCURRENT_CHANGE_NO_UPLOAD')
     body, mime = multipart(metadata, code)
     uploaded = api('POST', base + '/versions?bindings_inherit=strict', body, mime)
     candidate = uploaded.get('id', '')
     if not UUID.fullmatch(candidate):
         raise Stop('UPLOADED_VERSION_UNCONFIRMED')
+    history = recent_versions(api, base)
+    if len(history) < 2 or [row['id'] for row in history[:2]] != [candidate, before['version']]:
+        raise Stop('CONCURRENT_UPLOAD_NO_ACTIVATION')
     if active(api, base) != before or api('GET', base + '/settings') != settings:
         raise Stop('CONCURRENT_CHANGE_NO_ACTIVATION')
     deployment = lambda version: {'strategy': 'percentage', 'versions': [{'version_id': version, 'percentage': 100}]}

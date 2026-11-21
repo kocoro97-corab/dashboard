@@ -31,6 +31,7 @@ class Cloud:
                 {'name': 'GATE', 'type': 'durable_object_namespace', 'class_name': 'RelayGate', 'namespace_id': 'SYNTHETIC'}]}
         self.fault = None
         self.probes = 0
+        self.uploads = [{'id': OLD, 'number': 1}]
 
     def __call__(self, method, path, body=None, mime=None):
         self.calls.append((method, path, body))
@@ -45,8 +46,18 @@ class Cloud:
                     raise m.Stop('CLOUDFLARE_RESULT_UNCONFIRMED')
                 return {'id': 'new-deployment'}
             return {'deployments': [{'id': 'deployment-' + self.version, 'versions': [{'version_id': self.version, 'percentage': 100}]}]}
-        if '/versions?' in path:
+        if path.split('?', 1)[0].endswith('/versions'):
+            if method == 'GET':
+                return {'items': copy.deepcopy(self.uploads)}
             self.multipart = BytesParser(policy=default).parsebytes(('Content-Type: ' + mime + '\r\nMIME-Version: 1.0\r\n\r\n').encode() + body)
+            metadata = json.loads(list(self.multipart.iter_parts())[0].get_payload(decode=True))
+            if any(b.get('type') == 'inherit' and b.get('version_id', 'latest') != 'latest' for b in metadata['bindings']):
+                raise m.Stop('CLOUDFLARE_REQUEST_REJECTED', 400, 'VERSION_UPLOAD', [10057])
+            if self.fault == 'upload-before':
+                self.uploads.append({'id': OTHER, 'number': 2})
+            self.uploads.append({'id': NEW, 'number': max(r['number'] for r in self.uploads) + 1})
+            if self.fault == 'upload-after':
+                self.uploads.append({'id': OTHER, 'number': 3})
             if self.fault == 'concurrent':
                 self.version = OTHER
             return {'id': NEW}
@@ -121,7 +132,7 @@ class CodeOnlyTests(unittest.TestCase):
         result = m.deploy(cloud, 'a' * 32, saved.append, public_probe=cloud.probe, code=b'// synthetic code')
         return result, saved
 
-    def test_inherits_every_binding_from_exact_active_version_and_preserves_settings(self):
+    def test_api_compatible_latest_inheritance_preserves_active_settings(self):
         c = Cloud()
         before = copy.deepcopy(c.settings)
         result, saved = self.run_deploy(c)
@@ -130,11 +141,56 @@ class CodeOnlyTests(unittest.TestCase):
         self.assertEqual(c.settings, before)
         parts = list(c.multipart.iter_parts())
         metadata = json.loads(parts[0].get_payload(decode=True))
-        self.assertEqual(metadata['bindings'], [{'name': b['name'], 'type': 'inherit', 'version_id': OLD} for b in before['bindings']])
+        self.assertEqual(metadata['bindings'], [{'name': b['name'], 'type': 'inherit', 'version_id': 'latest'} for b in before['bindings']])
         self.assertNotIn('migrations', metadata)
         self.assertNotIn('observability', metadata)
         self.assertTrue(all(method in ['GET', 'POST'] for method, _, _ in c.calls))
         self.assertFalse(any('secrets' in path for _, path, _ in c.calls))
+
+    def test_old_uuid_inheritance_reproduces_owner_10057(self):
+        c = Cloud()
+        body, mime = m.multipart({'main_module': 'worker.mjs', 'bindings': [{'name': 'GATE', 'type': 'inherit', 'version_id': OLD}]}, b'//test')
+        with self.assertRaises(m.Stop) as raised:
+            c('POST', '/synthetic/versions?bindings_inherit=strict', body, mime)
+        self.assertEqual(raised.exception.provider_codes, [10057])
+        self.assertEqual(c.version, OLD)
+
+    def test_unactivated_latest_version_blocks_before_upload(self):
+        c = Cloud()
+        c.uploads.append({'id': OTHER, 'number': 2})
+        with self.assertRaises(m.Stop) as raised:
+            self.run_deploy(c)
+        self.assertEqual(raised.exception.code, 'LATEST_VERSION_NOT_ACTIVE')
+        self.assertTrue(all(method == 'GET' for method, _, _ in c.calls))
+
+    def test_upload_race_before_candidate_blocks_activation(self):
+        c = Cloud()
+        c.fault = 'upload-before'
+        with self.assertRaises(m.Stop) as raised:
+            self.run_deploy(c)
+        self.assertEqual(raised.exception.code, 'CONCURRENT_UPLOAD_NO_ACTIVATION')
+        self.assertEqual(c.version, OLD)
+        self.assertFalse(any(method == 'POST' and path.endswith('/deployments') for method, path, _ in c.calls))
+
+    def test_upload_race_after_candidate_blocks_activation(self):
+        c = Cloud()
+        c.fault = 'upload-after'
+        with self.assertRaises(m.Stop) as raised:
+            self.run_deploy(c)
+        self.assertEqual(raised.exception.code, 'CONCURRENT_UPLOAD_NO_ACTIVATION')
+        self.assertEqual(c.version, OLD)
+
+    def test_version_history_uses_sequence_not_response_order(self):
+        c = Cloud()
+        c.uploads = [{'id': OLD, 'number': 1}, {'id': OTHER, 'number': 2}]
+        self.assertEqual(m.recent_versions(c, '/synthetic')[0]['id'], OTHER)
+
+    def test_malformed_history_fails_closed(self):
+        c = Cloud()
+        c.uploads[0]['number'] = True
+        with self.assertRaises(m.Stop):
+            self.run_deploy(c)
+        self.assertTrue(all(method == 'GET' for method, _, _ in c.calls))
 
     def test_wrong_role_blocks_before_any_upload(self):
         c = Cloud()

@@ -64,7 +64,9 @@ arguments or chat. It requires the existing Worker/role/subdomain/GATE and one
   JSON policy is embedded locally; no npm installation or external build is needed.
 - A mode-0600 rollback record is saved in `$HOME/.myinvest-worker-rollback/` before
   upload. All binding names (including secrets and GATE) use Cloudflare `inherit`
-  pinned to that exact active version, with `bindings_inherit=strict`.
+  with the script API's supported `version_id: "latest"` and `bindings_inherit=strict`.
+  The runner refuses upload unless latest is active, then verifies the candidate
+  immediately follows that active version before any activation.
 - The versions API uploads a candidate without activation. The runner rechecks
   deployment/settings for concurrent changes before the deployment API switches
   100% to it. No PUT/PATCH/DELETE/settings/secret/migration/plan API is used.
@@ -75,7 +77,7 @@ arguments or chat. It requires the existing Worker/role/subdomain/GATE and one
 - Cloudflare API access requires the existing account's Worker script read/edit
   permissions. API/metadata failures emit only fixed codes and numeric HTTP
   status; they never print response bodies, tokens or account details.
-- Twelve synthetic regressions cover pinned inheritance, preservation, rollback,
+- Synthetic regressions cover API-compatible inheritance, preservation, rollback,
   uncertain activation, concurrent updates, preflight refusals and private files.
   These are not evidence of a successful Cloudflare upload. Actual owner execution
   is still required; real NH/account/order/store calls remain zero.
@@ -100,3 +102,29 @@ only the existing Worker/version read preflight, without checkpoint/upload/activ
 The actual candidate Worker and policy hashes, binding inheritance, activation and
 rollback behavior are unchanged. Added privacy/read-only regressions pass locally;
 live rejection detail still requires owner execution in the credential-bearing shell.
+
+### Confirmed 10057 correction
+
+The owner then supplied `VERSION_UPLOAD`, HTTP 400, repeated 10057 and fixed
+inherit/metadata/version-ID categories. The official SDK documents that
+`/workers/scripts/{script}/versions` accepts only `"latest"` for inherited
+bindings. UUID inheritance is supported by the separate Workers API
+`/workers/workers/{worker_id}/versions`, not this existing script endpoint.
+The first runner incorrectly used a UUID on the script endpoint.
+
+Reference: Cloudflare's generated official SDK, `MetadataBindingWorkersBindingKindInherit`:
+https://github.com/cloudflare/cloudflare-python/blob/main/src/cloudflare/types/workers/scripts/version_create_params.py
+
+The corrected runner stays on the existing script endpoint and uses `"latest"`.
+It checks numbered version history before checkpoint/upload and refuses an
+unactivated latest version. After upload it requires the two newest versions to
+be exactly candidate then captured active version. An intervening upload on
+either side stops activation; original active settings and deployment must still
+match. These are pre/post checks, not an atomic server lock: avoid parallel owner
+deployments during rollout. No secret values are read or supplied, and no settings,
+secret, migration, force or new Worker API is used.
+
+23 runner tests include a legacy-API fake that rejects UUID inheritance with
+10057, accepts latest, and checks unpublished-version refusals and upload races.
+All 318 Python tests pass locally. The Worker candidate itself is unchanged;
+actual activation still requires owner execution and metadata readback.
