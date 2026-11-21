@@ -8,6 +8,7 @@ Overall: **PARTIAL**. Existing news, events, local archives and transfer modules
 - Starting head: `cfe60e8e2b68e538c2bb43866b23f67bb4afbfdb`.
 - Baseline CI runs [44909700441](https://github.com/kocoro97-corab/dashboard/actions/runs/44909700441) and [44909696603](https://github.com/kocoro97-corab/dashboard/actions/runs/44909696603): SUCCESS. Earlier failure 44909527712 was the Work browser fixture blocking the newly introduced same-origin static JSON GET.
 - Fixture allowance now matches **only** GET `https://kocoro97-corab.github.io/dashboard-v2-dev/data/myinvest-public-briefings-v1.json`; other requests remain blocked. NH staging stays excluded for this branch.
+- The first integration commit also exposed an old `browser_final_integration.py` assumption: the manual briefing must sit beside live news in two columns. New requirements instead put the shared report above news and manual history in a collapsed section. Reproduced failure at all three widths; updated only those layout assertions and explicitly opened history. Existing timestamp, saved-text scrolling, calendar focus, news-to-stock navigation and unrelated industry/home checks are retained. Evidence: `final-integration-before.log` / `final-integration-after.log`.
 
 ## Implemented changes
 
@@ -74,6 +75,7 @@ All browser logins/providers below are synthetic; no real NH request is involved
 | Existing archive/feed/legacy UI | `tests/browser_news_briefing_panel_v1.py`, `browser_news_public_feed_v1.py`, `browser_public_briefing.py` | PASS at 1440 / 690 / 344px |
 | Existing app shell/handoff | `tests/browser_app_shell.py`, `browser_work_handoff.py` | PASS at 1440 / 690 / 344px; no broad external allow-list added |
 | Integrated UI | `tests/browser_news_final_v1.py --output /workspace/output/news-briefing-20261121/final-browser` | 3 widths PASS: ordering, no horizontal overflow, cancel same-day replacement, JSON download, private fields rejected, late import cancelled, route/logout cleanup |
+| Existing final integration | `tests/browser_final_integration.py --output /workspace/output/news-briefing-20261121/final-integration-after` | Updated layout expectation only; see final log for nine industry/news/home scenarios |
 | Actual capture replay | Above test with `--feed /workspace/output/news-briefing-20261121/final-live-feed.json` | 3 widths PASS; identical public report, explicit daily-rate time uncertainty |
 | Independent public capture | `collect_public_briefing_v1.py` | 13 quotes, core cross-check PASS, no optional failures in this run; six industry samples |
 | Local actual feed rerun | `update_public_briefing_feed_v1.cjs` | First local update PASS, duplicate SKIPPED; never published |
