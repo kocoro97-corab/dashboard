@@ -24,7 +24,7 @@ function safeUrl(s){
  try{
   const u=new URL(s);
   if(u.protocol!=='https:'||u.username||u.password||!u.hostname||
-    u.hostname==='localhost'||u.hostname.endsWith('.local')||u.hostname.endsWith('.internal')||
+    u.hostname==='localhost'||u.hostname.startsWith('[')||u.hostname.endsWith('.local')||u.hostname.endsWith('.internal')||
     /^\d{1,3}(?:\.\d{1,3}){3}$/.test(u.hostname))return null;
   u.hash='';return u.href;
  }catch{return null}
@@ -136,8 +136,12 @@ function selection(records,{now,date}={}){
  const chosen=distinct.find(x=>date===undefined||x.record.date===date)||null;
  if(!chosen)return {ok:true,empty:true,today,selected:null,dates:[...new Set(distinct.map(x=>x.record.date))],
   label:'등록된 브리핑 없음',freshness:'NO_REPORT'};
- const r=chosen.record;
+ const r=chosen.record,observationHours=r.observedAt==null?null:
+  Math.round(Math.max(0,(now-r.observedAt)/3600000)*10)/10;
  return {ok:true,empty:false,today,isToday:r.date===today,
+  marketObservationAgeHours:observationHours,
+  marketObservationStatus:observationHours===null?'UNKNOWN':
+   observationHours>36?'DECLARED_OLDER_THAN_36H':'DECLARED_UNVERIFIED',
   dates:[...new Set(distinct.map(x=>x.record.date))],
   selected:r,review:chosen.review,
   label:r.origin==='manual'?'사용자 수동 등록':r.origin==='chatgpt-task'?
