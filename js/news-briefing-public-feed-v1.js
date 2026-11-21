@@ -76,7 +76,7 @@ async function load({fetcher,baseHref,now=Date.now(),signal}={}){
   provenance:'SAME_ORIGIN_FILE_UNAUTHENTICATED',
   marketDataVerified:false,chatgptScheduledDeliveryConfirmed:false};
 }
-function mount(host,{fetcher=root.fetch?.bind(root),baseHref=root.location?.href}={}){
+function mount(host,{fetcher=root.fetch?.bind(root),baseHref=root.location?.href,fallbackRecords=()=>[]}={}){
  if(!host||typeof host.replaceChildren!=='function')return {ok:false,code:'INVALID_TARGET'};
  const doc=host.ownerDocument||root.document;
  const el=(tag,text,cls)=>{
@@ -86,7 +86,7 @@ function mount(host,{fetcher=root.fetch?.bind(root),baseHref=root.location?.href
   return node;
  };
  let destroyed=false,sequence=0,controller=null;
- let result=null,selectedKey='';
+ let result=null,lastGood=null,selectedKey='';
  const fmt=t=>t==null?'미확인':
   new Date(t).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+' KST';
  const sourceLabel=o=>o==='manual'?'수동 게시':
@@ -99,31 +99,42 @@ function mount(host,{fetcher=root.fetch?.bind(root),baseHref=root.location?.href
   host.replaceChildren();
   const area=el('section',undefined,'mifv1');
   const style=el('style');style.textContent=css;area.append(style);
-  const title=el('h3','공유 공개시장 브리핑');
-  const explain=el('p','같은 사이트에 게시된 공개 브리핑을 PC·모바일에서 조회합니다. ChatGPT 예약 작업 자동 전달은 연결되지 않았습니다.');
+  const title=el('h3','오늘의 AI 뉴스·투자 전략');
+  const explain=el('p','오전 7시 투자 브리핑 · ChatGPT 예약 작업 자동 전달 미연결 · 생성 방식과 자료 시각을 확인하세요.');
   explain.className='mifv1-description';
   const bar=el('div',undefined,'mifv1-controls'),button=el('button','공유 파일 새로고침');
   button.type='button';button.addEventListener('click',()=>{void refresh()});
   bar.append(button);area.append(title,explain,bar);
   const status=el('p',message||'공개 브리핑 파일 확인 중…');
   status.setAttribute('role','status');area.append(status);
-  if(result?.ok&&result.records.length){
-   const records=[...result.records].sort((a,b)=>b.date.localeCompare(a.date)||
+  let visible=lastGood?.records||[],local=false;
+  if(!visible.length){try{const rows=fallbackRecords();const checked=deps().transfer.exportJSON(rows,{now:Date.now()});if(checked.ok){visible=JSON.parse(checked.json).records;local=true}}catch{}}
+  if(visible.length){
+   const records=[...visible].sort((a,b)=>b.date.localeCompare(a.date)||
     (b.generatedAt??0)-(a.generatedAt??0)||a.origin.localeCompare(b.origin));
    if(!records.some(r=>key(r)===selectedKey))selectedKey=key(records[0]);
    const select=el('select');select.setAttribute('aria-label','공유 브리핑 날짜 및 작성 경로');
    for(const r of records){const option=el('option',r.date+' · '+sourceLabel(r.origin));option.value=key(r);select.append(option)}
    select.value=selectedKey;select.addEventListener('change',()=>{selectedKey=select.value;draw('공개 공유 파일의 작성 경로와 수치는 별도 검증되지 않았습니다.')});
    bar.append(select);
-   const r=records.find(v=>key(v)===selectedKey);
+   const r=records.find(v=>key(v)===selectedKey),today=deps().archive.kstDate(Date.now());
+   area.append(el('p',(local?'이 브라우저의 수동 보관 자료 · 기기 간 공유되지 않음':'공유 공개파일 · PC·모바일 공통')+' · '+(r.date===today?'오늘 날짜 보고서':'지난 보고서 · 오늘 브리핑 미등록'),'mifv1-freshness'));
+   if(r.origin==='dashboard-pipeline')area.append(el('p','규칙 기반 브리핑 · 실제 AI 모델 호출 없음'));
+   if(lastGood&&result&&!result.ok)area.append(el('p','이전 정상 파일 유지 · 최근 갱신 실패 · '+result.code,'mifv1-stale'));
+   if(r.observedAt==null)area.append(el('p','시장 관측시각 미확인 · 최신 시세로 판단하지 마세요.'));
+   else if(Date.now()-r.observedAt>36*3600000)area.append(el('p','시장 관측 36시간 초과 · 휴장 여부와 관측일을 확인하세요.'));
    area.append(el('h4',r.title),el('p',
     r.date+' · '+sourceLabel(r.origin)+' · 생성 '+fmt(r.generatedAt)+' · 관측 '+fmt(r.observedAt)+' · 조회 '+fmt(r.retrievedAt)));
-   if(r.rawText)area.append(el('pre',r.rawText));
+   if(r.rawText){if(!r.sections.length)area.append(el('pre',r.rawText));else{const raw=el('details');raw.append(el('summary','전체 원문 보기'),el('pre',r.rawText));area.append(raw)}}
+   const response=el('section',undefined,'mifv1-market-response');
+   const responseKinds=new Set(['us-market','kr-market','futures','rates-fx','sectors','daytrade','swing']);
+   if(r.sections.some(x=>responseKinds.has(x.kind)))response.append(el('h4','미국장 마감 및 한국장 대응'));
    for(const section of r.sections){
     const block=el('article');block.append(el('strong',section.heading),el('pre',section.body));
     if(section.sourceIds.length)block.append(el('small','출처 ID: '+section.sourceIds.join(', ')));
-    area.append(block);
+    if(responseKinds.has(section.kind))response.append(block);else area.append(block);
    }
+   if(response.children.length)area.append(response);
    if(r.sources.length){
     const list=el('ul');
     for(const entry of r.sources){
@@ -144,10 +155,12 @@ function mount(host,{fetcher=root.fetch?.bind(root),baseHref=root.location?.href
   controller?.abort();
   controller=typeof AbortController!=='undefined'?new AbortController():null;
   draw('공개 브리핑 파일 확인 중…');
-  const next=await load({fetcher,baseHref,signal:controller?.signal});
+  const requestController=controller,timeout=requestController?root.setTimeout(()=>requestController.abort(),15000):null;let next;
+  try{next=await load({fetcher,baseHref,signal:requestController?.signal})}finally{if(timeout!==null)root.clearTimeout(timeout)}
   if(destroyed||current!==sequence)return next;
   result=next;
   if(next.ok){
+   lastGood=next;
    draw('같은 사이트에서 공개 브리핑 '+next.records.length+
     '건을 읽었습니다. 게시 경로·내용·가격·출처는 독립 검증되지 않았습니다.');
   }else if(next.code==='PUBLIC_FEED_NOT_PUBLISHED'){
@@ -157,7 +170,7 @@ function mount(host,{fetcher=root.fetch?.bind(root),baseHref=root.location?.href
  }
  draw('공개 브리핑 파일 확인 중…');
  void refresh();
- return {ok:true,refresh,destroy:()=>{
+ return {ok:true,refresh,refreshLocal:()=>draw(result?.ok?'공유 공개 브리핑 · 출처와 시각 확인':'공유 파일 미연결 · 보관 자료 확인'),destroy:()=>{
   destroyed=true;sequence++;controller?.abort();host.replaceChildren();
  }};
 }

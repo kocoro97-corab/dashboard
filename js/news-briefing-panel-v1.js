@@ -56,7 +56,7 @@ function migrateLegacy(storage,{now=Date.now()}={}){
  if(!imported.ok)return imported;
  return {...imported,legacyCount:parsed.records.length,legacyPreserved:true};
 }
-function mount(host,{storage=root.localStorage}={}){
+function mount(host,{storage=root.localStorage,onChange=()=>{}}={}){
  if(!host||typeof host.replaceChildren!=='function')return {ok:false,code:'INVALID_TARGET'};
  const document=host.ownerDocument||root.document;
  const mk=(tag,text,cls)=>{
@@ -74,10 +74,11 @@ function mount(host,{storage=root.localStorage}={}){
   origin==='chatgpt-task'?'ChatGPT 작업 결과로 선언됨 (검증 안 됨)':
   '대시보드 생성으로 선언됨 (검증 안 됨)';
  const keyOf=r=>r.date+'|'+r.origin;
- let selectedKey='',notice='이 보관함은 자동 동기화되지 않습니다. 파일 가져오기는 직접 선택해야 합니다.';
+ let destroyed=false;let selectedKey='',notice='이 보관함은 자동 동기화되지 않습니다. 파일 가져오기는 직접 선택해야 합니다.';
  const style=mk('style');
  style.textContent='.mibv1{padding:14px;border:1px solid #344158;border-radius:11px;background:#111c2d;color:#e7eef9;margin:12px 0}.mibv1 *{box-sizing:border-box}.mibv1 h3{margin:0 0 6px}.mibv1 p{margin:7px 0}.mibv1-meta{color:#b6c5d9;font-size:12px}.mibv1-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0}.mibv1 button,.mibv1 select{font:inherit;min-height:38px;max-width:100%;border:1px solid #465775;border-radius:7px;padding:7px 10px;background:#264365;color:#eef5ff}.mibv1 button{cursor:pointer}.mibv1 select{min-width:220px}.mibv1 pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto;padding:12px;background:#0c1626;border:1px solid #344158;border-radius:8px;color:#edf3ff;font:inherit;line-height:1.55}.mibv1 article{border-top:1px solid #344158;padding:10px 0}.mibv1 a{color:#b1d9ff;overflow-wrap:anywhere}.mibv1-status{font-size:12px;color:#c8dcf4}@media(max-width:650px){.mibv1 select{width:100%;min-width:0}.mibv1 button{flex:1}}';
  function render(){
+  if(destroyed)return;
   const current=read(storage,{now:Date.now()});
   host.replaceChildren();
   const area=mk('section',undefined,'mibv1');area.append(style);
@@ -94,7 +95,10 @@ function mount(host,{storage=root.localStorage}={}){
    if(!file)return;
    if(file.size>MAX_FILE_BYTES){notice='파일 용량이 제한(3MB)을 초과했습니다.';render();return}
    try{
-    const result=importBackup(await file.text(),storage,{now:Date.now()});
+    const text=await file.text();if(destroyed)return;const now=Date.now(),existing=read(storage,{now});
+    const preview=existing.ok?transfer().mergeJSON(text,existing.records,{now}):null;
+    if(preview?.ok&&preview.stats.updated>0&&!(typeof root.confirm==='function'&&root.confirm('기존 브리핑 '+preview.stats.updated+'건을 새 버전으로 교체하시겠습니까? 취소하면 기존 기록을 유지합니다.'))){notice='교체를 취소했습니다. 기존 기록을 유지합니다.';render();return}
+    const result=importBackup(text,storage,{now});
     if(!result.ok)notice='가져오기 거부: '+result.code+' (기존 자료는 유지됩니다)';
     else{
      selectedKey='';const counts=result.stats;
@@ -103,7 +107,7 @@ function mount(host,{storage=root.localStorage}={}){
       '건 · 동일 시각 충돌 '+counts.equalTimeConflicts+'건. 충돌 기록은 기존 자료를 유지합니다.';
     }
    }catch{notice='파일을 읽지 못했습니다. 기존 자료는 유지됩니다.'}
-   render();
+   render();onChange();
   });
   const saveButton=button('JSON 백업 내보내기',()=>{
    const exported=exportBackup(storage,{now:Date.now()});
@@ -119,7 +123,7 @@ function mount(host,{storage=root.localStorage}={}){
    notice=result.ok?
     '기존 수동 기록 '+result.legacyCount+'건을 검사했습니다. 원본은 그대로 유지합니다. 동일 시각 충돌은 기존 기록이 우선합니다.':
     '복사 중단: '+result.code+' (기존 자료는 유지됩니다)';
-   render();
+   render();onChange();
   });
   bar.append(loadButton,saveButton,legacyButton,picker);
   area.append(bar,status);
@@ -169,7 +173,7 @@ function mount(host,{storage=root.localStorage}={}){
   host.append(area);
  }
  render();
- return {ok:true,refresh:render};
+ return {ok:true,refresh:render,destroy:()=>{destroyed=true;host.replaceChildren()}};
 }
 const api=Object.freeze({read,importBackup,exportBackup,migrateLegacy,mount,
  storageKey:KEY,legacyKey:LEGACY_KEY});

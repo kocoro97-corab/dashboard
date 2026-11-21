@@ -48,7 +48,7 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
      if file.is_file() and artifact in file.resolve().parents:r.fulfill(content_type=mimetypes.guess_type(str(file))[0] or 'application/octet-stream',body=file.read_bytes());return
     # Only the fixed optional public briefing JSON file is absent from this synthetic build.
     # Reject all other unexpected network requests as before.
-    if not args.published and r.request.method=='GET' and u.hostname=='kocoro97-corab.github.io' and u.path=='/dashboard-v2-dev/data/myinvest-public-briefings-v1.json':
+    if not args.published and r.request.method=='GET' and r.request.url=='https://kocoro97-corab.github.io/dashboard-v2-dev/data/myinvest-public-briefings-v1.json':
      r.fulfill(status=404,content_type='application/json',body='');return
     if r.request.url==ENDPOINT:
      h=r.request.headers;result=request(edge,json.loads(r.request.post_data or '{}'),origin=h.get('origin',''),authorization=h.get('authorization'),method=r.request.method,REMOTE_ADDR='127.0.0.1',HTTP_HOST=HOST,HTTP_X_FORWARDED_PROTO='https',HTTP_REFERER=h.get('referer',''),HTTP_X_MYINVEST_DEV_CLIENT=h.get('x-myinvest-dev-client',''),HTTP_X_MYINVEST_DEV_KEY=h.get('x-myinvest-dev-key',''));r.fulfill(status=result['status'],headers=result['headers'],body=json.dumps(result['body']));return

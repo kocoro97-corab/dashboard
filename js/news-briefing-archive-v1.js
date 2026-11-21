@@ -26,6 +26,7 @@ function safeUrl(s){
   if(u.protocol!=='https:'||u.username||u.password||!u.hostname||
     u.hostname==='localhost'||u.hostname.startsWith('[')||u.hostname.endsWith('.local')||u.hostname.endsWith('.internal')||
     /^\d{1,3}(?:\.\d{1,3}){3}$/.test(u.hostname))return null;
+  for(const key of u.searchParams.keys())if(/^(?:key|token|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|secret|password|authorization|auth|account(?:[_-]?(?:number|balance|id))?)$/i.test(key))return null;
   u.hash='';return u.href;
  }catch{return null}
 }

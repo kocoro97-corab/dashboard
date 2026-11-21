@@ -19,7 +19,7 @@ async def main():
                 for width in [1440, 690, 344]:
                     h = await Harness(browser, artifact, synthetic_feeds(), width).start_browser(tmp)
                     try:
-                        await h.login('news')
+                        await h.login('news');await h.page.locator('.nev5-management > summary').click()
                         panel = h.page.locator('.mibv1')
                         assert await panel.count() == 1, 'archive panel must mount once'
                         assert '자동 전달은 아직 연결되지 않았습니다' in await panel.inner_text()

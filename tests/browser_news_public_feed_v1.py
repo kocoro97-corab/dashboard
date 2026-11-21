@@ -55,7 +55,9 @@ async def main():
                         bad['records'][0]['accountNumber']='PRIVATE_DO_NOT_DISPLAY'
                         file.write_text(json.dumps(bad,ensure_ascii=False),encoding='utf-8')
                         await section.get_by_role('button',name='공유 파일 새로고침').click()
-                        await section.get_by_text('INVALID_PUBLIC_FEED_RECORD_',exact=False).wait_for()
+                        await section.get_by_role('status').filter(has_text='INVALID_PUBLIC_FEED_RECORD_').wait_for()
+                        assert '이전 정상 파일 유지' in await section.inner_text()
+                        assert '합성 공유 보고서' in await section.inner_text()
                         assert 'PRIVATE_DO_NOT_DISPLAY' not in await section.inner_text()
                         assert await h.page.evaluate(
                           "localStorage.getItem('myinvest_public_briefing_archive_v1')===null")

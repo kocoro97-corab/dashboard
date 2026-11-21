@@ -47,6 +47,7 @@ jobs:
           .venv-browser/bin/python tests/browser_public_briefing.py
           .venv-browser/bin/python tests/browser_news_briefing_panel_v1.py
           .venv-browser/bin/python tests/browser_news_public_feed_v1.py
+          .venv-browser/bin/python tests/browser_news_final_v1.py
           .venv-browser/bin/python tests/browser_final_integration.py
           .venv-browser/bin/python tests/browser_dense_review.py --widths 1440 344 --scales 1 1.5 --output /tmp/dense-ci
           .venv-browser/bin/python tests/browser_work_handoff.py

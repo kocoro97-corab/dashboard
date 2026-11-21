@@ -19,7 +19,7 @@ test('rule-based briefing preserves observed/retrieved/generated timestamps and 
  assert.equal(x.record.origin,'dashboard-pipeline');
  assert.equal(x.record.generatedAt,NOW);assert.equal(x.record.observedAt,OBS);
  assert.equal(x.record.retrievedAt,NOW-30000);
- assert.equal(x.record.sections.length,8);
+ assert.equal(x.record.sections.length,9);assert.equal(x.record.sections.at(-1).kind,'events');
  assert.equal(x.record.sections.find(s=>s.kind==='us-market').sourceIds[0],'provider');
  assert.equal(x.marketDataVerified,false);assert.equal(x.autoPublished,false);
  assert.equal(x.ruleBasedNotAI,true);
@@ -89,4 +89,28 @@ test('invalid and large input returns no output',()=>{
  assert.equal(build.convert(' '.repeat(3000001),{now:NOW}).code,'INPUT_TOO_LARGE');
  const s=snapshot();s.token='private';
  assert.equal(build.convert(JSON.stringify(s),{now:NOW}).ok,false);
+});
+test('different US session days cannot compose a combined closing report',()=>{
+ const s=snapshot();s.quotes[0].observedAt-=86400000;
+ assert.equal(make(s).code,'US_CLOSE_SESSION_MISMATCH');
+});
+test('calendar states stay explicit for weekend and declared holidays without invented live clocks',()=>{
+ for(const state of ['UNKNOWN','WEEKEND','DECLARED_HOLIDAY']){
+  const r=make(snapshot({calendar:{us:state,kr:state}}));assert.equal(r.ok,true,r.code);
+  assert.match(r.record.sections.find(x=>x.kind==='risk').body,state==='WEEKEND'?/주말/:state==='UNKNOWN'?/휴장 여부 미확인/:/휴장으로 제공됨 · 원문 검증 전/);
+ }
+ assert.equal(make(snapshot({calendar:{us:'OPEN',kr:'UNKNOWN'}})).code,'INVALID_CALENDAR');
+});
+test('daily two-year yield shows observation date and unknown time, not a 13-week proxy',()=>{
+ const s=snapshot();s.quotes.push({key:'ust2y',value:3.2,changePct:null,phase:'indicative',observedAt:null,observationDate:'2026-11-19',sourceId:'provider'});
+ const r=make(s);assert.equal(r.ok,true,r.code);assert.match(r.record.sections.find(x=>x.kind==='rates-fx').body,/미 국채 2년: 3.2 %.*2026-11-19 · 시각 미확인/);
+ s.quotes.at(-1).observationDate='2026-11-13';assert.equal(make(s).code,'INVALID_QUOTE');
+});
+test('sector sample retains citations and rejects private extra fields',()=>{
+ const s=snapshot({sectors:[{name:'합성 업종',changePct:2,up:8,total:10,observedAt:null,sourceId:'provider'}]});
+ const r=make(s);assert.equal(r.ok,true,r.code);const row=r.record.sections.find(x=>x.kind==='sectors');assert.match(row.body,/80.0%/);assert.deepEqual(row.sourceIds,['provider']);
+ s.sectors[0].accountNumber='PRIVATE';assert.equal(make(s).code,'INVALID_SECTOR_SAMPLE');
+});
+test('encoded credential query parameters are rejected before creating public report',()=>{
+ const s=snapshot();s.sources[0].url='https://example.org/?%61ccess_token=PRIVATE';assert.equal(make(s).code,'UNSAFE_URL');
 });

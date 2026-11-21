@@ -65,8 +65,8 @@ test('obvious private information and credential-shaped source query parameters 
   const r=io.exportJSON([draft({rawText,sections:[]})],{now:NOW});
   assert.ok(['POSSIBLE_PRIVATE_INFORMATION','INVALID_RECORD_POSSIBLE_SECRET_IN_PUBLIC_REPORT'].includes(r.code),rawText);
  }
- const link=normal(draft({sources:[{id:'s1',title:'원문',url:'https://example.org/?api_key=something-secret'}]}));
- assert.equal(io.exportJSON([link],{now:NOW}).code,'POSSIBLE_PRIVATE_INFORMATION');
+ const link=draft({sources:[{id:'s1',title:'원문',url:'https://example.org/?api_key=something-secret'}]});
+ assert.equal(io.exportJSON([link],{now:NOW}).code,'INVALID_RECORD_INVALID_SOURCE');
 });
 test('a single malformed record blocks the whole import instead of dropping and misreporting completeness',()=>{
  const data=JSON.parse(exportOne().json);
