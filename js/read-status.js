@@ -2,14 +2,24 @@
 (function(root){
 'use strict';
 const errors=new Map(),pending=new Map(),layers=new Set(['browser','relay','gas','nh','storage']);let serial=0;
-const known=new Set('AUTH_REQUIRED RELAY_PUBLIC_URL_DENIED RELAY_PUBLIC_FAILED RELAY_RATE_LIMIT RELAY_BUSY RELAY_UPSTREAM_NETWORK RELAY_REDIRECT_DENIED RELAY_GAS_ACCESS_REQUIRED RELAY_TARGET_MISMATCH RELAY_ACCESS_CLOSED RELAY_RESPONSE_INVALID GAS_REJECTED GAS_HTTP GAS_NON_JSON NH_HTTP NH_NETWORK NH_TOKEN NH_RSP NH_NO_PRICE NH_CONTRACT NH_CONTRACT_CODE NH_CONTRACT_NAME NH_CONTRACT_EXPIRY NH_OBSERVATION NH_STALE NH_TIMEOUT NH_NETWORK_ERROR NH_RESPONSE_INVALID NH_DATA_INVALID NH_AUTH_MISSING NH_RESPONSE_REJECTED READ_TIMEOUT READ_NETWORK READ_FORMAT SESSION_CHANGED'.split(' '));
+const known=new Set('AUTH_REQUIRED RELAY_PUBLIC_URL_DENIED RELAY_PUBLIC_FAILED RELAY_RATE_LIMIT RELAY_BUSY RELAY_UPSTREAM_NETWORK RELAY_REDIRECT_DENIED RELAY_GAS_ACCESS_REQUIRED RELAY_TARGET_MISMATCH RELAY_ACCESS_CLOSED RELAY_RESPONSE_INVALID GAS_REJECTED GAS_HTTP GAS_NON_JSON NH_HTTP NH_NETWORK NH_TOKEN NH_RSP NH_NO_PRICE NH_CONTRACT NH_CONTRACT_CODE NH_CONTRACT_NAME NH_CONTRACT_EXPIRY NH_OBSERVATION NH_STALE NH_TIMEOUT NH_NETWORK_ERROR NH_RESPONSE_INVALID NH_DATA_INVALID NH_AUTH_MISSING NH_RESPONSE_REJECTED NH_UPSTREAM NH_IDENTITY_UNVERIFIED NH_IDENTITY_AMBIGUOUS NH_SYMBOL_MISMATCH NH_REFERENCE_UNAVAILABLE NH_REFERENCE_INVALID NH_NO_BLOCK NH_UNSUPPORTED NH_PATH NH_CURRENCY_MISMATCH READ_TIMEOUT READ_NETWORK READ_FORMAT SESSION_CHANGED'.split(' '));
 const identity=()=>root.crypto?.randomUUID?.()||'read-'+Date.now().toString(36)+'-'+(++serial);
 function classify(error,meta={}){const http=Number.isInteger(error?.http)&&error.http>=100&&error.http<=599?error.http:null,code=known.has(error?.code)?error.code:error?.name==='AbortError'?'READ_TIMEOUT':error?.name==='SyntaxError'?'READ_FORMAT':'READ_NETWORK';let type=[502,503,504].includes(http)?'SERVER':[401,403].includes(http)?'ACCESS':['READ_TIMEOUT','NH_TIMEOUT'].includes(code)?'TIMEOUT':['READ_FORMAT','RELAY_RESPONSE_INVALID','NH_RESPONSE_INVALID','NH_DATA_INVALID'].includes(code)?'FORMAT':code==='NH_AUTH_MISSING'?'ACCESS':code==='NH_NETWORK_ERROR'?'NETWORK':code.startsWith('NH_')?'NH':code.startsWith('GAS_')?'GAS':'NETWORK';const retryable=![401,403].includes(http)&&([502,503,504].includes(http)||['RELAY_BUSY','RELAY_UPSTREAM_NETWORK','READ_NETWORK','READ_TIMEOUT'].includes(code));return {id:meta.id||identity(),at:new Date().toISOString(),scope:meta.scope==='account'?'account':'public',layer:layers.has(error?.verifiedLayer)?error.verifiedLayer:'unknown',http,code,type,retryable,attempts:meta.attempts||1}}
 function snapshot(){return [...errors.values()].map(x=>({...x}))}
 // Only fixed, non-sensitive target names are exposed. Unknown keys stay unnamed.
 const SAFE_TARGETS=Object.freeze({'future:k3':'KOSPI 200 선물','future:k4':'KOSDAQ 150 선물','account:nhQuotes':'NH 시세 중계','account:sessionInfo':'인증 상태'});
 const TYPE_MESSAGE=Object.freeze({SERVER:'서버·중계 장애',ACCESS:'인증·권한 확인 필요',TIMEOUT:'응답 시간 초과',NETWORK:'네트워크·원천 연결 확인',FORMAT:'응답 형식·데이터 검증 실패',GAS:'GAS 중계 실패',NH:'증권사 시세 조회 실패'});
-const CODE_MESSAGE=Object.freeze({NH_NO_PRICE:'NH 선물 가격 미수신 · 계약·원천 응답 확인 필요',NH_CONTRACT:'선물 계약·만기 식별 확인 필요',NH_OBSERVATION:'실제 시세 관측시각 미확인'});
+const CODE_MESSAGE=Object.freeze({
+ NH_NO_PRICE:'NH 선물 가격 미수신 · 가격·계약·원천 응답 확인 필요',
+ NH_CONTRACT:'선물 계약·만기 검증 실패',NH_CONTRACT_CODE:'선물 계약코드 검증 실패',
+ NH_CONTRACT_NAME:'선물 계약명 검증 실패',NH_CONTRACT_EXPIRY:'선물 만기 검증 실패',
+ NH_OBSERVATION:'실제 시세 관측시각 미확인',NH_STALE:'NH 선물 자료의 관측시각이 오래됨',
+ NH_SYMBOL_MISMATCH:'선물 종목식별자 불일치',NH_IDENTITY_UNVERIFIED:'선물 종목 식별 미검증',
+ NH_IDENTITY_AMBIGUOUS:'선물 계약 식별 중복·불명확',NH_REFERENCE_UNAVAILABLE:'선물 검증 기준자료 미수신',
+ NH_REFERENCE_INVALID:'선물 검증 기준자료 오류',NH_NO_BLOCK:'선물 응답에서 데이터 구간 미확인',
+ NH_UNSUPPORTED:'선물 상품 조회 지원 여부 확인 필요',NH_PATH:'선물 조회 경로 확인 필요',
+ NH_CURRENCY_MISMATCH:'시세 통화 불일치',NH_UPSTREAM:'NH 원천 데이터 응답 확인 필요'
+});
 const issueMessage=value=>CODE_MESSAGE[value.code]||TYPE_MESSAGE[value.type]||'원인 미확인';
 const safeTarget=key=>SAFE_TARGETS[key]||'요청 범위 미확인';
 const timeKST=value=>{const d=new Date(value);return Number.isFinite(d.getTime())?d.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hourCycle:'h23',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' KST':'발생시각 미확인'};
