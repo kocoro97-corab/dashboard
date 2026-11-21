@@ -7,7 +7,7 @@
 const K=Object.freeze(['now','market','mode','benchmark','marketBreadth','sectors','stocks']);
 const E=Object.freeze(['source','asOf','phase','observedAt','receivedAt']);
 const S=Object.freeze(['times','bars','volume']);
-const B=Object.freeze(['expectedCount','observedCount','advancers','evidence']);
+const B=Object.freeze(['universe','expectedCount','observedCount','advancers','evidence']);
 const LIMIT=Object.freeze({sectors:25,stocks:60,members:300,maxBars:300});
 const obj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
 const exact=(x,keys)=>obj(x)&&Object.keys(x).length===keys.length&&keys.every(k=>Object.hasOwn(x,k));
@@ -96,7 +96,8 @@ function prepare(input,libs){
   Math.abs(benchMetrics.w20.relative)>1e-9)
   return blocked('BENCHMARK_METRICS_UNAVAILABLE');
  const breadth=input.marketBreadth;
- if(!exact(breadth,B)||!evidence(breadth.evidence,bench.evidence.asOf)||
+ if(!exact(breadth,B)||breadth.universe!==(market==='KR'?'KR_LISTED':'US_LISTED')||
+  !evidence(breadth.evidence,bench.evidence.asOf)||
   !Number.isSafeInteger(breadth.expectedCount)||
   !Number.isSafeInteger(breadth.observedCount)||
   !Number.isSafeInteger(breadth.advancers)||
