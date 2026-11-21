@@ -42,7 +42,7 @@ function estimateExecutionDrag(trades,slip){
 function summarizeCase(value,now,deps){
  if(!value||typeof value!=='object'||Array.isArray(value)||
   !safeName(value.id,50)||!safeName(value.label,100))
-  return {id:null,label:null,status:'blocked',reason:'INVALID_CASE_ID_OR_LABEL'};
+  return {id:null,label:null,status:'blocked',reason:'INVALID_CASE_ID_OR_LABEL',metrics:null};
  const identity={market:value.series?.market||null,symbol:value.series?.symbol||null,
   exchange:value.series?.exchange||null,currency:value.series?.currency||null,
   priceConvention:value.series?.priceConvention||null,
