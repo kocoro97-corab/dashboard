@@ -39,3 +39,5 @@
 ## Codex 작업 보류
 
 현재 진행 중인 Codex의 중계/실데이터 장애 해결을 방해하지 않는다. 사용자가 추후 "코덱스 지시문 작성"을 요청하면 이 문서 및 그때의 완료 상태를 참고하여 **스테이징 GAS와 개발 Pages 양쪽의 일치된 게시/실환경 검증만** 과제에 반영한다. 그 전에는 지시문을 새로 발송하지 않는다.
+
+CI-only branch `fix/dev-hour-session-isolated` triggers synthetic push regression; no live NH/GAS test or worker deployment is authorized by this commit.
