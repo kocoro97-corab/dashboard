@@ -8,7 +8,7 @@ from playwright.async_api import async_playwright
 ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/'tools'),str(ROOT/'tests')]
 from build_dev_pages import build
-from public_integration_support import Harness,synthetic_feeds
+from public_integration_support import Harness,synthetic_feeds,ENDPOINT
 
 p=argparse.ArgumentParser()
 p.add_argument('--widths',nargs='+',type=int,default=[1440,690,344])
@@ -17,7 +17,7 @@ args=p.parse_args()
 async def exercise():
  with tempfile.TemporaryDirectory() as tmp:
   artifact=Path(tmp)/'public'
-  build(artifact,use_public_config=False)
+  build(artifact,relay_endpoint=ENDPOINT)
   feeds=synthetic_feeds()
   async with async_playwright() as pw:
    browser=await pw.chromium.launch(headless=True)
