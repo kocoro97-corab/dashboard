@@ -73,10 +73,14 @@ function marketAt(now,market,calendar){
  else window='unknown';
  const basis=weekend?'weekend-by-local-calendar':
   supplied?'owner-supplied-calendar-unverified':'weekdays-only-holiday-unverified';
- const regularOpening=localizedWindowReference({
+ // On weekend/explicitly supplied closure, there is no session to reference.
+ // In particular, DST switch Sundays can change their UTC offset midday;
+ // never display a fabricated weekend open/close instant.
+ const noSession=weekend||supplied?.status==='closed';
+ const regularOpening=noSession?null:localizedWindowReference({
   market,now,localDate:local.date,minuteOfDay:HOURS[market].open
  });
- const regularClosing=localizedWindowReference({
+ const regularClosing=noSession?null:localizedWindowReference({
   market,now,localDate:local.date,minuteOfDay:close
  });
  return Object.freeze({
