@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>MY INVEST V2 — 투자 근거 리포트 합성 미리보기</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}
+html{background:#091522;min-width:0}
+body{margin:0;padding:clamp(8px,2.4vw,24px);color:#e9f0fa;font-family:system-ui,"Malgun Gothic",sans-serif}
+.preview-nav{max-width:1180px;margin:0 auto 15px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.preview-nav strong{font-size:13px}
+.preview-nav .options{display:flex;gap:7px;flex-wrap:wrap}
+.preview-nav button{background:#1b3754;color:#dceeff;border:1px solid #486383;border-radius:9px;padding:10px 12px;min-height:42px;cursor:pointer;font:inherit;font-size:12px}
+.preview-nav button[aria-pressed=true]{background:#38668b;border-color:#84b8e7}
+.preview-nav button:focus-visible{outline:2px solid #8fc8ff;outline-offset:2px}
+.preview-info{max-width:1180px;margin:15px auto;color:#a8bad0;font-size:12px;line-height:1.7}
+</style>
+</head>
+<body>
+<nav class="preview-nav" aria-label="합성 데이터 미리보기 선택">
+ <strong>개발 브랜치 독립 미리보기 · 합성 데이터 전용</strong>
+ <div class="options">
+  <button type="button" data-demo-market="US" aria-pressed="true">미국 샘플</button>
+  <button type="button" data-demo-market="KR" aria-pressed="false">한국 샘플</button>
+  <button type="button" data-demo-market="BLOCKED" aria-pressed="false">검증 보류 사례</button>
+ </div>
+</nav>
+<div id="investment-research-report-demo"></div>
+<p class="preview-info">이 화면에 표시되는 시장국면·산업/종목 코드·상대강도·변화 이력은 모두 테스트를 위한 합성 가정입니다. 실시간 시장 및 실제 계좌 데이터가 아니며 저장되지 않습니다.</p>
+<script src="../js/market-sector-stock-alignment-v1.js"></script>
+<script src="../js/investment-evidence-explanation-v1.js"></script>
+<script src="../js/investment-evidence-timeline-v1.js"></script>
+<script src="../js/investment-research-report-v1.js"></script>
+<script src="../js/investment-research-report-panel-v1.js"></script>
+<script src="investment-research-report-demo-v1.js"></script>
+</body>
+</html>
