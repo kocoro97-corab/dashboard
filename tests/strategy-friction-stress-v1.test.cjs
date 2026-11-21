@@ -70,13 +70,15 @@ test('P4 5% vs 10% gap shock estimates worse single-trade hypothetical loss, nev
 });
 test('P4 gap shock arithmetic respects planned stop and adverse exit fee/slippage',()=>{
  const f=fixture(),r=stress.analyze(f);
- const first=baseEngine.simulate({...f.strategy,interval:'1d',bars:f.series.bars}).trades[0];
+ const observed=baseEngine.simulate({...f.strategy,interval:'1d',bars:f.series.bars}).trades;
  const shock=r.gapShockScenarios[0],worst=shock.worstSingleTrade;
- const assumedPrice=first.stop*.95,exitFill=assumedPrice*(1-first.exitFee/(first.quantity*first.exitFill)*0+0); // overwritten below
+ const trade=observed.find(t=>t.entryAt===worst.entryAt);
+ assert.ok(trade);
+ const assumedPrice=trade.stop*.95;
  assert.ok(Math.abs(worst.hypotheticalGapOpen-assumedPrice)<1e-9);
  const sell=assumedPrice*(1-f.strategy.slippageBps/10000);
- const pnl=first.quantity*(sell-first.entryFill)-first.entryFee-
-  first.quantity*sell*(f.strategy.feeBps/10000);
+ const pnl=trade.quantity*(sell-trade.entryFill)-trade.entryFee-
+  trade.quantity*sell*(f.strategy.feeBps/10000);
  assert.ok(Math.abs(worst.netPnl-pnl)<1e-7);
  assert.ok(worst.netR< -1);
 });
