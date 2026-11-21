@@ -23,7 +23,7 @@ The integration branch is added as an exact **push** trigger for existing read-o
 ## Dependency and conflict resolution
 
 - Both candidates descend from `9f7efa13`. Their 34 news and 33 strategy changed paths have **no direct overlap** against that base. The important dependency integration point is `tools/build_dev_pages.py`: the news branch's builder matches the common development baseline, while the strategy candidate adds a small development-only script injection. Copying that addition must still preserve the news scripts discovered from the news branch's source index.
-- The news branch's `index.html`, `js/page-news.js`, all six `news-briefing-*.js` modules and public collection/store tools remain byte-identical to PR #8. No whole-branch merge is used.
+- The news branch's `index.html`, `js/page-news.js`, all five `news-briefing-*.js` modules and public collection/store tools remain byte-identical to PR #8. No whole-branch merge is used.
 - The strategy candidate leaves source `index.html` unchanged. Its five optional scripts are inserted only into the generated development artifact, before `page-strategy.js`, in dependency order: evidence gate → session context → risk capacity → comparison model → comparison panel. Existing four news reader/archive scripts remain present exactly once before `page-news.js`.
 - Original strategy calculations, shared stock selection, conditional analysis, holdings projection and market refresh are retained. The comparison is opt-in and manual; it receives neither app context nor holdings. It makes no API/storage call and is destroyed on collapse/route exit/logout.
 - P4 diverges at `5e84f9f03a30e0ec65040fdb8e2b2f8c40c5e0d1`; comparison with news shows 37 news-only and 57 P4-only commits. P4 is reference-only. No P4 file/commit is imported or merged, and past-validation performance is not claimed.
@@ -45,6 +45,8 @@ The integration branch is added as an exact **push** trigger for existing read-o
 | `docs/MARKET_EVIDENCE_GATE_V1.md`, `docs/MARKET_SESSION_CONTEXT_V1.md`, `docs/STRATEGY_RISK_CAPACITY_V1.md`, `docs/STRATEGY_SCENARIO_COMPARE_V1.md`, `docs/STRATEGY_SCENARIO_ROUTE_INTEGRATION_V1.md` | Original contracts and limitations |
 
 Additional integration edits: `.github/workflows/pr-tests.yml` (exact push branch and synthetic browsers), `tests/browser_news_strategy_integration.py` (cross-page integration), extra news/order/preservation assertions in the imported dev-bundle test, and this report.
+
+Source provenance check: 22 of the 24 selected files match the strategy candidate byte-for-byte. The two integration adjustments are the scoped style in `page-strategy.js` and added news-preservation assertions in `test_strategy_comparison_dev_bundle.py`. [Integration push CI runs](https://github.com/kocoro97-corab/dashboard/actions/workflows/pr-tests.yml?query=branch%3Aintegration%2Fnews-strategy-20261121) are separate from the baseline PR checks above; no new PR is involved.
 
 ### Reproduced integration defect and minimal fix
 
