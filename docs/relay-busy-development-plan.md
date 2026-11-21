@@ -128,3 +128,23 @@ secret, migration, force or new Worker API is used.
 10057, accepts latest, and checks unpublished-version refusals and upload races.
 All 318 Python tests pass locally. The Worker candidate itself is unchanged;
 actual activation still requires owner execution and metadata readback.
+
+### Pending-candidate inspection after guarded upload
+
+The owner reported `CONCURRENT_CHANGE_NO_ACTIVATION` after the corrected upload.
+This means upload/lineage checks completed, then the active deployment or raw
+settings comparison differed. It does not establish that another actor changed
+the Worker: binding list order and per-version annotations can also differ.
+Do not rerun the normal upload while an inactive candidate may be latest.
+
+`--inspect-pending` performs only GETs and reads a matching mode-0600 owner
+checkpoint already stored by the runner. It reports fixed setting/binding field
+names and equality booleans; no configuration values, binding names, credentials
+or response messages leave the machine. It identifies deployment-ID changes,
+binding order versus values, version-annotation-only differences and whether a
+single candidate immediately follows active. It never uploads, activates,
+rewrites a checkpoint, restores settings or relaxes the activation guard.
+The actual owner difference must be inspected before a recovery change is chosen.
+
+Official settings model distinguishes per-version annotations from configuration:
+https://github.com/cloudflare/cloudflare-python/blob/main/src/cloudflare/types/workers/scripts/script_and_version_setting_get_response.py

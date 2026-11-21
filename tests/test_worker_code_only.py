@@ -81,6 +81,53 @@ class Cloud:
 
 
 class CodeOnlyTests(unittest.TestCase):
+    def test_pending_inspection_reports_order_only_without_values_or_writes(self):
+        c = Cloud()
+        original = copy.deepcopy(c.settings)
+        c.settings['bindings'].reverse()
+        c.uploads.append({'id': NEW, 'number': 2})
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / 'record.json'
+            m.private_checkpoint(p, {'worker': m.NAME, 'deployment': {'id': 'deployment-' + OLD, 'version': OLD}, 'settings': original})
+            before = p.read_bytes()
+            result = m.inspect_pending(c, 'a' * 32, Path(tmp))
+            self.assertTrue(result['bindingsOrderOnly'])
+            self.assertTrue(result['bindingValuesUnchanged'])
+            self.assertTrue(result['candidateImmediatelyFollowsActive'])
+            self.assertEqual(result['changedSettingFields'], ['bindings'])
+            self.assertEqual(p.read_bytes(), before)
+        self.assertTrue(all(method == 'GET' for method, _, _ in c.calls))
+        text = json.dumps(result)
+        self.assertNotIn('MYINVEST_GAS_URL', text)
+        self.assertNotIn('SYNTHETIC', text)
+
+    def test_pending_inspection_detects_actual_binding_value_change_without_value(self):
+        a = Cloud().settings
+        b = copy.deepcopy(a)
+        b['bindings'][0]['text'] = 'PRIVATE_VALUE'
+        result = m.settings_difference(a, b)
+        self.assertFalse(result['bindingValuesUnchanged'])
+        self.assertFalse(result['equalIgnoringOnlyBindingOrderAndVersionAnnotations'])
+        self.assertEqual(result['changedBindingFields'], ['text'])
+        self.assertNotIn('PRIVATE_VALUE', json.dumps(result))
+
+    def test_pending_inspection_identifies_version_annotations_and_preserves_limits(self):
+        a = Cloud().settings
+        b = copy.deepcopy(a)
+        b['annotations'] = {'workers/message': 'PRIVATE_MESSAGE'}
+        result = m.settings_difference(a, b)
+        self.assertTrue(result['equalIgnoringOnlyBindingOrderAndVersionAnnotations'])
+        self.assertEqual(result['changedSettingFields'], ['annotations'])
+        b['limits']['cpu_ms'] = 99
+        self.assertFalse(m.settings_difference(a, b)['equalIgnoringOnlyBindingOrderAndVersionAnnotations'])
+        self.assertNotIn('PRIVATE_MESSAGE', json.dumps(result))
+
+    def test_pending_inspection_refuses_without_matching_checkpoint(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(m.Stop) as e:
+                m.inspect_pending(Cloud(), 'a' * 32, Path(tmp))
+        self.assertEqual(e.exception.code, 'MATCHING_OWNER_CHECKPOINT_REQUIRED')
+
     def test_diagnose_never_uploads_activates_or_writes_checkpoint(self):
         c = Cloud()
         saved = []

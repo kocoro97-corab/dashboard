@@ -209,6 +209,68 @@ def private_checkpoint(path, doc):
         json.dump(doc, f)
 
 
+def settings_difference(before, after):
+    """Values and binding names never leave the owner machine."""
+    known = {'annotations', 'bindings', 'cache_options', 'compatibility_date',
+        'compatibility_flags', 'exports_reconciliation', 'limits', 'logpush',
+        'observability', 'placement', 'tags', 'tail_consumers', 'usage_model',
+        'migration_tag', 'main_module', 'body_part', 'etag', 'modified_on',
+        'created_on', 'last_deployed_from'}
+    changed = {k for k in set(before) | set(after) if before.get(k) != after.get(k) or (k in before) != (k in after)}
+    old_bindings, new_bindings = before.get('bindings'), after.get('bindings')
+    def binding_map(rows):
+        if not isinstance(rows, list) or any(not isinstance(b, dict) or not isinstance(b.get('name'), str) for b in rows):
+            return None
+        result = {b['name']: b for b in rows}
+        return result if len(result) == len(rows) else None
+    old, new = binding_map(old_bindings), binding_map(new_bindings)
+    order_only = old is not None and new is not None and old == new and old_bindings != new_bindings
+    detail = set()
+    if old is not None and new is not None:
+        for name in set(old) & set(new):
+            detail.update(k for k in set(old[name]) | set(new[name]) if old[name].get(k) != new[name].get(k) or (k in old[name]) != (k in new[name]))
+    allowed_binding_fields = {'type', 'text', 'json', 'namespace_id', 'class_name', 'environment', 'script_name', 'name', 'id'}
+    return {'changedSettingFields': sorted(changed & known) + (['OTHER'] if changed - known else []),
+        'bindingsOrderOnly': order_only,
+        'bindingNamesUnchanged': old is not None and new is not None and set(old) == set(new),
+        'bindingValuesUnchanged': old is not None and new is not None and old == new,
+        'changedBindingFields': sorted(detail & allowed_binding_fields) + (['OTHER'] if detail - allowed_binding_fields else []),
+        'equalIgnoringOnlyBindingOrderAndVersionAnnotations':
+            not (changed - {'bindings', 'annotations'}) and old is not None and new is not None and old == new}
+
+
+def inspect_pending(api, account, checkpoint_dir):
+    if not re.fullmatch(r'[a-fA-F0-9]{32}', account):
+        raise Stop('ACCOUNT_ID_INVALID')
+    base = '/accounts/' + account + '/workers/scripts/' + NAME
+    current = active(api, base)
+    history = recent_versions(api, base)
+    settings = api('GET', base + '/settings')
+    checkpoint = None
+    # Checkpoints belong to the owner; no paths, settings, binding names or values
+    # are printed. Reject symlinks and cap parsing. No checkpoint is rewritten.
+    paths = sorted(checkpoint_dir.glob('*.json'), key=lambda p: p.stat().st_mtime, reverse=True)
+    for path in paths[:100]:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 2 * 1024 * 1024:
+            continue
+        try:
+            doc = json.loads(path.read_text())
+            if doc.get('worker') == NAME and doc.get('deployment', {}).get('version') == current['version']:
+                verified_settings(doc.get('settings'))
+                checkpoint = doc
+                break
+        except Exception:
+            continue
+    if checkpoint is None:
+        raise Stop('MATCHING_OWNER_CHECKPOINT_REQUIRED')
+    return {'status': 'PASS', 'phase': 'PENDING_CANDIDATE_INSPECTION_READ_ONLY',
+        'deploymentAttempted': False, 'activeVersionUnchanged': True,
+        'deploymentIdUnchanged': current['id'] == checkpoint['deployment']['id'],
+        'latestIsActive': history[0]['id'] == current['version'],
+        'candidateImmediatelyFollowsActive': len(history) > 1 and history[0]['id'] != current['version'] and history[1]['id'] == current['version'],
+        **settings_difference(checkpoint['settings'], settings)}
+
+
 def deploy(api, account, save, public_probe=probe, code=None, diagnose=False):
     if not re.fullmatch(r'[a-fA-F0-9]{32}', account):
         raise Stop('ACCOUNT_ID_INVALID')
@@ -289,12 +351,15 @@ def deploy(api, account, save, public_probe=probe, code=None, diagnose=False):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--diagnose', action='store_true', help='Read-only existing Worker/version preflight; no upload or activation')
+    parser.add_argument('--inspect-pending', action='store_true', help='Read-only compare the owner checkpoint and current pending candidate; never upload or activate')
     args = parser.parse_args()
     try:
         account = os.environ.get('CLOUDFLARE_ACCOUNT_ID') or input('Cloudflare Account ID: ').strip()
         token = os.environ.get('CLOUDFLARE_API_TOKEN') or getpass.getpass('Cloudflare API token (hidden): ')
-        checkpoint = Path.home() / '.myinvest-worker-rollback' / (uuid.uuid4().hex + '.json')
-        result = deploy(api_client(token.strip()), account.strip(), lambda doc: private_checkpoint(checkpoint, doc), diagnose=args.diagnose)
+        checkpoint_dir = Path.home() / '.myinvest-worker-rollback'
+        checkpoint = checkpoint_dir / (uuid.uuid4().hex + '.json')
+        api = api_client(token.strip())
+        result = inspect_pending(api, account.strip(), checkpoint_dir) if args.inspect_pending else deploy(api, account.strip(), lambda doc: private_checkpoint(checkpoint, doc), diagnose=args.diagnose)
     except Stop as e:
         result = {'status': 'FAIL' if e.code == 'ACTIVATION_FAILED_MANUAL_RECOVERY_REQUIRED' else 'NOT_RUN', 'code': e.code}
         if e.http:
