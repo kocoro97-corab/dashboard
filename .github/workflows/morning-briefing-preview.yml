@@ -1,0 +1,28 @@
+name: Public morning briefing preview (manual, no publication)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Collect only fixed public provider routes
+        run: |
+          mkdir -p "$RUNNER_TEMP/public-briefing"
+          python3 tools/collect_public_briefing_v1.py --output "$RUNNER_TEMP/public-briefing/snapshot.json"
+      - name: Validate and compose a local public-only preview
+        run: node tools/update_public_briefing_feed_v1.cjs --source "$RUNNER_TEMP/public-briefing/snapshot.json" --store "$RUNNER_TEMP/public-briefing/myinvest-public-briefings-v1.json" --ack-public
+      - name: Summarize without publishing
+        run: |
+          echo 'Public-only draft composed locally. No repository, Pages, GAS, NH or AI call was made by the composition step. Automatic 07:00 publication is disabled.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: reviewed-public-briefing-preview
+          path: ${{ runner.temp }}/public-briefing/*.json
+          if-no-files-found: error
+          retention-days: 7
