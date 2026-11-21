@@ -1,0 +1,33 @@
+name: Investment evidence explanation isolated offline validation
+on:
+  push:
+    branches:
+      - feat/investment-evidence-explanation-isolated
+permissions:
+  contents: read
+jobs:
+  synthetic-research:
+    name: Existing sector adapter and Korean explanation with no NH/GAS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout without persistent credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check source and test syntax
+        run: |
+          node --check js/market-sector-stock-alignment-v1.js
+          node --check js/market-sector-stock-adapter-v1.js
+          node --check js/investment-evidence-explanation-v1.js
+          node --check tools/inspect_investment_evidence_v1.cjs
+          node --check tests/investment-evidence-explanation-v1.test.cjs
+          node --check tests/investment-evidence-inspector-v1.test.cjs
+      - name: Original market-sector-stock alignment (39)
+        run: node tests/market-sector-stock-alignment-v1.test.cjs
+      - name: Existing SectorInsights and strategy adapter (43)
+        run: node tests/market-sector-stock-adapter-v1.test.cjs
+      - name: Korean explanation and unverified market data safety (35)
+        run: node tests/investment-evidence-explanation-v1.test.cjs
+      - name: Bounded, credential-free JSON Markdown CLI inspection (9)
+        run: node tests/investment-evidence-inspector-v1.test.cjs
