@@ -59,6 +59,8 @@ Setting `testStartAt` creates an explicit evaluation subperiod and excludes entr
 - `validation`: time split, conservative stop-first assumption, provenance limits, no future bar in signal computation
 - `signals`, `skipped`, `trades[]`: decision bar, next-bar actual opening fill, reason, fee, target/stop, result
 - `statistics`: trade count, win rate, realized P&L and final equity, realized-only drawdown, mean net R
+- `MYInvestStrategyReview.audit` gives daily-close hypothetical liquidation drawdown, same-symbol full-capital buy/hold and allocation-capped buy/hold comparators; these are exposure-mismatched descriptive baselines, not an alpha benchmark.
+- `reliability.winRateWilson95` illustrates sample uncertainty assuming independent trades, which is **not validated** by backtest observations.
 - `warnings`: missing market impact, taxes, FX, financing, survivorship/delisting bias, intrabar order uncertainty
 
 ## Tests required before integration
