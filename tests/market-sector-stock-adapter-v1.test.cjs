@@ -209,7 +209,8 @@ test('same-date future sector member quote is rejected despite a matching date',
 });
 test('sector member quote cannot occur after its source receipt',()=>{
  const x=fixture();
- x.sectors[0].members[0].observedAt=x.sectors[0].evidence.receivedAt+600000;
+ x.sectors[0].evidence.receivedAt=NOW-25*60000;
+ x.sectors[0].members[0].observedAt=NOW-15*60000;
  assert.equal(run(x).code,'SECTOR_MEMBER_EVIDENCE_INVALID');
 });
 test('extra secret fields in a technical output are rejected without being echoed',()=>{
