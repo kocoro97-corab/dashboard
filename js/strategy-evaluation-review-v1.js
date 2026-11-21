@@ -61,8 +61,8 @@ function audit({bars,simulation}={}){
    !positive(t.entryOpen)||!positive(t.entryFill)||!positive(t.exitFill)||
    !closeEnough(t.entryOpen,bars[t.entryIndex].o)||
    !closeEnough(t.decisionClose,bars[t.decisionIndex].c)||
-   !closeEnough(t.entryAt,bars[t.entryIndex].t)||
-   !closeEnough(t.exitAt,bars[t.exitIndex].t)||
+   t.entryAt!==bars[t.entryIndex].t||
+   t.exitAt!==bars[t.exitIndex].t||
    !closeEnough(t.entryFill,t.entryOpen*(1+slip))||
    !closeEnough(t.entryFee,t.quantity*t.entryFill*fee)||
    !closeEnough(t.exitFee,t.quantity*t.exitFill*fee)||
@@ -73,7 +73,17 @@ function audit({bars,simulation}={}){
  }
  if(!closeEnough(initial+netSum,simulation.statistics?.finalEquity)||
   !closeEnough(netSum,simulation.statistics?.netPnl)||
+  !closeEnough(simulation.statistics?.initialCapital,initial)||
+  !closeEnough(simulation.statistics?.netReturnPct,100*netSum/initial)||
   simulation.statistics?.trades!==trs.length)return invalid('EQUITY_RECONCILIATION_FAILED');
+ // Independently replay the fixed P4 rules against these exact bars. Date/price
+ // identity and the ledger alone cannot prove a target was truly touched.
+ const replay=api.simulate({interval:'1d',bars,...p,
+  ...(testAt==null?{}:{testStartAt:testAt})});
+ if(replay.status!=='ok'||JSON.stringify(replay.trades)!==JSON.stringify(trs))
+  return invalid('SIMULATION_REPLAY_MISMATCH');
+ if(!closeEnough(replay.statistics.finalEquity,simulation.statistics.finalEquity)||
+  replay.signals!==simulation.signals)return invalid('SIMULATION_REPLAY_MISMATCH');
  let realized=0,tradeIndex=0;
  const dailyEquity=[];
  for(let i=first;i<bars.length;i++){
