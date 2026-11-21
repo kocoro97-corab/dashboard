@@ -12,9 +12,8 @@ const MARKET=Object.freeze({KR:{currency:'KRW',zone:'Asia/Seoul',
 const CONVENTION=new Set(['raw','split_adjusted','total_return_adjusted']);
 const isNum=Number.isFinite,positive=x=>isNum(x)&&x>0;
 const issue=(code,detail)=>({code,...(detail===undefined?{}:{detail})});
-function dateKey(t,zone){
- const f=new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'});
- const parts=f.formatToParts(new Date(t));
+function dateKey(t,formatter){
+ const parts=formatter.formatToParts(new Date(t));
  return ['year','month','day'].map(k=>parts.find(p=>p.type===k)?.value||'').join('-');
 }
 function inspect(input={}){
@@ -25,7 +24,7 @@ function inspect(input={}){
  const bars=input.bars,market=MARKET[input.market],now=input.now??Date.now();
  if(!market)errors.push(issue('UNSUPPORTED_MARKET'));
  if(!Array.isArray(bars)||bars.length>MAX_BARS||bars.length===0)errors.push(issue('INVALID_BAR_COLLECTION'));
- if(!Number.isSafeInteger(now)||now<=0)errors.push(issue('INVALID_AS_OF'));
+ if(!Number.isSafeInteger(now)||now<=0||now>8640000000000000)errors.push(issue('INVALID_AS_OF'));
  if(typeof input.symbol!=='string'||!/^[A-Za-z0-9.^_-]{1,32}$/.test(input.symbol))
   errors.push(issue('SYMBOL_REQUIRED'));
  if(typeof input.exchange!=='string'||!market?.exchanges.has(input.exchange.toUpperCase()))
@@ -36,6 +35,8 @@ function inspect(input={}){
  if(input.finalized!==true)errors.push(issue('FINALIZED_DAILY_BARS_REQUIRED'));
  if(!CONVENTION.has(input.priceConvention))
   flags.push(issue('PRICE_ADJUSTMENT_CONVENTION_UNKNOWN'));
+ if(input.priceConvention==='total_return_adjusted')
+  flags.push(issue('TOTAL_RETURN_OHLCV_CONSISTENCY_NEEDS_REVIEW'));
  if(typeof input.sourceProvider!=='string'||!/^[-_A-Za-z0-9. ]{2,60}$/.test(input.sourceProvider))
   flags.push(issue('SOURCE_IDENTITY_UNDECLARED'));
  if(input.purpose!=='historical'&&input.purpose!=='current')
@@ -43,17 +44,18 @@ function inspect(input={}){
  if(errors.some(x=>['INVALID_BAR_COLLECTION','UNSUPPORTED_MARKET','INVALID_AS_OF'].includes(x.code)))
   return {status:'block',version:VERSION,errors,flags,facts,
    eligibleForProvisionalBacktest:false,realSourceVerified:false};
+ const formatter=new Intl.DateTimeFormat('en-CA',{timeZone:market.zone,year:'numeric',month:'2-digit',day:'2-digit'});
  const dateKeys=new Set(),suspicious=[],wideRanges=[],gaps=[];
- let missingVolumes=0,zeroVolumes=0,invalidOHLC=0,duplicatedDays=0,notIncreasing=0,
+ let missingVolumes=0,invalidVolumes=0,zeroVolumes=0,invalidOHLC=0,duplicatedDays=0,notIncreasing=0,
   maxAbsChangePct=0,longestGapDays=0;
  for(let i=0;i<bars.length;i++){
   const b=bars[i],prev=bars[i-1];
-  if(!b||!Number.isSafeInteger(b.t)||b.t<=0||
+  if(!b||!Number.isSafeInteger(b.t)||b.t<=0||b.t>8640000000000000||
    ![b.o,b.h,b.l,b.c].every(positive)||
    b.l>Math.min(b.o,b.c)||b.h<Math.max(b.o,b.c)||b.h<b.l){
    invalidOHLC++;continue;
   }
-  const key=dateKey(b.t,market.zone);
+  const key=dateKey(b.t,formatter);
   if(dateKeys.has(key))duplicatedDays++;
   dateKeys.add(key);
   if(prev){
@@ -70,7 +72,8 @@ function inspect(input={}){
     }
    }
   }
-  if(b.v==null||!isNum(b.v)||b.v<0)missingVolumes++;
+  if(b.v==null)missingVolumes++;
+  else if(!isNum(b.v)||b.v<0)invalidVolumes++;
   else if(b.v===0)zeroVolumes++;
   const range=(b.h/b.l-1)*100;
   if(range>=70&&wideRanges.length<12)
@@ -78,6 +81,7 @@ function inspect(input={}){
   if(b.t>now+300000)errors.push(issue('FUTURE_BAR_TIMESTAMP',{index:i}));
  }
  if(invalidOHLC)errors.push(issue('INVALID_OHLC',{count:invalidOHLC}));
+ if(invalidVolumes)errors.push(issue('INVALID_VOLUME',{count:invalidVolumes}));
  if(notIncreasing)errors.push(issue('NON_DAILY_OR_UNSORTED_TIMESTAMPS',{count:notIncreasing}));
  if(duplicatedDays)errors.push(issue('DUPLICATE_EXCHANGE_DATES',{count:duplicatedDays}));
  if(bars.length<MIN_BARS)errors.push(issue('TOO_FEW_BARS_FOR_P4',{count:bars.length}));
@@ -89,7 +93,8 @@ function inspect(input={}){
  if(gaps.length)flags.push(issue('LONG_CALENDAR_GAPS',{count:gaps.length}));
  if(input.observedAt==null||!Number.isSafeInteger(input.observedAt))
   flags.push(issue('SOURCE_OBSERVATION_TIME_UNDECLARED'));
- else if(input.observedAt<bars.at(-1).t||input.observedAt>now+300000)
+ else if(bars.at(-1)&&Number.isSafeInteger(bars.at(-1).t)&&
+  (input.observedAt<bars.at(-1).t||input.observedAt>now+300000))
   errors.push(issue('INCONSISTENT_SOURCE_OBSERVATION'));
  if(input.purpose==='current'&&bars.length){
   const last=bars.at(-1).t,age=(now-last)/86400000;
@@ -97,7 +102,7 @@ function inspect(input={}){
  }
  facts.barCount=bars.length;facts.firstAt=bars[0]?.t??null;facts.lastAt=bars.at(-1)?.t??null;
  facts.exchangeTimeZone=market.zone;facts.missingVolumeBars=missingVolumes;
- facts.zeroVolumeBars=zeroVolumes;facts.duplicatedExchangeDays=duplicatedDays;
+ facts.zeroVolumeBars=zeroVolumes;facts.invalidVolumeBars=invalidVolumes;facts.duplicatedExchangeDays=duplicatedDays;
  facts.longestCalendarGapDays=Math.round(longestGapDays*10)/10;
  facts.maxAbsCloseChangePct=Math.round(maxAbsChangePct*100)/100;
  facts.largePriceJumpExamples=suspicious;facts.wideRangeExamples=wideRanges;facts.longGapExamples=gaps;
