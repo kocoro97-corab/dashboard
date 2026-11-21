@@ -82,6 +82,20 @@ test('P4 review preserves gap-stop PnL on exit day rather than substituting clos
  assert.equal(day22.holding,false);
 });
 
+test('P4 allocation-matched passive benchmark uses fixed capped capital and exposes exposure mismatch',()=>{
+ const b=flat(),x=review.audit(evaluate(b,{initialCapital:100000,maxAllocationPct:25,feeBps:100,slippageBps:100}));
+ assert.equal(x.status,'ok');
+ const full=x.buyAndHold,limited=x.allocationMatchedBuyAndHold;
+ assert.equal(full.allocationPct,100);
+ assert.equal(limited.allocationPct,25);
+ assert.equal(limited.method,'FIXED_ALLOCATION_BUY_AND_HOLD_NEXT_ELIGIBLE_OPEN');
+ assert.ok(limited.shares<full.shares);
+ assert.ok(limited.uninvestedCapital>full.uninvestedCapital);
+ assert.ok(limited.netReturnPct>full.netReturnPct); // flat series: less capital loses less to costs
+ assert.equal(x.comparison.comparableExposure,false);
+ assert.ok(Math.abs(x.comparison.allocationMatchedReturnDifferencePctPoints-(-limited.netReturnPct))<1e-10);
+ assert.ok(x.comparison.interpretation.includes('알파로 해석 금지'));
+});
 test('P4 review is deterministic, read-only, and does not claim verified data provenance',()=>{
  const b=breakout(),input=evaluate(b),before=JSON.stringify(input);
  const a=review.audit(input),again=review.audit(input);
