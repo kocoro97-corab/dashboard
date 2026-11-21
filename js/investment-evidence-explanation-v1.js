@@ -99,7 +99,7 @@ function safeIssues(v){
 function markdown(result){
  const header='# 시장·산업·종목 판단 근거 — 가상 분석·원천 미인증\n\n';
  if(result.status==='blocked')
-  return header+'**분석 보류:** 입력 또는 관측 근거를 다시 확인해야 합니다.\n\n'+
+  return header+'**분석 보류:** '+result.headline+'\n\n'+
    '실제 매수·매도·주문을 승인한 사실은 없습니다.\n';
  let s=header+'- 시장: '+(result.market==='KR'?'한국':'미국')+
   ' / 현지 거래일(제공 자료): '+result.asOf+'\n'+
