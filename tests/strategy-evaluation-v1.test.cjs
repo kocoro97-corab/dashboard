@@ -38,7 +38,7 @@ test('P4 enters only at NEXT bar open, exits at observed target and records cost
 test('P4 uses preceding completed bars, not future high/volume to create a signal',()=>{
  const b=breakout(),first=evalP4.signalAt(b,20,{volumeMultiple:1.5});
  assert.ok(first);assert.equal(first.stop,99);assert.equal(first.priorHigh,101);
- b[21].h=1000;b[22].v=10000;b[30].c=500;
+ b[21].h=1000;b[22].v=10000;b[30].c=500;b[30].h=501;
  assert.deepEqual(evalP4.signalAt(b,20,{volumeMultiple:1.5}),first);
  const altered=run(b);assert.equal(altered.trades[0].decisionIndex,20);
  assert.equal(altered.trades[0].entryIndex,21);
