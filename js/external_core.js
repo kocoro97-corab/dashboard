@@ -1,7 +1,7 @@
 /* Pure OCR/identity/review logic. No network, credentials, DOM, or private fixtures. */
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.ExternalCore=api})(typeof globalThis!=='undefined'?globalThis:this,function(){
   'use strict';
-  const TYPES=new Set(['ISA','PENSION','IRP']);
+  const TYPES=new Set(['ISA','PENSION','IRP','GENERAL']);
   const PURCHASE=new Set(['현금','신용','미수','대출']);
   const MENU=new Set(['종목명','종목코드','수량','잔고수량','보유수량','평균매입가','평균매수가','매입가','평단가','현재가','평가금액','평가손익','평가손익률','주식잔고손익','수익률','합계','총자산','예수금','조회','일괄매도','자산현황','평생우대','비용포함','국내잔고','주식잔고','매매손익','국내주식','해외주식','ISA','연금저축','IRP','매도','매수','원화','평가','전체','선택','정렬','총매입금액','원','KRW']);
   const norm=v=>String(v==null?'':v).normalize('NFKC').replace(/[\u200b-\u200d\ufeff\s]/g,'').toUpperCase();
@@ -32,8 +32,15 @@
     function visit(node){if(!node||typeof node!=='object')return;if(Array.isArray(node.words))node.words.forEach(add);for(const k of ['blocks','paragraphs','lines'])if(Array.isArray(node[k]))node[k].forEach(visit)}
     visit(data);return out;
   }
+  const symbols=data=>(data&&data.words||[]).flatMap(w=>w.symbols||[]).filter(s=>s.bbox&&
+    ['x0','x1','y0','y1'].every(k=>Number.isFinite(s.bbox[k]))&&s.bbox.x1>s.bbox.x0&&s.bbox.y1>s.bbox.y0&&Number.isFinite(s.confidence));
+  function mixedPrefixRegion(korean){
+    const hangul=symbols(korean).filter(s=>/^[가-힣]$/.test(s.text)).sort((a,b)=>a.bbox.x0-b.bbox.x0);
+    if(hangul.length<2||hangul.some(s=>s.confidence<80))return null;
+    const boundary=Math.floor(hangul[0].bbox.x0);
+    return boundary>0?{x0:0,x1:boundary}:null;
+  }
   function mixedName(korean,english,index){
-    const symbols=data=>(data&&data.words||[]).flatMap(w=>w.symbols||[]).filter(s=>s.bbox&&Number.isFinite(s.confidence));
     const hangul=symbols(korean).filter(s=>/^[가-힣]$/.test(s.text)).sort((a,b)=>a.bbox.x0-b.bbox.x0);
     if(hangul.length<2||hangul.some(s=>s.confidence<80))return null;
     const boundary=hangul[0].bbox.x0;
@@ -48,12 +55,43 @@
     const flat=words(data).filter(w=>!(w.x>=region.x0&&w.x<region.x1&&w.y>=region.y0&&w.y<=region.y1));
     flat.push({text:name,bbox:region.bbox});return {text:data.text||'',words:flat};
   }
+  function replaceHeaderRegion(data,reading,region,scale){
+    if(!region||!['x0','x1','y0','y1'].every(k=>Number.isFinite(region[k]))||region.x1<=region.x0||region.y1<=region.y0||!Number.isFinite(scale)||scale<=0)throw Error('OCR_HEADER_REGION_INVALID');
+    const kept=words(data).filter(w=>!(w.x>=region.x0&&w.x<region.x1&&w.y>=region.y0&&w.y<region.y1));
+    const recovered=words(reading).map(w=>({text:w.text,bbox:{x0:region.x0+w.bbox.x0/scale,x1:region.x0+w.bbox.x1/scale,y0:region.y0+w.bbox.y0/scale,y1:region.y0+w.bbox.y1/scale}}))
+      .filter(w=>w.bbox.x0>=region.x0&&w.bbox.x1<=region.x1&&w.bbox.y0>=region.y0&&w.bbox.y1<=region.y1);
+    return {text:data.text||'',words:kept.concat(recovered)};
+  }
+  function offsetReading(reading,x,y){
+    if(!Number.isFinite(x)||!Number.isFinite(y))throw Error('OCR_OFFSET_INVALID');
+    const move=b=>b&&({x0:b.x0+x,x1:b.x1+x,y0:b.y0+y,y1:b.y1+y});
+    return {words:(reading&&reading.words||[]).map(w=>({text:w.text,confidence:w.confidence,bbox:move(w.bbox),
+      symbols:(w.symbols||[]).map(s=>({text:s.text,confidence:s.confidence,bbox:move(s.bbox)}))}))};
+  }
+  function refinedName(korean,english,index,prefixReading,suffixReading){
+    // Full crop readings may fix Korean-only names too. Never use fuzzy aliases
+    // or pick between disagreeing exact names from the two language workers.
+    const names=new Set();
+    for(const reading of [korean,english]){
+      const items=reading&&reading.words||[];
+      if(!items.length||items.some(w=>!w.bbox||!['x0','x1','y0','y1'].every(k=>Number.isFinite(w.bbox[k]))||w.bbox.x1<=w.bbox.x0||w.bbox.y1<=w.bbox.y0||!Number.isFinite(w.confidence)||w.confidence<90))continue;
+      if(Math.min(...items.map(w=>w.bbox.y1))<=Math.max(...items.map(w=>w.bbox.y0)))continue;
+      const name=items.slice().sort((a,b)=>a.bbox.x0-b.bbox.x0).map(w=>w.text).join('');
+      const found=match({name,code:''},index);if(found.status==='proposal')names.add(found.canonicalName);
+    }
+    const mixed=mixedName(korean,english,index);if(mixed)names.add(mixed);
+    const separated=mixedName(korean,prefixReading,index);if(separated)names.add(separated);
+    for(const latin of [english,prefixReading]){const recovered=mixedName(suffixReading,latin,index);if(recovered)names.add(recovered)}
+    return names.size===1?[...names][0]:null;
+  }
   function parse(data,accountType,index){
     if(!TYPES.has(accountType))throw Error('알 수 없는 계좌 구분');
     const all=words(data),rejected=[],warnings=[];
-    if(!all.length)return {holdings:[],rejected,warnings:['좌표가 포함된 OCR 결과가 필요합니다. 원문만으로 수량을 추측하지 않습니다.']};
+    if(!all.length)return {holdings:[],rejected,layoutVerified:false,headerChecks:{name:false,quantity:false,avgPrice:false},warnings:['좌표가 포함된 OCR 결과가 필요합니다. 원문만으로 수량을 추측하지 않습니다.']};
     const heights=all.map(w=>w.h).sort((a,b)=>a-b),height=heights[Math.floor(heights.length/2)],tolerance=Math.max(2,height*.45);
-    const headerText=w=>norm(w.text).replace(/[.:·ㆍ;>＊*]/g,'');
+    // A reproduced label-only OCR confusion. This never normalizes a holding's
+    // name/code and still requires separate quantity/price headers + geometry.
+    const headerText=w=>norm(w.text).replace(/[.:·ㆍ;>＊*]/g,'').replace(/^송목명$/,'종목명');
     const isName=w=>/^(종목명|상품명|종명)$/.test(headerText(w));
     const isQty=w=>/^(잔고수량|보유수량|수량)$/.test(headerText(w));
     const isAvg=w=>/^(평균매입가|평균매수가|평균매입단가|평단가|매입가)$/.test(headerText(w));
@@ -76,7 +114,22 @@
       const q=nearby.find(isQty),a=nearby.find(isAvg);
       if(q&&a&&q.x!==a.x&&n.x<q.x&&n.x<a.x){headers={name:n,quantity:q,avgPrice:a};break}
     }
-    if(!headers)return {holdings:[],rejected,warnings:['종목명·수량·평균매입가 머리글을 확인하지 못했습니다. 행을 추측하지 않습니다.']};
+    const headerChecks={name:headerWords.some(isName),quantity:headerWords.some(isQty),avgPrice:headerWords.some(isAvg)};
+    if(!headers){
+      let headerRetryRegion=null;
+      // Two actual same-row numeric-column labels can locate pixels to reread.
+      // They never stand in for the missing name label or authorize parsing.
+      for(const q of headerWords.filter(isQty)){
+        const a=headerWords.find(w=>isAvg(w)&&w.x>q.x&&Math.abs(w.y-q.y)<=height*.6);
+        if(!a)continue;
+        const rowY=(q.y+a.y)/2;
+        const others=headerWords.filter(w=>Math.abs(w.y-rowY)<=height*.6&&
+          (isQty(w)||isAvg(w)||/^(평가손익|평가금액|수익률|현재가)$/.test(headerText(w))));
+        const right=Math.min(...others.map(w=>w.bbox.x0));
+        if(right>0){headerRetryRegion={x0:0,x1:right,y0:Math.max(0,Math.min(q.bbox.y0,a.bbox.y0)-height*.5),y1:Math.max(q.bbox.y1,a.bbox.y1)+height*.5};break}
+      }
+      return {holdings:[],rejected,layoutVerified:false,headerChecks,headerRetryRegion,warnings:['종목명·수량·평균매입가 머리글을 확인하지 못했습니다. 행을 추측하지 않습니다.']};
+    }
     const headerY=Math.max(...Object.values(headers).map(w=>w.y));
     const codeHeader=all.find(w=>norm(w.text)==='종목코드'&&Math.abs(w.y-headerY)<=height*2.5);if(codeHeader)headers.code=codeHeader;
     const knownHeader=w=>isName(w)||isQty(w)||isAvg(w)||/^(종목코드|현재가|평가금액|평가손익|수익률|매수구분|구분)$/.test(headerText(w));
@@ -85,7 +138,16 @@
     const centers=[...new Set(columns.map(w=>w.x))];
     const bounds={};Object.entries(headers).forEach(([key,w])=>{const i=centers.indexOf(w.x);bounds[key]=[i?(centers[i-1]+w.x)/2:-Infinity,i<centers.length-1?(w.x+centers[i+1])/2:Infinity]});
     const grouped=[];
-    all.filter(w=>w.y>headerY+height*.6).sort((a,b)=>a.y-b.y).forEach(w=>{let group=grouped.find(g=>Math.abs(g.y-w.y)<=tolerance);if(!group){group={y:w.y,parts:[]};grouped.push(group)}group.parts.push(w)});
+    all.filter(w=>w.y>headerY+height*.6).sort((a,b)=>a.y-b.y).forEach(w=>{
+      // Mixed scripts often have different box centers on the same printed row.
+      // Require actual vertical overlap for the extra allowance; never borrow
+      // numbers from a nearby cash/subtotal line based on distance alone.
+      const matches=grouped.filter(g=>Math.abs(g.y-w.y)<=tolerance||g.bottom>g.top&&
+        Math.min(g.bottom,w.bbox.y1)-Math.max(g.top,w.bbox.y0)>=Math.min(g.bottom-g.top,w.h)*.35);
+      let group=matches.length===1?matches[0]:null;
+      if(!group){group={y:w.y,top:w.bbox.y0,bottom:w.bbox.y1,parts:[]};grouped.push(group)}
+      group.parts.push(w);group.top=Math.max(group.top,w.bbox.y0);group.bottom=Math.min(group.bottom,w.bbox.y1);
+    });
     const holdings=[],regions=[];
     for(const group of grouped){
       const cell=key=>group.parts.filter(w=>w.x>=bounds[key][0]&&w.x<bounds[key][1]).sort((a,b)=>a.x-b.x);
@@ -113,14 +175,15 @@
       warnings.push('같은 종목의 서로 다른 OCR 값이 있습니다. 수량·평균매입가를 직접 확인하세요.');
       plan.conflicts.forEach(conflict=>{const row=plan.rows.find(x=>key(x)===key(conflict.after));if(row){row.quantity=null;row.avgPrice=null;row.needsReview=true}});
     }
-    return {holdings:plan.rows,rejected,warnings,conflicts:plan.conflicts,regions};
+    return {holdings:plan.rows,rejected,warnings,conflicts:plan.conflicts,regions,layoutVerified:true,headerChecks};
   }
-  const key=row=>row.accountType+'|'+(row.code&&/^[A-Z0-9]{6}$/.test(row.code)?row.code:norm(row.name));
-  const comparable=row=>JSON.stringify([row.accountType,norm(row.name),String(row.code||''),number(row.quantity),number(row.avgPrice)]);
+  const accountKey=row=>row.accountId&&!row.accountId.startsWith('legacy-')?row.accountId:row.accountType;
+  const key=row=>accountKey(row)+'|'+(row.code&&/^[A-Z0-9]{6}$/.test(row.code)?row.code:norm(row.name));
+  const comparable=row=>JSON.stringify([accountKey(row),norm(row.name),String(row.code||''),number(row.quantity),number(row.avgPrice)]);
   function merge(base,added){
     const rows=base.map(x=>({...x})),changes=[],conflicts=[],duplicates=[];
     for(const item of added){
-      const i=rows.findIndex(row=>row.accountType===item.accountType&&(key(row)===key(item)||norm(row.name)===norm(item.name)));
+      const i=rows.findIndex(row=>accountKey(row)===accountKey(item)&&(key(row)===key(item)||norm(row.name)===norm(item.name)));
       if(i<0){rows.push({...item});changes.push({kind:'add',after:{...item}});continue}
       if(comparable(rows[i])===comparable(item)){duplicates.push({...item});continue}
       const change={kind:'replace',before:{...rows[i]},after:{...item}};changes.push(change);conflicts.push(change);rows[i]={...rows[i],...item};
@@ -131,9 +194,10 @@
     const seen=new Set();
     for(const row of rows){
       if(!TYPES.has(row.accountType)||!norm(row.name)||PURCHASE.has(norm(row.name))||String(row.name).length>60||/^\s*[=+@-]/.test(row.name)||row.code&&!/^[A-Z0-9]{6}$/.test(row.code)||number(row.quantity)===null||number(row.avgPrice)===null)throw Error('종목명·코드·수량·평균매입가 확인 필요');
+      if(row.accountId!==undefined&&(typeof row.accountId!=='string'||!/^(?:legacy-(?:ISA|PENSION|IRP|GENERAL)|ext-[A-Za-z0-9-]{8,48})$/.test(row.accountId)))throw Error('종목명·코드·수량·평균매입가 확인 필요');
       const k=key(row);if(seen.has(k))throw Error('같은 계좌에 중복 종목이 있습니다.');seen.add(k);
     }
     return rows;
   }
-  return {norm,number,master,match,parse,merge,key,comparable,validate,mixedName,replaceName};
+  return {norm,number,master,match,parse,merge,key,comparable,validate,mixedName,mixedPrefixRegion,refinedName,replaceName,replaceHeaderRegion,offsetReading};
 });

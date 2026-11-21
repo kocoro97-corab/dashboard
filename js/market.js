@@ -3,45 +3,99 @@ let CFG=LS('invest_cfg_v4')||JSON.parse(JSON.stringify(DEF)),MAN=LS('invest_man'
 // 이전에 저장된 설정에도 선물 항목을 새 방식으로 맞춤
 ['KR','US'].forEach(s=>CFG[s].forEach(x=>{
   if(FUT[x.id]){x.fut=FUT[x.id];x.name='코스피200 선물';delete x.y;delete x.m}
-  else if(x.id==='k4'&&x.y==='KQ24.KQ'){delete x.y;x.m=1;x.name='코스닥150 선물'}
+  else if(x.id==='k4'){delete x.y;delete x.m;delete x.fut;x.name='코스닥150 선물'}
 }));
 const FQ={},FST={},NQ={};
 // ----- 나무증권(NH PLUG) 선물 시세: 서버(GAS)가 대신 조회, 로그인 토큰 필요 -----
 async function nhFetch(items){
   const tk=LS('invest_session_token');
-  if(!tk)return{ok:false,msg:'로그인 토큰 없음'};
+  if(!tk)return{ok:false,msg:'로그인 토큰 없음',code:'NH_AUTH_MISSING',layer:'browser'};
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),25000);
   try{
-    const c=new AbortController(),t=setTimeout(()=>c.abort(),25000);
-    const r=await fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'nhQuotes',token:tk,items:items}),signal:c.signal});
-    clearTimeout(t);
-    const j=JSON.parse(await r.text());
-    if(!j.success)return{ok:false,msg:SafeDiagnostics.message(j)};
+    const r=await post({action:'nhQuotes',token:tk,items:items},{signal:controller.signal});
+    const raw=await r.text();let j;
+    try{j=JSON.parse(raw)}catch{return{ok:false,msg:'NH 중계 응답 형식 오류',code:'NH_RESPONSE_INVALID',layer:'relay',http:r.status}}
+    if(!j||typeof j!=='object'||j.success!==true||r.ok===false){
+      return{ok:false,msg:SafeDiagnostics.message(j),code:typeof j?.code==='string'?j.code:'NH_RESPONSE_REJECTED',layer:j?.layer||'relay',http:r.status};
+    }
+    if(!j.data||typeof j.data!=='object'||Array.isArray(j.data)){
+      return{ok:false,msg:'NH 선물 응답 데이터 형식 오류',code:'NH_DATA_INVALID',layer:'unknown',http:r.status};
+    }
     const errors={};Object.keys(j.errors||{}).filter(k=>items.some(x=>x.k===k)).forEach(k=>{errors[k]=SafeDiagnostics.message(j.errors[k],'NH_UPSTREAM')});
-    return{ok:true,data:j.data||{},errors};
-  }catch(e){return{ok:false,msg:'통신 실패('+(e&&e.name==='AbortError'?'시간 초과':'서버 주소·배포 확인')+')'}}
+    return{ok:true,data:j.data,errors};
+  }catch(e){
+    const timedOut=e&&e.name==='AbortError';
+    return{ok:false,msg:timedOut?'NH 중계 시간 초과':'NH 중계 통신 실패',code:timedOut?'NH_TIMEOUT':'NH_NETWORK_ERROR',layer:'browser'};
+  }finally{clearTimeout(timeout)}
 }
-async function fillNH(){
-  const ids=Object.keys(NHF),t=hms(new Date());
-  const r=await nhFetch(ids.map(id=>({k:id,t:'fut',c:NHF[id]})));
-  if(!r.ok){ids.forEach(id=>delete NQ[id]);NH_STATUS='실패 · '+r.msg+' · '+t;return{ok:0,fail:ids.length}}
+const FUTURE_SAFE_CODES=new Set('NH_NO_PRICE NH_CONTRACT NH_CONTRACT_CODE NH_CONTRACT_NAME NH_CONTRACT_EXPIRY NH_OBSERVATION NH_STALE NH_TOKEN NH_RSP NH_HTTP NH_NETWORK NH_TIMEOUT NH_UPSTREAM NH_IDENTITY_UNVERIFIED NH_IDENTITY_AMBIGUOUS NH_SYMBOL_MISMATCH NH_REFERENCE_UNAVAILABLE NH_REFERENCE_INVALID NH_NO_BLOCK NH_UNSUPPORTED NH_PATH NH_CURRENCY_MISMATCH'.split(' '));
+function futureErrorCode(value){
+ const raw=typeof value==='string'?value:typeof value?.code==='string'?value.code:typeof value?.diagnostic?.code==='string'?value.diagnostic.code:'';
+ const code=/^(?:nh\s*\/\s*)?(NH_[A-Z_]+)(?:\s*\/\s*HTTP\s*[1-5][0-9]{2})?$/.exec(raw.trim())?.[1];
+ return code&&FUTURE_SAFE_CODES.has(code)?code:'NH_NO_PRICE';
+}
+function rootFutureStatus(id,error){
+ if(!window.ReadStatus)return;
+ if(error===null){ReadStatus.clear('future:'+id);return}
+ ReadStatus.note({code:futureErrorCode(error)},{scope:'public',key:'future:'+id});
+}
+async function fillNH(requested=Object.keys(NHF)){
+  const validContract=d=>{if(d?.contractVerified!==true||!/^\d{8}$/.test(d.expiry||''))return false;const y=Number(d.expiry.slice(0,4)),m=Number(d.expiry.slice(4,6)),day=Number(d.expiry.slice(6,8)),date=new Date(Date.UTC(y,m-1,day)),today=new Date(Date.now()+9*3600000).toISOString().slice(0,10).replace(/-/g,'');return date.toISOString().slice(0,10).replace(/-/g,'')===d.expiry&&d.expiry>=today&&String(y%10)===d.code?.[3]&&'123456789ABC'[m-1]===d.code?.[4]};
+  const ids=[...new Set(requested.filter(id=>Object.prototype.hasOwnProperty.call(NHF,id)))],t=hms(new Date());if(!ids.length)return {ok:0,fail:0};
+  const current=typeof publicReadScope==='function'?publicReadScope():()=>true;
+  const scope=LS('invest_session_token'),r=await nhFetch(ids.map(id=>({k:id,t:'fut',c:NHF[id]})));if(scope!==LS('invest_session_token')||!current())return {ok:0,fail:0,discarded:true};
+  if(!r.ok){ids.forEach(id=>{delete NQ[id];if(SRC[id]==='H'){delete Q[id];delete SRC[id];delete QT[id]};window.ReadStatus?.note({code:r.code,http:r.http,verifiedLayer:r.layer},{scope:'public',key:'future:'+id})});NH_STATUS='실패 · '+r.msg+' · '+t;return{ok:0,fail:ids.length}}
   let ok=0;const ds=[],er=[];
-  ids.forEach(id=>{const d=r.data[id];
-    if(d&&d.p!=null&&d.prev!=null){NQ[id]={p:d.p,prev:d.prev,basis:d.basis,t:d.t||t,at:t};ok++;ds.push(id+':'+d.code+'('+d.dir+')')}
-    else{delete NQ[id];er.push(id+': '+(r.errors[id]||'응답 없음'))}});
+  ids.forEach(id=>{const d=r.data[id],validObservation=d&&Number.isFinite(d.observedAt)&&d.observedAt>0&&d.observedAt<=Date.now()+300000&&Date.now()-d.observedAt<=4*86400000;
+    if(d&&(id!=='k4'||validObservation&&validContract(d))&&Number.isFinite(d.p)&&d.p>0&&Number.isFinite(d.prev)&&d.prev>0&&typeof d.code==='string'&&new RegExp('^'+NHF[id]+'[0-9][1-9ABC]000$').test(d.code)){NQ[id]={p:d.p,prev:d.prev,basis:d.basis,t:d.t||t,at:t,code:d.code,expiry:d.expiry||null,contractVerified:d.contractVerified===true};Q[id]={p:d.p,prev:d.prev,observedAt:d.observedAt||null,contractCode:d.code||null,expiry:d.expiry||null,contractVerified:d.contractVerified===true,observationKind:d.observationKind||null,marketState:d.marketState||'UNVERIFIED',delayStatus:d.delayStatus||'UNVERIFIED',volume:Number.isFinite(d.volume)?d.volume:null,turnover:Number.isFinite(d.turnover)?d.turnover:null};SRC[id]='H';QT[id]=Date.now();rootFutureStatus(id,null);ok++;ds.push(id+':'+d.code+'('+d.dir+')')}
+    else{delete NQ[id];if(SRC[id]==='H'){delete Q[id];delete SRC[id];delete QT[id]};rootFutureStatus(id,(r.errors||{})[id]||(!d?'NH_NO_PRICE':id==='k4'&&!validObservation?'NH_OBSERVATION':id==='k4'&&!validContract(d)?'NH_CONTRACT':'NH_NO_PRICE'));er.push(id+': '+((r.errors||{})[id]||(d?'계약·관측시각 또는 시세 검증 실패':'응답 없음')))}});
   NH_STATUS='선물 '+ok+'/'+ids.length+' 성공 · '+t+(ds.length?' · '+ds.join(' '):'')+(er.length?' · 실패 '+er.join(' / '):'');
   return{ok:ok,fail:ids.length-ok};
 }
+// Read-only fallback priority: only adapters backed by approved provider credentials are attempted.
+// NH PLUG remains the primary futures source. No quote is copied from a visual iframe.
+let MARKET_SOURCE_ATTEMPTS={futures:[],tick:[]};
+async function fillAuthorizedMarketSources(needFuture=true){
+ const current=publicReadScope(),scope=LS('invest_session_token'),resolver=window.MyInvestMarketSourcePriority;
+ if(!resolver)return;
+ if(needFuture){
+  if(['W','F','K','C'].includes(SRC.k4)){delete Q.k4;delete SRC.k4;delete QT.k4}
+  if(!Q.k4){
+  const r=await resolver.resolve('futures');if(scope!==LS('invest_session_token')||!current())return;
+  MARKET_SOURCE_ATTEMPTS.futures=r.attempts;
+  if(r.quote){
+   const d=r.quote;Q.k4={p:d.p,prev:d.prev,observedAt:d.observedAt,contractCode:d.contractCode,expiry:d.expiry,contractVerified:true,delayed:d.delayed,stale:d.stale};
+   SRC.k4=({NH_PLUG_WS:'W',NH_FUTURES:'F',KIS:'K',KOSCOM:'C'})[d.provider];QT.k4=Date.now();rootFutureStatus('k4',null);
+  }
+  }
+ }
+ const tick=await resolver.resolve('tick');if(scope!==LS('invest_session_token')||!current())return;
+ MARKET_SOURCE_ATTEMPTS.tick=tick.attempts;
+ if(tick.quote&&!tick.quote.stale){
+  Q.TICK={p:tick.quote.p,observedAt:tick.quote.observedAt,delayed:tick.quote.delayed};
+  SRC.TICK=tick.quote.provider==='IBKR'?'I':'X';QT.TICK=Date.now();
+ }else if(SRC.TICK==='I'||SRC.TICK==='X'){
+  delete Q.TICK;delete SRC.TICK;delete QT.TICK;
+ }
+}
 async function fillFutures(skip){
-  let ok=0,fail=0;
+  const current=publicReadScope();let ok=0,fail=0;
   await Promise.all(Object.keys(FUT).filter(id=>!(skip&&skip.has(id))).map(async id=>{
     const t=hms(new Date());
     try{
       const j=await getJSON('https://finance.daum.net/api/home/sec?path='+encodeURIComponent('/api/futures/'+FUT[id]));
+      if(!current())return;
       const p=j&&nnum(j.tradePrice),prev=j&&nnum(j.prevClosingPrice);
       if(p==null||prev==null)throw 0;
       const k=j.kospi200&&nnum(j.kospi200.tradePrice);
       FQ[id]={p:p,prev:prev,basis:k!=null?p-k:null,t:t};FST[id]='';ok++;
-    }catch(e){FST[id]='수신 실패 · '+t;fail++}
+      // Canonical read adapter for the V2 market cards; keep legacy FQ intact.
+      Q[id]={p,prev};SRC[id]='D';QT[id]=Date.now();
+       // NH can fail before the verified Daum fallback succeeds: clear the resolved visible quote error.
+       // Contract/expiry remain unverified and source remains Daum (never claim NH recovery).
+       rootFutureStatus(id,null);
+    }catch(e){if(current()){FST[id]='수신 실패 · '+t;fail++}}
   }));
   return{ok:ok,fail:fail};
 }
@@ -54,42 +108,55 @@ const TABS=[['코스피','^KS11'],['코스닥','^KQ11'],['S&P500','^GSPC'],['나
 $('tabs').innerHTML=TABS.map(t=>`<button data-y="${t[1]}" onclick="showQ('${t[1]}','${t[0]}','')">${t[0]}</button>`).join('');
 
 const NET={log:[],ok:0,fail:0};
+function publicReadScope(){
+  const token=LS('invest_session_token'),route=window.location?.hash;
+  const generation=typeof DashboardTransport!=='undefined'?DashboardTransport.readState?.().generation:null;
+  return ()=>token===LS('invest_session_token')&&route===window.location?.hash&&generation===(typeof DashboardTransport!=='undefined'?DashboardTransport.readState?.().generation:null);
+}
 async function getTxt(targetUrl){
+  const relay=typeof DashboardTransport!=='undefined'&&DashboardTransport.isRelay();
   const proxy=MYP();
-  if(!proxy)return null;
+  if(!relay&&!proxy)return null;
   const fullUrl=proxy+(proxy.includes('?')?'&':'?')+'url='+encodeURIComponent(targetUrl);
+  let t=null;
   try{
-    const c=new AbortController(),t=setTimeout(()=>c.abort(),9000);
-    const r=await fetch(fullUrl,{signal:c.signal});
-    clearTimeout(t);
-    if(r.ok){const x=await r.text();if(x&&x.length>10){NET.ok++;return x}}
+    const c=relay?null:new AbortController();t=c?setTimeout(()=>c.abort(),9000):null;
+    const r=await (typeof DashboardTransport!=='undefined'?DashboardTransport.publicRead(targetUrl,c?{signal:c.signal}:{}):fetch(fullUrl,{signal:c?.signal}));
+    if(r.ok){const x=await r.text();if(typeof x==='string'&&x.trim()){NET.ok++;return x}}
     NET.fail++;
-  }catch(e){NET.fail++}
+  }catch(e){
+    if(['SESSION_CHANGED','READ_CANCELLED'].includes(e?.code))return null;
+    NET.fail++;
+    const family=String(targetUrl).startsWith('https://news.google.com/')?'뉴스':String(targetUrl).startsWith('https://query1.finance.yahoo.com/')?'Yahoo OHLCV':String(targetUrl).startsWith('https://m.stock.naver.com/api/stocks/theme')?'네이버 테마':'공개 시세';
+    const safe=new Set(['AUTH_REQUIRED','RELAY_PUBLIC_URL_DENIED','RELAY_PUBLIC_FAILED','RELAY_RATE_LIMIT','RELAY_BUSY','RELAY_UPSTREAM_NETWORK','RELAY_REDIRECT_DENIED','RELAY_GAS_ACCESS_REQUIRED','RELAY_TARGET_MISMATCH','RELAY_ACCESS_CLOSED']);
+    NET.log.push(family+' · '+(safe.has(e?.code)?e.code:e?.name==='AbortError'?'TIMEOUT':'NETWORK_OR_RESPONSE')+(Number.isInteger(e?.http)&&e.http>=100&&e.http<=599?' · HTTP '+e.http:''));
+    if(NET.log.length>30)NET.log.shift();
+  }finally{if(t!==null)clearTimeout(t)}
   return null;
 }
 async function getJSON(u){const x=await getTxt(u);try{return JSON.parse(x)}catch(e){return null}}
 
-function openDg(){$('dgs').textContent='성공 '+NET.ok+'회 · 실패 '+NET.fail+'회';$('dgl').textContent=['NH 나무증권: '+NH_STATUS,'출처별 수신: '+srcSummary(Object.keys(Q)),'--- 통신 기록'].concat(NET.log.length?NET.log:['기록 없음']).join('\n');$('dgp').value=MYP();$('dg').classList.add('on')}
+function openDg(){const relay=typeof DashboardTransport!=='undefined'&&DashboardTransport.isRelay();$('dgs').textContent='성공 '+NET.ok+'회 · 실패 '+NET.fail+'회'+(relay?' · 중계 연결':'');$('dgl').textContent=['NH 나무증권: '+NH_STATUS,'출처별 수신: '+srcSummary(Object.keys(Q)),'--- 통신 기록'].concat(NET.log.length?NET.log:['기록 없음']).join('\n');$('dgp').value=relay?window.MYINVEST_TRANSPORT_CONFIG.endpoint:MYP();$('dgp').readOnly=relay;const save=$('saveProxyBtn');if(save)save.disabled=relay;$('dg').classList.add('on')}
 function closeDg(){$('dg').classList.remove('on')}
-function saveProxy(){LS('invest_myproxy',$('dgp').value.trim());NET.ok=0;NET.fail=0;closeDg();refresh();loadNews();THM_AT=0;fetchTopThemes()}
+function saveProxy(){if(typeof DashboardTransport!=='undefined'&&DashboardTransport.isRelay())return;LS('invest_myproxy',$('dgp').value.trim());NET.ok=0;NET.fail=0;closeDg();refresh();loadNews();THM_AT=0;fetchTopThemes()}
 
 const nnum=v=>{const n=parseFloat(String(v==null?'':v).replace(/[,+\s]/g,''));return isFinite(n)?n:null};
 function nsgn(o,ch){if(ch==null)return ch;const c=(o&&(o.compareToPreviousPrice||o.fluctuationsType))||{},cd=String(c.code||''),tx=String(c.name||'')+String(c.text||'');
 const dn=cd==='4'||cd==='5'||/FALL|하락|하한/.test(tx),up=cd==='1'||cd==='2'||/RIS|상승|상한/.test(tx);return dn?-Math.abs(ch):up?Math.abs(ch):ch}
-function nq(o){if(!o)return null;const p=nnum(o.closePrice??o.calcPrice);if(p==null)return null;const ch=nsgn(o,nnum(o.compareToPreviousClosePrice??o.fluctuations));return{p:p,prev:ch==null?p:p-ch}}
+function nq(o){if(!o)return null;const p=nnum(o.closePrice??o.calcPrice);if(p==null)return null;const ch=nsgn(o,nnum(o.compareToPreviousClosePrice??o.fluctuations));return{p:p,prev:ch==null?null:p-ch}}
 const narr=j=>Array.isArray(j)?j:j?(j.datas||j.result||j.data||j.items||Object.values(j).find(Array.isArray)||((j.closePrice||j.calcPrice)?[j]:[])):[];
 let INV=null;const SRC={};
 // ----- 시세 출처 표시: N=네이버 · Y=Yahoo · D=다음 · H=NH(나무증권) · M=수동 -----
 const QT={};   // 종목별 마지막 수신 시각
-const SRC_NAME={N:'네이버',Y:'Yahoo',D:'다음',H:'NH 나무증권',M:'수동'},SRC_SHORT={N:'네',Y:'Y',D:'다',H:'NH',M:'수'};
+const SRC_NAME={N:'네이버',Y:'Yahoo',D:'다음',H:'NH 나무증권',W:'NH PLUG 실시간',F:'NH선물',K:'한국투자증권',C:'코스콤',I:'IBKR',X:'dxFeed',M:'수동'},SRC_SHORT={N:'네',Y:'Y',D:'다',H:'NH',W:'NH-WSS',F:'NH선물',K:'KIS',C:'코스콤',I:'IBKR',X:'dx',M:'수'};
 let NH_STATUS='아직 연결 전';   // 나무증권 연동 상태 (🩺 진단에 표시)
 const srcTag=(k,full)=>{const s=SRC[k];if(!s||!Q[k])return '';return full?(SRC_NAME[s]||s)+(QT[k]?' · '+hms(new Date(QT[k])):''):(SRC_SHORT[s]||s)};
 const srcSummary=keys=>{const c={};keys.forEach(k=>{const s=SRC[k];if(Q[k]&&s)c[s]=(c[s]||0)+1});return Object.keys(c).map(s=>(SRC_NAME[s]||s)+' '+c[s]).join(' · ')||'수신 없음'};
 const srcLine=t=>t?`<div class="mini" style="font-size:9px;margin-top:2px;opacity:.75">출처 ${t}</div>`:'';
 
 async function fillNaver(want,fr){
-  const W=new Set(want),T=[];let n=0;
-  const put=(k,o)=>{const q=nq(o);if(q&&W.has(k)){Q[k]=q;SRC[k]='N';QT[k]=Date.now();fr.add(k);n++}};
+  const current=publicReadScope(),W=new Set(want),T=[];let n=0;
+  const put=(k,o)=>{const q=nq(o);if(current()&&q&&W.has(k)){Q[k]=q;SRC[k]='N';QT[k]=Date.now();fr.add(k);n++}};
   [['^KS11','KOSPI'],['^KQ11','KOSDAQ']].forEach(([k,c])=>{if(W.has(k))T.push(getJSON('https://polling.finance.naver.com/api/realtime/domestic/index/'+c).then(j=>put(k,narr(j)[0])))});
   const wi={'.INX':'^GSPC','.IXIC':'^IXIC','.DJI':'^DJI','.SOX':'^SOX','.VIX':'^VIX'},wk=Object.keys(wi).filter(c=>W.has(wi[c]));
   if(wk.length)T.push(getJSON('https://stock.naver.com/api/polling/worldstock/index?reutersCodes='+wk.join(',')).then(j=>narr(j).forEach((o,i)=>{const rc=o.reutersCode||o.symbolCode||wk[i];if(wi[rc])put(wi[rc],o)})));
@@ -104,34 +171,38 @@ async function fillNaver(want,fr){
 
 async function quote(s){
   const j=await getJSON('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(s)+'?interval=1d&range=1d');
-  const m=j&&j.chart&&j.chart.result&&j.chart.result[0]&&j.chart.result[0].meta;if(!m||m.regularMarketPrice==null)return null;
-  return{p:m.regularMarketPrice,prev:m.chartPreviousClose!=null?m.chartPreviousClose:m.previousClose};
+  const m=j&&j.chart&&j.chart.result&&j.chart.result[0]&&j.chart.result[0].meta;if(!m||String(m.symbol||'').toUpperCase()!==s.toUpperCase()||!Number.isFinite(m.regularMarketPrice)||m.regularMarketPrice<=0)return null;
+  return{p:m.regularMarketPrice,prev:m.chartPreviousClose!=null?m.chartPreviousClose:m.previousClose,observedAt:Number.isFinite(m.regularMarketTime)?m.regularMarketTime*1000:null};
 }
 const KY={};
 async function quoteKR(c){for(const x of['.KS','.KQ']){const q=await quote(c+x);if(q){KY[c]=c+x;return q}}return null}
 
 async function fillQuotes(list){
-  let i=0;
+  const current=publicReadScope();let i=0;
   await Promise.all(Array.from({length:4},async()=>{
     while(i<list.length){
+      if(!current())return;
       const c=list[i++];
       const q=await(isKR(c)?quoteKR(c):quote(c));
-      if(q){Q[c]=q;SRC[c]='Y';QT[c]=Date.now()}
+      if(!current())return;
+      if(q){Q[c]=q;SRC[c]='Y';QT[c]=Date.now()}else if(Q[c])Q[c].refreshFailed=true;
     }
   }));
 }
 
 let MK_BUSY=false;
-async function refreshMarket(){   // '시장 종합' 카드(지수·선물·수급)만 갱신
-  if(MK_BUSY)return;MK_BUSY=true;
+async function refreshMarket(requested=[]){   // '시장 종합' 카드(지수·선물·수급)만 갱신
+  if(MK_BUSY)return;MK_BUSY=true;const current=publicReadScope();
   const btn=$('mkBtn'),st=$('mkSt');
   if(btn){btn.disabled=true;btn.textContent='갱신 중...'}
   try{
-    const list=CFG[sess()],want=[...new Set(list.filter(x=>x.y).map(x=>x.y))],fr=new Set();
-    await fillNaver(want,fr);
-    await fillQuotes(want.filter(c=>!fr.has(c)));
-    const hasNH=list.some(x=>NHF[x.id]),nh=hasNH?await fillNH():{ok:0,fail:0};
-    const hasFut=list.some(x=>x.fut),fu=hasFut?await fillFutures(new Set(Object.keys(NQ))):{ok:0,fail:0};
+    const extra=Array.isArray(requested)?requested.filter(s=>typeof s==='string'&&/^[A-Za-z0-9^=.-]{1,32}$/.test(s)&&!['k3','k4','TICK'].includes(s)).slice(0,24):[];
+    const list=CFG[sess()],want=[...new Set([...list.filter(x=>x.y).map(x=>x.y),...extra])],fr=new Set();
+    await fillNaver(want,fr);if(!current())return;
+    await fillQuotes(want.filter(c=>!fr.has(c)));if(!current())return;
+    const requestedNH=[...new Set([...list.filter(x=>NHF[x.id]).map(x=>x.id),...(Array.isArray(requested)?requested:[]).filter(id=>NHF[id])])],hasNH=requestedNH.length>0,nh=hasNH?await fillNH(requestedNH):{ok:0,fail:0};if(!current())return;
+    const hasFut=list.some(x=>x.fut)||Array.isArray(requested)&&requested.includes('k3'),fu=hasFut?await fillFutures(new Set(Object.keys(NQ))):{ok:0,fail:0};if(!current())return;
+    await fillAuthorizedMarketSources(requestedNH.includes('k4'));
     const got=want.filter(c=>Q[c]).length;
     renderCards();updateTickGauge();generateScenario();
     st.textContent='갱신 '+hms(new Date())+' · 성공 '+got+'/'+want.length+(hasNH?' · 선물 NH '+nh.ok+'/'+(nh.ok+nh.fail):'')+(fu.ok+fu.fail?' · 다음 '+fu.ok+'/'+(fu.ok+fu.fail):'')+' · 출처 '+srcSummary(want);
@@ -151,6 +222,7 @@ async function refresh(){
   await fillQuotes(all.filter(c=>!fr.has(c)));
   const nh=await fillNH();
   const fu=await fillFutures(new Set(Object.keys(NQ)));
+  await fillAuthorizedMarketSources(true);
   const got=all.filter(c=>Q[c]).length;
   renderCards();fetchTopThemes();renderThemes();updateTickGauge();generateScenario();
   $('status').textContent='시세 갱신 '+hms(new Date())+' · 성공 '+got+' · 실패 '+(all.length-got)+'건 · 선물 NH '+nh.ok+'/'+(nh.ok+nh.fail)+(fu.ok+fu.fail?' · 다음 '+fu.ok+'/'+(fu.ok+fu.fail):'')+' · 출처 '+srcSummary(all);
@@ -175,15 +247,16 @@ function renderCards(){
       const f=FQ[x.id];
       if(f){const df=f.p-f.prev,pc=df/f.prev*100;d=df>0?1:df<0?-1:0;v=nf(f.p);c=(pc>=0?'+':'')+nf(pc)+'%'+(f.basis!=null?' · 베이시스 '+(f.basis>=0?'+':'')+nf(f.basis):'')+' · '+(FST[x.id]||f.t)}
       else c=FST[x.id]||'불러오는 중';
-    }else if(x.m){v=MAN[x.id]||'입력';c='직접 입력'}
+    }else if(NHF[x.id]){const q=Q[x.id];if(q&&Number.isFinite(q.p)&&Number.isFinite(q.prev)&&q.prev>0){v=nf(q.p);const pc=(q.p/q.prev-1)*100;d=pc>0?1:pc<0?-1:0;c=(pc>=0?'+':'')+nf(pc)+'% · '+(q.stale?'마지막 관측(지연 가능)':'관측 시각 확인')}else c='선물 시세 미수신 · 연결 진단에서 사유 확인'}
+    else if(x.m){v=MAN[x.id]||'입력';c='직접 입력'}
     else{
       const q=Q[x.y];if(q){const df=q.p-q.prev,pc=df/q.prev*100;d=df>0?1:df<0?-1:0;
       if(x.t==='yld'){v=nf(q.p)+'%';c=(df>=0?'+':'')+nf(df)+'p'}
       else if(x.t==='fx'){v=nf(q.p);c=(df>=0?'+':'')+nf(df)+' ('+nf(pc)+'%)'}
       else{v=nf(q.p);c=(pc>=0?'+':'')+nf(pc)+'%'}}
     }
-    const tag=x.inv?(INV?'네이버':''):NQ[x.id]?'NH 나무증권 · '+NQ[x.id].at:x.fut?(FQ[x.id]?'다음':''):x.m?'수동 입력':srcTag(x.y,true);
-    return `<div class="card" style="cursor:pointer" onclick="${x.inv||x.fut||NQ[x.id]?'':x.m?`manIn('${x.id}')`:`openQ('${x.id}')`}"><div class="cl"><span>${x.name}</span><span>${x.inv||x.fut||NQ[x.id]?'':x.m?'✎':'📈'}</span></div><div class="value">${v}</div><div class="change ${d>0?'up':d<0?'down':'neutral'}">${c}</div>${srcLine(tag)}</div>`
+    const tag=x.inv?(INV?'네이버':''):NQ[x.id]?'NH 나무증권 · '+NQ[x.id].at:x.fut?(FQ[x.id]?'다음':''):NHF[x.id]?(SRC_NAME[SRC[x.id]]||'NH 선물 미수신'):x.m?'수동 입력':srcTag(x.y,true);
+    return `<div class="card" style="cursor:pointer" onclick="${x.inv||x.fut||NHF[x.id]||NQ[x.id]?'':x.m?`manIn('${x.id}')`:`openQ('${x.id}')`}"><div class="cl"><span>${x.name}</span><span>${x.inv||x.fut||NQ[x.id]?'':x.m?'✎':'📈'}</span></div><div class="value">${v}</div><div class="change ${d>0?'up':d<0?'down':'neutral'}">${c}</div>${srcLine(tag)}</div>`
   }).join('')
 }
 
@@ -209,28 +282,26 @@ const hms=d=>{if(!d)return'—';const p=n=>String(n).padStart(2,'0');return p(d.
 function tickStatus(){
   const el=$('tickSt');if(!el)return;
   const c=ok=>ok===true?'#4ade80':ok===false?'var(--red)':'var(--amber)';
-  const wo=TS.w==='ok'?true:TS.w==='fail'?false:null,wl=wo===true?'성공':wo===false?'실패':'대기';
+  const wo=TS.w==='ok'?true:TS.w==='fail'?false:null,wl=wo===true?'프레임 수신':wo===false?'실패':'대기';
   const g=TS.g;
-  el.innerHTML='실시간 위젯 <b style="color:'+c(wo)+'">'+wl+'</b> · '+hms(TS.wAt)+'<br>게이지 <b style="color:'+c(g?g.ok:null)+'">'+(g?(g.ok?'성공':'실패'):'대기')+'</b> · '+(g?g.src:'')+' · '+hms(TS.gAt);
+  el.innerHTML='참고 위젯 <b style="color:'+c(wo)+'">'+wl+'</b> · '+hms(TS.wAt)+'<br>게이지 <b style="color:'+c(g?g.ok:null)+'">'+(g?(g.src==='직접 입력'?'수동 입력':g.ok?'관측 확인':'미연결'):'미확인')+'</b> · '+(g?g.src:'')+' · '+hms(TS.gAt);
 }
 function updateTickGauge(){
-  if($('tin').value)return;   // 직접 입력값이 있으면 입력값 우선
-  const qN=Q['^IXIC'],qS=Q['^GSPC'];let tv=null,src='';
-  if(qN&&qN.prev){tv=Math.round((qN.p/qN.prev-1)*100*450);src='나스닥 등락률로 추정'}
-  else if(qS&&qS.prev){tv=Math.round((qS.p/qS.prev-1)*100*550);src='S&P500 등락률로 추정'}
-  TS.gAt=new Date();
-  if(tv==null||isNaN(tv)){TS.g={ok:false,src:'지수 시세 없음'};$('tl2').textContent='데이터 없음';tickStatus();return}
-  TS.g={ok:true,src:src};
-  $('tm').style.left='calc('+((Math.max(-1000,Math.min(1000,tv))+1000)/20)+'% - 1px)';
-  $('tl2').textContent='추정: '+(tv>=600?'매수 우위':tv<=-600?'매도 우위':'중립권')+' ('+tv+')';
+  if($('tin').value)return; // Manual entries remain explicit and are never copied to Q.TICK.
+  const q=Q.TICK,source=({I:'IBKR',X:'dxFeed'})[SRC.TICK],at=q?.observedAt,now=Date.now();
+  const valid=source&&Number.isInteger(q?.p)&&Math.abs(q.p)<=5000&&Number.isFinite(at)&&at>0&&at<=now+60000&&now-at<=120000;
+  if(!valid){TS.g={ok:false,src:'숫자 API 미연결 · TradingView 참고용'};TS.gAt=null;$('tm').hidden=true;$('tl2').textContent='실제 TICK 수치 미연결';tickStatus();return}
+  TS.g={ok:true,src:source+' · 검증된 관측값'};TS.gAt=new Date(at);$('tm').hidden=false;
+  $('tm').style.left='calc('+((Math.max(-1000,Math.min(1000,q.p))+1000)/20)+'% - 1px)';
+  $('tl2').textContent='관측값: '+q.p+' · '+(q.p>=600?'매수 우위':q.p<=-600?'매도 우위':'±600 범위 안');
   tickStatus();
 }
 
 function generateScenario(){
   const h=new Date().getHours(),isDay=h>=7&&h<21;
   const qK=Q['^KS11'],qQ=Q['^KQ11'],qN=Q['^IXIC'],qS=Q['^GSPC'];
-  const getP=q=>q&&q.prev?((q.p/q.prev-1)*100).toFixed(2):'0.00';
-  const txt=isDay?`[📊 한국장 주간 시나리오]\n• 코스피(${getP(qK)}%), 코스닥(${getP(qQ)}%)\n• 주도 테마 수급 집중 구간, 5일선 눌림목 중심 대응.`:`[🌙 미국장 야간 시나리오]\n• 나스닥(${getP(qN)}%), S&P500(${getP(qS)}%)\n• 필라델피아 반도체 및 빅테크 흐름 연동 대응.`;
+  const getP=q=>q&&Number.isFinite(q.p)&&q.p>0&&Number.isFinite(q.prev)&&q.prev>0?((q.p/q.prev-1)*100).toFixed(2)+'%':'미확인';
+  const txt=isDay?`[📊 한국장 주간 시나리오]\n• 코스피(${getP(qK)}), 코스닥(${getP(qQ)})\n• 주도 테마 수급 집중 구간, 5일선 눌림목 중심 대응.`:`[🌙 미국장 야간 시나리오]\n• 나스닥(${getP(qN)}), S&P500(${getP(qS)})\n• 필라델피아 반도체 및 빅테크 흐름 연동 대응.`;
   $('gv').textContent=txt;
   $('gptTime').textContent=new Date().toLocaleTimeString('ko-KR')+' 생성';
 }
@@ -242,8 +313,9 @@ const esc=v=>String(v).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[
 const ago=d=>{const m=(Date.now()-d)/60000;return m<1?'방금':m<60?Math.floor(m)+'분 전':Math.floor(m/1440)+'일 전'};
 
 async function fetchNews(q){
-  const x=await getTxt('https://news.google.com/rss/search?q='+encodeURIComponent(q)+'&hl=ko&gl=KR&ceid=KR:ko');if(!x)return[];
-  const d=new DOMParser().parseFromString(x,'text/xml');return[...d.querySelectorAll('item')].map(i=>{const g=t=>{const e=i.querySelector(t);return e?e.textContent:''};return{t:g('title'),l:g('link'),s:g('source'),d:new Date(g('pubDate')||0)}})
+  const x=await getTxt('https://news.google.com/rss/search?q='+encodeURIComponent(q)+'&hl=ko&gl=KR&ceid=KR:ko');if(!x)return null;
+  const d=new DOMParser().parseFromString(x,'text/xml');if(d.querySelector('parsererror')||!d.querySelector('rss,feed'))return null;
+  return[...d.querySelectorAll('item')].map(i=>{const g=t=>{const e=i.querySelector(t);return e?e.textContent:''};return{t:g('title'),l:g('link'),s:g('source'),d:new Date(g('pubDate')||NaN)}})
 }
 
 async function loadNews(){
@@ -251,9 +323,10 @@ async function loadNews(){
   const mks=await fetchNews('코스피 OR 증시 OR 나스닥 when:2d');
   const hds=await fetchNews('(삼성전자 OR SK하이닉스 OR 한미반도체 OR 알테오젠) when:2d');
   const renderN=(list,el,stEl)=>{
+    if(!Array.isArray(list)){$(el).replaceChildren();$(stEl).textContent='뉴스 수신 실패 · 미확인';return}
     const m={};list.forEach(a=>{const k=a.t.replace(/\s-\s[^-]+$/,'');if(!m[k]||a.d>m[k].d)m[k]={t:k,l:a.l,s:a.s,d:a.d}});
     const arr=Object.values(m).sort((a,b)=>b.d-a.d).slice(0,6);
-    $(el).innerHTML=arr.length?arr.map(a=>`<div class="news"><strong><a href="${escA(/^https:\/\//i.test(String(a.l))?a.l:'#')}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${esc(a.t)}</a></strong><span class="mini">${esc(a.s)} · ${ago(a.d)}</span></div>`).join(''):'<div class="mini">기사 없음</div>';
+    $(el).innerHTML=arr.length?arr.map(a=>`<div class="news" data-news-published="${Number.isFinite(a.d.getTime())&&a.d.getTime()<=Date.now()+300000?a.d.toISOString():''}"><strong><a href="${escA(/^https:\/\//i.test(String(a.l))?a.l:'#')}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${esc(a.t)}</a></strong><span class="mini">${esc(a.s)} · ${Number.isFinite(a.d.getTime())&&a.d.getTime()<=Date.now()+300000?esc(a.d.toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}))+' KST':'게시시각 미확인'}</span></div>`).join(''):'<div class="mini">기사 없음</div>';
     $(stEl).textContent=arr.length?arr.length+'건':'없음';
   };
   renderN(mks,'nl_mk','nst_mk');renderN(hds,'nl_hd','nst_hd');
@@ -263,7 +336,7 @@ function setTick(){
   const v=parseFloat($('tin').value);LS('invest_tick',$('tin').value);
   if(isNaN(v)){updateTickGauge();return}
   $('tm').style.left='calc('+((Math.max(-1000,Math.min(1000,v))+1000)/20)+'% - 1px)';   // tv → v 수정
-  $('tl2').textContent='입력값: '+v;TS.g={ok:true,src:'직접 입력'};TS.gAt=new Date();tickStatus();
+  $('tm').hidden=false;$('tl2').textContent='입력값: '+v;TS.g={ok:true,src:'직접 입력'};TS.gAt=new Date();tickStatus();
 }
 
 let cur='KR';
@@ -283,6 +356,22 @@ let NH_ACCOUNT_BUSY = false;
 let NH_ACCOUNT_RUN=0;
 const nhMoney = v => v==null ? '—' : Number(v).toLocaleString('ko-KR',{maximumFractionDigits:2});
 const nhSafe = v => String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function mergeNhAccountResultsV2(previous,incoming){
+  if(!Array.isArray(incoming))throw Error('NH_CONTRACT');
+  const old=new Map((previous||[]).filter(a=>typeof a.accountKey==='string'&&a.accountKey).map(a=>[a.accountKey,a]));
+  return incoming.map(a=>{
+    const result={...a},before=old.get(a.accountKey);
+    if(before)for(const market of ['domestic','overseas']){
+      if(!result[market]&&before[market])result[market]={...before[market],stale:true};
+      else if(result[market]&&result[market].partial&&before[market]){
+        const rows=new Map((before[market].holdings||[]).map(h=>[h.code+'|'+h.currency,h]));
+        (result[market].holdings||[]).forEach(h=>rows.set(h.code+'|'+h.currency,h));
+        result[market]={...result[market],holdings:[...rows.values()],stale:true};
+      }
+    }
+    return result;
+  });
+}
 async function loadNHAccounts(){
   if(NH_ACCOUNT_BUSY)return;NH_ACCOUNT_BUSY=true;const run=++NH_ACCOUNT_RUN;
   const btn=$('nhAccountBtn'),st=$('nhAccountStatus');
@@ -291,20 +380,20 @@ async function loadNHAccounts(){
   try{
     const tk=LS('invest_session_token');
     if(!tk)throw new Error('로그인이 필요합니다.');
-    const res=await fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'nhAccounts',token:tk})});
+    const res=await post({action:'nhAccounts',token:tk});
     const data=JSON.parse(await res.text());
     if(run!==NH_ACCOUNT_RUN||tk!==LS('invest_session_token'))return;
     if(!data.success){
       throw Object.assign(new Error(''),{diagnostic:SafeDiagnostics.diagnostic(data)});
     }
-    NH_ACCOUNTS=(Array.isArray(data.accounts)?data.accounts:[]).filter(a=>['domestic','overseas'].some(k=>Array.isArray(a[k]&&a[k].holdings)&&a[k].holdings.length>0)).map(a=>({...a,errors:(Array.isArray(a.errors)?a.errors:[]).map(x=>SafeDiagnostics.message(x,'NH_UPSTREAM'))}));
+    NH_ACCOUNTS=mergeNhAccountResultsV2(NH_ACCOUNT_SESSION===tk?NH_ACCOUNTS:[],data.accounts).filter(a=>['domestic','overseas'].some(k=>Array.isArray(a[k]&&a[k].holdings)&&a[k].holdings.length>0)).map(a=>({...a,errors:(Array.isArray(a.errors)?a.errors:[]).map(x=>SafeDiagnostics.message(x,'NH_UPSTREAM'))}));
     NH_ACCOUNT_UPDATED=data.updatedAt||'';
     NH_ACCOUNT_FETCHED_AT=Date.now();
     NH_ACCOUNT_SESSION=tk;
     renderNHAccounts();
     if(typeof extSyncWithNH==='function')extSyncWithNH();
     const count=NH_ACCOUNTS.length;
-    if(st)st.textContent='조회 '+(NH_ACCOUNT_UPDATED||hms(new Date()))+' · 일반계좌 '+count+'개 · 모의계좌 제외';
+    if(st)st.textContent='조회 '+(NH_ACCOUNT_UPDATED||hms(new Date()))+' · 일반계좌 '+count+'개 · 모의계좌 제외'+(NH_ACCOUNTS.some(a=>['domestic','overseas'].some(k=>a[k]&&(a[k].stale||a[k].partial)))?' · 일부 이전 조회값 유지':'')+(data.gatewayVersion===2?' · ISA·연금저축·IRP: OCR·수동 관리(직접조회 미검증)':'');
   }catch(e){if(run!==NH_ACCOUNT_RUN)return;if(st)st.textContent='조회 실패(기존 조회값 유지) · '+SafeDiagnostics.message(e,'FRONTEND_NETWORK');if(typeof renderExternalAssets==='function')renderExternalAssets()}
   finally{if(run===NH_ACCOUNT_RUN){NH_ACCOUNT_BUSY=false;if(btn){btn.disabled=false;btn.textContent='↻ 계좌 잔고 조회'}}}
 }
@@ -321,7 +410,7 @@ function renderNHAccounts(){
       if(!d||!Array.isArray(d.holdings)||!d.holdings.length)return;
       const sm=d.summary||{},hs=Array.isArray(d.holdings)?d.holdings:[];
       const money=sm.evalAmount,profit=sm.profit,dep=sm.deposit;
-      cardHtml+=`<div class="card"><div class="cl"><span>일반계좌 · ${label}</span><span>${hs.length}종목</span></div><div class="value">${nhMoney(money)}<span class="mini"> 원 평가금액</span></div><div class="change ${profit>0?'up':profit<0?'down':'neutral'}">손익 ${nhMoney(profit)}원${sm.returnRate!=null?' · '+Number(sm.returnRate).toFixed(2)+'%':''}</div><div class="mini">예수금 ${nhMoney(dep)}원 · 계좌유형 ${a.acctType==='02'?'주문대리인':'일반'}</div></div>`;
+      cardHtml+=`<div class="card"><div class="cl"><span>일반계좌 · ${label}</span><span>${hs.length}종목${d.stale?' · 이전 조회값':d.partial?' · 부분 조회':''}</span></div><div class="value">${nhMoney(money)}<span class="mini"> 원 평가금액</span></div><div class="change ${profit>0?'up':profit<0?'down':'neutral'}">손익 ${nhMoney(profit)}원${sm.returnRate!=null?' · '+Number(sm.returnRate).toFixed(2)+'%':''}</div><div class="mini">예수금 ${nhMoney(dep)}원 · 계좌유형 ${a.acctType==='02'?'주문대리인':'일반'}</div></div>`;
       if(filter==='all'||filter===key)hs.forEach(h=>rows.push({a:'일반계좌',market:label,h:h}));
     });
     if(a.errors&&a.errors.length)cardHtml+=`<div class="mini" style="grid-column:1/-1;color:var(--amber)">일반계좌 조회 안내: ${nhSafe(a.errors.map(x=>SafeDiagnostics.message(x,'NH_UPSTREAM')).join(' / '))}</div>`;

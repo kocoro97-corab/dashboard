@@ -6,24 +6,38 @@ class Sheet{
   appendRow(row){this.rows.push([...row])}
   deleteRow(index){this.rows.splice(index-1,1)}
   getRange(row,column,count=1,width=1){const sheet=this;return {
-    getValue:()=>sheet.rows[row-1]?.[column-1],setNumberFormat(){return this},
+    getValue:()=>sheet.rows[row-1]?.[column-1],getValues:()=>Array.from({length:count},(_,i)=>Array.from({length:width},(_,j)=>sheet.rows[row+i-1]?.[column+j-1]??'')),setNumberFormat(){return this},
     setValues(values){if(sheet.failures){sheet.failures--;throw Error('simulated write failure')}values.forEach((values,i)=>{if(!sheet.rows[row+i-1])sheet.rows[row+i-1]=[];values.forEach((v,j)=>sheet.rows[row+i-1][column+j-1]=v)})}
   }}
 }
 function store(){
-  const sheets=new Map();let locked=false;
+  const sheets=new Map(),properties=new Map();let locked=false;
   const sheet=name=>{if(!sheets.has(name))sheets.set(name,new Sheet());return sheets.get(name)};
   const ctx=vm.createContext({Date,console,getSheet:sheet,jsonResponse:x=>x,
+    PropertiesService:{getScriptProperties:()=>({getProperty:key=>properties.get(key)||null,setProperty:(key,value)=>properties.set(key,value)})},
     sessionUser_:token=>token==='alice-token'?'alice':token==='bob-token'?'bob':null,
     securityWithLock_:fn=>{assert.equal(locked,false);locked=true;try{return fn()}finally{locked=false}},
     Utilities:{DigestAlgorithm:{SHA_256:'sha256'},computeDigest:(_,text)=>[...crypto.createHash('sha256').update(text).digest()],getUuid:()=>crypto.randomUUID()}
   });
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../gas/AccountStoreV2.gs'),'utf8'),ctx);
   vm.runInContext(fs.readFileSync(path.join(__dirname,'../gas/ExternalHoldings.gs'),'utf8'),ctx);
   const read=(token='alice-token')=>ctx.handleExternalHoldingsV2(token);
-  const save=(rows,options={})=>ctx.handleSaveExternalHoldingsV2(options.token||'alice-token',rows,options.revision===undefined?read(options.token).revision:options.revision,options.confirm===undefined?true:options.confirm);
+  const save=(rows,options={})=>ctx.handleSaveExternalHoldingsV2(options.token||'alice-token',rows,options.revision===undefined?read(options.token).revision:options.revision,options.confirm===undefined?true:options.confirm,options.version);
   return {ctx,sheet,read,save};
 }
 const row=type=>({accountType:type,code:'035720',name:'카카오',quantity:101,avgPrice:20100,source:'manual'});
+test('optional account IDs preserve distinct brokers and survive readback/recovery',()=>{
+  const s=store(),rows=[{...row('GENERAL'),accountId:'ext-synthetic-account-a'},{...row('GENERAL'),accountId:'ext-synthetic-account-b'}];
+  const catalog=s.ctx.handleExternalAccountCatalog_('alice-token');assert.equal(s.ctx.handleSaveExternalAccountCatalog_('alice-token',rows.map((row,i)=>({id:row.accountId,accountType:'GENERAL',accountName:'Synthetic '+i,broker:'Synthetic Broker'})),['Synthetic Broker'],catalog.revision,true).success,true);
+  assert.equal(s.save(rows,{version:1}).success,true);assert.equal(s.read().holdings.length,2);assert.equal(s.read().holdings[0].accountId,rows[0].accountId);
+  assert.equal(s.save([]).code,'STORE_CLIENT_UPGRADE_REQUIRED');assert.equal(s.read().holdings.length,2);
+  assert.equal(s.save([],{version:1}).success,true);const id=s.ctx.handleExternalHistory('alice-token').history[0].snapshotId;
+  assert.equal(s.ctx.handleRestoreExternalHoldings('alice-token',id,s.read().revision,true).success,true);assert.equal(s.read().holdings[1].accountId,rows[1].accountId);
+});
+test('legacy account aliases do not bypass per-account duplicate validation',()=>{
+  const s=store();assert.equal(s.save([row('ISA'),{...row('ISA'),accountId:'legacy-ISA'}],{version:1}).code,'STORE_DUPLICATE');
+  assert.equal(s.save([{...row('ISA'),accountId:'legacy-IRP'}],{version:1}).code,'STORE_INVALID');
+});
 for(const type of ['ISA','PENSION','IRP'])test(type+' save backs up, preserves other users, and supports restore/redo',()=>{
   const s=store();assert.equal(s.save([row(type)],{token:'bob-token'}).success,true);
   assert.equal(s.save([row(type)]).success,true);
@@ -32,7 +46,7 @@ for(const type of ['ISA','PENSION','IRP'])test(type+' save backs up, preserves o
   const selected=history.find(x=>x.holdings.length===1);
   const restored=s.ctx.handleRestoreExternalHoldings('alice-token',selected.snapshotId,s.read().revision,true);
   assert.equal(restored.success,true);assert.equal(s.read().holdings.length,1);
-  assert.equal(s.read().revision,before.revision);assert.equal(s.read('bob-token').holdings.length,1);
+  assert.notEqual(s.read().revision,before.revision);assert.equal(s.read('bob-token').holdings.length,1);
   assert.ok(s.ctx.handleExternalHistory('alice-token').history.some(x=>x.reason==='restore'&&x.holdings.length===0));
 });
 test('missing confirmation and stale or missing revisions cannot overwrite saved data',()=>{
@@ -58,23 +72,21 @@ test('unauthenticated access and another users snapshot ID cannot restore privat
 });
 test('write failure rolls back only the caller and keeps a recovery snapshot',()=>{
   const s=store();s.save([row('ISA')]);s.save([row('IRP')],{token:'bob-token'});const before=s.read().revision;
-  s.sheet('ExternalHoldings').failures=1;
+  s.sheet('AccountStoreV2').failures=1;
   assert.equal(s.save([{...row('ISA'),quantity:202}]).code,'STORE_WRITE_FAILED');
   assert.equal(s.read().revision,before);assert.equal(s.read('bob-token').holdings.length,1);
-  assert.ok(s.ctx.handleExternalHistory('alice-token').history.length>=2);
+  assert.equal(s.ctx.handleExternalHistory('alice-token').history.length,1);
 });
-test('failed rollback reports an explicit recovery action instead of claiming success',()=>{
-  const s=store();s.save([row('ISA')]);s.sheet('ExternalHoldings').failures=2;
-  const result=s.save([{...row('ISA'),quantity:202}]);
-  assert.equal(result.code,'STORE_RECOVERY_REQUIRED');assert.ok(result.snapshotId);
-  assert.equal(s.ctx.handleRestoreExternalHoldings('alice-token',result.snapshotId,s.read().revision,true).success,true);
-  assert.equal(s.read().holdings[0].quantity,101);
+test('repeated interrupted prepare writes preserve the last committed state without rollback',()=>{
+  const s=store();s.save([row('ISA')]);const before=s.read();s.sheet('AccountStoreV2').failures=2;
+  for(let i=0;i<2;i++)assert.equal(s.save([{...row('ISA'),quantity:202}]).code,'STORE_WRITE_FAILED');
+  assert.equal(s.read().revision,before.revision);assert.equal(s.read().holdings[0].quantity,101);
 });
 test('history retention is bounded and preserves numeric leading-zero codes',()=>{
   const s=store();for(let i=0;i<8;i++)assert.equal(s.save([{...row('ISA'),quantity:101+i}]).success,true);
   assert.equal(s.ctx.handleExternalHistory('alice-token').history.length,5);
-  const data=s.sheet('ExternalHoldings');data.rows[1][2]=35720;
-  assert.equal(s.read().holdings[0].code,'035720');
+  const legacy=store();legacy.read();legacy.sheet('ExternalHoldings').appendRow(['alice','ISA',35720,'Synthetic',1,2,'saved','fixture']);
+  assert.equal(legacy.read().holdings[0].code,'035720');
 });
 test('alphanumeric KRX codes survive save, delete, and restore without digit stripping',()=>{
   const s=store();assert.equal(s.save([{...row('ISA'),name:'에스엔시스',code:'0008Z0'}]).success,true);
@@ -89,6 +101,6 @@ test('recovery preserves legacy invalid codes for review without allowing them i
   const before=s.read();assert.equal(s.save([]).success,true);
   const snapshot=s.ctx.handleExternalHistory('alice-token').history.find(x=>x.holdings.length===1);
   assert.equal(s.ctx.handleRestoreExternalHoldings('alice-token',snapshot.snapshotId,s.read().revision,true).success,true);
-  assert.equal(s.read().revision,before.revision);
+  assert.notEqual(s.read().revision,before.revision);
   assert.equal(s.save(s.read().holdings).code,'STORE_INVALID');
 });

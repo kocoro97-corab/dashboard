@@ -1,5 +1,7 @@
 /* ===== themes.js: 주도 테마 & 강도판 (거래대금·거래량·상승률 종합) ===== */
 const TH_API='https://stock.naver.com/api/domestic/market/theme/';
+// Verified public list response: {groups:[{no,name,changeRate,...}]}.
+const TH_LIST_URL='https://m.stock.naver.com/api/stocks/theme?page=1&pageSize=100';
 const TH_CAND=12,TH_TOP=6;
 const TH_CACHE_MS=10*60*1000;   // 자동 갱신 아님: 설정 저장 등으로 곧바로 다시 불릴 때 재수신을 막는 캐시 (↻ 버튼은 THM_AT=0 으로 무시)
 let THM=[],THM_MSG='',THM_BUSY=false,THM_AT=0;
@@ -16,7 +18,7 @@ const fv=(o,names,re)=>{
 const rowsOf=j=>{
   if(Array.isArray(j))return j;
   if(!j||typeof j!=='object')return [];
-  for(const k of ['stocks','stockList','themes','themeList','items','list','datas','data','result','contents']){
+  for(const k of ['stocks','stockList','groups','themes','themeList','items','list','datas','data','result','contents']){
     const v=j[k];
     if(Array.isArray(v))return v;
     if(v&&typeof v==='object'){const r=rowsOf(v);if(r.length)return r}
@@ -31,7 +33,7 @@ function parseTheme(o){return{
   rate:nsgn(o,nnum(fv(o,['changeRate','fluctuationsRatio','fluctuationRate'],RATE_RE)))}}
 function parseStock(o){
   const code=String(fv(o,['itemCode','stockCode','code','symbolCode'],/code$/i)||'');
-  return{code:code,
+  return{code:code,price:nnum(o.closePrice),observedAt:typeof o.localTradedAt==='string'?o.localTradedAt:null,
     name:String(fv(o,['stockName','itemName','name'],/name/i)||code),
     rate:nsgn(o,nnum(fv(o,['fluctuationsRatio','changeRate','fluctuationRate'],RATE_RE))),
     val:nnum(fv(o,['accumulatedTradingValue','tradingValue','accumulatedTradingAmount','amount'],/(trading|accum).*(value|amount)/i)),
@@ -68,12 +70,13 @@ async function fetchTopThemes(){
   if(THM_BUSY||(THM.length&&Date.now()-THM_AT<TH_CACHE_MS))return;   // 수동 갱신(↻) 시 THM_AT=0
   THM_BUSY=true;$('thS').textContent='테마 분석 중...';
   try{
-    const raw=rowsOf(await getJSON(TH_API+'list?startIdx=0&pageSize=100&sortType=changeRate'));
+    const raw=rowsOf(await getJSON(TH_LIST_URL));
     dbg('테마목록',raw[0]);
     const all=raw.map(parseTheme).filter(t=>t.no!=null&&t.name&&t.rate!=null);
     const cand=all.filter(t=>t.rate>0).sort((a,b)=>b.rate-a.rate).slice(0,TH_CAND);
     if(!cand.length){
-      if(!THM.length)THM_MSG=all.length?'현재 상승 중인 테마가 없습니다.':'테마 데이터를 받지 못했습니다. (🩺 진단에서 로그 확인)';
+      if(all.length){THM=[];THM_AT=Date.now();THM_MSG='현재 상승 중인 테마가 없습니다.'}
+      else THM_MSG='테마 데이터 수신 실패'+(THM.length?' · 이전 수신 자료 유지':' · 미확인');
       return;
     }
     await pool(cand,4,async t=>{
@@ -87,9 +90,9 @@ async function fetchTopThemes(){
     THM=top;THM_MSG='';THM_AT=Date.now();
     $('thS').textContent=(openKR()?'장중':'장마감')+' · 상승률·거래대금·거래량 종합 · '+new Date().toLocaleTimeString('ko-KR');
   }catch(e){
-    if(!THM.length)THM_MSG='테마 분석 중 오류가 발생했습니다.';
+    THM_MSG='테마 분석 중 오류가 발생했습니다.'+(THM.length?' 이전 수신 자료 유지':'');
   }finally{
-    THM_BUSY=false;renderThemes();
+    THM_BUSY=false;if(THM_MSG)$('thS').textContent=THM_MSG;renderThemes();
   }
 }
 

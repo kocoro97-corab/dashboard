@@ -64,6 +64,14 @@ class FakeGoogle:
 class DeploymentTests(unittest.TestCase):
     replacement = "function handleNhExternalQuotes(token,codes) { return 'new'; }"
 
+    def test_v2_single_file_update_stops_before_any_google_request(self):
+        fake = FakeGoogle()
+        with self.assertRaisesRegex(module.DeployError, 'complete reviewed module bundle'):
+            module.deploy(fake.api, 'test-script', 'test-deployment',
+                          'function handleNhExternalQuotes() { return nhGatewayV2_(); }',
+                          'a' * 40, self.good_probe)
+        self.assertEqual(fake.calls, [])
+
     @staticmethod
     def good_probe():
         return {"success": True, "version": "v7", "features": ["nhExternalQuotes"]}

@@ -1,0 +1,39 @@
+[hidden]{display:none!important}
+.dashboard-nav{display:flex;gap:5px;overflow:auto;padding:8px 0;scrollbar-width:thin}
+.dashboard-nav a,.account-nav a{flex:none;color:var(--muted);text-decoration:none;padding:9px 12px;border:1px solid var(--line);border-radius:8px;min-height:40px}
+.dashboard-nav a[aria-current=page],.account-nav a[aria-current=page]{background:#203e5e;color:var(--text);border-color:var(--blue)}
+.shell-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:9px 0}
+.shell-heading h1{font-size:20px}.shell-meta{display:flex;flex-wrap:wrap;gap:10px;color:var(--muted)}
+#pageViewport{height:calc(100dvh - 230px);min-height:300px;overflow:auto;overscroll-behavior:contain;padding:2px 2px 24px;scrollbar-gutter:stable}
+.page-content{display:flex;flex-direction:column;gap:12px;min-width:0}.page-note{padding:12px;border:1px solid var(--line);border-radius:10px;color:var(--muted);line-height:1.7}
+.page-content input,.page-content select{max-width:100%}.page-content .card{min-width:0}.page-content .tw{max-width:100%}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px}.summary-grid dt{color:var(--muted)}.summary-grid dd{font-size:18px;margin:5px 0}
+.account-nav{display:flex;overflow:auto;gap:5px;padding:3px 0 12px}.account-report{display:grid;gap:12px}.shell-error{color:var(--amber)}
+.shell-form{display:flex;gap:8px;flex-wrap:wrap;align-items:end}.shell-form label{display:grid;gap:5px}.shell-form input{min-height:36px}
+#appContainer>header{padding-top:36px}#legacyParking{display:none!important}
+@media(max-width:600px){body{padding:7px}.dashboard-nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible}.dashboard-nav a{font-size:11px;text-align:center;padding:9px 2px}.shell-heading h1{font-size:18px}#pageViewport{height:calc(100dvh - 290px)}.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.shell-meta{font-size:10px}.page-content .two{grid-template-columns:minmax(0,1fr)}}
+
+/* Korean market convention: red gains, blue losses; keep text legible on dark cards.
+   Scoped to explicit quote direction classes to avoid recoloring navigation and alerts. */
+:root{--market-rise:#ff7777;--market-fall:#79b8ff;--market-unchanged:#e7eef9}
+#pageViewport .market-up,#pageViewport .price-up,#pageViewport .change-up,
+#pageViewport .rate-up,#pageViewport .rise,#pageViewport .positive{
+  color:var(--market-rise)!important;font-weight:750
+}
+#pageViewport .market-down,#pageViewport .price-down,#pageViewport .change-down,
+#pageViewport .rate-down,#pageViewport .fall,#pageViewport .negative{
+  color:var(--market-fall)!important;font-weight:750
+}
+#pageViewport .market-flat,#pageViewport .change-flat{
+  color:var(--market-unchanged)!important
+}
+
+/* Compact, safe read diagnostics: code is visible without expanding the detail list. */
+#readConnectionStatus.read-status-compact{display:grid;gap:5px;padding:8px 11px;border-color:#946e32;margin:4px 0}
+#readConnectionStatus.read-status-compact>strong{font-size:12px;line-height:1.35;overflow-wrap:anywhere}
+#readConnectionStatus.read-status-compact details{font-size:11px}
+#readConnectionStatus.read-status-compact summary{cursor:pointer;display:list-item;padding:2px 0}
+#readConnectionStatus.read-status-compact details p{margin:5px 0;padding:6px;border-top:1px solid var(--line);overflow-wrap:anywhere}
+#readConnectionStatus .read-status-actions{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+#readConnectionStatus .read-status-actions button{min-height:30px;padding:4px 10px}
+#readConnectionStatus .read-status-actions small{font-size:10px;line-height:1.3;color:var(--muted)}

@@ -8,6 +8,7 @@ function startTimers(){
 function stopTimers(){IV_IDS.forEach(clearInterval);IV_IDS=[]}
 
 async function initDashboard(){
+  if(window.DashboardShell)return DashboardShell.start();
   const session=LS('invest_session_token');
   await loadProtectedHoldings();
   if(session!==LS('invest_session_token'))return;

@@ -32,7 +32,7 @@ function backend(body,http=200){
   const ctx=vm.createContext({sessionUser_:token=>token==='test-session'?'tester':null,
     jsonResponse:x=>x,Utilities:{formatDate:()=> '2026-11-10 12:00:00'},
   });
-  vm.runInContext(source('gas/Nhplug.gs'),ctx);
+  vm.runInContext(source('gas/NhGatewayV2.gs'),ctx);vm.runInContext(source('gas/NhAccountsV2.gs'),ctx);vm.runInContext(source('gas/Nhplug.gs'),ctx);
   ctx.nhCall_=(api,input)=>{requests.push({api,input});return {http,body}};
   return {ctx,requests,quote:codes=>ctx.handleNhExternalQuotes('test-session',codes)};
 }
@@ -211,4 +211,17 @@ test('a late saved-data load preserves edits made while the request was pending'
   const pending=f.run('loadExternalAssets()');await waiting;f.run("editExternal(0,'quantity','202')");
   finish({text:async()=>JSON.stringify({success:true,storeVersion:2,revision:'r2',holdings:[{accountType:'ISA',name:'카카오',code:'035720',quantity:303,avgPrice:20100,source:'saved'}]})});
   await pending;assert.equal(f.run('EXT_ASSETS[0].quantity'),202);assert.equal(f.run('EXT_SAVED_ROWS[0].quantity'),303);assert.match(f.element('externalStatus').textContent,/임시 목록을 보존/);
+});
+
+test('V2 stale and partial domestic balances never masquerade as fresh quote sources',()=>{
+  const f=frontend();
+  for(const state of [{stale:true},{partial:true}]){
+    f.ctx.NH_ACCOUNTS=[{domestic:{...state,holdings:[{code:'035720',currentPrice:100}]}}];
+    assert.equal(f.run('Object.keys(extNHPrices()).length'),0);
+  }
+});
+test('V2 unconfirmed NH amounts are excluded and integrated totals are explicitly partial',()=>{
+  const f=frontend();f.ctx.NH_ACCOUNTS=[{domestic:{summary:{evalAmount:null,profit:null},holdings:[{code:'035720',evalAmount:null,profit:null}]},overseas:null}];
+  f.run("EXT_ASSETS=[{accountType:'ISA',code:'035720',name:'카카오',quantity:2,avgPrice:80}];EXT_PRICES={};renderExternalAssets()");
+  assert.match(f.element('externalSummaryCards').innerHTML,/부분 합계/);assert.match(f.element('externalSummaryCards').innerHTML,/평가손익 미확인/);
 });

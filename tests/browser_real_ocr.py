@@ -51,6 +51,9 @@ def main():
             page.on('dialog', lambda dialog: dialog.accept())
 
             def route_request(route):
+                # Module-only regression; browser_app_shell.py covers routed integration.
+                if '/js/app-shell.js' in route.request.url:
+                    route.fulfill(content_type='application/javascript',body='');return
                 host = urlparse(route.request.url).hostname
                 if host == '127.0.0.1':
                     if '/js/init.js' in route.request.url:

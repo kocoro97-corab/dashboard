@@ -1,0 +1,18 @@
+(function(root){
+'use strict';
+const entries=new Map();let pending=null,loaded=false;
+const clean=v=>typeof v==='string'&&v.trim()&&!/[\x00-\x1f]/.test(v)?v.trim().slice(0,200):null;
+const symbol=s=>typeof s==='string'&&/^[A-Z][A-Z0-9.-]{0,14}$/.test(s)?s:null;
+function accept(row){if(!row||!symbol(row.symbol)||!clean(row.nameEn)||!['EQUITY','ETF','LISTED_SECURITY'].includes(row.type)||!['NASDAQ','NYSE','ARCA','AMEX','BATS','IEX'].includes(row.exchange))return false;const value={symbol:row.symbol,nameEn:clean(row.nameEn),nameKo:row.koSource?.startsWith('https://api.stock.naver.com/stock/')?clean(row.nameKo):null,type:row.type,exchange:row.exchange};entries.set(value.symbol,Object.freeze(value));return true}
+function notify(){root.dispatchEvent(new Event('myinvest:instrument-names'))}
+async function load(){if(loaded)return true;if(pending)return pending;pending=(async()=>{const r=await fetch('data/us-instruments.json',{cache:'no-cache'});if(!r.ok)throw Error('NAME_DIRECTORY_UNAVAILABLE');const d=await r.json();if(d.schemaVersion!==1||!Array.isArray(d.sources)||!d.sources.some(s=>s.url?.startsWith('https://www.nasdaqtrader.com/dynamic/SymDir/'))||!Array.isArray(d.instruments))throw Error('NAME_DIRECTORY_INVALID');for(const row of d.instruments)accept(row);loaded=true;notify();return true})();try{return await pending}catch{return false}finally{pending=null}}
+function lookup(s){return entries.get(String(s||'').toUpperCase())||null}
+function ingest(s,meta){if(!symbol(s)||meta?.symbol!==s||meta.currency!=='USD'||!['EQUITY','ETF'].includes(meta.instrumentType))return false;const exchange={NMS:'NASDAQ',NGM:'NASDAQ',NCM:'NASDAQ',NYQ:'NYSE',PCX:'ARCA',ASE:'AMEX',BTS:'BATS'}[meta.exchangeName];const name=clean(meta.longName)||clean(meta.shortName),previous=lookup(s);if(!exchange||!name||(previous?.type==='ETF'&&meta.instrumentType!=='ETF'))return false;const value=Object.freeze({...previous,symbol:s,nameEn:name,type:meta.instrumentType,exchange});if(JSON.stringify(previous)===JSON.stringify(value))return true;entries.set(s,value);notify();return true}
+function search(text,limit=20){const q=String(text||'').trim().toLocaleLowerCase();if(!q)return [];return [...entries.values()].filter(r=>[r.symbol,r.nameKo,r.nameEn].some(x=>x?.toLocaleLowerCase().includes(q))).sort((a,b)=>(a.symbol.toLowerCase()===q?-1:0)-(b.symbol.toLowerCase()===q?-1:0)||a.symbol.localeCompare(b.symbol)).slice(0,limit)}
+function resolve(text){const s=String(text||'').trim().toUpperCase();if(lookup(s))return {symbol:s,matches:[lookup(s)]};const found=search(text,30);return found.length===1?{symbol:found[0].symbol,matches:found}:{symbol:null,matches:found}}
+function label(s,fallback){const r=lookup(s);return r?(r.nameKo||r.nameEn)+' ('+s+')':clean(fallback)||s}
+function node(s,fallback){const e=document.createElement('span');e.className='instrument-name';e.dataset.instrumentSymbol=s;e.dataset.instrumentFallback=fallback||s;paint(e);return e}
+function paint(e){const s=e.dataset.instrumentSymbol,r=lookup(s),main=document.createElement('span'),sub=document.createElement('small');main.className='instrument-primary';main.textContent=r?r.nameKo||r.nameEn:e.dataset.instrumentFallback||s;sub.textContent=r?(r.nameKo?r.nameEn+' · ':'')+s+' · '+(r.type==='ETF'?'ETF':r.type==='EQUITY'?'주식':r.exchange):(e.dataset.instrumentFallback&&e.dataset.instrumentFallback!==s?s:s+' · 종목명 미확인');e.replaceChildren(main,sub)}
+function repaint(){document.querySelectorAll('[data-instrument-symbol]').forEach(paint)}
+root.InstrumentNames=Object.freeze({load,lookup,ingest,search,resolve,label,node});root.addEventListener('myinvest:instrument-names',repaint);
+})(window);
