@@ -49,12 +49,16 @@ test('development UI has a 60-minute idle countdown and isolated browser state',
  assert.equal(vm.runInContext('sessionLeftMs()',f.ctx),MIN);
  f.time.move(60*MIN);
  assert.equal(vm.runInContext('sessionLeftMs()',f.ctx),0);
+ f.time.move(0);
+ vm.runInContext('startSessionTimer(true)',f.ctx);
+ assert.equal(f.element('sessionTimeTxt').textContent,'01:00:00');
  assert.equal(f.operating.get('invest_session_token'),'"OPERATING_SESSION"');
  assert.equal(f.operating.get('invest_last_active'),'99');
 });
 test('production UI still expires after 5 minutes of no activity',()=>{
  const f=frontend(false);
- vm.runInContext('touchActive(true)',f.ctx);
+ vm.runInContext('startSessionTimer(true)',f.ctx);
+ assert.equal(f.element('sessionTimeTxt').textContent,'05:00');
  f.time.move(5*MIN+1);
  assert.ok(vm.runInContext('sessionLeftMs()',f.ctx)<0);
 });
