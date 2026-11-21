@@ -102,6 +102,20 @@ test('P4 review rejects invalid intervals, zero samples and inconsistent metadat
  assert.equal(review.audit().code,'INVALID_DAILY_BARS');
 });
 
+test('P4 Wilson bounds reveal one winning trade is not a reliable high win rate',()=>{
+ const one=review.winRateWilson95(1,1),half=review.winRateWilson95(15,30);
+ assert.ok(one.lowPct>15&&one.lowPct<25);
+ assert.ok(Math.abs(one.highPct-100)<1e-10);
+ assert.ok(half.lowPct<40&&half.highPct>60);
+ assert.ok(half.lowPct>=0&&half.highPct<=100);
+ assert.equal(review.winRateWilson95(0,0),null);
+ assert.equal(review.winRateWilson95(4,3),null);
+ assert.equal(review.winRateWilson95(0,1).lowPct,0);
+ const b=breakout(),r=review.audit(evaluate(b));
+ assert.equal(r.status,'ok');
+ assert.ok(r.reliability.winRateWilson95.lowPct<30);
+ assert.ok(r.warnings.some(x=>x.includes('독립성')));
+});
 test('P4 review marks evaluation sample as low evidence even if window labelled holdout',()=>{
  const b=breakout(),s=strategy.simulate({interval:'1d',bars:b,testStartAt:b[21].t});
  const r=review.audit({bars:b,simulation:s});
