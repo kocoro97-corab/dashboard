@@ -1,7 +1,28 @@
 // Security boundary for the existing GAS backend. No spreadsheet IDs or credentials here.
 const SECURITY_PASSWORD_ROUNDS = 600000;
-const SECURITY_IDLE_MS = 5 * 60 * 1000;
+const SECURITY_IDLE_MS = 5 * 60 * 1000;  // operating GAS: unchanged
+const SECURITY_STAGING_IDLE_MS = 60 * 60 * 1000;  // isolated, verified development GAS only
 const SECURITY_MAX_SESSION_MS = 8 * 60 * 60 * 1000;
+
+// Fail closed: do not lengthen production or unidentified/test-like deployments.
+// The staging-only guard and metadata are installed by StagingBridge.gs, never
+// by the production script. Full fingerprints prevent accidental environment
+// naming from silently widening authentication duration.
+function securityIdleMs_() {
+  if (typeof securityEnvironmentGuard_ !== 'function' ||
+      typeof securityEnvironmentMetadata_ !== 'function') return SECURITY_IDLE_MS;
+  try {
+    const meta = securityEnvironmentMetadata_();
+    if (meta && meta.freshTestEnvironment === true &&
+        meta.testEnvironment === 'nh-staging' &&
+        meta.gatewayVersion === 2 &&
+        meta.storeEngine === 'account-store-v2' &&
+        ['scriptHash', 'sheetHash', 'sourceDigest'].every(function(k){
+          return typeof meta[k] === 'string' && /^[a-f0-9]{64}$/.test(meta[k]);
+        })) return SECURITY_STAGING_IDLE_MS;
+  } catch (e) { /* Unverified environment preserves 5-minute policy. */ }
+  return SECURITY_IDLE_MS;
+}
 
 function securityBytes_(text) {
   return new Uint8Array(Utilities.newBlob(String(text)).getBytes().map(function(b){return b & 255}));
@@ -93,7 +114,7 @@ function securitySession_(token) {
   const props=PropertiesService.getScriptProperties(),raw=props.getProperty('S_'+token);let s;
   try{s=JSON.parse(raw||'null')}catch(e){return null}
   if(!s)return null;
-  if(s.v!==2||typeof s.u!=='string'||!Number.isFinite(s.t)||!Number.isFinite(s.c)||Date.now()-s.t>SECURITY_IDLE_MS||Date.now()-s.c>SECURITY_MAX_SESSION_MS||s.t>Date.now()+1000){props.deleteProperty('S_'+token);return null}
+  if(s.v!==2||typeof s.u!=='string'||!Number.isFinite(s.t)||!Number.isFinite(s.c)||Date.now()-s.t>securityIdleMs_()||Date.now()-s.c>SECURITY_MAX_SESSION_MS||s.t>Date.now()+1000){props.deleteProperty('S_'+token);return null}
   const user=securityFindUser_(s.u);
   if(!user||String(user.row[2])!=='approved'){props.deleteProperty('S_'+token);return null}
   s.t=Date.now();props.setProperty('S_'+token,JSON.stringify(s));return s;
