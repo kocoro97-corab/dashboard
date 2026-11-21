@@ -138,13 +138,14 @@ test('same report import does not change archive, and repeated import is idempot
  assert.deepEqual(once.records,twice.records);
 });
 test('manual legacy rows are explicitly upgraded, saved receipt is not promoted to generation time',()=>{
- const text=JSON.stringify([{date:'2026-11-20',text:'시장 브리핑',at:NOW-3600000}]);
+ const text=JSON.stringify([{date:'2026-11-20',text:'시장 브리핑',at:NOW-3600000,source:'user'}]);
  const o=io.parseLegacyJSON(text,{now:NOW});
  assert.equal(o.ok,true);
  assert.equal(o.records[0].origin,'manual');
  assert.equal(o.records[0].generatedAt,null);
  assert.equal(o.records[0].observedAt,null);
  assert.equal(o.records[0].rawText,'시장 브리핑');
+ assert.equal(io.parseLegacyJSON(JSON.stringify([{date:'2026-11-20',text:'공개',at:1,source:'external'}]),{now:NOW}).code,'INVALID_LEGACY_ROW');
  assert.equal(io.parseLegacyJSON(JSON.stringify([{date:'2026-11-20',text:'본문',
    at:NOW-3600000,holdings:[{symbol:'TSLA'}]}]),{now:NOW}).code,'INVALID_LEGACY_ROW');
 });
