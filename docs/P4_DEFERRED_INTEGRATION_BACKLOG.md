@@ -20,6 +20,7 @@
 - 동일 종목의 100% 보유 대비 외에 **최대 배분비율에 한정한 고정보유 비교**를 추가. 두 비교 모두 실제 노출·기간이 달라 알파나 유의미한 초과수익으로 판정 금지.
 - 새로운 독립 `js/strategy-series-quality-v1.js`는 KR/US 일봉 구조·시장 식별·중복 거래일·거래량·대형 가격 급변·수정주가 방식 누락을 검사하고, 모두 확인되지 않으면 과거검증 진입을 보류. `tests/strategy-series-quality-v1.test.cjs`와 `docs/P4_SERIES_QUALITY.md` 포함. 이 모듈은 원천 진위 자체를 검증하지 않음.
 - 새로운 `js/strategy-performance-report-v1.js`는 P4 품질검사→백테스트→성과 검토를 읽기 전용으로 연결하여 수익률·승률 불확실성·최대 낙폭·비용·위험 초과·동일 종목 보유 대비 비교를 표준화. 서로 다른 기간·종목·수수료·원천 데이터의 시나리오 비교는 금지하며 전략 순위를 매기지 않음. `tests/strategy-performance-report-v1.test.cjs`와 `docs/P4_PERFORMANCE_REPORT.md` 추가.
+- 신규 `js/strategy-regime-analysis-v1.js`는 확정 벤치마크 종가의 **후행 20일 수익률 ±3%**를 상승/횡보/하락으로 고정 분류하고, 각 거래를 **신호 발생일 장세**에 귀속하여 순손익·승률/불확실성·위험초과·최악 R을 분석. 후행 국면을 실시간 예측으로 해석하지 않으며 원천 시세·벤치마크 거래일 정합성 확인 전 화면 게시 금지. `tests/strategy-regime-analysis-v1.test.cjs`, `docs/P4_REGIME_ATTRIBUTION.md` 포함.
 - 기존 결과와 OHLCV가 실제 일치하는지 독립 결정적 재실행으로 점검, 가짜 거래 내역 불허.
 - 합성 데이터 테스트. **실제 수신 시세 또는 실전 성과 검증은 미실시.**
 
