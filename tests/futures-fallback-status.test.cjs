@@ -8,13 +8,13 @@ const begin=source.indexOf('async function fillFutures(skip){');
 const end=source.indexOf('\nconst isKR=',begin);
 assert.ok(begin>=0&&end>begin,'future fallback function exists');
 const functionCode=source.slice(begin,end);
-function harness(fetcher){
+function harness(fetcher,current=()=>true){
  const seen={errors:new Map([['future:k3','NH_NO_PRICE']]),calls:[]};
  const Q={},SRC={},QT={},FQ={},FST={};
  const rootFutureStatus=(id,error)=>{seen.calls.push({id,error});if(error===null)seen.errors.delete('future:'+id);else seen.errors.set('future:'+id,error)};
  const nnum=v=>v==null||v===''?null:Number.isFinite(Number(v))?Number(v):null;
- const fn=new Function('getJSON','FUT','nnum','hms','FQ','FST','Q','SRC','QT','rootFutureStatus',functionCode+';return fillFutures')(
-  fetcher,{k3:'KR4A016C0004'},nnum,()=>'18:05:00',FQ,FST,Q,SRC,QT,rootFutureStatus);
+ const fn=new Function('getJSON','FUT','nnum','hms','FQ','FST','Q','SRC','QT','rootFutureStatus','publicReadScope',functionCode+';return fillFutures')(
+  fetcher,{k3:'KR4A016C0004'},nnum,()=>'18:05:00',FQ,FST,Q,SRC,QT,rootFutureStatus,()=>current);
  return{fn,seen,Q,SRC,QT,FQ,FST};
 }
 test('successful Daum fallback clears prior NH_NO_PRICE without claiming NH source',async()=>{
@@ -40,4 +40,8 @@ test('skipped Daum fallback does not accidentally clear existing diagnostics',as
  const result=await h.fn(new Set(['k3']));
  assert.equal(result.ok,0);
  assert.equal(h.seen.errors.get('future:k3'),'NH_NO_PRICE');
+});
+
+test('fallback response from a departed route cannot update quotes or clear its error',async()=>{
+ let current=true,finish;const h=harness(()=>new Promise(r=>finish=r),()=>current),pending=h.fn(new Set());current=false;finish({tradePrice:786,prevClosingPrice:770});await pending;assert.equal(h.Q.k3,undefined);assert.equal(h.seen.calls.length,0);
 });

@@ -43,7 +43,8 @@ function rootFutureStatus(id,error){
 async function fillNH(requested=Object.keys(NHF)){
   const validContract=d=>{if(d?.contractVerified!==true||!/^\d{8}$/.test(d.expiry||''))return false;const y=Number(d.expiry.slice(0,4)),m=Number(d.expiry.slice(4,6)),day=Number(d.expiry.slice(6,8)),date=new Date(Date.UTC(y,m-1,day)),today=new Date(Date.now()+9*3600000).toISOString().slice(0,10).replace(/-/g,'');return date.toISOString().slice(0,10).replace(/-/g,'')===d.expiry&&d.expiry>=today&&String(y%10)===d.code?.[3]&&'123456789ABC'[m-1]===d.code?.[4]};
   const ids=[...new Set(requested.filter(id=>Object.prototype.hasOwnProperty.call(NHF,id)))],t=hms(new Date());if(!ids.length)return {ok:0,fail:0};
-  const scope=LS('invest_session_token'),r=await nhFetch(ids.map(id=>({k:id,t:'fut',c:NHF[id]})));if(scope!==LS('invest_session_token'))return {ok:0,fail:0,discarded:true};
+  const current=typeof publicReadScope==='function'?publicReadScope():()=>true;
+  const scope=LS('invest_session_token'),r=await nhFetch(ids.map(id=>({k:id,t:'fut',c:NHF[id]})));if(scope!==LS('invest_session_token')||!current())return {ok:0,fail:0,discarded:true};
   if(!r.ok){ids.forEach(id=>{delete NQ[id];if(SRC[id]==='H'){delete Q[id];delete SRC[id];delete QT[id]};window.ReadStatus?.note({code:r.code,http:r.http,verifiedLayer:r.layer},{scope:'public',key:'future:'+id})});NH_STATUS='실패 · '+r.msg+' · '+t;return{ok:0,fail:ids.length}}
   let ok=0;const ds=[],er=[];
   ids.forEach(id=>{const d=r.data[id],validObservation=d&&Number.isFinite(d.observedAt)&&d.observedAt>0&&d.observedAt<=Date.now()+300000&&Date.now()-d.observedAt<=4*86400000;
@@ -56,12 +57,12 @@ async function fillNH(requested=Object.keys(NHF)){
 // NH PLUG remains the primary futures source. No quote is copied from a visual iframe.
 let MARKET_SOURCE_ATTEMPTS={futures:[],tick:[]};
 async function fillAuthorizedMarketSources(needFuture=true){
- const scope=LS('invest_session_token'),resolver=window.MyInvestMarketSourcePriority;
+ const current=publicReadScope(),scope=LS('invest_session_token'),resolver=window.MyInvestMarketSourcePriority;
  if(!resolver)return;
  if(needFuture){
   if(['W','F','K','C'].includes(SRC.k4)){delete Q.k4;delete SRC.k4;delete QT.k4}
   if(!Q.k4){
-  const r=await resolver.resolve('futures');if(scope!==LS('invest_session_token'))return;
+  const r=await resolver.resolve('futures');if(scope!==LS('invest_session_token')||!current())return;
   MARKET_SOURCE_ATTEMPTS.futures=r.attempts;
   if(r.quote){
    const d=r.quote;Q.k4={p:d.p,prev:d.prev,observedAt:d.observedAt,contractCode:d.contractCode,expiry:d.expiry,contractVerified:true,delayed:d.delayed,stale:d.stale};
@@ -69,7 +70,7 @@ async function fillAuthorizedMarketSources(needFuture=true){
   }
   }
  }
- const tick=await resolver.resolve('tick');if(scope!==LS('invest_session_token'))return;
+ const tick=await resolver.resolve('tick');if(scope!==LS('invest_session_token')||!current())return;
  MARKET_SOURCE_ATTEMPTS.tick=tick.attempts;
  if(tick.quote&&!tick.quote.stale){
   Q.TICK={p:tick.quote.p,observedAt:tick.quote.observedAt,delayed:tick.quote.delayed};
@@ -79,11 +80,12 @@ async function fillAuthorizedMarketSources(needFuture=true){
  }
 }
 async function fillFutures(skip){
-  let ok=0,fail=0;
+  const current=publicReadScope();let ok=0,fail=0;
   await Promise.all(Object.keys(FUT).filter(id=>!(skip&&skip.has(id))).map(async id=>{
     const t=hms(new Date());
     try{
       const j=await getJSON('https://finance.daum.net/api/home/sec?path='+encodeURIComponent('/api/futures/'+FUT[id]));
+      if(!current())return;
       const p=j&&nnum(j.tradePrice),prev=j&&nnum(j.prevClosingPrice);
       if(p==null||prev==null)throw 0;
       const k=j.kospi200&&nnum(j.kospi200.tradePrice);
@@ -93,7 +95,7 @@ async function fillFutures(skip){
        // NH can fail before the verified Daum fallback succeeds: clear the resolved visible quote error.
        // Contract/expiry remain unverified and source remains Daum (never claim NH recovery).
        rootFutureStatus(id,null);
-    }catch(e){FST[id]='수신 실패 · '+t;fail++}
+    }catch(e){if(current()){FST[id]='수신 실패 · '+t;fail++}}
   }));
   return{ok:ok,fail:fail};
 }
@@ -106,24 +108,30 @@ const TABS=[['코스피','^KS11'],['코스닥','^KQ11'],['S&P500','^GSPC'],['나
 $('tabs').innerHTML=TABS.map(t=>`<button data-y="${t[1]}" onclick="showQ('${t[1]}','${t[0]}','')">${t[0]}</button>`).join('');
 
 const NET={log:[],ok:0,fail:0};
+function publicReadScope(){
+  const token=LS('invest_session_token'),route=window.location?.hash;
+  const generation=typeof DashboardTransport!=='undefined'?DashboardTransport.readState?.().generation:null;
+  return ()=>token===LS('invest_session_token')&&route===window.location?.hash&&generation===(typeof DashboardTransport!=='undefined'?DashboardTransport.readState?.().generation:null);
+}
 async function getTxt(targetUrl){
   const relay=typeof DashboardTransport!=='undefined'&&DashboardTransport.isRelay();
   const proxy=MYP();
   if(!relay&&!proxy)return null;
   const fullUrl=proxy+(proxy.includes('?')?'&':'?')+'url='+encodeURIComponent(targetUrl);
+  let t=null;
   try{
-    const c=new AbortController(),t=setTimeout(()=>c.abort(),window.MYINVEST_TRANSPORT_CONFIG&&window.MYINVEST_TRANSPORT_CONFIG.publicMarket===true?30000:9000);
-    const r=await (typeof DashboardTransport!=='undefined'?DashboardTransport.publicRead(targetUrl,{signal:c.signal}):fetch(fullUrl,{signal:c.signal}));
-    clearTimeout(t);
+    const c=relay?null:new AbortController();t=c?setTimeout(()=>c.abort(),9000):null;
+    const r=await (typeof DashboardTransport!=='undefined'?DashboardTransport.publicRead(targetUrl,c?{signal:c.signal}:{}):fetch(fullUrl,{signal:c?.signal}));
     if(r.ok){const x=await r.text();if(typeof x==='string'&&x.trim()){NET.ok++;return x}}
     NET.fail++;
   }catch(e){
+    if(['SESSION_CHANGED','READ_CANCELLED'].includes(e?.code))return null;
     NET.fail++;
     const family=String(targetUrl).startsWith('https://news.google.com/')?'뉴스':String(targetUrl).startsWith('https://query1.finance.yahoo.com/')?'Yahoo OHLCV':String(targetUrl).startsWith('https://m.stock.naver.com/api/stocks/theme')?'네이버 테마':'공개 시세';
     const safe=new Set(['AUTH_REQUIRED','RELAY_PUBLIC_URL_DENIED','RELAY_PUBLIC_FAILED','RELAY_RATE_LIMIT','RELAY_BUSY','RELAY_UPSTREAM_NETWORK','RELAY_REDIRECT_DENIED','RELAY_GAS_ACCESS_REQUIRED','RELAY_TARGET_MISMATCH','RELAY_ACCESS_CLOSED']);
     NET.log.push(family+' · '+(safe.has(e?.code)?e.code:e?.name==='AbortError'?'TIMEOUT':'NETWORK_OR_RESPONSE')+(Number.isInteger(e?.http)&&e.http>=100&&e.http<=599?' · HTTP '+e.http:''));
     if(NET.log.length>30)NET.log.shift();
-  }
+  }finally{if(t!==null)clearTimeout(t)}
   return null;
 }
 async function getJSON(u){const x=await getTxt(u);try{return JSON.parse(x)}catch(e){return null}}
@@ -147,8 +155,8 @@ const srcSummary=keys=>{const c={};keys.forEach(k=>{const s=SRC[k];if(Q[k]&&s)c[
 const srcLine=t=>t?`<div class="mini" style="font-size:9px;margin-top:2px;opacity:.75">출처 ${t}</div>`:'';
 
 async function fillNaver(want,fr){
-  const W=new Set(want),T=[];let n=0;
-  const put=(k,o)=>{const q=nq(o);if(q&&W.has(k)){Q[k]=q;SRC[k]='N';QT[k]=Date.now();fr.add(k);n++}};
+  const current=publicReadScope(),W=new Set(want),T=[];let n=0;
+  const put=(k,o)=>{const q=nq(o);if(current()&&q&&W.has(k)){Q[k]=q;SRC[k]='N';QT[k]=Date.now();fr.add(k);n++}};
   [['^KS11','KOSPI'],['^KQ11','KOSDAQ']].forEach(([k,c])=>{if(W.has(k))T.push(getJSON('https://polling.finance.naver.com/api/realtime/domestic/index/'+c).then(j=>put(k,narr(j)[0])))});
   const wi={'.INX':'^GSPC','.IXIC':'^IXIC','.DJI':'^DJI','.SOX':'^SOX','.VIX':'^VIX'},wk=Object.keys(wi).filter(c=>W.has(wi[c]));
   if(wk.length)T.push(getJSON('https://stock.naver.com/api/polling/worldstock/index?reutersCodes='+wk.join(',')).then(j=>narr(j).forEach((o,i)=>{const rc=o.reutersCode||o.symbolCode||wk[i];if(wi[rc])put(wi[rc],o)})));
@@ -170,28 +178,30 @@ const KY={};
 async function quoteKR(c){for(const x of['.KS','.KQ']){const q=await quote(c+x);if(q){KY[c]=c+x;return q}}return null}
 
 async function fillQuotes(list){
-  let i=0;
+  const current=publicReadScope();let i=0;
   await Promise.all(Array.from({length:4},async()=>{
     while(i<list.length){
+      if(!current())return;
       const c=list[i++];
       const q=await(isKR(c)?quoteKR(c):quote(c));
-      if(q){Q[c]=q;SRC[c]='Y';QT[c]=Date.now()}
+      if(!current())return;
+      if(q){Q[c]=q;SRC[c]='Y';QT[c]=Date.now()}else if(Q[c])Q[c].refreshFailed=true;
     }
   }));
 }
 
 let MK_BUSY=false;
 async function refreshMarket(requested=[]){   // '시장 종합' 카드(지수·선물·수급)만 갱신
-  if(MK_BUSY)return;MK_BUSY=true;
+  if(MK_BUSY)return;MK_BUSY=true;const current=publicReadScope();
   const btn=$('mkBtn'),st=$('mkSt');
   if(btn){btn.disabled=true;btn.textContent='갱신 중...'}
   try{
     const extra=Array.isArray(requested)?requested.filter(s=>typeof s==='string'&&/^[A-Za-z0-9^=.-]{1,32}$/.test(s)&&!['k3','k4','TICK'].includes(s)).slice(0,24):[];
     const list=CFG[sess()],want=[...new Set([...list.filter(x=>x.y).map(x=>x.y),...extra])],fr=new Set();
-    await fillNaver(want,fr);
-    await fillQuotes(want.filter(c=>!fr.has(c)));
-    const requestedNH=[...new Set([...list.filter(x=>NHF[x.id]).map(x=>x.id),...(Array.isArray(requested)?requested:[]).filter(id=>NHF[id])])],hasNH=requestedNH.length>0,nh=hasNH?await fillNH(requestedNH):{ok:0,fail:0};
-    const hasFut=list.some(x=>x.fut)||Array.isArray(requested)&&requested.includes('k3'),fu=hasFut?await fillFutures(new Set(Object.keys(NQ))):{ok:0,fail:0};
+    await fillNaver(want,fr);if(!current())return;
+    await fillQuotes(want.filter(c=>!fr.has(c)));if(!current())return;
+    const requestedNH=[...new Set([...list.filter(x=>NHF[x.id]).map(x=>x.id),...(Array.isArray(requested)?requested:[]).filter(id=>NHF[id])])],hasNH=requestedNH.length>0,nh=hasNH?await fillNH(requestedNH):{ok:0,fail:0};if(!current())return;
+    const hasFut=list.some(x=>x.fut)||Array.isArray(requested)&&requested.includes('k3'),fu=hasFut?await fillFutures(new Set(Object.keys(NQ))):{ok:0,fail:0};if(!current())return;
     await fillAuthorizedMarketSources(requestedNH.includes('k4'));
     const got=want.filter(c=>Q[c]).length;
     renderCards();updateTickGauge();generateScenario();

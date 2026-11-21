@@ -29,6 +29,7 @@
       data:Object.freeze({publicRead:url=>publicConnected()?getTxt(url):Promise.resolve(null),accounts:snapshot}),
       error:()=>({status:'error',message:'모듈 처리 실패 · 연결 상태를 확인하세요.'}),
       subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn)},
+      cancelPending(){revision++;for(const [key,job] of jobs)if(job.busy)jobs.delete(key)},
       clear(){scope=null;revision++;jobs.clear();emit()},
       market(force=false,symbols=[]){
         if(!publicConnected())return Promise.resolve();

@@ -117,3 +117,6 @@ test('sanitized NH futures diagnostics enumerate supported verified failures',()
  }
  assert.ok(!diagSource.includes('error?.body'));
 });
+test('retained failed refresh is stale and cannot support a current market regime',()=>{
+ const p=policy(),s=samples(110,120);s.quotes['^KS11'].refreshFailed=true;const q=p.quote('^KS11',s.quotes,s.sources,s.timestamps,now);assert.equal(q.stale,true);assert.equal(q.timely,false);assert.equal(q.receivedAt,now);assert.equal(p.marketRegime('KR',s.quotes,s.sources,s.timestamps,now).status,'insufficient');
+});

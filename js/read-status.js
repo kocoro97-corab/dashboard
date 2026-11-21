@@ -2,14 +2,15 @@
 (function(root){
 'use strict';
 const errors=new Map(),pending=new Map(),layers=new Set(['browser','relay','gas','nh','storage']);let serial=0;
-const known=new Set('AUTH_REQUIRED RELAY_PUBLIC_URL_DENIED RELAY_PUBLIC_FAILED RELAY_RATE_LIMIT RELAY_BUSY RELAY_UPSTREAM_NETWORK RELAY_REDIRECT_DENIED RELAY_GAS_ACCESS_REQUIRED RELAY_TARGET_MISMATCH RELAY_ACCESS_CLOSED RELAY_RESPONSE_INVALID GAS_REJECTED GAS_HTTP GAS_NON_JSON NH_HTTP NH_NETWORK NH_TOKEN NH_RSP NH_NO_PRICE NH_CONTRACT NH_CONTRACT_CODE NH_CONTRACT_NAME NH_CONTRACT_EXPIRY NH_OBSERVATION NH_STALE NH_TIMEOUT NH_NETWORK_ERROR NH_RESPONSE_INVALID NH_DATA_INVALID NH_AUTH_MISSING NH_RESPONSE_REJECTED NH_UPSTREAM NH_IDENTITY_UNVERIFIED NH_IDENTITY_AMBIGUOUS NH_SYMBOL_MISMATCH NH_REFERENCE_UNAVAILABLE NH_REFERENCE_INVALID NH_NO_BLOCK NH_UNSUPPORTED NH_PATH NH_CURRENCY_MISMATCH READ_TIMEOUT READ_NETWORK READ_FORMAT SESSION_CHANGED'.split(' '));
+const known=new Set('AUTH_REQUIRED RELAY_PUBLIC_URL_DENIED RELAY_PUBLIC_FAILED RELAY_RATE_LIMIT RELAY_BUSY RELAY_UPSTREAM_NETWORK RELAY_REDIRECT_DENIED RELAY_GAS_ACCESS_REQUIRED RELAY_TARGET_MISMATCH RELAY_ACCESS_CLOSED RELAY_RESPONSE_INVALID GAS_REJECTED GAS_HTTP GAS_NON_JSON NH_HTTP NH_NETWORK NH_TOKEN NH_RSP NH_NO_PRICE NH_CONTRACT NH_CONTRACT_CODE NH_CONTRACT_NAME NH_CONTRACT_EXPIRY NH_OBSERVATION NH_STALE NH_TIMEOUT NH_NETWORK_ERROR NH_RESPONSE_INVALID NH_DATA_INVALID NH_AUTH_MISSING NH_RESPONSE_REJECTED NH_UPSTREAM NH_IDENTITY_UNVERIFIED NH_IDENTITY_AMBIGUOUS NH_SYMBOL_MISMATCH NH_REFERENCE_UNAVAILABLE NH_REFERENCE_INVALID NH_NO_BLOCK NH_UNSUPPORTED NH_PATH NH_CURRENCY_MISMATCH READ_TIMEOUT READ_NETWORK READ_FORMAT READ_CANCELLED READ_QUEUE_FULL SESSION_CHANGED'.split(' '));
 const identity=()=>root.crypto?.randomUUID?.()||'read-'+Date.now().toString(36)+'-'+(++serial);
-function classify(error,meta={}){const http=Number.isInteger(error?.http)&&error.http>=100&&error.http<=599?error.http:null,code=known.has(error?.code)?error.code:error?.name==='AbortError'?'READ_TIMEOUT':error?.name==='SyntaxError'?'READ_FORMAT':'READ_NETWORK';let type=[502,503,504].includes(http)?'SERVER':[401,403].includes(http)?'ACCESS':['READ_TIMEOUT','NH_TIMEOUT'].includes(code)?'TIMEOUT':['READ_FORMAT','RELAY_RESPONSE_INVALID','NH_RESPONSE_INVALID','NH_DATA_INVALID'].includes(code)?'FORMAT':code==='NH_AUTH_MISSING'?'ACCESS':code==='NH_NETWORK_ERROR'?'NETWORK':code.startsWith('NH_')?'NH':code.startsWith('GAS_')?'GAS':'NETWORK';const retryable=![401,403].includes(http)&&([502,503,504].includes(http)||['RELAY_BUSY','RELAY_UPSTREAM_NETWORK','READ_NETWORK','READ_TIMEOUT'].includes(code));return {id:meta.id||identity(),at:new Date().toISOString(),scope:meta.scope==='account'?'account':'public',layer:layers.has(error?.verifiedLayer)?error.verifiedLayer:'unknown',http,code,type,retryable,attempts:meta.attempts||1}}
+function classify(error,meta={}){const http=Number.isInteger(error?.http)&&error.http>=100&&error.http<=599?error.http:null,code=known.has(error?.code)?error.code:error?.name==='AbortError'?'READ_TIMEOUT':error?.name==='SyntaxError'?'READ_FORMAT':'READ_NETWORK';let type=[502,503,504].includes(http)?'SERVER':[401,403].includes(http)?'ACCESS':['READ_TIMEOUT','NH_TIMEOUT'].includes(code)?'TIMEOUT':['READ_FORMAT','RELAY_RESPONSE_INVALID','NH_RESPONSE_INVALID','NH_DATA_INVALID'].includes(code)?'FORMAT':code==='NH_AUTH_MISSING'?'ACCESS':code==='NH_NETWORK_ERROR'?'NETWORK':code.startsWith('NH_')?'NH':code.startsWith('GAS_')?'GAS':'NETWORK';const retryable=!['READ_CANCELLED','READ_QUEUE_FULL','SESSION_CHANGED','AUTH_REQUIRED','RELAY_PUBLIC_URL_DENIED','RELAY_REDIRECT_DENIED','RELAY_GAS_ACCESS_REQUIRED','RELAY_TARGET_MISMATCH','RELAY_ACCESS_CLOSED'].includes(code)&&![401,403].includes(http)&&([502,503,504].includes(http)||['RELAY_BUSY','RELAY_UPSTREAM_NETWORK','READ_NETWORK','READ_TIMEOUT'].includes(code));return {id:meta.id||identity(),at:new Date().toISOString(),scope:meta.scope==='account'?'account':'public',layer:layers.has(error?.verifiedLayer)?error.verifiedLayer:'unknown',http,code,type,retryable,attempts:meta.attempts||1}}
 function snapshot(){return [...errors.values()].map(x=>({...x}))}
 // Only fixed, non-sensitive target names are exposed. Unknown keys stay unnamed.
 const SAFE_TARGETS=Object.freeze({'future:k3':'KOSPI 200 선물','future:k4':'KOSDAQ 150 선물','account:nhQuotes':'NH 시세 중계','account:sessionInfo':'인증 상태'});
 const TYPE_MESSAGE=Object.freeze({SERVER:'서버·중계 장애',ACCESS:'인증·권한 확인 필요',TIMEOUT:'응답 시간 초과',NETWORK:'네트워크·원천 연결 확인',FORMAT:'응답 형식·데이터 검증 실패',GAS:'GAS 중계 실패',NH:'증권사 시세 조회 실패'});
 const CODE_MESSAGE=Object.freeze({
+ READ_QUEUE_FULL:'조회 대기열 가득 참 · 잠시 후 새로고침',
  NH_NO_PRICE:'NH 선물 가격 미수신 · 가격·계약·원천 응답 확인 필요',
  NH_CONTRACT:'선물 계약·만기 검증 실패',NH_CONTRACT_CODE:'선물 계약코드 검증 실패',
  NH_CONTRACT_NAME:'선물 계약명 검증 실패',NH_CONTRACT_EXPIRY:'선물 만기 검증 실패',
@@ -59,7 +60,35 @@ function render(){
 function emit(){render();root.dispatchEvent?.(new Event('myinvest:read-status'))}
 function note(error,meta={}){const key=meta.key||meta.scope||'public';errors.set(key,classify(error,meta));while(errors.size>20)errors.delete(errors.keys().next().value);emit()}
 function clear(key){if(key==null)errors.clear();else errors.delete(key);emit()}
-async function execute(key,operation,options={}){const prior=pending.get(key);if(prior&&prior.current()&&!prior.signal?.aborted)return prior.promise;const current=options.current||(()=>true),id=identity();const job=(async()=>{for(let attempt=1;attempt<=2;attempt++){if(!current())throw Object.assign(Error(),{code:'SESSION_CHANGED'});try{const result=await operation();if(!current())throw Object.assign(Error(),{code:'SESSION_CHANGED'});clear(key);return result}catch(error){if(!current())throw error;const safe=classify(error,{id,scope:'public',attempts:attempt});note(error,{key,id,scope:'public',attempts:attempt});if(attempt===2||!safe.retryable||options.signal?.aborted)throw error;await new Promise(resolve=>setTimeout(resolve,200))}}})();pending.set(key,{promise:job,current,signal:options.signal});try{return await job}finally{if(pending.get(key)?.promise===job)pending.delete(key)}}
+function retryDelay(error,attempt,now=Date.now(),random=Math.random()){
+ const raw=error?.retryAfter;let hinted=0;
+ if(raw!=null){const value=String(raw).trim();hinted=/^\d+(?:\.\d+)?$/.test(value)?Number(value)*1000:Math.max(0,Date.parse(value)-now);if(!Number.isFinite(hinted))hinted=0}
+ const jitter=Math.floor(Math.max(0,Math.min(1,random))*500);
+ return Math.max(hinted,Math.min(8000,1000*2**(attempt-1))+jitter);
+}
+function waitRetry(ms,options){return new Promise((resolve,reject)=>{
+ let timer;const stop=()=>{if(timer!==undefined)clearTimeout(timer);options.signal?.removeEventListener('abort',abort);root.removeEventListener?.('myinvest:cancel-reads',cancel)};
+ const abort=()=>{stop();reject(Object.assign(Error('READ_CANCELLED'),{code:'READ_CANCELLED',name:'AbortError'}))};
+ const cancel=()=>{if(options.current&&!options.current()){stop();reject(Object.assign(Error('SESSION_CHANGED'),{code:'SESSION_CHANGED'}))}};
+ if(options.signal?.aborted){abort();return}
+ options.signal?.addEventListener('abort',abort,{once:true});root.addEventListener?.('myinvest:cancel-reads',cancel);
+ timer=setTimeout(()=>{stop();if(options.current&&!options.current())reject(Object.assign(Error('SESSION_CHANGED'),{code:'SESSION_CHANGED'}));else resolve()},ms);
+})}
+async function execute(key,operation,options={}){
+ const prior=pending.get(key);if(prior&&prior.current()&&!prior.signal?.aborted&&prior.signal===options.signal)return prior.promise;
+ const current=options.current||(()=>true),id=identity();
+ const job=(async()=>{for(let attempt=1;attempt<=3;attempt++){
+  if(!current())throw Object.assign(Error(),{code:'SESSION_CHANGED'});
+  try{const result=await operation();if(!current())throw Object.assign(Error(),{code:'SESSION_CHANGED'});clear(key);return result}
+  catch(error){if(!current()||options.signal?.aborted||['READ_CANCELLED','SESSION_CHANGED'].includes(error?.code))throw error;
+   const safe=classify(error,{id,scope:'public',attempts:attempt});note(error,{key,id,scope:'public',attempts:attempt});
+   const delay=retryDelay(error,attempt);if(attempt===3||!safe.retryable||delay>30000)throw error;
+   root.DashboardTransport?.deferReads?.(delay);await waitRetry(delay,options);
+  }
+ }})();
+ pending.set(key,{promise:job,current,signal:options.signal});try{return await job}finally{if(pending.get(key)?.promise===job)pending.delete(key)}
+}
+
 function observeResponse(response,action,current){if(typeof response?.clone!=='function')return;response.clone().json().then(value=>{if(!current())return;const key='account:'+action;if(response.ok&&value?.success===true){clear(key);return}note({http:response.status,code:value?.code||value?.diagnostic?.code,verifiedLayer:value?.layer||value?.diagnostic?.layer},{key,scope:action==='nhQuotes'?'public':'account'})}).catch(()=>{if(current())note({http:response.status,code:'READ_FORMAT'},{key:'account:'+action,scope:action==='nhQuotes'?'public':'account'})})}
-root.ReadStatus=Object.freeze({execute,note,clear,snapshot,classify,observeResponse});
+root.ReadStatus=Object.freeze({execute,note,clear,snapshot,classify,observeResponse,retryDelay});
 })(typeof window!=='undefined'?window:globalThis);

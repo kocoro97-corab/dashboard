@@ -7,7 +7,8 @@ import {createHandler,RelayGate,allowedMarketUrl} from '../relay/worker/worker.m
 const publicFixtures=process.env.MYINVEST_TEST_PUBLIC_FIXTURE?JSON.parse(fs.readFileSync(process.env.MYINVEST_TEST_PUBLIC_FIXTURE,'utf8')):{};
 const futuresFixture=process.env.MYINVEST_TEST_FUTURE_FIXTURE?JSON.parse(fs.readFileSync(process.env.MYINVEST_TEST_FUTURE_FIXTURE,'utf8')):null;let futureIndex=0;
 const expected={freshTestEnvironment:true,testEnvironment:'nh-staging',scriptHash:'a'.repeat(64),sheetHash:'b'.repeat(64),sourceDigest:'c'.repeat(64),gatewayVersion:2,storeEngine:'account-store-v2'};
-const host='myinvest-v2-dev-relay.synthetic.workers.dev',token='a'.repeat(64),store=new Map(),storage={get:async k=>structuredClone(store.get(k)),put:async(k,v)=>store.set(k,structuredClone(v)),transaction(fn){return fn(this)}};
+let gateTail=Promise.resolve();
+const host='myinvest-v2-dev-relay.synthetic.workers.dev',token='a'.repeat(64),store=new Map(),storage={get:async k=>structuredClone(store.get(k)),put:async(k,v)=>store.set(k,structuredClone(v)),transaction(fn){const job=gateTail.then(()=>fn(this));gateTail=job.catch(()=>{});return job}};
 const gate=new RelayGate({storage});let live=false;
 const env={MYINVEST_ENABLED:'true',MYINVEST_GAS_URL:'https://script.google.com/macros/s/SYNTHETIC_WORKER/exec',MYINVEST_PUBLIC_HOST:host,MYINVEST_EXPECTED_METADATA:JSON.stringify(expected),MYINVEST_PUBLIC_MARKET:'true',MYINVEST_ACCOUNT_READS:'true',MYINVEST_EXTERNAL_STORE:'true',GATE:{idFromName:()=>1,get:()=>({fetch:(url,init)=>gate.fetch(new Request(url,init))})}};
 if(futuresFixture)env.MYINVEST_PUBLIC_FUTURES='true';

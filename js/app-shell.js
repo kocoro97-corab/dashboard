@@ -27,7 +27,7 @@
   function unmount(name){try{instances.get(name)?.unmount()}catch{}}
   function change(route){
     if(!started||!ctx.authenticated())return;
-    if(current){scrolls.set(current.path,viewport.scrollTop);unmount(current.page)}
+    if(current){root.DashboardTransport?.cancelReads?.();ctx.cancelPending?.();scrolls.set(current.path,viewport.scrollTop);unmount(current.page)}
     current=route;const epoch=++revision;title.textContent=titles[route.page];title.focus({preventScroll:true});
     for(const a of nav.querySelectorAll('a')){if(a.dataset.page===route.page)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')}
     status.classList.remove('shell-error');status.textContent='페이지 연결 중';
@@ -42,7 +42,7 @@
     prepare();if(!LS('invest_session_token')||$('appContainer').style.display!=='block')return;
     if(started)return;started=true;clock();startTimers();manualRefresh=()=>refreshPage(true);router.start();
   }
-  function stop(){started=false;revision++;root.MYInvestCalendar?.close();root.MYInvestCalendarPending=false;root.InvestWorkflow?.clear();root.ReadStatus?.clear();router?.stop();unmount(current?.page);instances.clear();scrolls.clear();current=null;ctx.clear();viewport?.replaceChildren();
+  function stop(){started=false;revision++;root.DashboardTransport?.cancelReads?.();root.MYInvestCalendar?.close();root.MYInvestCalendarPending=false;root.InvestWorkflow?.clear();root.ReadStatus?.clear();router?.stop();unmount(current?.page);instances.clear();scrolls.clear();current=null;ctx.clear();viewport?.replaceChildren();
     // Detached page views are discarded on logout; original account clear logic
     // remains the authority for holdings, OCR, drafts and server session cleanup.
     for(const id of ['nhAccountSection','externalAssetSection'])if($(id))$(id).hidden=false;

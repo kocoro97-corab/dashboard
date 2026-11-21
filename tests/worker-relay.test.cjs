@@ -20,3 +20,27 @@ test('public supplier GET has no GAS token and no redirect fallback; session rev
 test('target proof cached for 30 seconds, credentials never cached',async()=>{const f=await fixture();let calls=0;const gateway=f.api.createGateway(f.api.configuration(f.env),async()=>{calls++;return new Response(JSON.stringify({...expected,success:true}),{headers:{'Content-Type':'application/json'}})});await Promise.all([gateway.verify(),gateway.verify()]);await gateway.verify();assert.equal(calls,1)});
 test('durable gate bounds concurrent leases and per-IP login attempts across handler instances',async()=>{const f=await fixture(),input={ipHash:'a'.repeat(64),login:false},acquire=()=>f.actor.fetch(new Request('https://gate/acquire',{method:'POST',body:JSON.stringify(input)}));const leases=[];for(let i=0;i<4;i++)leases.push((await(await acquire()).json()).lease);assert.equal((await acquire()).status,503);for(const lease of leases)await f.actor.fetch(new Request('https://gate/release',{method:'POST',body:JSON.stringify({lease})}));input.login=true;for(let i=0;i<6;i++){const r=await acquire();assert.equal(r.status,200);await f.actor.fetch(new Request('https://gate/release',{method:'POST',body:JSON.stringify({lease:(await r.json()).lease})}))}assert.equal((await acquire()).status,429);assert.ok(!JSON.stringify([...f.state.saved.values()]).includes('192.0.2.1'))});
 test('optional public futures default deny; explicit opt-in permits only two authenticated fixed products',async()=>{const payload={action:'nhQuotes',items:[{k:'k4',t:'fut',c:'A06'}]};let f=await fixture();assert.equal((await f.handler(req(payload,{Authorization:'Bearer '+token}),f.env)).status,403);assert.equal(f.calls.length,0);f=await fixture({MYINVEST_PUBLIC_FUTURES:'true'});assert.equal((await f.handler(req(payload),f.env)).status,401);for(const items of [[{k:'k4',t:'fut',c:'A01'}],[{k:'k4',t:'stock',c:'A06'}],[{k:'k4',t:'fut',c:'A06',account:'PRIVATE'}],[{k:'k4',t:'fut',c:'A06'},{k:'k4',t:'fut',c:'A06'}]])assert.notEqual((await f.handler(req({...payload,items},{Authorization:'Bearer '+token}),f.env)).status,200);f.gateway.post=async body=>({success:true,data:{k4:{p:1500,prev:1490,observedAt:Date.now()-30000,code:'A066C000',name:'코스닥150 선물',expiry:'20261210',contractVerified:true,private:'SECRET'}},private:'SECRET'});const response=await f.handler(req(payload,{Authorization:'Bearer '+token}),f.env),raw=await response.text();assert.equal(response.status,200);assert.ok(!raw.includes('SECRET'));assert.ok(JSON.parse(raw).data.k4.observedAt>0);assert.equal(JSON.parse(raw).data.k4.contractVerified,true)});
+
+test('public read deadline includes GAS session wait and releases the real gate lease',async()=>{
+ const f=await fixture();let calls=0;
+ const handler=f.api.createHandler({readDeadline:()=>AbortSignal.timeout(15),fetcher:async(url,options)=>{
+  calls++;const p=JSON.parse(options.body||'{}');
+  if(p.action==='appVersion')return new Response(JSON.stringify({...expected,success:true}),{headers:{'Content-Type':'application/json'}});
+  return new Promise((resolve,reject)=>{options.signal.addEventListener('abort',()=>reject(Error('SYNTHETIC_TIMEOUT')),{once:true})});
+ }});
+ const keepAlive=setTimeout(()=>{},100);const r=await handler(req({action:'publicFetch',url:'https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=1y'},{Authorization:'Bearer '+token}),f.env);clearTimeout(keepAlive);
+ assert.equal(r.status,502);assert.equal((await r.json()).code,'RELAY_UPSTREAM_NETWORK');assert.equal(Object.keys(f.state.saved.get('quota').leases).length,0);assert.equal(calls,2);
+});
+test('busy response gives a CORS-readable Retry-After without raising capacity',async()=>{
+ const f=await fixture(),leases=[];
+ for(let i=0;i<4;i++)leases.push((await(await f.actor.fetch(new Request('https://gate/acquire',{method:'POST',body:JSON.stringify({ipHash:'a'.repeat(64),login:false})}))).json()).lease);
+ const r=await f.handler(req(),f.env);assert.equal(r.status,503);assert.equal((await r.json()).code,'RELAY_BUSY');assert.equal(r.headers.get('Retry-After'),'5');assert.equal(r.headers.get('Access-Control-Expose-Headers'),'Retry-After');
+ assert.equal(f.calls.length,0);for(const lease of leases)await f.actor.fetch(new Request('https://gate/release',{method:'POST',body:JSON.stringify({lease})}));
+});
+
+test('public deadline bounds an already-pending shared metadata proof and releases its lease',async()=>{
+ const f=await fixture();let late,publicCalls=0;
+ const handler=f.api.createHandler({readDeadline:()=>AbortSignal.timeout(10),gatewayFactory:()=>({verify:()=>new Promise(r=>late=r),public:async()=>{publicCalls++;return 'public'}})});
+ const keepAlive=setTimeout(()=>{},100);const r=await handler(req({action:'publicFetch',url:'https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=1y'},{Authorization:'Bearer '+token}),f.env);clearTimeout(keepAlive);
+ assert.equal(r.status,502);assert.equal(Object.keys(f.state.saved.get('quota').leases).length,0);late({...expected,success:true});await new Promise(r=>setImmediate(r));assert.equal(publicCalls,0);
+});

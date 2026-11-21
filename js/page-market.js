@@ -22,7 +22,7 @@ const contractNote=id=>['NQ=F','ES=F','YM=F','GC=F','CL=F'].includes(id)?'Yahoo 
 const el=(tag,txt,cls)=>{const n=document.createElement(tag);if(txt!==undefined)n.textContent=txt;if(cls)n.className=cls;return n};
 const btn=(txt,fn)=>{const b=el('button',txt);b.type='button';b.addEventListener('click',fn);return b};
 function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(!x||typeof x!=='object')return structuredClone(DEFAULT);return Object.fromEntries(['KR','US'].map(k=>[k,Array.isArray(x[k])?Array.from(new Set([...x[k].filter(id=>byId(id)),...DEFAULT[k]])).slice(0,ALL.length):[...DEFAULT[k]]]))}catch{return {KR:[...DEFAULT.KR],US:[...DEFAULT.US]}}}
-function quote(id){const q=typeof Q!=='undefined'&&Q[id];if(!q||typeof q.p!=='number'||!Number.isFinite(q.p))return null;const p=q.p,prev=typeof q.prev==='number'?q.prev:null;return {p,delta:Number.isFinite(prev)&&prev!==0?(p-prev)/prev*100:null,source:typeof SRC!=='undefined'?({N:'Naver',Y:'Yahoo',D:'Daum',H:'NH',W:'NH PLUG 실시간',F:'NH선물',K:'KIS',C:'코스콤',I:'IBKR',X:'dxFeed',M:'수동'}[SRC[id]]||'출처 미확인'):'출처 미확인',observed:timeLabel(q.observedAt,'관측시각 미확인'),received:typeof QT!=='undefined'?timeLabel(QT[id],'수신시각 미확인'):'수신시각 미확인'}}
+function quote(id){const q=typeof Q!=='undefined'&&Q[id];if(!q||typeof q.p!=='number'||!Number.isFinite(q.p))return null;const p=q.p,prev=typeof q.prev==='number'?q.prev:null;return {p,stale:q.refreshFailed===true,delta:Number.isFinite(prev)&&prev!==0?(p-prev)/prev*100:null,source:typeof SRC!=='undefined'?({N:'Naver',Y:'Yahoo',D:'Daum',H:'NH',W:'NH PLUG 실시간',F:'NH선물',K:'KIS',C:'코스콤',I:'IBKR',X:'dxFeed',M:'수동'}[SRC[id]]||'출처 미확인'):'출처 미확인',observed:timeLabel(q.observedAt,'관측시각 미확인'),received:typeof QT!=='undefined'?timeLabel(QT[id],'수신시각 미확인'):'수신시각 미확인'}}
 function format(v){return Number.isFinite(v)?v.toLocaleString('ko-KR',{maximumFractionDigits:3}):'미연결'}
 function create(){
  const legacy=DashboardPages.legacy({ids:['marketSection','tickSection','workMacroLivePreview'],intro:'기존 시장 지표 및 거시경제 화면',refresh:async(ctx,force)=>{await ctx.market(force,[...settings[region],'^VIX','KRW=X','^TNX','^SOX']);if(!ctx.development())await ctx.once('tick-widget',()=>{const ti=LS('invest_tick');if(ti){$('tin').value=ti;setTick()}TS.w='wait';tickStatus();embed($('tickq'),'single-quote',{symbol:'USI:TICK',width:'100%',colorTheme:'dark',isTransparent:true,locale:'kr'},ok=>{TS.w=ok?'ok':'fail';TS.wAt=new Date();tickStatus()})})}});
@@ -61,10 +61,10 @@ function create(){
   const q=quote(id),c=btn('',()=>openChart(id));c.className='miv-indicator';
   const delta=el('small',q&&q.delta!==null?(q.delta>0?'+':'')+q.delta.toFixed(2)+'%':'등락 미확인');
   if(q&&q.delta!==null)delta.classList.add(q.delta>0?'market-up':q.delta<0?'market-down':'market-flat');
-  const full=q?q.source+' · 관측 '+q.observed+' · 수신 '+q.received:'시세 미연결 · 상세 화면에서 연결 상태 확인';
+  const full=q?q.source+(q.stale?' · 이전 자료 · 최근 갱신 실패':'')+' · 관측 '+q.observed+' · 수신 '+q.received:'시세 미연결 · 상세 화면에서 연결 상태 확인';
   c.title=d.name+' · '+full;c.setAttribute('aria-label',d.name+' · '+(q?format(q.p):'미연결'));
   const time=q?.received.match(/\d{2}:\d{2}:\d{2}/)?.[0];
-  c.append(el('strong',d.name,'miv-name'),el('div',q?format(q.p):'미연결','miv-value'),delta,el('small',q?q.source+(time?' · '+time:''):'수신 없음','miv-provenance'));
+  c.append(el('strong',d.name,'miv-name'),el('div',q?format(q.p):'미연결','miv-value'),delta,el('small',q?(q.stale?'이전 자료':q.source)+(time?' · '+time:''):'수신 없음','miv-provenance'));
   return c;
  }
  function draw(){if(!alive)return;grid.replaceChildren();settings[region].slice(0,9).forEach(id=>{const c=card(id);if(c)grid.append(c)});if(settings[region].length<9)grid.append(el('p','표시 지표가 9개 미만입니다. 지표 편집에서 추가하세요.'))}
@@ -76,7 +76,7 @@ function create(){
   const d=byId(id),panel=dialog(d.name+' · 확대 차트');panel.classList.add('miv-chart-panel');
   const contractSummary=el('p',contractNote(id)||'','mini');if(contractNote(id))panel.append(contractSummary);
   const quoteSummary=el('p','','mini');panel.append(quoteSummary);
-  function updateSummary(){const value=quote(id);contractSummary.textContent=contractNote(id)||'';quoteSummary.textContent=value?format(value.p)+' · '+unitFor(id)+(value.delta!==null?' · 등락 '+(value.delta>0?'+':'')+value.delta.toFixed(2)+'%':' · 등락률 미확인')+' · 출처 '+value.source+' · 관측 '+value.observed+' · 수신 '+value.received:'현재 시세 미연결'}
+  function updateSummary(){const value=quote(id);contractSummary.textContent=contractNote(id)||'';quoteSummary.textContent=value?format(value.p)+' · '+unitFor(id)+(value.delta!==null?' · 등락 '+(value.delta>0?'+':'')+value.delta.toFixed(2)+'%':' · 등락률 미확인')+(value.stale?' · 이전 자료 · 최근 갱신 실패':'')+' · 출처 '+value.source+' · 관측 '+value.observed+' · 수신 '+value.received:'현재 시세 미연결'}
   updateSummary();
   if(id==='k4'){
    const note=el('p','1순위 NH 선물 현재가 · 외부 참고 심볼은 TradingView KRX:KQI1! 연속선물입니다. 연속선물은 개별 월물과 가격이 다를 수 있고, 차트 값은 대시보드 카드로 자동 전송되지 않습니다.','mini');

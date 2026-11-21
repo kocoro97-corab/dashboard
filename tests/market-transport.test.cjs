@@ -51,3 +51,10 @@ test('manual TICK remains explicit and does not become an authenticated provider
  const f=setup();f.ctx.$('tin').value='125';f.ctx.$('tm').style={};f.ctx.$('tm').hidden=true;f.ctx.setTick();
  assert.equal(f.ctx.$('tm').hidden,false);assert.match(f.ctx.$('tl2').textContent,/입력값: 125/);assert.equal(vm.runInContext('Q.TICK',f.ctx),undefined);
 });
+test('failed refresh keeps the last quote and original receipt with an explicit stale marker',async()=>{
+ const f=setup();vm.runInContext('Q.AAA={p:100,prev:99,observedAt:123};QT.AAA=77;SRC.AAA="Y"',f.ctx);f.ctx.quote=async()=>null;await f.ctx.fillQuotes(['AAA']);assert.equal(vm.runInContext('Q.AAA.p',f.ctx),100);assert.equal(vm.runInContext('QT.AAA',f.ctx),77);assert.equal(vm.runInContext('Q.AAA.refreshFailed',f.ctx),true);
+ f.ctx.quote=async()=>({p:101,prev:99,observedAt:456});await f.ctx.fillQuotes(['AAA']);assert.equal(vm.runInContext('Q.AAA.refreshFailed',f.ctx),undefined);assert.equal(vm.runInContext('Q.AAA.p',f.ctx),101);
+});
+test('departed market bulk collector does not start the rest of an old route queue',async()=>{
+ const f=setup();f.ctx.window.location={hash:'#/market'};const release=[],calls=[];f.ctx.quote=s=>{calls.push(s);return new Promise(r=>release.push(r))};const running=f.ctx.fillQuotes(['AAA','BBB','CCC','DDD','EEE','FFF']);f.ctx.window.location.hash='#/news';release.forEach(r=>r({p:100,prev:99}));await running;assert.equal(calls.length,4);assert.equal(vm.runInContext('Object.keys(Q).length',f.ctx),0);
+});

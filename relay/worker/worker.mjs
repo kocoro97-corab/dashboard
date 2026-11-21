@@ -48,9 +48,9 @@ async function bounded(response,limit=MAX_RESPONSE){
  const chunks=[];let size=0;try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>limit)throw failure('RELAY_RESPONSE_TOO_LARGE');chunks.push(value)}}catch(error){await reader.cancel().catch(()=>{});throw error}
  const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length}try{return new TextDecoder('utf-8',{fatal:true}).decode(bytes)}catch{throw failure('RELAY_RESPONSE_INVALID')}
 }
-export function createGateway(config,fetcher=fetch,proof={}){
+export function createGateway(config,fetcher=fetch,proof={},readSignal=null){
  async function post(payload){
-  let url=config.upstream,options={method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8','Accept':'application/json'},body:JSON.stringify({...payload,stagingBinding:config.expected.sheetHash}),redirect:'manual',signal:AbortSignal.timeout(120000)};
+  let url=config.upstream,options={method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8','Accept':'application/json'},body:JSON.stringify({...payload,stagingBinding:config.expected.sheetHash}),redirect:'manual',signal:readSignal||AbortSignal.timeout(120000)};
   for(let hop=0;hop<4;hop++){
    let response;try{response=await fetcher(url,options)}catch{throw failure('RELAY_UPSTREAM_NETWORK')}
    if(response.status>=300&&response.status<400){
@@ -58,7 +58,7 @@ export function createGateway(config,fetcher=fetch,proof={}){
     if(next.hostname==='accounts.google.com')throw failure('RELAY_GAS_ACCESS_REQUIRED');
     if(![301,302,303].includes(response.status)||hop===3||next.protocol!=='https:'||next.hostname!=='script.googleusercontent.com'||next.pathname!=='/macros/echo'||next.username||next.password||next.port||next.hash)throw failure('RELAY_REDIRECT_DENIED');
     // Preserve the signed Location bytes. Never replay a body or auth to redirects.
-    url=location;options={method:'GET',headers:{Accept:'application/json'},redirect:'manual',signal:AbortSignal.timeout(120000)};continue;
+    url=location;options={method:'GET',headers:{Accept:'application/json'},redirect:'manual',signal:readSignal||AbortSignal.timeout(120000)};continue;
    }
    if(response.status!==200)throw failure('RELAY_UPSTREAM_HTTP');
    if(response.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase()!=='application/json')throw failure('RELAY_NON_JSON');
@@ -70,7 +70,7 @@ export function createGateway(config,fetcher=fetch,proof={}){
  return {post,async verify(){const key=config.upstream+'|'+JSON.stringify(config.expected);if(proof.key===key&&proof.until>Date.now())return proof.data;if(proof.key===key&&proof.pending)return proof.pending;proof.key=key;proof.pending=(async()=>{const data=await post({action:'appVersion'});if(data.success!==true||Object.entries(config.expected).some(([k,v])=>data[k]!==v))throw failure('RELAY_TARGET_MISMATCH',503);proof.data=data;proof.until=Date.now()+30000;return data})();try{return await proof.pending}finally{proof.pending=null}},async public(url,token){
   if(!allowedMarketUrl(url))throw failure('RELAY_PUBLIC_URL_DENIED',403);
   const session=await post({action:'sessionInfo',token});if(session.success!==true||session.mustChangePassword)throw failure('AUTH_REQUIRED',401);
-  let r;try{const host=new URL(url).hostname,referer=host==='news.google.com'?'https://news.google.com/':host==='query1.finance.yahoo.com'?'https://finance.yahoo.com/':host==='finance.daum.net'?'https://finance.daum.net/':'https://stock.naver.com/';r=await fetcher(url,{method:'GET',headers:{Accept:'*/*','User-Agent':'Mozilla/5.0','Referer':referer},redirect:'manual',signal:AbortSignal.timeout(20000)})}catch{throw failure('RELAY_UPSTREAM_NETWORK')}
+  let r;try{const host=new URL(url).hostname,referer=host==='news.google.com'?'https://news.google.com/':host==='query1.finance.yahoo.com'?'https://finance.yahoo.com/':host==='finance.daum.net'?'https://finance.daum.net/':'https://stock.naver.com/';r=await fetcher(url,{method:'GET',headers:{Accept:'*/*','User-Agent':'Mozilla/5.0','Referer':referer},redirect:'manual',signal:readSignal?AbortSignal.any([readSignal,AbortSignal.timeout(20000)]):AbortSignal.timeout(20000)})}catch{throw failure('RELAY_UPSTREAM_NETWORK')}
   if(r.status>=300&&r.status<400)throw failure('RELAY_REDIRECT_DENIED');if(r.status!==200)throw failure('RELAY_PUBLIC_FAILED');return bounded(r);
  }};
 }
@@ -88,10 +88,17 @@ function validatePayload(body){
 }
 function futureExpiry(q){if(!/^\d{8}$/.test(q?.expiry||''))return false;const y=Number(q.expiry.slice(0,4)),m=Number(q.expiry.slice(4,6)),d=Number(q.expiry.slice(6,8)),date=new Date(Date.UTC(y,m-1,d)),today=new Date(Date.now()+9*3600000).toISOString().slice(0,10).replace(/-/g,'');return date.toISOString().slice(0,10).replace(/-/g,'')===q.expiry&&q.expiry>=today&&String(y%10)===q.code?.[3]&&'123456789ABC'[m-1]===q.code?.[4]}
 function futureResult(result,items){if(result?.success!==true)return result;const data={},errors={};for(const item of items){const q=result.data?.[item.k],prefix=item.c,name=String(q?.name||'').replace(/\s/g,'');const observed=Number.isFinite(q?.observedAt)&&q.observedAt>0&&q.observedAt<=Date.now()+300000&&Date.now()-q.observedAt<=4*86400000?q.observedAt:null;if(q&&(item.k!=='k4'||observed!==null)&&q.contractVerified===true&&futureExpiry(q)&&Number.isFinite(q.p)&&q.p>0&&Number.isFinite(q.prev)&&q.prev>0&&new RegExp('^'+prefix+'[0-9][1-9ABC]000$').test(q.code||'')&&(prefix==='A06'?/코스닥150|KOSDAQ150/i:/코스피200|KOSPI200/i).test(name)){data[item.k]={p:q.p,prev:q.prev,basis:Number.isFinite(q.basis)?q.basis:null,code:q.code,name:prefix==='A06'?'코스닥150 선물':'코스피200 선물',t:/^[0-9:]{6,8}$/.test(q.t||'')?q.t:'',expiry:/^\d{8}$/.test(q.expiry||'')?q.expiry:null,contractVerified:q.contractVerified===true&&futureExpiry(q),observedAt:observed,observationKind:observed?'trade':null,marketState:'UNVERIFIED',delayStatus:'UNVERIFIED',receivedAt:new Date().toISOString(),volume:Number.isFinite(q.volume)?q.volume:null,turnover:Number.isFinite(q.turnover)?q.turnover:null}}else{const raw=String(result.errors?.[item.k]||''),match=/^(NH_(?:TOKEN|CONFIG|NETWORK|JSON|HTTP|RSP|NO_PRICE|CONTRACT|CONTRACT_CODE|CONTRACT_NAME|CONTRACT_EXPIRY|OBSERVATION|STALE|UNSUPPORTED|UPSTREAM|SYMBOL_MISMATCH))(?: \/ HTTP ([1-5][0-9]{2}))?$/.exec(raw);errors[item.k]=match?match[1]+(match[2]?' / HTTP '+match[2]:''):'NH_NO_PRICE'}}return {success:true,data,errors}}
-export function createHandler({fetcher=fetch,gatewayFactory=createGateway}={}){const proof={};return async function(request,env){
+async function readWithin(operation,signal){
+ if(!signal)return operation();if(signal.aborted)throw failure('RELAY_UPSTREAM_NETWORK');
+ return new Promise((resolve,reject)=>{
+  const abort=()=>reject(failure('RELAY_UPSTREAM_NETWORK'));signal.addEventListener('abort',abort,{once:true});
+  Promise.resolve().then(()=>{if(signal.aborted)throw failure('RELAY_UPSTREAM_NETWORK');return operation()}).then(resolve,reject).finally(()=>signal.removeEventListener('abort',abort));
+ });
+}
+export function createHandler({fetcher=fetch,gatewayFactory=createGateway,readDeadline=()=>AbortSignal.timeout(25000)}={}){const proof={};return async function(request,env){
  let lease=null,gate=null,attemptedWrite=false;const origin=request.headers.get('Origin')===ORIGIN;
  const headers={'Content-Type':'application/json;charset=utf-8','Cache-Control':'no-store','Pragma':'no-cache','Vary':'Origin','X-Content-Type-Options':'nosniff','Strict-Transport-Security':'max-age=31536000'};
- if(origin)headers['Access-Control-Allow-Origin']=ORIGIN;
+ if(origin){headers['Access-Control-Allow-Origin']=ORIGIN;headers['Access-Control-Expose-Headers']='Retry-After'}
  const reply=(status,value)=>new Response(status===204?null:JSON.stringify(value),{status,headers});
  try{
   const url=new URL(request.url);if(url.protocol!=='https:')throw failure('RELAY_HTTPS_REQUIRED',403);
@@ -116,11 +123,11 @@ export function createHandler({fetcher=fetch,gatewayFactory=createGateway}={}){c
   const ip=request.headers.get('CF-Connecting-IP');if(!ip)throw failure('RELAY_CONFIG_INVALID',503);
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(config.expected.scriptHash+'|'+ip));const ipHash=Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
   const quota=await gate.fetch('https://gate/acquire',{method:'POST',body:JSON.stringify({ipHash,login:action==='login'})});
-  if(!quota.ok)throw failure(quota.status===429?'RELAY_RATE_LIMIT':'RELAY_BUSY',quota.status);
+  if(!quota.ok){headers['Retry-After']=quota.status===429?'60':'5';throw failure(quota.status===429?'RELAY_RATE_LIMIT':'RELAY_BUSY',quota.status)}
   lease=(await quota.json()).lease;if(typeof lease!=='string')throw failure('RELAY_CONFIG_INVALID',503);
-  const gateway=gatewayFactory(config,fetcher,proof),metadata=await gateway.verify();let result;
-  if(action==='appVersion')result={...metadata,relayProfile:'persistent',developmentPublicMarket:config.market,developmentPublicFutures:config.futures,developmentIndustryMarket:config.market,developmentFuturesReadVersion:2,developmentAccountReads:config.accounts,developmentExternalStore:config.store,developmentExternalTestStore:false};
-  else if(action==='publicFetch')result={success:true,text:await gateway.public(body.url,body.token)};
+  const readSignal=action==='publicFetch'?readDeadline():null,gateway=gatewayFactory(config,fetcher,proof,readSignal),metadata=await readWithin(()=>gateway.verify(),readSignal);let result;
+  if(action==='appVersion')result={...metadata,relayProfile:'persistent',developmentPublicMarket:config.market,developmentPublicFutures:config.futures,developmentIndustryMarket:config.market,developmentFuturesReadVersion:2,developmentReadResilienceVersion:1,developmentAccountReads:config.accounts,developmentExternalStore:config.store,developmentExternalTestStore:false};
+  else if(action==='publicFetch')result={success:true,text:await readWithin(()=>gateway.public(body.url,body.token),readSignal)};
   else{attemptedWrite=writes.has(action);result=await gateway.post(body);if(action==='nhQuotes')result=futureResult(result,body.items)}
   if(result.success!==true)result={success:false,code:safeCode.has(result.code)?result.code:'GAS_REJECTED',layer:['gas','storage','nh'].includes(result.layer)?result.layer:'gas',...(safeMessages.has(result.message)?{message:result.message}:{}),mustChangePassword:result.mustChangePassword===true};
   return reply(200,result);

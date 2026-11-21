@@ -6,18 +6,8 @@
     const c=window.MYINVEST_TRANSPORT_CONFIG,token=LS('invest_session_token');
     if(!c||c.publicMarket!==true||!token||$('appContainer').style.display!=='block')return;
     if(!installed){
-      const read=getTxt,tails=Array.from({length:c.persistentRelay===true?3:1},()=>Promise.resolve());let cursor=0,pending=0;
-      // Queue before the existing per-request timeout starts. Persistent Workers
-      // reserve one of four slots for auth; temporary relay reserves one of two; never replay a queued read to a new target.
-      getTxt=function(url){
-        const tk=LS('invest_session_token'),endpoint=c.endpoint;
-        if(pending>=48)return Promise.resolve(null);
-        pending++;
-        const current=()=>c.publicMarket===true&&tk===LS('invest_session_token')&&endpoint===c.endpoint;
-        const slot=cursor++%tails.length;const job=tails[slot].then(async()=>{if(!current())return null;const value=await read(url);return current()?value:null});
-        tails[slot]=job.catch(()=>null);
-        return job.finally(()=>pending--);
-      };
+      // Read concurrency, duplicate joins and route/session cancellation live in
+      // DashboardTransport, shared by all pages and public-read call sites.
       // Public source adapters are reused. No NH request is attempted, including
       // the existing automatic futures call inside refreshMarket.
       const readFutures=fillNH;fillNH=async(...args)=>{if(c.publicFutures===true)return readFutures(...args);NH_STATUS='미연결 · 개발 환경의 NH 요청 차단';return{ok:0,fail:0}};

@@ -49,9 +49,9 @@ function quote(id,quotes,sources,received,now=Date.now()){
  const delta=numeric(prev)&&prev>0?(p/prev-1)*100:null;
  const observed=numeric(at)&&at>0&&at<=now+300000?at:null;
  const seen=numeric(rx)&&rx>0&&rx<=now+300000?rx:null;
- const stale=(observed!==null&&now-observed>4*86400000)||(seen!==null&&now-seen>30*60000);
+ const stale=quotes?.[id]?.refreshFailed===true||(observed!==null&&now-observed>4*86400000)||(seen!==null&&now-seen>30*60000);
  // A receipt verifies transport timing, not the original exchange quote time.
- const timely=seen!==null&&now-seen<=30*60000&&(observed===null||now-observed<=86400000);
+ const timely=!stale&&seen!==null&&now-seen<=30*60000&&(observed===null||now-observed<=86400000);
  return {id,valid:true,price:p,delta,source:SOURCE[sources?.[id]]||'출처 미확인',receivedAt:seen,observedAt:observed,stale,timely};
 }
 function marketRegime(region,quotes,sources,received,now=Date.now()){
