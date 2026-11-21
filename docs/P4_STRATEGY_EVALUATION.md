@@ -84,3 +84,7 @@ Only after relay/public feed stability is verified:
 5. Never infer intraday VWAP or short-term trading efficacy from daily bars.
 
 **No deployment, trading or account interaction is authorized by this document.**
+
+## Isolated CI branch
+
+The `fix/p4-strategy-evaluation-isolated` branch is a separate, synthetic-only CI validation branch created from the feature implementation. This avoids changing Codex's branch or opening a PR that could trigger the separate live NH staging workflow.
