@@ -85,7 +85,7 @@ test('rejects future, invalid or inverted market observation/retrieval timestamp
 test('URL policy excludes non-HTTPS, embedded credentials, localhost/IP and escaped host tricks',()=>{
  for(const url of ['http://example.com','javascript:alert(1)',
   'https://user:pass@example.org/a','https://localhost/a',
-  'https://192.168.0.5/a','https://router.local/a',
+  'https://192.168.0.5/a','https://[::1]/a','https://router.local/a',
   'https://example.com/evil\\url','https://example.com/has space']){
   assert.equal(brief.safeUrl(url),null);
   assert.equal(brief.normalize(record({sources:[{id:'x',title:'A',url}]}),{now:TODAY}).ok,false);
@@ -154,6 +154,20 @@ test('archive selector always distinguishes today from archived previous date',(
  assert.equal(out.freshness,'ARCHIVED_NOT_TODAY');
  assert.equal(out.selected.date,'2026-11-20');
  assert.equal(brief.selection([normalized(prev)],{now:TODAY,date:'2026-11-21'}).empty,true);
+});
+test('market observation freshness is advisory and never claims authenticated live prices',()=>{
+ const current=brief.selection([normalized()],{now:TODAY});
+ assert.equal(current.marketObservationStatus,'DECLARED_UNVERIFIED');
+ assert.ok(current.marketObservationAgeHours>0);
+ const old=record({observedAt:OBS-3*86400000,retrievedAt:FETCH,
+  generatedAt:GEN});
+ const stale=brief.selection([normalized(old)],{now:TODAY});
+ assert.equal(stale.marketObservationStatus,'DECLARED_OLDER_THAN_36H');
+ assert.equal(stale.freshness,'TODAY_UNVERIFIED');
+ const noStamp=record({origin:'manual',generatedAt:null,observedAt:null,retrievedAt:null});
+ const unknown=brief.selection([normalized(noStamp)],{now:TODAY});
+ assert.equal(unknown.marketObservationStatus,'UNKNOWN');
+ assert.equal(unknown.marketObservationAgeHours,null);
 });
 test('public feed is read-only and fails closed for malformed or private-account records',()=>{
  const parsed=brief.parseFeed({type:'public-briefing-feed-v1',schemaVersion:1,records:[record()]},{now:TODAY});
