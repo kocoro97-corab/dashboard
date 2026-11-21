@@ -77,13 +77,13 @@ function analyze(input={}){
  const base=measuredCase('baseline','기준 가정',strategy,series.bars,engine,review);
  if(!base.ok)return fail('BASELINE_'+base.code);
  const f=base.params.feeBps,s=base.params.slippageBps;
- if(f>BUMP.at(-1)?false:false){} // no-op removed in later audit if present
  if(f+BUMP.at(-1)>200||s+BUMP.at(-1)>200)
   return fail('COST_STRESS_BEYOND_ALLOWED_MODEL_LIMIT',{feeBps:f,slippageBps:s,maxAdditionalBps:BUMP.at(-1)});
  const cost=[base.presentation],deltas=[];
  for(const bump of BUMP){
   for(const kind of ['fee','slippage','combined']){
-   const next={...base.params,feeBps:f+(kind==='fee'||kind==='combined'?bump:0),
+   const next={...base.params,...(strategy.testStartAt==null?{}:{testStartAt:strategy.testStartAt}),
+    feeBps:f+(kind==='fee'||kind==='combined'?bump:0),
     slippageBps:s+(kind==='slippage'||kind==='combined'?bump:0)};
    const id=kind+'-plus-'+bump+'bps';
    const outcome=measuredCase(id,kind+' +'+bump+'bp',next,series.bars,engine,review);
