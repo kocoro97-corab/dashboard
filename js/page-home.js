@@ -3,7 +3,7 @@
 (function(root){
 'use strict';
 const {node}=DashboardPages;
-const css=`.homev4{display:grid;gap:9px}.homev4-top{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.homev4-title{margin:0;font-size:16px}.homev4-sub{font-size:11px;color:#b6c5d9;margin:0}.homev4-switch{display:flex;gap:5px;flex-wrap:wrap}.homev4 button{cursor:pointer}.homev4-switch button,.homev4-actions button{border:1px solid #465775;color:#e7eef9;background:#172238;border-radius:7px;padding:6px 10px;min-height:34px}.homev4-switch button[aria-pressed="true"]{border-color:#72b5ff;background:#264365}.homev4-main{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.homev4-quote{border:1px solid #35445c;border-radius:9px;background:#172238;padding:10px;min-width:0;display:grid;gap:5px}.homev4-quote dt{font-size:12px;color:#b6c5d9}.homev4-quote dd{font-size:clamp(17px,1.9vw,23px);font-weight:750;letter-spacing:-.3px;margin:0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.homev4-quote .homev4-provenance{font-size:10px;color:#afc1d6;overflow-wrap:anywhere;line-height:1.35}.homev4-percent{font-size:13px;font-weight:750}.homev4-support{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.homev4-support>div{padding:6px 9px;border:1px solid #35445c;border-radius:7px;min-width:0}.homev4-support strong{display:block;font-size:12px}.homev4-support small{display:block;color:#b6c5d9;font-size:10px}.homev4-bottom{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:7px}.homev4-panel{border:1px solid #35445c;background:#172238;padding:11px;border-radius:9px;min-width:0}.homev4-panel h3{font-size:14px;margin:0 0 6px}.homev4-panel p{font-size:12px;margin:4px 0;line-height:1.5}.homev4-panel .homev4-major{font-size:16px;font-weight:750}.homev4-actions{display:flex;gap:5px;flex-wrap:wrap}.homev4-muted{color:#b6c5d9;font-size:11px!important}.homev4-asset{font-size:19px!important;font-weight:750;font-variant-numeric:tabular-nums}.homev4-insight{font-size:12px;line-height:1.45;color:#b6c5d9}.homev4 .market-up{color:#ff7777}.homev4 .market-down{color:#79b8ff}.homev4 .market-flat{color:#e7eef9}@media(max-width:650px){.homev4-main{grid-template-columns:repeat(2,minmax(0,1fr))}.homev4-bottom{grid-template-columns:1fr}.homev4-quote{padding:8px}.homev4-quote dd{font-size:17px}.homev4-support{grid-template-columns:repeat(3,minmax(0,1fr))}.homev4-support>div{padding:6px}}`;
+const css=`.homev4{display:grid;gap:9px}.homev4-top{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.homev4-title{margin:0;font-size:16px}.homev4-sub{font-size:11px;color:#b6c5d9;margin:0}.homev4-switch{display:flex;gap:5px;flex-wrap:wrap}.homev4 button{cursor:pointer}.homev4-switch button,.homev4-actions button{border:1px solid #465775;color:#e7eef9;background:#172238;border-radius:7px;padding:6px 10px;min-height:34px}.homev4-switch button[aria-pressed="true"]{border-color:#72b5ff;background:#264365}.homev4-main{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.homev4-quote{border:1px solid #35445c;border-radius:9px;background:#172238;padding:10px;min-width:0;display:grid;gap:5px}.homev4-quote dt{font-size:12px;color:#b6c5d9}.homev4-quote dd{font-size:clamp(17px,1.9vw,23px);font-weight:750;letter-spacing:-.3px;margin:0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.homev4-quote .homev4-provenance{font-size:10px;color:#afc1d6;overflow-wrap:anywhere;line-height:1.35}.homev4-percent{font-size:13px;font-weight:750}.homev4-support{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.homev4-support>div{padding:6px 9px;border:1px solid #35445c;border-radius:7px;min-width:0}.homev4-support strong{display:block;font-size:12px}.homev4-support small{display:block;color:#b6c5d9;font-size:10px}.homev4-bottom{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:7px}.homev4-panel{border:1px solid #35445c;background:#172238;padding:11px;border-radius:9px;min-width:0}.homev4-panel h3{font-size:14px;margin:0 0 6px}.homev4-panel p{font-size:12px;margin:4px 0;line-height:1.5}.homev4-panel .homev4-major{font-size:16px;font-weight:750}.homev4-actions{display:flex;gap:5px;flex-wrap:wrap}.homev4-muted{color:#b6c5d9;font-size:11px!important}.homev4-asset{font-size:19px!important;font-weight:750;font-variant-numeric:tabular-nums}.homev4-insight{font-size:12px;line-height:1.45;color:#b6c5d9}.homev4 .market-up{color:#ff7777}.homev4 .market-down{color:#79b8ff}.homev4 .market-flat{color:#e7eef9}.homev4-editor[hidden]{display:none}.homev4-editor{display:grid;gap:8px}.homev4-editor-rows{display:grid;gap:5px;max-height:240px;overflow:auto}.homev4-editrow{display:flex;gap:5px;align-items:center;flex-wrap:wrap;padding:5px;border:1px solid #344158;border-radius:6px}.homev4-editrow span{flex:1;min-width:120px;font-size:12px}.homev4-editor-add{display:flex;gap:5px;flex-wrap:wrap;max-height:145px;overflow:auto}.homev4-editor-actions{display:flex;gap:6px;flex-wrap:wrap}.homev4-editor button{border:1px solid #465775;color:#e7eef9;background:#172238;border-radius:6px;padding:5px 8px;min-height:34px}.homev4-editor button:disabled{opacity:.35;cursor:default}.homev4-editor-note{font-size:11px;color:#b6c5d9}@media(max-width:650px){.homev4-main{grid-template-columns:repeat(2,minmax(0,1fr))}.homev4-bottom{grid-template-columns:1fr}.homev4-quote{padding:8px}.homev4-quote dd{font-size:17px}.homev4-support{grid-template-columns:repeat(3,minmax(0,1fr))}.homev4-support>div{padding:6px}}`;
 const time=t=>new Date(t).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'})+' KST';
 const num=(v,d=2)=>Number.isFinite(v)?v.toLocaleString('ko-KR',{maximumFractionDigits:d}):'미수신';
 const pct=v=>v===null?'등락률 미확인':(v>0?'+':'')+v.toFixed(2)+'%';
@@ -11,7 +11,41 @@ const dir=v=>v===null?'market-flat':v>0?'market-up':v<0?'market-down':'market-fl
 const unit=id=>id==='KRW=X'?' 원/USD':id==='^TNX'?' %':'';
 const act=(label,path)=>{const b=node('button',label);b.type='button';b.addEventListener('click',()=>{root.location.hash='#/'+path});return b};
 DashboardPages.register('home',()=>{
- let scope='AUTO',timer=null,active=false,viewRef=null,ctxRef=null,lastRegion=null;
+ let scope='AUTO',timer=null,active=false,viewRef=null,ctxRef=null,lastRegion=null,preferences=null,editing=false,draft=null;
+ const policy=()=>root.HomeMarketPolicy;
+ function saved(){
+  try{const raw=localStorage.getItem(policy().STORAGE_KEY);return policy().selections(raw===null?null:JSON.parse(raw))}
+  catch{return policy().selections(null)}
+ }
+ function persist(value){
+  try{localStorage.setItem(policy().STORAGE_KEY,JSON.stringify(policy().selections(value)));return true}
+  catch{return false}
+ }
+ function editButton(label,fn){const b=node('button',label);b.type='button';b.addEventListener('click',fn);return b}
+ function renderEditor(view){
+  const panel=view.querySelector('.homev4-editor');if(!panel)return;
+  panel.hidden=!editing;if(!editing||!draft)return;
+  const region=effective(),items=policy().display(region,draft),rows=view.querySelector('.homev4-editor-rows'),add=view.querySelector('.homev4-editor-add');
+  view.querySelector('.homev4-editor-title').textContent=(region==='KR'?'한국장':'미국장')+' 홈 지수 편집 · '+items.length+'개';
+  rows.replaceChildren();add.replaceChildren();
+  items.forEach(([id,name],index)=>{
+   const row=node('div',null,'homev4-editrow');row.append(node('span',(index+1)+'. '+name));
+   for(const [action,label] of [['up','▲'],['down','▼'],['remove','제외']]){
+    const b=editButton(label,()=>{draft=policy().editSelection(draft,region,action,id);renderEditor(view)});
+    b.setAttribute('aria-label',name+' '+label);b.disabled=(action==='up'&&index===0)||(action==='down'&&index===items.length-1);row.append(b)
+   }
+   rows.append(row);
+  });
+  for(const [id,name] of policy().CATALOG){
+   if(draft[region].includes(id))continue;
+   const b=editButton('+ '+name,()=>{draft=policy().editSelection(draft,region,'add',id);renderEditor(view)});
+   b.setAttribute('aria-label',name+' 추가');add.append(b);
+  }
+  if(!items.length)rows.append(node('p','선택한 지수가 없습니다. 아래에서 추가하세요.','homev4-editor-note'));
+  if(!add.children.length)add.append(node('p','추가할 수 있는 지수가 없습니다.','homev4-editor-note'));
+  view.querySelector('.homev4-editor-status').textContent='';
+ }
+
  const effective=()=>scope==='AUTO'?root.HomeMarketPolicy.regionAt(new Date()):scope;
  function card(id,name){
   const m=root.HomeMarketPolicy.quote(id,Q,SRC,QT),el=node('dl',null,'homev4-quote');
@@ -22,19 +56,20 @@ DashboardPages.register('home',()=>{
  }
  function render(view,ctx){
   if(!view)return;
-  const region=effective(),policy=root.HomeMarketPolicy;
+  const region=effective(),marketPolicy=policy();
   const title=view.querySelector('.homev4-title');title.textContent=(region==='KR'?'한국장':'미국장')+' 중심 · 핵심 지수';
   view.querySelector('.homev4-sub').textContent=scope==='AUTO'?'한국시간 07:00~20:59 한국 우선 / 21:00~06:59 미국 우선 · 자동 전환':'직접 선택 · 다른 시장은 보조 지표에서 확인';
-  for(const b of view.querySelectorAll('.homev4-switch button'))b.setAttribute('aria-pressed',String(b.dataset.region===scope));
+  for(const b of view.querySelectorAll('.homev4-switch button'))if(b.dataset.region)b.setAttribute('aria-pressed',String(b.dataset.region===scope));
   const main=view.querySelector('.homev4-main');main.replaceChildren();
-  for(const [id,name] of policy.MAIN[region])main.append(card(id,name));
+  for(const [id,name] of marketPolicy.display(region,preferences))main.append(card(id,name));
+  if(!main.children.length)main.append(node('p','표시할 지수가 없습니다. 지수 편집에서 추가하세요.','homev4-muted'));
   const support=view.querySelector('.homev4-support');support.replaceChildren();
-  for(const [id,name] of policy.SECONDARY[region]){
+  for(const [id,name] of marketPolicy.SECONDARY[region].filter(([id])=>!preferences[region].includes(id))){
    const m=policy.quote(id,Q,SRC,QT),box=node('div');
    const label=node('strong',name),small=node('small',m.valid?num(m.price,id==='KRW=X'?2:2)+unit(id)+' · '+pct(m.delta):'미수신');
    small.classList.add(dir(m.delta??null));box.append(label,small);support.append(box);
   }
-  const judgement=policy.marketRegime(region,Q,SRC,QT),summary=view.querySelector('.homev4-summary');
+  const judgement=marketPolicy.marketRegime(region,Q,SRC,QT),summary=view.querySelector('.homev4-summary');
   summary.replaceChildren(node('h3','시장국면 · 관측 기준'),node('p',judgement.title,'homev4-major'),node('p',judgement.basis));
   for(const note of judgement.notes)summary.append(node('p',note));
   summary.append(node('p','실제 수신된 지수의 전일 대비 등락으로만 설명합니다. 정규장 실시간 여부·수급·원천 관측시각이 미확인되면 매매 판단으로 사용하지 마세요.','homev4-muted'));
@@ -42,6 +77,7 @@ DashboardPages.register('home',()=>{
   let snap=null;try{snap=ctx.snapshot()}catch{}
   const complete=snap?.complete===true,subtotal=snap?.knownSubtotal;
   assets.append(node('p',Number.isFinite(subtotal)?num(subtotal,0)+'원':'미조회','homev4-asset'),node('p',complete?'조회 범위 내 집계':'부분 조회 · 미조회 계좌/시세 포함 가능','homev4-muted'));
+  renderEditor(view);
  }
  const legacy=DashboardPages.legacy({
   build(view){
@@ -51,24 +87,33 @@ DashboardPages.register('home',()=>{
    for(const [id,label] of [['AUTO','자동'],['KR','한국'],['US','미국']]){
     const b=node('button',label);b.type='button';b.dataset.region=id;b.addEventListener('click',()=>{scope=id;render(view,ctxRef);void legacy.refresh(ctxRef,true).catch(()=>{})});buttons.append(b);
    }
+   buttons.append(editButton('지수 편집',()=>{editing=!editing;draft=editing?policy().selections(preferences):null;renderEditor(view)}));
    top.append(titles,buttons);
+   const editor=node('section',null,'homev4-panel homev4-editor');editor.hidden=true;
+   editor.append(node('h3','홈 지수 편집','homev4-editor-title'),node('p','현재 선택한 시장의 홈 화면 전용 설정입니다. ▲▼ 순서를 바꾸거나 제외·추가할 수 있습니다. 시장 상세 화면 설정은 변경하지 않습니다.','homev4-editor-note'));
+   editor.append(node('div',null,'homev4-editor-rows'),node('p','추가 가능한 지수','homev4-editor-note'),node('div',null,'homev4-editor-add'));
+   const footer=node('div',null,'homev4-editor-actions'),status=node('p',null,'homev4-editor-status homev4-editor-note');
+   footer.append(editButton('기본값 복원',()=>{draft[effective()]=policy().MAIN[effective()].map(([id])=>id);renderEditor(view)}),
+    editButton('저장',()=>{if(!persist(draft)){status.textContent='설정을 저장할 수 없습니다. 브라우저 저장 공간을 확인하세요.';return}preferences=policy().selections(draft);editing=false;draft=null;render(view,ctxRef);void legacy.refresh(ctxRef,true).catch(()=>{})}),
+    editButton('취소',()=>{editing=false;draft=null;renderEditor(view)}));
+   editor.append(footer,status);
    const main=node('div',null,'homev4-main'),support=node('div',null,'homev4-support'),bottom=node('div',null,'homev4-bottom'),summary=node('section',null,'homev4-panel homev4-summary'),assets=node('section',null,'homev4-panel homev4-assets');
    bottom.append(summary,assets);
    const actions=node('div',null,'homev4-actions');for(const [label,path] of [['시장 상세','market'],['산업·테마','sectors'],['투자전략','strategy']])actions.append(act(label,path));
-   view.append(top,main,node('p','보조 지표 · 다른 시장의 최근 수신값','homev4-muted'),support,bottom,actions);
+   view.append(top,editor,main,node('p','보조 지표 · 다른 시장의 최근 수신값','homev4-muted'),support,bottom,actions);
    viewRef=view;
   },
   refresh:(ctx,force)=>{
-   const region=effective(),base=[...root.HomeMarketPolicy.MAIN[region],...root.HomeMarketPolicy.SECONDARY[region]].map(x=>x[0]);
+   const region=effective(),base=[...policy().display(region,preferences),...policy().SECONDARY[region]].map(x=>x[0]);
    return ctx.market(force,[...new Set(base)].filter(id=>id!=='k4'));
   },
   update(view,ctx){ctxRef=ctx;render(view,ctx)}
  });
  function tick(){if(!active)return;const delay=60000-Date.now()%60000+50;timer=setTimeout(()=>{if(active){const region=effective(),changed=scope==='AUTO'&&region!==lastRegion;lastRegion=region;if(scope==='AUTO')render(viewRef,ctxRef);if(changed)void legacy.refresh(ctxRef,true).catch(()=>{});tick()}},delay)}
  return {
-  mount(container,ctx){active=true;ctxRef=ctx;lastRegion=effective();legacy.mount(container,ctx);tick()},
+  mount(container,ctx){active=true;ctxRef=ctx;preferences=saved();editing=false;draft=null;lastRegion=effective();legacy.mount(container,ctx);tick()},
   refresh:(ctx,force)=>legacy.refresh(ctx,force),
-  unmount(){active=false;if(timer!==null){clearTimeout(timer);timer=null}ctxRef=null;viewRef=null;legacy.unmount()},
+  unmount(){active=false;if(timer!==null){clearTimeout(timer);timer=null}ctxRef=null;viewRef=null;editing=false;draft=null;preferences=null;legacy.unmount()},
   getStatus:()=>({...legacy.getStatus(),market:effective(),scope})
  };
 });
