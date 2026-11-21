@@ -18,7 +18,9 @@ class Node{
 }
 function descendants(n){return [n,...n.children.flatMap(x=>x instanceof Node?descendants(x):[])]}
 const text=n=>descendants(n).map(x=>x.textContent||'').join(' | ');
-function setup(){
+function setup(savedState={}){
+ const store=new Map(Object.entries(savedState));
+ const localStorage={getItem:k=>store.has(k)?store.get(k):null,setItem:(k,v)=>store.set(k,String(v))};
  const root={location:{hash:''}},pages={};
  new Function('window',policy)(root);
  const Q={'^KS11':{p:102,prev:100},'^KQ11':{p:103,prev:100},'^GSPC':{p:104,prev:100},'^IXIC':{p:105,prev:100},'^DJI':{p:106,prev:100},'^SOX':{p:107,prev:100},'KRW=X':{p:1336,prev:1338},'^VIX':{p:28.52,prev:27},'k3':{p:1100,prev:1080,contractVerified:true}},SRC={},QT={};
@@ -38,10 +40,10 @@ function setup(){
   }
  };
  const scheduled=[];let clock=0;
- new Function('window','DashboardPages','Q','SRC','QT','setTimeout','clearTimeout',home)(root,DashboardPages,Q,SRC,QT,(fn,delay)=>{scheduled.push({fn,delay});return ++clock},()=>{});
+ new Function('window','DashboardPages','Q','SRC','QT','setTimeout','clearTimeout','localStorage',home)(root,DashboardPages,Q,SRC,QT,(fn,delay)=>{scheduled.push({fn,delay});return ++clock},()=>{},localStorage);
  const ctx={market:async(force,ids)=>{ctx.calls.push({force,ids})},calls:[],snapshot:()=>({knownSubtotal:17727973,complete:false})};
  const container=node('main'),instance=pages.home();instance.mount(container,ctx);
- return{container,instance,ctx,root,policy:root.HomeMarketPolicy,findButton:t=>descendants(container).find(x=>x.tagName==='BUTTON'&&x.textContent===t),find:cls=>descendants(container).find(x=>x.className.split(' ').includes(cls))};
+ return{container,instance,ctx,root,store,storage:localStorage,policy:root.HomeMarketPolicy,findButton:t=>descendants(container).find(x=>x.tagName==='BUTTON'&&x.textContent===t),find:cls=>descendants(container).find(x=>x.className.split(' ').includes(cls))};
 }
 test('home renders market-specific priorities, actual changes, partial asset label and regime',()=>{
  const x=setup(),mode=x.instance.getStatus().market;
@@ -73,4 +75,35 @@ test('home primary KOSDAQ150 card remains visible and explicitly missing without
  assert.equal(cards[0].children[1].textContent,'미수신');
  assert.match(cards[0].children[3].textContent,/NH 코스닥150 선물 계약\/시세 확인 필요/);
  x.instance.unmount();
+});
+
+test('home index editor can reorder, remove and add allowlisted quotes without altering US',async()=>{
+ const x=setup();x.findButton('한국').click();x.findButton('지수 편집').click();
+ const initial=x.find('homev4-editor-rows');assert.equal(initial.children.length,7);
+ const old=x.find('homev4-main').children.map(c=>c.children[0].textContent);
+ assert.deepEqual(old.slice(0,3),['KOSPI','KOSDAQ','KOSPI 200 선물']);
+ const kosdaq=initial.children[1];kosdaq.children.find(b=>b.attrs['aria-label']==='KOSDAQ ▲').click();
+ assert.deepEqual(x.find('homev4-editor-rows').children.slice(0,2).map(r=>r.children[0].textContent),['1. KOSDAQ','2. KOSPI']);
+ const now=x.find('homev4-editor-rows');now.children.find(r=>r.children[0].textContent.includes('KOSPI 200 선물')).children.find(b=>b.textContent==='제외').click();
+ x.find('homev4-editor-add').children.find(b=>b.textContent==='+ VIX').click();
+ x.findButton('저장').click();
+ const saved=JSON.parse(x.store.get(x.policy.STORAGE_KEY));
+ assert.deepEqual(saved.KR.slice(0,3),['^KQ11','^KS11','k4']);
+ assert.ok(saved.KR.includes('^VIX')&&!saved.KR.includes('k3'));
+ assert.deepEqual(saved.US,x.policy.MAIN.US.map(c=>c[0]));
+ assert.equal(x.find('homev4-main').children[0].children[0].textContent,'KOSDAQ');
+ await Promise.resolve();await Promise.resolve();
+ assert.ok(x.ctx.calls.some(call=>call.ids.includes('^VIX')&&!call.ids.includes('k4')));
+ const restored=setup(Object.fromEntries(x.store));restored.findButton('한국').click();
+ assert.equal(restored.find('homev4-main').children[0].children[0].textContent,'KOSDAQ');
+});
+test('home editor cancellation never saves and corrupted symbol IDs are ignored',()=>{
+ const x=setup({myinvest_home_priorities_v1:JSON.stringify({KR:['BAD<script>','^VIX','^VIX','k4'],US:['^DJI']})});
+ x.findButton('한국').click();
+ assert.deepEqual(x.find('homev4-main').children.map(r=>r.children[0].textContent),['VIX','KOSDAQ 150 선물']);
+ x.findButton('지수 편집').click();
+ x.find('homev4-editor-rows').children[0].children.find(b=>b.textContent==='제외').click();
+ x.findButton('취소').click();
+ assert.deepEqual(x.find('homev4-main').children.map(r=>r.children[0].textContent),['VIX','KOSDAQ 150 선물']);
+ assert.equal(JSON.parse(x.store.get(x.policy.STORAGE_KEY)).KR[0],'BAD<script>');
 });
