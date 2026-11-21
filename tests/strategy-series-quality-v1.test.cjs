@@ -111,6 +111,37 @@ test('P4 quality gate is deterministic and never mutates original OHLCV or metad
  assert.deepEqual(a,b);
  assert.equal(JSON.stringify(input),before);
 });
+test('P4 rejects invalid negative or string volume rather than marking it missing',()=>{
+ for(const v of [-1,'10000',NaN]){
+  const b=rows();b[45].v=v;
+  const x=quality.inspect(data({bars:b}));
+  assert.equal(x.status,'block');
+  assert.ok(codes(x.errors).includes('INVALID_VOLUME'));
+ }
+});
+test('P4 gracefully rejects broken final rows and out-of-range timestamps',()=>{
+ const b=rows();b[b.length-1]=null;
+ let x=quality.inspect(data({bars:b,purpose:'current'}));
+ assert.equal(x.status,'block');
+ assert.ok(codes(x.errors).includes('INVALID_OHLC'));
+ b[b.length-1]={...rows()[149],t:8640000000000001};
+ x=quality.inspect(data({bars:b}));
+ assert.equal(x.status,'block');
+ assert.ok(codes(x.errors).includes('INVALID_OHLC'));
+});
+test('P4 inherited market prototype keys cannot bypass the exchange identity gate',()=>{
+ for(const market of ['constructor','toString','__proto__']){
+  const x=quality.inspect(data({market}));
+  assert.equal(x.status,'block');
+  assert.ok(codes(x.errors).includes('UNSUPPORTED_MARKET'));
+ }
+});
+test('P4 total-return adjustment convention requires explicit consistency review',()=>{
+ const x=quality.inspect(data({priceConvention:'total_return_adjusted'}));
+ assert.equal(x.status,'review');
+ assert.ok(codes(x.flags).includes('TOTAL_RETURN_OHLCV_CONSISTENCY_NEEDS_REVIEW'));
+ assert.equal(x.realSourceVerified,false);
+});
 test('P4 structurally ready series is compatible with isolated original engine',()=>{
  const input=data(),report=quality.inspect(input),simulation=strategy.simulate({
   bars:input.bars,interval:'1d'
