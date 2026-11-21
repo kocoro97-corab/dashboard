@@ -51,6 +51,21 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
         text=text.replace(marker, '<script>window.MYINVEST_PERSISTENT_RELAY=Object.freeze('+json.dumps({'profile':'isolated','endpoint':relay_endpoint},separators=(',',':'))+');</script>\n'+marker)
     text = text.replace(marker, '<script>window.MYINVEST_TRANSPORT_CONFIG={mode:"relay",endpoint:"",devSession:true};</script>\n<script src="js/dev_market.js?v=1"></script>\n<script src="js/dev_inspection.js?v=1"></script>\n<script src="js/dev_connect.js?v=1"></script>\n' + marker)
     text = text.replace(marker, '<script src="vendor/ocr/tesseract.min.js"></script>\n<script src="js/dev_ocr.js?v=1"></script>\n'+marker)
+    # Only the isolated development artifact receives the optional manual strategy
+    # comparator. Production index.html, NEWS/PR#8 and live endpoints stay untouched.
+    strategy_anchor = '<script src="js/page-strategy.js?v=1"></script>'
+    if text.count(strategy_anchor) != 1:
+        raise ValueError('DEV_STRATEGY_ANCHOR_CHANGED')
+    strategy_optional_modules = (
+        'market-evidence-gate-v1.js',
+        'market-session-context-v1.js',
+        'strategy-risk-capacity-v1.js',
+        'strategy-scenario-compare-v1.js',
+        'strategy-scenario-compare-panel-v1.js',
+    )
+    compare_scripts = ''.join('<script src="js/' + name + '?v=1"></script>\n'
+                              for name in strategy_optional_modules)
+    text = text.replace(strategy_anchor, compare_scripts + strategy_anchor)
     text = re.sub(r'(src="js/[^"?]+\?[^" ]+)(")', lambda m: m[1] + '&dev=' + revision[:12] + m[2], text)
     (output / 'index.html').write_text(text)
     assets = {'js': set(re.findall(r'src="js/([A-Za-z0-9_-]+\.js)', text)),
