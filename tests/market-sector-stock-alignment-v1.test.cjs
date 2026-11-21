@@ -187,6 +187,11 @@ test('repeated sector identifiers cannot shadow a legitimate sector',()=>{
  x.sectors.push({...x.sectors[0]});
  const r=run(x);
  assert.equal(r.status,'partial');
+ assert.equal(r.sectorContexts[0].status,'blocked');
+ assert.equal(r.sectorContexts[1].status,'coherent');
+ assert.equal(r.sectorContexts[2].status,'blocked');
+ assert.ok(r.sectorContexts[0].issues.includes('DUPLICATE_SECTOR_ID'));
+ assert.ok(r.sectorContexts[2].issues.includes('DUPLICATE_SECTOR_ID'));
  assert.ok(r.candidates[0].issues.includes('SECTOR_EVIDENCE_BLOCKED'));
  assert.equal(r.candidates[1].status,'coherent-input');
 });
