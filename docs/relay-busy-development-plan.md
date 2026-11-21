@@ -85,3 +85,18 @@ CI-passing source commit into a temporary directory using `git archive`. It does
 not merge/reset/stash or change the owner's working tree. The private rollback
 record survives temporary directory cleanup. Do not use the older
 `nh_v2_persistent.py` deploy command for this code-only scope: it bulk-writes secrets.
+
+### Owner HTTP 400 follow-up
+
+The owner reported `CLOUDFLARE_REQUEST_REJECTED` HTTP 400 from the first runner.
+That result did not include a request stage or provider code, so it cannot establish
+whether the rejection was a read preflight or candidate upload. Do not diagnose it
+as token expiry or claim a successful upload/activation.
+
+The runner now includes a fixed `requestStage`, numeric `providerCodes`, and fixed
+`providerHints` categories for a rejected API call. Raw Cloudflare messages, URLs,
+submitted source/configuration and credentials remain excluded. `--diagnose` runs
+only the existing Worker/version read preflight, without checkpoint/upload/activation.
+The actual candidate Worker and policy hashes, binding inheritance, activation and
+rollback behavior are unchanged. Added privacy/read-only regressions pass locally;
+live rejection detail still requires owner execution in the credential-bearing shell.

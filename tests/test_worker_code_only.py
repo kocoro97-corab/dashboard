@@ -5,6 +5,9 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import io
+import urllib.error
+from unittest.mock import patch
 from email.parser import BytesParser
 from email.policy import default
 
@@ -67,6 +70,52 @@ class Cloud:
 
 
 class CodeOnlyTests(unittest.TestCase):
+    def test_diagnose_never_uploads_activates_or_writes_checkpoint(self):
+        c = Cloud()
+        saved = []
+        result = m.deploy(c, 'a' * 32, saved.append, public_probe=c.probe, diagnose=True)
+        self.assertEqual(result['phase'], 'WORKER_CODE_ONLY_PREFLIGHT_READ_ONLY')
+        self.assertFalse(result['deploymentAttempted'])
+        self.assertFalse(saved)
+        self.assertTrue(all(method == 'GET' for method, _, _ in c.calls))
+
+    def test_http400_reports_fixed_stage_numeric_codes_without_body_or_token(self):
+        body = json.dumps({'errors': [{'code': 10021, 'message': 'PRIVATE_TOKEN_ACCOUNT_BODY'},
+                                     {'code': 'PRIVATE_VALUE'}, {'code': True}]}).encode()
+        error = urllib.error.HTTPError('https://api.cloudflare.com/private', 400, 'PRIVATE', {}, io.BytesIO(body))
+        with patch.object(m.urllib.request, 'build_opener') as opener:
+            opener.return_value.open.side_effect = error
+            with self.assertRaises(m.Stop) as raised:
+                m.api_client('SYNTHETIC_TOKEN')('POST', '/accounts/synthetic/workers/scripts/synthetic/versions?bindings_inherit=strict', b'test')
+        e = raised.exception
+        self.assertEqual(e.stage, 'VERSION_UPLOAD')
+        self.assertEqual(e.provider_codes, [10021])
+        self.assertNotIn('PRIVATE', json.dumps(vars(e)))
+        self.assertNotIn('SYNTHETIC_TOKEN', json.dumps(vars(e)))
+
+    def test_non_json_api_rejection_does_not_expose_body(self):
+        error = urllib.error.HTTPError('https://api.cloudflare.com/private', 400, 'PRIVATE', {}, io.BytesIO(b'PRIVATE_BODY'))
+        with patch.object(m.urllib.request, 'build_opener') as opener:
+            opener.return_value.open.side_effect = error
+            with self.assertRaises(m.Stop) as raised:
+                m.api_client('SYNTHETIC_TOKEN')('GET', '/accounts/synthetic/workers/scripts/synthetic/deployments')
+        self.assertEqual(raised.exception.stage, 'DEPLOYMENTS_READ')
+        self.assertEqual(raised.exception.provider_codes, [])
+
+    def test_http200_api_error_also_reports_safe_codes(self):
+        with patch.object(m.urllib.request, 'build_opener') as opener:
+            response = opener.return_value.open.return_value.__enter__.return_value
+            response.read.return_value = b'{"success":false,"errors":[{"code":10000,"message":"PRIVATE_BODY"}]}'
+            with self.assertRaises(m.Stop) as raised:
+                m.api_client('SYNTHETIC_TOKEN')('GET', '/accounts/synthetic/workers/scripts/synthetic/settings')
+        self.assertEqual(raised.exception.stage, 'WORKER_SETTINGS_READ')
+        self.assertEqual(raised.exception.provider_codes, [10000])
+
+    def test_provider_message_is_reduced_to_fixed_categories(self):
+        self.assertEqual(m.provider_hints({'errors': [{'message': 'Invalid inherit binding for Durable Object PRIVATE_TOKEN_URL'}]}),
+                         ['DURABLE_OBJECT', 'BINDING_INHERIT', 'BINDING'])
+        self.assertEqual(m.provider_hints({'errors': [{'message': 'PRIVATE_TOKEN_URL'}]}), [])
+
     def run_deploy(self, cloud):
         saved = []
         result = m.deploy(cloud, 'a' * 32, saved.append, public_probe=cloud.probe, code=b'// synthetic code')

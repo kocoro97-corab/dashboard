@@ -3,6 +3,7 @@
 No GAS credentials/files, secret writes, settings writes, migrations, NH calls,
 new Worker creation or automatic force rollback. Token stays in memory.
 """
+import argparse
 import getpass
 import hashlib
 import json
@@ -29,8 +30,46 @@ CAPABILITIES = ('freshTestEnvironment', 'testEnvironment', 'scriptHash', 'sheetH
 
 
 class Stop(Exception):
-    def __init__(self, code, http=None):
-        self.code, self.http = code, http
+    def __init__(self, code, http=None, stage=None, provider_codes=None, hints=None):
+        self.code, self.http, self.stage = code, http, stage
+        self.provider_codes = provider_codes or []
+        self.hints = hints or []
+
+
+def request_stage(method, path):
+    if path.endswith('/workers/subdomain'):
+        return 'ACCOUNT_SUBDOMAIN_READ'
+    if path.endswith('/settings'):
+        return 'WORKER_SETTINGS_READ'
+    if path.endswith('/deployments'):
+        return 'VERSION_ACTIVATE' if method == 'POST' else 'DEPLOYMENTS_READ'
+    if '/versions?' in path:
+        return 'VERSION_UPLOAD'
+    if '/versions/' in path:
+        return 'ACTIVE_VERSION_READ'
+    return 'CLOUDFLARE_API'
+
+
+def provider_codes(doc):
+    errors = doc.get('errors') if isinstance(doc, dict) else None
+    if not isinstance(errors, list):
+        return []
+    return [e['code'] for e in errors[:10] if isinstance(e, dict) and type(e.get('code')) is int]
+
+
+def provider_hints(doc):
+    # Fixed categories only: never expose Cloudflare's message text, which may
+    # echo a submitted value, source code, account ID or URL.
+    errors = doc.get('errors') if isinstance(doc, dict) else None
+    if not isinstance(errors, list):
+        return []
+    message = ' '.join(str(e.get('message', '')) for e in errors[:10] if isinstance(e, dict)).lower()
+    terms = {'DURABLE_OBJECT': 'durable object', 'BINDING_INHERIT': 'inherit',
+             'METADATA': 'metadata', 'VERSION_ID': 'version_id', 'MAIN_MODULE': 'main_module',
+             'BINDING': 'binding', 'SYNTAX': 'syntax', 'COMPATIBILITY': 'compatibility',
+             'MULTIPART': 'multipart', 'PERMISSION': 'permission',
+             'AUTHENTICATION': 'authentication', 'ACCOUNT_ID': 'account identifier'}
+    return [label for label, term in terms.items() if term in message]
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -42,6 +81,7 @@ def api_client(token):
     if not isinstance(token, str) or not token or len(token) > 2048 or any(ord(c) <= 32 or ord(c) >= 127 for c in token):
         raise Stop('TOKEN_FORMAT_INVALID')
     def call(method, path, body=None, content_type='application/json'):
+        stage = request_stage(method, path)
         data = json.dumps(body).encode() if isinstance(body, dict) else body
         req = urllib.request.Request('https://api.cloudflare.com/client/v4' + path,
             data=data, method=method, headers={'Authorization': 'Bearer ' + token,
@@ -54,14 +94,20 @@ def api_client(token):
                 doc = json.loads(raw)
         except urllib.error.HTTPError as e:
             status = e.code
-            e.close()
-            raise Stop('CLOUDFLARE_REQUEST_REJECTED', status) from None
+            try:
+                rejected = json.loads(e.read(16384))
+                codes, hints = provider_codes(rejected), provider_hints(rejected)
+            except Exception:
+                codes, hints = [], []
+            finally:
+                e.close()
+            raise Stop('CLOUDFLARE_REQUEST_REJECTED', status, stage, codes, hints) from None
         except Stop:
             raise
         except Exception:
-            raise Stop('CLOUDFLARE_RESULT_UNCONFIRMED') from None
+            raise Stop('CLOUDFLARE_RESULT_UNCONFIRMED', stage=stage) from None
         if doc.get('success') is not True:
-            raise Stop('CLOUDFLARE_API_REJECTED')
+            raise Stop('CLOUDFLARE_API_REJECTED', stage=stage, provider_codes=provider_codes(doc), hints=provider_hints(doc))
         return doc.get('result')
     return call
 
@@ -146,7 +192,7 @@ def private_checkpoint(path, doc):
         json.dump(doc, f)
 
 
-def deploy(api, account, save, public_probe=probe, code=None):
+def deploy(api, account, save, public_probe=probe, code=None, diagnose=False):
     if not re.fullmatch(r'[a-fA-F0-9]{32}', account):
         raise Stop('ACCOUNT_ID_INVALID')
     base = '/accounts/' + account + '/workers/scripts/' + NAME
@@ -161,6 +207,9 @@ def deploy(api, account, save, public_probe=probe, code=None):
     if old.get('freshTestEnvironment') is not True or old.get('testEnvironment') != 'nh-staging':
         raise Stop('ISOLATED_GAS_METADATA_REQUIRED')
     api('GET', base + '/versions/' + before['version'])
+    if diagnose:
+        return {'status': 'PASS', 'phase': 'WORKER_CODE_ONLY_PREFLIGHT_READ_ONLY',
+                'deploymentAttempted': False}
     code = bundle() if code is None else code
     # Preserve runtime compatibility and pin ALL inherited bindings, including
     # secrets and GATE, to the exact active version rather than latest upload.
@@ -211,15 +260,22 @@ def deploy(api, account, save, public_probe=probe, code=None):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--diagnose', action='store_true', help='Read-only existing Worker/version preflight; no upload or activation')
+    args = parser.parse_args()
     try:
         account = os.environ.get('CLOUDFLARE_ACCOUNT_ID') or input('Cloudflare Account ID: ').strip()
         token = os.environ.get('CLOUDFLARE_API_TOKEN') or getpass.getpass('Cloudflare API token (hidden): ')
         checkpoint = Path.home() / '.myinvest-worker-rollback' / (uuid.uuid4().hex + '.json')
-        result = deploy(api_client(token.strip()), account.strip(), lambda doc: private_checkpoint(checkpoint, doc))
+        result = deploy(api_client(token.strip()), account.strip(), lambda doc: private_checkpoint(checkpoint, doc), diagnose=args.diagnose)
     except Stop as e:
         result = {'status': 'FAIL' if e.code == 'ACTIVATION_FAILED_MANUAL_RECOVERY_REQUIRED' else 'NOT_RUN', 'code': e.code}
         if e.http:
             result['http'] = e.http
+        if e.stage:
+            result['requestStage'] = e.stage
+            result['providerCodes'] = e.provider_codes
+            result['providerHints'] = e.hints
     except (EOFError, KeyboardInterrupt):
         result = {'status': 'NOT_RUN', 'code': 'OWNER_INPUT_REQUIRED'}
     except Exception:
