@@ -372,6 +372,30 @@ test('blocked record detail containing account information is rejected',()=>{
  assert.equal(r.code,'INVALID_ARCHIVED_EVIDENCE');
  assert.equal(serial(r).includes('TOP_SECRET'),false);
 });
+test('duplicate archived stock symbols are blocked, including a second unqualified record',()=>{
+ const f=fixture();
+ const output=f.records[1].adapterOutput=copy(f.records[1].adapterOutput);
+ const second=copy(output.context.candidates[0]);
+ second.status='blocked';second.posture='unavailable';
+ second.issues=['DUPLICATE_STOCK_ID'];
+ second.riskMultiplierIllustration=null;
+ second.hypotheticalPolicyRiskCeilingPct=null;
+ output.context.candidates.push(second);
+ output.context.coverage.stocksSupplied=2;
+ output.context.coverage.stockObservationsCoherent=1;
+ output.context.status=output.status='partial';
+ assert.equal(explanation.explain(output).status,'partial-evidence');
+ const r=compiled(f);
+ assert.equal(r.code,'DUPLICATE_ARCHIVED_STOCK_ID');
+ assert.equal(r.snapshots.length,0);
+});
+test('a candidate with manual-review readiness but no stock ID is not a historical trend observation',()=>{
+ const f=fixture();
+ const output=f.records[1].adapterOutput=copy(f.records[1].adapterOutput);
+ output.context.candidates[0].symbol=null;
+ assert.equal(explanation.explain(output).status,'review-context-only');
+ assert.equal(compiled(f).code,'INVALID_ARCHIVED_CANDIDATE');
+});
 test('a forged classification context cannot be used as a time series',()=>{
  const f=fixture();
  f.records[1].adapterOutput=copy(f.records[1].adapterOutput);
