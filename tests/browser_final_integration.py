@@ -44,6 +44,28 @@ async def main():
        scroll=await h.page.locator('.nev5-brief-scroll').bounding_box();assert (350<=scroll['height']<=480) if width==1440 else (220<=scroll['height']<=350)
        await h.page.locator('.nev5-brief-editor summary').first.click();await h.page.locator('.nev5-brief-editor input[type=date]').fill('2026-11-17');await h.page.locator('.nev5-brief-editor textarea').fill('공개 합성 브리핑\n'*150);await h.page.get_by_text('생성·관측·조회 시각 (선택 · 한국시간)',exact=True).click();await h.page.get_by_label('브리핑 생성시각',exact=True).fill('2026-11-17T09:00');await h.page.get_by_label('시장 데이터 관측시각',exact=True).fill('2026-11-17T08:50');await h.page.get_by_label('자료 조회시각',exact=True).fill('2026-11-17T08:55');await h.page.get_by_role('button',name='보고서 저장',exact=True).click();stored=await h.page.evaluate('JSON.parse(localStorage.getItem("myinvest_public_ai_briefings_v1"))[0]');assert stored['generatedAt']==1794873600000;assert stored['generatedAt']!=stored['at'];assert '시장 관측' in await h.page.locator('.nev5-brief').inner_text();assert await h.page.locator('.nev5-brief-scroll').evaluate('e=>e.scrollHeight>e.clientHeight');await h.page.locator('.nev5-brief-body>summary').click();assert not await h.page.locator('.nev5-brief-scroll').is_visible();await h.page.locator('.nev5-brief-body>summary').click();assert await h.page.locator('.nev5-brief-scroll').is_visible();await h.page.get_by_role('button',name='투자 캘린더',exact=True).click();dialog=h.page.get_by_role('dialog');await dialog.wait_for();await h.page.keyboard.press('Escape');assert await dialog.count()==0;assert await h.page.get_by_role('button',name='투자 캘린더',exact=True).evaluate('e=>e===document.activeElement');await h.go('market');await h.go('news');assert await h.page.locator('#newsSection').count()==1;assert await h.page.locator('.nev5-brief').count()==1;assert await h.page.locator('.news').first.get_attribute('data-news-published')=='2026-11-17T00:00:00.000Z';await h.page.get_by_role('button',name='삼성전자 (005930) 분석',exact=True).first.click();await h.page.wait_for_selector('#stockSearch');assert await h.page.evaluate('InvestWorkflow.current().source')=='news';assert await h.page.locator('#stockSearch').input_value()=='005930';await h.go('news');await h.page.screenshot(path=str(OUT/(str(width)+'-news.png')));assert await h.page.evaluate('document.documentElement.scrollWidth<=innerWidth+1');assert not h.errors
       await check('BRIEF_TIMESTAMPS_COLLAPSE_FEED_LAYOUT_AND_CALENDAR_FOCUS',briefing)
+      async def home_p1():
+       await h.go('home');assert await h.page.locator('.homev4-main .homev4-quote').count()==7
+       await h.page.get_by_role('button',name='지수 편집',exact=True).click()
+       assert await h.page.locator('.homev4-editrow').count()==7
+       await h.page.get_by_role('button',name='KOSDAQ ▲',exact=True).click()
+       await h.page.get_by_role('button',name='KOSPI 200 선물 제외',exact=True).click()
+       await h.page.get_by_role('button',name='VIX 추가',exact=True).click()
+       assert await h.page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+       await h.page.get_by_role('button',name='저장',exact=True).click()
+       await h.page.wait_for_function('()=>document.querySelector(".homev4-main .homev4-quote dt")?.textContent==="KOSDAQ"')
+       saved=await h.page.evaluate('JSON.parse(localStorage.getItem("myinvest_home_priorities_v1"))')
+       assert saved['KR'][0]=='^KQ11' and 'k3' not in saved['KR'] and '^VIX' in saved['KR']
+       assert saved['US'][0]=='^GSPC'
+       await h.go('market');await h.go('home')
+       assert await h.page.locator('.homev4-main dt').first.inner_text()=='KOSDAQ'
+       await h.page.get_by_role('button',name='미국',exact=True).click()
+       assert await h.page.locator('.homev4-main dt').first.inner_text()=='S&P 500'
+       await h.page.get_by_role('button',name='자동',exact=True).click()
+       assert await h.page.locator('.homev4-main dt').first.inner_text()=='KOSDAQ'
+       assert await h.page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+       await h.page.screenshot(path=str(OUT/(str(width)+'-home-p1.png')))
+      await check('HOME_PERSONAL_PRIORITIES_SAVE_REENTRY_AND_MARKET_SWITCH',home_p1)
       assert not any(r['action'] in ['nhAccounts','order','saveExternalHoldings','restoreExternalHoldings'] for r in h.requests)
      finally:await h.close()
    finally:await b.close()
