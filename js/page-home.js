@@ -65,7 +65,7 @@ DashboardPages.register('home',()=>{
   if(!main.children.length)main.append(node('p','표시할 지수가 없습니다. 지수 편집에서 추가하세요.','homev4-muted'));
   const support=view.querySelector('.homev4-support');support.replaceChildren();
   for(const [id,name] of marketPolicy.SECONDARY[region].filter(([id])=>!preferences[region].includes(id))){
-   const m=policy.quote(id,Q,SRC,QT),box=node('div');
+   const m=marketPolicy.quote(id,Q,SRC,QT),box=node('div');
    const label=node('strong',name),small=node('small',m.valid?num(m.price,id==='KRW=X'?2:2)+unit(id)+' · '+pct(m.delta):'미수신');
    small.classList.add(dir(m.delta??null));box.append(label,small);support.append(box);
   }
