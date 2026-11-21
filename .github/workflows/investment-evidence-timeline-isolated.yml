@@ -1,0 +1,38 @@
+name: Investment evidence timeline isolated offline CI
+on:
+  push:
+    branches:
+      - feat/investment-evidence-timeline-isolated
+permissions:
+  contents: read
+jobs:
+  research-synthetic:
+    name: Existing evidence + historical transition tests (no NH or storage)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Checkout without persistent credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Validate source syntax
+        run: |
+          node --check js/market-sector-stock-alignment-v1.js
+          node --check js/market-sector-stock-adapter-v1.js
+          node --check js/investment-evidence-explanation-v1.js
+          node --check js/investment-evidence-timeline-v1.js
+          node --check tools/inspect_investment_timeline_v1.cjs
+          node --check tests/investment-evidence-timeline-v1.test.cjs
+          node --check tests/investment-evidence-timeline-cli-v1.test.cjs
+      - name: Original source and sector alignment regression (39)
+        run: node tests/market-sector-stock-alignment-v1.test.cjs
+      - name: Existing SectorInsights and WorkTradingStrategy adapter regression (43)
+        run: node tests/market-sector-stock-adapter-v1.test.cjs
+      - name: Korean explanation and qualified source safety (35)
+        run: node tests/investment-evidence-explanation-v1.test.cjs
+      - name: Existing explanation JSON Markdown CLI inspection (9)
+        run: node tests/investment-evidence-inspector-v1.test.cjs
+      - name: Historical observation-only transition and privacy checks (46)
+        run: node tests/investment-evidence-timeline-v1.test.cjs
+      - name: History CLI summary, safe JSON and no storage (8)
+        run: node tests/investment-evidence-timeline-cli-v1.test.cjs
