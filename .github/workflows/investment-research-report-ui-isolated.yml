@@ -1,0 +1,45 @@
+name: Investment research report isolated PC/Fold synthetic CI
+on:
+  push:
+    branches:
+      - feat/investment-research-report-ui-isolated
+permissions:
+  contents: read
+jobs:
+  offline-research-report:
+    name: 210 offline tests + 3 mobile/PC report journeys (no NH/GAS)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout without persisted GitHub credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check JavaScript source and preview syntax
+        run: |
+          node --check js/investment-research-report-v1.js
+          node --check js/investment-research-report-panel-v1.js
+          node --check preview/investment-research-report-demo-v1.js
+          node --check tests/investment-research-report-v1.test.cjs
+          python3 -m py_compile tests/browser_investment_research_report_v1.py
+      - name: Original market-sector-stock alignment (39)
+        run: node tests/market-sector-stock-alignment-v1.test.cjs
+      - name: Existing sector insights and swing adapter (43)
+        run: node tests/market-sector-stock-adapter-v1.test.cjs
+      - name: Korean explanation model (35)
+        run: node tests/investment-evidence-explanation-v1.test.cjs
+      - name: Existing evidence explanation CLI (9)
+        run: node tests/investment-evidence-inspector-v1.test.cjs
+      - name: Existing historical evidence timeline (46)
+        run: node tests/investment-evidence-timeline-v1.test.cjs
+      - name: Existing historical CLI (8)
+        run: node tests/investment-evidence-timeline-cli-v1.test.cjs
+      - name: New report model and safe DOM offline assertions (30)
+        run: node tests/investment-research-report-v1.test.cjs
+      - name: Install browser for isolated offline UI validation
+        run: |
+          python3 -m venv .venv-research-report
+          .venv-research-report/bin/python -m pip install playwright==1.56.0
+          .venv-research-report/bin/python -m playwright install --with-deps chromium
+      - name: PC 1440 / middle 690 / Fold6 narrow 344 synthetic journeys
+        run: .venv-research-report/bin/python tests/browser_investment_research_report_v1.py
