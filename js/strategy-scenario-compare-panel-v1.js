@@ -132,7 +132,11 @@ function mount(host){
  function drawDifference(result){
   difference.replaceChildren();
   difference.append(make('h2','4. 스윙 − 단타 비교'));
-  if(!result||!result.comparable){
+  if(!result||result.status==='invalid'||result.status==='invalid-scenarios'){
+   difference.append(make('p','입력값을 확인하세요. 조건이 유효하지 않아 가상 차이를 계산하지 않았습니다.','warning'));
+   return;
+  }
+  if(!result.comparable){
    difference.append(make('p','두 가상 계획 모두 유효할 때만 수량·손실·이익 차이를 비교합니다.','warning'));
    return;
   }
