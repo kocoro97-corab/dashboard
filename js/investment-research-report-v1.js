@@ -147,10 +147,12 @@ function build(input,injected){
  for(let i=0;i<current.candidates.length;i++){
   const candidate=current.candidates[i],dated=last.candidates[i];
   if(!obj(candidate)||!obj(dated)||
-   !safeSymbol(candidate.symbol,input.market)||
+   !(candidate.symbol===null||safeSymbol(candidate.symbol,input.market))||
    candidate.symbol!==dated.symbol||
    candidate.sectorId!==dated.sectorId||
-   candidate.observation!==dated.posture||
+   (candidate.readiness==='blocked'?
+    !(candidate.observation==='unavailable'&&dated.posture===null):
+    candidate.observation!==dated.posture)||
    candidate.readiness!==dated.readiness||
    candidate.hypotheticalRiskCeilingPct!==dated.hypotheticalRiskCeilingPct||
    !Array.isArray(candidate.evidence)||
