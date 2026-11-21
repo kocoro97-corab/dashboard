@@ -62,7 +62,7 @@ test('unknown nested source and section properties are blocked',()=>{
 test('obvious private information and credential-shaped source query parameters block public export',()=>{
  for(const rawText of ['계좌번호: 1234567890','주민등록번호: 901010-1234567',
   'password=secret12345','access_token=Bearer123456']){
-  const r=io.exportJSON([normal(draft({rawText,sections:[]}))],{now:NOW});
+  const r=io.exportJSON([draft({rawText,sections:[]})],{now:NOW});
   assert.ok(['POSSIBLE_PRIVATE_INFORMATION','INVALID_RECORD_POSSIBLE_SECRET_IN_PUBLIC_REPORT'].includes(r.code),rawText);
  }
  const link=normal(draft({sources:[{id:'s1',title:'원문',url:'https://example.org/?api_key=something-secret'}]}));
