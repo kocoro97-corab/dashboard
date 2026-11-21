@@ -8,6 +8,16 @@ const VERSION='p4-evaluation-review-v1',ENGINE='p4-swing-breakout-v1';
 const isNum=Number.isFinite,positive=v=>isNum(v)&&v>0;
 function invalid(code){return {status:'invalid',version:VERSION,code}}
 function closeEnough(a,b){return isNum(a)&&isNum(b)&&Math.abs(a-b)<=1e-7*Math.max(1,Math.abs(a),Math.abs(b))}
+// Wilson score interval is a conditional finite-sample illustration, not proof
+// of performance: trade outcomes may be serially correlated or selected.
+function winRateWilson95(wins,total){
+ if(!Number.isSafeInteger(wins)||!Number.isSafeInteger(total)||total<1||wins<0||wins>total)return null;
+ const z=1.959963984540054,p=wins/total,z2=z*z;
+ const midpoint=(p+z2/(2*total))/(1+z2/total);
+ const margin=z*Math.sqrt(p*(1-p)/total+z2/(4*total*total))/(1+z2/total);
+ return {lowPct:Math.max(0,(midpoint-margin)*100),highPct:Math.min(100,(midpoint+margin)*100),
+  interpretation:'Wilson 95% mathematical interval: independence of trade outcomes is NOT proven'};
+}
 function curveRisk(curve,capital){
  let peak=capital,maxDrawdownPct=0,drawdownDays=0,worstAt=null;
  for(const p of curve){
@@ -111,7 +121,8 @@ function audit({bars,simulation}={}){
   costConvention:'FEES_AND_SLIPPAGE_BOTH_SIDES',
   drawdownConvention:'DAILY_CLOSE_HYPOTHETICAL_LIQUIDATION_NOT_INTRADAY'},
   reliability:{grade,tradeCount:trades,minimumSuggestedTrades:30,
-   note:'30회는 표본 경고용 임의 기준이며 통계적 유의성이나 재현성을 보장하지 않습니다.'},
+   winRateWilson95:winRateWilson95(simulation.statistics?.wins,trades),
+   note:'30회는 표본 경고용 임의 기준이며 통계적 유의성이나 재현성을 보장하지 않습니다. 승률 범위는 거래 독립성을 가정한 참고치이며 백테스트 편향을 보정하지 않습니다.'},
   strategy:{curve:dailyEquity,drawdown:strategyRisk,
    finalEquity:simulation.statistics.finalEquity,netReturnPct:simulation.statistics.netReturnPct,
    realizedOnlyDrawdownPct:simulation.statistics.maxRealizedDrawdownPct},
@@ -122,9 +133,10 @@ function audit({bars,simulation}={}){
    '동일종목 100% 보유와 위험한도 기반 전략은 투자 노출이 달라 수익률 차이를 알파로 해석할 수 없습니다.',
    '최대낙폭은 거래일 종가에 청산한 가상 평가액만 사용하며 장중 최악의 손실은 포착하지 못합니다.',
    '평가 구간 지정만으로 사전 고정된 외표본 검증을 보증하지 않습니다.',
+   '승률 신뢰구간은 거래 독립성을 가정하며 전략 수익성의 검증을 의미하지 않습니다.',
    '세금·환율·배당·상장폐지/생존편향·시장충격 및 가격 원천 품질은 미반영입니다.']};
 }
-const exported=Object.freeze({audit,curveRisk,version:VERSION});
+const exported=Object.freeze({audit,curveRisk,winRateWilson95,version:VERSION});
 if(typeof module==='object'&&module.exports)module.exports=exported;
 else root.MYInvestStrategyReview=exported;
 })(typeof globalThis!=='undefined'?globalThis:this);
