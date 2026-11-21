@@ -108,7 +108,10 @@ async function approveUser(targetId){
   }catch(e){alert('승인 처리 중 오류 발생')}
 }
 
-const SESSION_MS=300000;   // 5분. 절대 시각 기준이라 화면 꺼짐·백그라운드에서도 정확히 만료
+// Development-only usability: one-hour inactivity in the isolated Pages session.
+// The operating site remains at 5 minutes. GAS must independently enforce its
+// staging-only 60-minute idle limit; changing this client timer alone is insufficient.
+const SESSION_MS=window.MYINVEST_TRANSPORT_CONFIG?.devSession===true?60*60*1000:5*60*1000;
 let sessionInterval=null,sessionBound=false,lastWrite=0;
 const lastActive=()=>Number(AUTH_STORAGE.getItem('invest_last_active'))||0;
 function touchActive(force){
