@@ -1,0 +1,21 @@
+name: Market-sector-stock alignment isolated tests
+on:
+  push:
+    branches:
+      - feat/market-sector-stock-alignment-isolated
+permissions:
+  contents: read
+jobs:
+  synthetic-only:
+    name: Public research context alignment, offline unit only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout without persistent credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify isolated JavaScript syntax
+        run: node --check js/market-sector-stock-alignment-v1.js
+      - name: Run 39 synthetic cross-layer evidence checks
+        run: node tests/market-sector-stock-alignment-v1.test.cjs
