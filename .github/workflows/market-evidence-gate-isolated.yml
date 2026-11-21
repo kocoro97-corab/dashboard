@@ -1,0 +1,21 @@
+name: Market evidence gate isolated unit tests
+on:
+  push:
+    branches:
+      - feat/market-evidence-gate-isolated
+permissions:
+  contents: read
+jobs:
+  isolated-unit:
+    name: Offline unit-only market evidence verification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out only the isolated branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check JavaScript syntax (no network or credentials)
+        run: node --check js/market-evidence-gate-v1.js
+      - name: Execute 18 market evidence tests (mocked inputs only)
+        run: node tests/market-evidence-gate-v1.test.cjs
