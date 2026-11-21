@@ -214,7 +214,7 @@ test('unexpected private candidate metadata never appears in output',()=>{
  const r=run(x);
  assert.equal(r.candidates[0].status,'blocked');
  assert.ok(r.candidates[0].issues.includes('INVALID_OR_PRIVATE_RECORD_FIELDS'));
- assert.equal(JSON.stringify(r).includes('PRIVATE'),false);
+ assert.equal(JSON.stringify(r).includes('token=PRIVATE'),false);
  assert.equal(JSON.stringify(r).includes('broker.example'),false);
 });
 
