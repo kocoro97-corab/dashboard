@@ -38,7 +38,7 @@ function prepare(input,libs){
  if(!alignment||typeof alignment.examine!=='function'||!insights||
   typeof insights.metrics!=='function'||typeof insights.sampleBreadth!=='function')
   return blocked('MISSING_EXISTING_ANALYSIS_DEPENDENCY');
- const day=alignment.localDay,market=input.market,now=input.now;
+ const day=alignment.localDay,market=input.market,mode=input.mode,now=input.now;
  function evidence(e,expected){
   if(!exact(e,E))return false;
   if(typeof e.source!=='string'||!/^[A-Z][A-Z0-9_-]{0,15}$/.test(e.source)||
