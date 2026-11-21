@@ -377,7 +377,7 @@ test('a forged classification context cannot be used as a time series',()=>{
  f.records[1].adapterOutput=copy(f.records[1].adapterOutput);
  f.records[1].adapterOutput.context.candidates[0].posture='aligned-watch';
  f.records[1].adapterOutput.context.candidates[0].riskMultiplierIllustration=0.5;
- assert.equal(compiled(f).code,'INCONSISTENT_ARCHIVED_REPORT');
+ assert.equal(compiled(f).code,'INVALID_ARCHIVED_EVIDENCE');
 });
 test('a forged order approval must never be archived',()=>{
  const f=fixture();f.records[0].adapterOutput.tradeApproved=true;
