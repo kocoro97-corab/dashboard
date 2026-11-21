@@ -25,7 +25,7 @@ function dependency(){
 }
 function hasPrivateText(s){
  if(typeof s!=='string')return false;
- return /(?:계좌번호|주민등록번호|비밀번호|인증번호|계좌잔고)\s*[:=]\s*\S{2,}|\b(?:account[_-]?number|account[_-]?balance|password|passcode|authorization|secret[_-]?key)\s*[:=]\s*\S{3,}|\b\d{6}-[1-4]\d{6}\b/i.test(s);
+ return /(?:계좌번호|주민등록번호|비밀번호|인증번호|계좌잔고)\s*[:=]\s*\S{2,}|\b(?:account[_-]?number|account[_-]?balance|password|passcode|authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret[_-]?key)\s*[:=]\s*\S{3,}|\b\d{6}-[1-4]\d{6}\b/i.test(s);
 }
 function inspectRecord(row,{now}={}){
  if(!keysAllowed(row,'record'))return bad('UNEXPECTED_OR_PRIVATE_RECORD_FIELD');
