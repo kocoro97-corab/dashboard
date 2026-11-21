@@ -49,7 +49,7 @@ function opportunity(selection,analysis,ctx,now=Date.now()){
  if(kind==='kr_theme_daily')warnings.push('국내 당일 테마 점수는 스윙 상대강도나 산업 전체 순위가 아닙니다.');
  if(selection.mode==='day')warnings.push('분봉·호가·체결 자료가 없어 단타 진입/손절 신호를 생성하지 않습니다.');
  if(!held)warnings.push('검증된 보유행이 없거나 계좌가 미조회일 수 있으며 실제 미보유로 단정하지 않습니다.');
- const qualified=scoped&&coverageOk&&timeOk&&barsOk&&positiveStrength&&selection.mode==='swing';
+ const qualified=scoped&&['us_theme_sample','kr_industry_sample'].includes(kind)&&coverageOk&&timeOk&&barsOk&&positiveStrength&&selection.mode==='swing';
  const status=held?'holding':qualified?'qualified_watch':selection.mode==='day'?'intraday_unverified':'insufficient';
  const label=held?'기존 보유종목 관리':qualified?'스윙 상대강세 관심후보':selection.mode==='day'?'단타 관찰 · 진입 판단 보류':'스윙 검증 보류';
  return {track,status,label,basis:'주도 산업·테마 → 종목 상대강도 → 기술적 일봉 검증의 관찰 경로 · 매수 권유/주문 신호 아님',checks,warnings};
