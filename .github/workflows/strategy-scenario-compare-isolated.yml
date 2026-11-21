@@ -1,0 +1,36 @@
+name: Strategy scenario comparison offline CI
+on:
+  push:
+    branches:
+      - feat/strategy-scenario-compare-isolated
+permissions:
+  contents: read
+jobs:
+  standalone-only:
+    name: Offline model + PC/Fold preview, no NH/GAS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check JavaScript and Python syntax
+        run: |
+          for file in js/market-evidence-gate-v1.js js/market-quality-diagnostics-v1.js js/market-session-context-v1.js js/strategy-risk-capacity-v1.js js/strategy-scenario-compare-v1.js js/strategy-scenario-compare-panel-v1.js; do node --check "$file"; done
+          python3 -m py_compile tests/browser_strategy_scenario_compare_v1.py
+      - name: Offline synthetic unit regressions (115)
+        run: |
+          node tests/market-evidence-gate-v1.test.cjs
+          node tests/market-quality-diagnostics-v1.test.cjs
+          node tests/market-session-context-v1.test.cjs
+          node tests/market-session-cli-v1.test.cjs
+          node tests/strategy-risk-capacity-v1.test.cjs
+          node tests/strategy-risk-cli-v1.test.cjs
+          node tests/strategy-scenario-compare-v1.test.cjs
+      - name: Install isolated browser fixture
+        run: |
+          python3 -m venv .venv-preview
+          .venv-preview/bin/python -m pip install playwright==1.56.0
+          .venv-preview/bin/python -m playwright install --with-deps chromium
+      - name: PC and Fold synthetic interactive preview
+        run: .venv-preview/bin/python tests/browser_strategy_scenario_compare_v1.py
