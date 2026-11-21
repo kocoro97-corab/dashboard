@@ -99,6 +99,10 @@ test('CLI does not convert blocked adapter into a valid report',()=>{
  assert.equal(r.status,'blocked');
  assert.equal(r.code,'DAY_INTRADAY_EVIDENCE_NOT_CONNECTED');
  assert.equal(r.tradeApproved,false);
+ const md=run(JSON.stringify(block),['--stdin','--ack-manual-review','--markdown']);
+ assert.equal(md.status,2);
+ assert.match(md.stdout,/단타용 확정 분봉 자료가 연결되지 않았습니다/);
+ assert.equal(md.stdout.includes('undefined'),false);
 });
 test('direct inspect format, malformed data and explicit error handling are deterministic',()=>{
  const data=JSON.stringify(qualified());
