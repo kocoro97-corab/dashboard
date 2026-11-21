@@ -1,0 +1,24 @@
+name: Market quality diagnostics isolated unit tests
+on:
+  push:
+    branches:
+      - feat/market-quality-diagnostics-isolated
+permissions:
+  contents: read
+jobs:
+  offline-only:
+    name: Offline market evidence and diagnostics (zero NH/GAS calls)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check JavaScript syntax
+        run: |
+          node --check js/market-evidence-gate-v1.js
+          node --check js/market-quality-diagnostics-v1.js
+      - name: Run 39 offline mocked tests, no production connections
+        run: |
+          node tests/market-evidence-gate-v1.test.cjs
+          node tests/market-quality-diagnostics-v1.test.cjs
