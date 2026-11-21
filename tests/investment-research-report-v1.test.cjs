@@ -75,7 +75,7 @@ test('US report shows source and single-date market context without mislabeling 
  assert.equal(r.sources.providerAuthenticated,false);
  assert.equal(r.marketSummary.classification,'우호적 관찰');
  assert.equal(r.marketSummary.coveragePct,90);
- assert.equal(r.marketSummary.breadthPct,65);
+ assert.ok(Math.abs(r.marketSummary.breadthPct-650/900*100)<1e-10);
  assert.equal(r.livePriceVerified,false);
  assert.equal(r.sourceAuthenticated,false);
  assert.equal(r.investmentRecommendation,false);
@@ -99,7 +99,7 @@ test('sector observations are original classifications and not a market-wide ran
  assert.equal(r.sectorRows[0].classification,'상대강세 관찰');
  assert.equal(r.sectorRows[0].relative5Pct,2);
  assert.equal(r.sectorRows[0].relative20Pct,3);
- assert.equal(r.sectorRows[0].breadthPct,70);
+ assert.ok(Math.abs(r.sectorRows[0].breadthPct-7/9*100)<1e-10);
  assert.equal(r.sectorRows[0].fullIndustryRanking,false);
  assert.equal(r.sectorRows[1].classification,'상대약세 관찰');
  assert.equal(r.sectorRows[1].relative5Pct,-2);
@@ -187,8 +187,10 @@ test('large coverage shift withholds misleading comparison',()=>{
  v.context.marketContext.coveragePct=65;
  x.records[1].adapterOutput=v;
  const r=compile(x);
- assert.equal(r.status,'blocked'); // upstream explanation refuses ungrounded partial forgery
- assert.equal(r.code,'INVALID_HISTORY_INPUT');
+ assert.equal(r.status,'manual-review');
+ assert.equal(r.history.status,'withheld');
+ assert.match(r.history.reason,/표본/);
+ assert.equal(r.history.lastComparison.changes.length,0);
 });
 test('single valid observation shows market context but no inferred prior trend',()=>{
  const x=fixture();x.records=[x.records[2]];
