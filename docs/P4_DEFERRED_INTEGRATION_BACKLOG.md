@@ -22,6 +22,7 @@
 - 새로운 `js/strategy-performance-report-v1.js`는 P4 품질검사→백테스트→성과 검토를 읽기 전용으로 연결하여 수익률·승률 불확실성·최대 낙폭·비용·위험 초과·동일 종목 보유 대비 비교를 표준화. 서로 다른 기간·종목·수수료·원천 데이터의 시나리오 비교는 금지하며 전략 순위를 매기지 않음. `tests/strategy-performance-report-v1.test.cjs`와 `docs/P4_PERFORMANCE_REPORT.md` 추가.
 - 신규 `js/strategy-regime-analysis-v1.js`는 확정 벤치마크 종가의 **후행 20일 수익률 ±3%**를 상승/횡보/하락으로 고정 분류하고, 각 거래를 **신호 발생일 장세**에 귀속하여 순손익·승률/불확실성·위험초과·최악 R을 분석. 후행 국면을 실시간 예측으로 해석하지 않으며 원천 시세·벤치마크 거래일 정합성 확인 전 화면 게시 금지. `tests/strategy-regime-analysis-v1.test.cjs`, `docs/P4_REGIME_ATTRIBUTION.md` 포함.
 - 신규 `js/strategy-walkforward-v1.js`는 고정 파라미터·기준일봉의 연속된 접두부만 사용해 2~6개 비중복 평가구간을 검사. 미래 봉 차단, 구간별 자본 재설정, 종료일 강제청산 공개, 누적복리 수익률 표시 금지 및 독립 외표본 입증 불가를 명시. `tests/strategy-walkforward-v1.test.cjs`, `docs/P4_WALKFORWARD.md` 포함. Codex의 P0 작업 완료 전까지 연동·게시 보류.
+- 신규 `js/strategy-friction-stress-v1.js`는 수수료·슬리피지 각각 +10/+30bp 및 동시 추가 7개 가상 비용 시나리오, 손절가 대비 5%·10% 갭 하락 시 개별 거래의 계획 위험 초과를 분석. 외부 거래 수수료를 추정·단정하지 않고 거래 경로 변화 가능성을 표기. `tests/strategy-friction-stress-v1.test.cjs`, `docs/P4_FRICTION_STRESS.md` 포함. 실데이터/화면 통합과 운영 반영은 보류.
 - 기존 결과와 OHLCV가 실제 일치하는지 독립 결정적 재실행으로 점검, 가짜 거래 내역 불허.
 - 합성 데이터 테스트. **실제 수신 시세 또는 실전 성과 검증은 미실시.**
 
