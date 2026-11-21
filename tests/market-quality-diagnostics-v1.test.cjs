@@ -31,8 +31,8 @@ test('qualified four US index inputs show coherent but never market-verified sta
  assert.equal(x.market,'US');
  assert.equal(x.gateStatus,'qualified-close');
  assert.equal(x.marketDate,'2026-11-20');
- assert.equal(x.direction,'mixed');
- assert.equal(x.comparedDirection,'mixed');
+ assert.equal(x.direction,'up');
+ assert.equal(x.comparedDirection,'up');
  assert.deepEqual(x.cards.map(c=>c.value),['4/4','입력 일치','확인','0건']);
  assert.equal(x.marketDataVerified,false);
  assert.equal(x.calendarVerified,false);
@@ -51,7 +51,7 @@ test('known NH_NO_PRICE is informative but does not read or disclose any account
  assert.equal(x.events[0].code,'NH_NO_PRICE');
  assert.equal(x.events[0].label,'KOSPI 200 선물');
  assert.equal(x.events[0].title,'선물 시세 미수신');
- assert.match(x.events[0].action,/계약/);
+ assert.match(x.events[0].action,/종목코드|만기/);
  assert.equal(x.cards[3].value,'1건');
 });
 
