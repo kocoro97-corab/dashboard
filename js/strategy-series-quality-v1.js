@@ -21,7 +21,7 @@ function inspect(input={}){
  if(!input||typeof input!=='object'||Array.isArray(input))
   return {status:'block',version:VERSION,errors:[issue('INVALID_INPUT')],flags:[],facts:{},
    eligibleForProvisionalBacktest:false,realSourceVerified:false};
- const bars=input.bars,market=MARKET[input.market],now=input.now??Date.now();
+ const bars=input.bars,market=Object.prototype.hasOwnProperty.call(MARKET,input.market)?MARKET[input.market]:null,now=input.now??Date.now();
  if(!market)errors.push(issue('UNSUPPORTED_MARKET'));
  if(!Array.isArray(bars)||bars.length>MAX_BARS||bars.length===0)errors.push(issue('INVALID_BAR_COLLECTION'));
  if(!Number.isSafeInteger(now)||now<=0||now>8640000000000000)errors.push(issue('INVALID_AS_OF'));
