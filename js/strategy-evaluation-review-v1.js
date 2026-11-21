@@ -29,9 +29,10 @@ function curveRisk(curve,capital){
  }
  return {maxDrawdownPct,drawdownDays,worstAt,observation:'DAILY_CLOSE_LIQUIDATION_VALUE'};
 }
-function benchmarkHold(bars,start,capital,fee,slip){
+function benchmarkHold(bars,start,capital,fee,slip,allocation=1){
  const entryOpen=bars[start].o,entryFill=entryOpen*(1+slip);
- const qty=Math.floor(capital/(entryFill*(1+fee)));
+ if(!isNum(allocation)||allocation<=0||allocation>1)return null;
+ const qty=Math.floor(capital*allocation/(entryFill*(1+fee)));
  if(!Number.isSafeInteger(qty)||qty<1)return null;
  const entryFee=qty*entryFill*fee,uninvested=capital-qty*entryFill-entryFee;
  const curve=bars.slice(start).map(b=>{
@@ -39,7 +40,8 @@ function benchmarkHold(bars,start,capital,fee,slip){
   return {at:b.t,equity:uninvested+qty*liquidatedPrice*(1-fee)};
  });
  const last=curve.at(-1);
- return {method:'FULL_CAPITAL_BUY_AND_HOLD_NEXT_ELIGIBLE_OPEN',
+ return {method:allocation===1?'FULL_CAPITAL_BUY_AND_HOLD_NEXT_ELIGIBLE_OPEN':'FIXED_ALLOCATION_BUY_AND_HOLD_NEXT_ELIGIBLE_OPEN',
+  allocationPct:allocation*100,
   entryAt:bars[start].t,exitAt:bars.at(-1).t,entryOpen,entryFill,shares:qty,
   uninvestedCapital:uninvested,finalEquity:last.equity,
   netReturnPct:(last.equity/capital-1)*100,curve,
@@ -112,7 +114,8 @@ function audit({bars,simulation}={}){
  }
  const end=dailyEquity.at(-1);
  if(!closeEnough(end.equity,simulation.statistics.finalEquity))return invalid('DAILY_EQUITY_RECONCILIATION_FAILED');
- const strategyRisk=curveRisk(dailyEquity,initial),hold=benchmarkHold(bars,first,initial,fee,slip);
+ const strategyRisk=curveRisk(dailyEquity,initial),hold=benchmarkHold(bars,first,initial,fee,slip),
+  matched=benchmarkHold(bars,first,initial,fee,slip,p.maxAllocationPct/100);
  const trades=trs.length,grade=trades<30?'LOW_SAMPLE':testAt==null?'NO_PREDECLARED_HOLDOUT':'HOLDOUT_DATE_PRESENT_NOT_PROVEN_INDEPENDENT';
  return {status:'ok',version:VERSION,engine:ENGINE,validation:{
   source:'CALLER_SUPPLIED_UNVERIFIED_DAILY_BARS',
@@ -127,10 +130,13 @@ function audit({bars,simulation}={}){
    finalEquity:simulation.statistics.finalEquity,netReturnPct:simulation.statistics.netReturnPct,
    realizedOnlyDrawdownPct:simulation.statistics.maxRealizedDrawdownPct},
   buyAndHold:hold,
+  allocationMatchedBuyAndHold:matched,
   comparison:hold?{returnDifferencePctPoints:simulation.statistics.netReturnPct-hold.netReturnPct,
-   comparableExposure:false,interpretation:'100% 동일종목 보유 대비 차이; 투자 노출 및 위험배분이 달라 알파로 해석 금지'}:null,
+   comparableExposure:false,
+   allocationMatchedReturnDifferencePctPoints:matched?simulation.statistics.netReturnPct-matched.netReturnPct:null,
+   interpretation:'100% 동일종목 보유 대비 차이. 동일 최대 투자비중 벤치마크도 전략의 실제 보유 기간·위험을 일치시키지 못하므로 알파로 해석 금지'}:null,
   warnings:['실제 시세 및 수정주가 여부 검증 전까지 결과는 실데이터 성과가 아닙니다.',
-   '동일종목 100% 보유와 위험한도 기반 전략은 투자 노출이 달라 수익률 차이를 알파로 해석할 수 없습니다.',
+   '동일종목 100% 보유 및 고정 최대배분 비중 보유와 위험한도 기반 전략은 실제 보유 기간과 노출이 달라 수익률 차이를 알파로 해석할 수 없습니다.',
    '최대낙폭은 거래일 종가에 청산한 가상 평가액만 사용하며 장중 최악의 손실은 포착하지 못합니다.',
    '평가 구간 지정만으로 사전 고정된 외표본 검증을 보증하지 않습니다.',
    '승률 신뢰구간은 거래 독립성을 가정하며 전략 수익성의 검증을 의미하지 않습니다.',
