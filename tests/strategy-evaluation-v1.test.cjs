@@ -31,6 +31,9 @@ test('P4 enters only at NEXT bar open, exits at observed target and records cost
  assert.ok(t.target>t.entryFill);
  assert.ok(t.netPnl>0);
  assert.ok(t.grossPnl>t.netPnl);
+ assert.ok(t.plannedRisk<=100000+0.001);
+ assert.ok(t.quantity*t.entryFill*(1+0.001)<=2500000+0.001);
+ assert.equal(t.riskOverrun,false);
  assert.ok(out.statistics.feeCost>0);
  assert.equal(out.validation.futureDataUsedForSignal,false);
  assert.equal(out.validation.inputProvenance,'NOT_EXTERNALLY_VERIFIED');
@@ -55,6 +58,8 @@ test('P4 uses worse gap-open stop fills, not the planned stop price',()=>{
  const out=run(b);assert.equal(out.trades[0].reason,'stop_gap');
  assert.ok(out.trades[0].exitFill<out.trades[0].stop);
  assert.ok(out.trades[0].netPnl<0);
+ assert.equal(out.trades[0].riskOverrun,true);
+ assert.ok(-out.trades[0].netPnl>out.trades[0].plannedRisk);
 });
 test('P4 awards capped target on target-gap open before later intraday stop',()=>{
  const b=breakout();b[21].h=110;
