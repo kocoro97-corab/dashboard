@@ -69,6 +69,7 @@ function simulate(options={}){
    entryFill:position.entryFill,exitIndex,exitAt:b.t,exitFill,stop:position.stop,
    target:position.target,quantity:position.quantity,holdingBars:exitIndex-position.entryIndex+1,
    reason,ambiguous,entryFee:position.entryFee,exitFee,grossPnl:gross,netPnl:net,
+   plannedRisk:position.plannedRisk,riskOverrun:net< -position.plannedRisk,
    netR:position.plannedRisk>0?net/position.plannedRisk:null};
   trades.push(trade);cashEquity+=net;grossProfit+=gross;totalCosts+=position.entryFee+exitFee;
   points.push({at:b.t,equity:cashEquity});position=null;
