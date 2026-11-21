@@ -1,0 +1,32 @@
+name: Strategy risk capacity isolated offline tests
+on:
+  push:
+    branches:
+      - feat/strategy-risk-capacity-isolated
+permissions:
+  contents: read
+jobs:
+  offline-only:
+    name: Offline market evidence, clock and hypothetical risk (no NH/GAS)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: JavaScript syntax checks
+        run: |
+          node --check js/market-evidence-gate-v1.js
+          node --check js/market-quality-diagnostics-v1.js
+          node --check js/market-session-context-v1.js
+          node --check tools/inspect_market_session_context_v1.cjs
+          node --check js/strategy-risk-capacity-v1.js
+          node --check tools/inspect_strategy_risk_v1.cjs
+      - name: Offline synthetic unit and CLI regressions (97 tests)
+        run: |
+          node tests/market-evidence-gate-v1.test.cjs
+          node tests/market-quality-diagnostics-v1.test.cjs
+          node tests/market-session-context-v1.test.cjs
+          node tests/market-session-cli-v1.test.cjs
+          node tests/strategy-risk-capacity-v1.test.cjs
+          node tests/strategy-risk-cli-v1.test.cjs
