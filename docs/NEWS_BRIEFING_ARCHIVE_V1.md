@@ -77,6 +77,8 @@
 
 `selection(records, {now,date?})`: 가장 최신 날짜를 기본 표시, 수동 날짜 선택 지원. 오늘 보고서가 없으면 지난 날짜의 보고서를 보여주되 **`ARCHIVED_NOT_TODAY`**로 명시. 오늘 보고서도 `TODAY_UNVERIFIED`로 표시하며 실제 시장데이터가 최신인 듯 보장하지 않는다.
 
+시장 관측시각이 없다면 `marketObservationStatus:'UNKNOWN'`을 표시하고, **선언된 관측시각이 36시간을 넘으면** `DECLARED_OLDER_THAN_36H` 경고를 제공한다. 이는 가격원천을 직접 검증한 최신성 판정이 아니라 화면에 보여줄 참고 경고다.
+
 `parseFeed(payload, {now})`: 아래 읽기 전용 서버 응답 규격을 엄격히 검사. 하나라도 부적합한 레코드가 있다면 전체 전달을 거부해 불분명한 데이터를 실데이터로 내보내지 않는다.
 
 ```json
