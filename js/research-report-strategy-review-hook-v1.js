@@ -8,17 +8,20 @@
 if(root.MYINVEST_RESEARCH_REVIEW!=='synthetic-only')return;
 const doc=root.document;
 let viewport=null,observer=null,disclosure=null,host=null,panel=null,active=false;
+let auditHost=null,auditPanel=null;
 let pending=false;
 function destroyPanel(){
  try{panel?.destroy?.()}catch{}
- panel=null;
+ try{auditPanel?.destroy?.()}catch{}
+ panel=null;auditPanel=null;
  if(host)host.replaceChildren();
+ if(auditHost)auditHost.replaceChildren();
 }
 function clear(){
  destroyPanel();
  if(disclosure)disclosure.removeEventListener('toggle',onToggle);
  disclosure?.remove();
- disclosure=null;host=null;
+ disclosure=null;host=null;auditHost=null;
 }
 function syntheticChoice(choice){
  const fixture=root.MYInvestResearchHarnessFixtureV1;
@@ -37,7 +40,15 @@ function onToggle(){
   return;
  }
  const mounted=engine.mount(host,sample);
- if(mounted?.ok)panel=mounted;
+ if(mounted?.ok){
+  panel=mounted;
+  const input=root.MYInvestNativeContractSyntheticFixtureV1?.fixture?.('US');
+  const audit=root.MYInvestNativeContractAuditPanelV1;
+  if(input&&typeof audit?.mount==='function'){
+   const result=audit.mount(auditHost,input);
+   if(result?.ok)auditPanel=result;
+  }
+ }
  else host.textContent='합성 리포트 화면을 준비하지 못했습니다.';
 }
 function make(){
@@ -57,6 +68,9 @@ function make(){
    const sample=syntheticChoice(value);
    if(!sample)return;
    panel.update(sample);
+   const input=root.MYInvestNativeContractSyntheticFixtureV1?.fixture?.(
+    value==='KR'?'KR':'US',value==='BLOCKED'?'missing':'default');
+   if(auditPanel&&input)auditPanel.update(input);
    for(const b of chooser.querySelectorAll('button'))
     b.setAttribute('aria-pressed',String(b===button));
   });
@@ -65,7 +79,9 @@ function make(){
  }
  host=doc.createElement('div');host.className='research-harness-content';
  host.setAttribute('data-research-content','');
- container.append(summary,paragraph,chooser,host);
+ auditHost=doc.createElement('div');
+ auditHost.setAttribute('data-native-contract-audit','');
+ container.append(summary,paragraph,chooser,host,auditHost);
  container.addEventListener('toggle',onToggle);
  return container;
 }
@@ -109,7 +125,8 @@ function stop(){
 root.MYInvestResearchReportHarnessV1=Object.freeze({
  getStatus:()=>Object.freeze({
   active,attached:!!disclosure?.isConnected,open:!!disclosure?.open,
-  panelMounted:!!panel,kind:'SYNTHETIC_REVIEW_ONLY',
+  panelMounted:!!panel,auditPanelMounted:!!auditPanel,
+  kind:'SYNTHETIC_REVIEW_ONLY',
   realAccountDataRead:false,marketCalls:0,orderCalls:0,
   published:false
  }),
