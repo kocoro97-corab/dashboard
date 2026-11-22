@@ -8,7 +8,7 @@
 (function(root){
 'use strict';
 const S=Object.freeze({
- nyse:'https://www.nyse.com/markets/hours-calendars',
+ nyse:'https://www.nyse.com/trade/hours-calendars',
  fed26:'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',
  fed27:'https://www.federalreserve.gov/newsevents/pressreleases/monetary20261112a.htm',
  bls:'https://www.bls.gov/schedule/2026/12_sched_list.htm',
@@ -26,12 +26,7 @@ function row(date,type,title,sourceId,{time='',note='',tentative=false}={}){
  // close, the market date remains source local, without false KST inference.
  let kstDate=null,kstTime=null;
  if(time){
-  const eastern=new Date(date+'T'+time+':00'+(
-   // NYSE US DST: UTC-4 roughly Mar2nd Sun to Nov1st Sun.
-   // Derived with Intl below instead of fixed seasonal offset.
-   'Z'));
-  const formatter=new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',
-   hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
+  // U.S. Eastern source clock is converted with Intl DST rules.
   // Find correct UTC instant whose Eastern wall-clock matches the specified
   // local time; scan bounded ±12h in 30-min increments. Offsets vary by DST.
   const midday=Date.parse(date+'T12:00:00Z');
