@@ -15,6 +15,7 @@ CALENDAR_MODULES = (
     'invest-calendar-core-v2.js',
     'invest-calendar-style-v2.js',
     'invest-calendar-google-readonly-v2.js',
+    'invest-calendar-google-oauth-setup-v1.js',
     'invest-calendar-official-market-events-v1.js',
     'invest-calendar-krx-official-v1.js',
     'invest-calendar-unified-market-v1.js',
@@ -89,15 +90,18 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True,
         news_anchor = '<script src="js/page-news.js?v=2"></script>'
         if text.count(news_anchor) != 1:
             raise ValueError('DEV_CALENDAR_NEWS_ANCHOR_CHANGED')
+        # Permission for the SDK/API is not a network request. Scripts are
+        # loaded on explicit user action when no public client ID is built in.
+        # Keep the ordinary (non-calendar) development CSP unchanged.
+        text = text.replace("script-src 'self' ", "script-src 'self' https://accounts.google.com ")
+        text = text.replace("connect-src 'self' data:", "connect-src 'self' https://www.googleapis.com https://accounts.google.com data:")
+        text = text.replace("frame-src https://s.tradingview.com;",
+                            "frame-src https://s.tradingview.com https://accounts.google.com;")
         oauth_scripts = ''
         if google_calendar_client_id is not None:
             if (not isinstance(google_calendar_client_id,str) or
                     not CALENDAR_CLIENT_RE.fullmatch(google_calendar_client_id)):
                 raise ValueError('GOOGLE_PUBLIC_OAUTH_CLIENT_ID_INVALID')
-            text = text.replace("script-src 'self' ", "script-src 'self' https://accounts.google.com ")
-            text = text.replace("connect-src 'self' data:", "connect-src 'self' https://www.googleapis.com https://accounts.google.com data:")
-            text = text.replace("frame-src https://s.tradingview.com;",
-                                "frame-src https://s.tradingview.com https://accounts.google.com;")
             oauth_scripts = (
                 '<script>window.MYINVEST_GOOGLE_CALENDAR_CLIENT_ID=' +
                 json.dumps(google_calendar_client_id) + ';</script>\n' +
