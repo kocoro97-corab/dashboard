@@ -41,7 +41,7 @@ async def main():
       # Opening a separate opt-in report must not fetch holdings or mutate the
       # existing orderless strategy planner.
       baseline=len(harness.requests)
-      await sidecar.locator('summary').click()
+      await sidecar.locator(':scope > summary').click()
       await page.locator('.irr1 .stock').first.wait_for()
       assert await page.locator('.irr1 .stock').count()==2
       assert await page.locator('.irr1 .sector').count()==2
@@ -90,7 +90,7 @@ async def main():
       assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth+1'),width
 
       # On close and routing away all mounted report data and listeners disappear.
-      await sidecar.locator('summary').click()
+      await sidecar.locator(':scope > summary').click()
       await page.wait_for_function('()=>!document.querySelector(".irr1")')
       assert not await sidecar.evaluate('(el)=>el.open')
       await harness.go('news')
