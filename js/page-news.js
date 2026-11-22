@@ -21,7 +21,7 @@ function normalizeBrief(row){
 root.MYInvestBriefingData=Object.freeze({normalize:normalizeBrief});
 function create(){
  const legacy=DashboardPages.legacy({ids:['newsSection'],intro:'기존 뉴스 피드: 실제 수신 기사만 표시합니다. 기사 게시시각·출처·원문 링크를 확인하세요.',refresh:(ctx,force)=>ctx.news(force)});
- let view,eventsArea,symbolsArea,status,ctxRef,active=false,filter='all',newsVersion=0;
+ let view,eventsArea,symbolsArea,status,ctxRef,active=false,filter='all',newsVersion=0,calendarEventsListener=null;
 
  const BRIEF_KEY='myinvest_public_ai_briefings_v1';
  const briefToday=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
@@ -96,10 +96,10 @@ function create(){
    const keys=new Set(rows.map(r=>r.date+'|'+r.origin));return rows.concat(converted.filter(r=>!keys.has(r.date+'|'+r.origin))).slice(0,90);
   }})||null;
   eventsArea=el('section');eventsArea.dataset.newsBlock='events';view.append(eventsArea);
-  legacy.mount(container,ctx);newsTop.append(container.firstElementChild);container.prepend(view);symbols();events();if(root.MYInvestCalendarPending){root.MYInvestCalendarPending=false;openCalendar()}
+  legacy.mount(container,ctx);newsTop.append(container.firstElementChild);container.prepend(view);symbols();events();calendarEventsListener=()=>{if(active)events()};root.addEventListener('myinvest:calendar-changed',calendarEventsListener);if(root.MYInvestCalendarPending){root.MYInvestCalendarPending=false;openCalendar()}
  }
 
- return {mount,refresh:async(ctx,force)=>{try{await legacy.refresh(ctx,force);if(active)status.textContent='기존 뉴스 원천 갱신 요청 완료 · 각 기사 출처와 게시시각 확인'}catch(e){if(active)status.textContent='기존 뉴스 수신 실패 · 외부 원천 연결을 확인하세요.';throw e}symbols();await annotateNews()},unmount(){active=false;newsVersion++;root.MYInvestCalendarWorkspaceV2?.logout?.();archivePanel?.destroy?.();archivePanel=null;sharedPublicFeed?.destroy?.();sharedPublicFeed=null;ctxRef=null;briefingArea=null;view?.remove();legacy.unmount()},getStatus:()=>({status:active?'ready':'unmounted',events:loadEvents().length})};
+ return {mount,refresh:async(ctx,force)=>{try{await legacy.refresh(ctx,force);if(active)status.textContent='기존 뉴스 원천 갱신 요청 완료 · 각 기사 출처와 게시시각 확인'}catch(e){if(active)status.textContent='기존 뉴스 수신 실패 · 외부 원천 연결을 확인하세요.';throw e}symbols();await annotateNews()},unmount(){active=false;newsVersion++;if(calendarEventsListener)root.removeEventListener('myinvest:calendar-changed',calendarEventsListener);calendarEventsListener=null;root.MYInvestCalendarWorkspaceV2?.logout?.();archivePanel?.destroy?.();archivePanel=null;sharedPublicFeed?.destroy?.();sharedPublicFeed=null;ctxRef=null;briefingArea=null;view?.remove();legacy.unmount()},getStatus:()=>({status:active?'ready':'unmounted',events:loadEvents().length})};
 }
 root.MYInvestCalendar=Object.freeze({open:()=>{openCalendar();return true},close:closeCalendar});DashboardPages.register('news',create);
 })(window);
