@@ -2,7 +2,7 @@
 
 ## 구현 범위와 현재 상태
 
-개발 브랜치 `feat/calendar-workspace-google-readonly-isolated`. 코덱스 통합 브랜치 `integration/news-strategy-20261121` 커밋 `e485fc9c89ee618590274d05b6710baa42a0bc1c`에서 분기했습니다.
+최신 통합 검증 브랜치 `feat/calendar-codex-dev-bundle-isolated`. 코덱스 통합 브랜치 `integration/news-strategy-20261121` 커밋 `4084a8fe538e47adbcc7fe3d6b534a74a9b40d4e`에서 분기하고, 앞서 검증한 자체 캘린더 모듈을 재사용했습니다.
 
 기존 뉴스·이벤트 메뉴의 '▦ 투자 캘린더' 버튼과 앱 상단 '▦ 일정' 버튼을 유지하면서 새 자체 캘린더를 열도록 연결했습니다. 원본 소스 중 `js/page-news.js`에 위임/변경 알림/페이지 나가기 시 인증 정리만 최소 수정했습니다. 그 외 일정·Google·화면·빌더·테스트는 새 파일입니다.
 
@@ -63,3 +63,19 @@
 ## 다음 검증 단계
 
 임시 검증이 끝나도 `dashboard-v2-dev` 또는 운영 Pages에 아직 배포된 것은 아닙니다. 사용자가 만든 Google 웹 OAuth 클라이언트 ID로 검증용 도메인에서 **실제 Google 읽기 연동**을 동의한 후, 별도 MY INVEST 캘린더 쓰기/양방향 동기화 요구사항을 승인받아 진행해야 합니다.
+## 최신 코덱스 개발 빌드 직접 연결 (2026-11-22)
+
+캘린더의 자체 화면·기존 뉴스 일정·Google 읽기 전용 인증 모듈을 코덱스 최신 앱 셸을 유지한 상태에서 **기존 `tools/build_dev_pages.py`가 선택적으로 포함하도록 통합**했습니다. 별도 미리보기 빌더는 동일한 자산 복사·CSP를 다시 구현하지 않습니다.
+
+**로컬/CI 개발 검증용 명령**: `python3 tools/build_dev_pages.py --output /tmp/myinvest-calendar-review --include-calendar`
+
+- 옵션을 지정하지 않은 표준 개발 빌드는 캘린더 모듈을 추가하지 않습니다.
+- 명령은 파일 아티팩트 생성만 하며 실제 `dev-pages`, GitHub Pages, GAS, 운영 API에 게시하지 않습니다.
+- `--include-calendar`만 설정하면 자체 캘린더와 ICS 전송은 동작하고 Google 실시간 연결 버튼은 비활성화됩니다.
+- Google 실시간 읽기는 사용자 동의와 공개용 Google Cloud 웹 OAuth 클라이언트 ID, 허용 JavaScript Origin 등록이 필요합니다. 공개 OAuth ID만 `--google-calendar-client-id`로 전달할 수 있습니다. 이메일, 클라이언트 비밀 키, 액세스·갱신 토큰을 넣지 않습니다.
+- Google OAuth 옵션 사용 시에만 `accounts.google.com`과 `www.googleapis.com` 등 필요한 제한적 CSP 허용 규칙이 개발 아티팩트에 추가됩니다.
+- `tools/build_calendar_review_v2.py`는 기존 `build_dev_pages.build(...,include_calendar=True)`를 호출하는 얇은 래퍼입니다.
+
+`tests/test_calendar_dev_bundle_v2.py`는 평상시 개발 빌드의 자산·CSP 불변성, 선택적 캘린더 자산 삽입·순서, 원본 `index.html` 불변, OAuth 설정 유효성, 기존 빌더와 래퍼 출력 일치를 확인합니다.
+
+Google 계정에서 실제 OAuth 동의 및 일정 조회를 성공적으로 검증한 것은 아닙니다. PC/폴드6 사이 자동 동기화도 구현하지 않았으며, 브라우저별 수동 일정은 `.ics` 내보내기·가져오기로 직접 이동할 수 있습니다.
