@@ -1,0 +1,51 @@
+name: Native market data contract and zero-duplicate-fetch research review
+on:
+  push:
+    branches:
+      - feat/research-native-data-contract-gate-isolated
+permissions:
+  contents: read
+jobs:
+  offline-native-data-audit:
+    name: 210 legacy + 32 native contract + 5 build + PC/Fold safe sidecar
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout sandbox without saved credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Validate native audit and review scripts
+        run: |
+          node --check js/research-native-data-contract-audit-v1.js
+          node --check js/research-native-contract-synthetic-fixture-v1.js
+          node --check js/research-native-contract-audit-panel-v1.js
+          node --check js/research-report-strategy-review-hook-v1.js
+          node --check tests/research-native-data-contract-audit-v1.test.cjs
+          python3 -m py_compile tools/build_research_report_review_v1.py
+          python3 -m py_compile tests/browser_research_report_strategy_harness_v1.py
+      - name: Existing alignment engine regression (39)
+        run: node tests/market-sector-stock-alignment-v1.test.cjs
+      - name: Existing market-sector-stock adapter regression (43)
+        run: node tests/market-sector-stock-adapter-v1.test.cjs
+      - name: Existing Korean evidence explanation regression (35)
+        run: node tests/investment-evidence-explanation-v1.test.cjs
+      - name: Existing explanation inspector regression (9)
+        run: node tests/investment-evidence-inspector-v1.test.cjs
+      - name: Existing timeline regression (46)
+        run: node tests/investment-evidence-timeline-v1.test.cjs
+      - name: Existing timeline inspector regression (8)
+        run: node tests/investment-evidence-timeline-cli-v1.test.cjs
+      - name: Existing research report model regression (30)
+        run: node tests/investment-research-report-v1.test.cjs
+      - name: New native Home Industry Sector Stock contract checks (32)
+        run: node tests/research-native-data-contract-audit-v1.test.cjs
+      - name: Ensure original Codex shell unmodified in temporary-only review build (5)
+        run: python3 -m unittest discover -s tests -p 'test_research_report_review_artifact_v1.py'
+      - name: Install local Chromium for synthetic read-only browser review
+        run: |
+          python3 -m venv .venv-native-gate
+          .venv-native-gate/bin/python -m pip install playwright==1.56.0
+          .venv-native-gate/bin/python -m playwright install --with-deps chromium
+      - name: Existing strategy and native-contract audit no-new-market-reads 1440/690/344
+        run: .venv-native-gate/bin/python tests/browser_research_report_strategy_harness_v1.py
