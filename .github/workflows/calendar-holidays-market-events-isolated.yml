@@ -1,0 +1,49 @@
+name: Investment calendar subscribed holidays and verified market schedule review
+on:
+  push:
+    branches:
+      - feat/calendar-holidays-market-events-isolated
+permissions:
+  contents: read
+jobs:
+  offline-calendar-market-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Checkout isolated developer branch without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Syntax validation for existing news, Google and market evidence calendar
+        run: |
+          node --check js/page-news.js
+          node --check js/invest-calendar-core-v2.js
+          node --check js/invest-calendar-google-readonly-v2.js
+          node --check js/invest-calendar-official-market-events-v1.js
+          node --check js/invest-calendar-workspace-v2.js
+          node --check tests/invest-calendar-official-market-events-v1.test.cjs
+          python3 -m py_compile tools/build_dev_pages.py tests/browser_calendar_workspace_v2.py tests/browser_calendar_holiday_market_google_v1.py
+      - name: Run ALL inherited and expanded Node tests (no provider credentials)
+        run: |
+          for file in tests/*.test.cjs; do
+            echo "Checking $file"
+            node "$file" >/dev/null || exit 1
+          done
+      - name: Verify default dev bundle and Google public OAuth consent constraints
+        run: |
+          python3 -m unittest discover -s tests -p 'test_calendar_review_build_v2.py' -v
+          python3 -m unittest discover -s tests -p 'test_calendar_dev_bundle_v2.py' -v
+          python3 -m unittest discover -s tests -p 'test_strategy_comparison_dev_bundle.py' -v
+      - name: Install CI-only Chromium Playwright
+        run: |
+          python3 -m venv .venv-market-calendar
+          .venv-market-calendar/bin/python -m pip install playwright==1.56.0
+          .venv-market-calendar/bin/python -m playwright install --with-deps chromium
+      - name: Original Codex news strategy and primary calendar regression PC Fold
+        run: |
+          .venv-market-calendar/bin/python tests/browser_app_shell.py
+          .venv-market-calendar/bin/python tests/browser_news_final_v1.py
+          .venv-market-calendar/bin/python tests/browser_news_strategy_integration.py
+          .venv-market-calendar/bin/python tests/browser_calendar_workspace_v2.py
+      - name: New Google subscribed holiday and official US market schedule simulated OAuth
+        run: .venv-market-calendar/bin/python tests/browser_calendar_holiday_market_google_v1.py
