@@ -1,0 +1,47 @@
+name: Latest Codex calendar opt-in developer-bundle verification (never deploy)
+on:
+  push:
+    branches:
+      - feat/calendar-codex-dev-bundle-isolated
+permissions:
+  contents: read
+jobs:
+  calendar-codex-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check calendar, native build and news JS/Python syntax
+        run: |
+          node --check js/page-news.js
+          node --check js/invest-calendar-core-v2.js
+          node --check js/invest-calendar-style-v2.js
+          node --check js/invest-calendar-google-readonly-v2.js
+          node --check js/invest-calendar-workspace-v2.js
+          python3 -m py_compile tools/build_dev_pages.py tools/build_calendar_review_v2.py tests/test_calendar_dev_bundle_v2.py tests/test_calendar_review_build_v2.py tests/browser_calendar_workspace_v2.py
+      - name: All inherited Codex and calendar Node regressions (offline)
+        run: |
+          for file in tests/*.test.cjs; do
+            echo "Checking $file"
+            node "$file" >/dev/null || exit 1
+          done
+      - name: Calendar review and native developer bundle Python guards
+        run: |
+          python3 -m unittest discover -s tests -p 'test_calendar_review_build_v2.py' -v
+          python3 -m unittest discover -s tests -p 'test_calendar_dev_bundle_v2.py' -v
+          python3 -m unittest discover -s tests -p 'test_strategy_comparison_dev_bundle.py' -v
+      - name: Install Chromium for synthetic-only PC and Fold app-shell tests
+        run: |
+          python3 -m venv .venv-calendar-codex
+          .venv-calendar-codex/bin/python -m pip install playwright==1.56.0
+          .venv-calendar-codex/bin/python -m playwright install --with-deps chromium
+      - name: Existing app news strategy and native integration route regression
+        run: |
+          .venv-calendar-codex/bin/python tests/browser_app_shell.py
+          .venv-calendar-codex/bin/python tests/browser_news_final_v1.py
+          .venv-calendar-codex/bin/python tests/browser_news_strategy_integration.py
+      - name: Calendar CRUD ICS import export and Google-disabled 1440/690/344 journeys
+        run: .venv-calendar-codex/bin/python tests/browser_calendar_workspace_v2.py
