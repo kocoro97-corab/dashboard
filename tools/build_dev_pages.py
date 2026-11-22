@@ -44,6 +44,9 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
     if relay_endpoint:
         from urllib.parse import urlsplit
         text=text.replace("https://*.trycloudflare.com;","https://*.trycloudflare.com "+urlsplit(relay_endpoint).scheme+'://'+urlsplit(relay_endpoint).netloc+';')
+    debug_anchor = '<script src="js/debug.js?v=3-safe"></script>'
+    if text.count(debug_anchor) != 1:raise ValueError('DEV_DIAGNOSTIC_ANCHOR_CHANGED')
+    text = text.replace(debug_anchor, '<script>window.MYINVEST_DEV_DIAGNOSTICS=true;</script>\n<script src="js/development-diagnostics.js?v=1"></script>\n'+debug_anchor)
     marker = '<script src="js/transport.js?v=1"></script>'
     if text.count(marker) != 1:
         raise ValueError('DEV_TRANSPORT_MARKER_CHANGED')
@@ -69,6 +72,9 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
     compare_scripts = ''.join('<script src="js/' + name + '?v=1"></script>\n'
                               for name in strategy_optional_modules)
     text = text.replace(strategy_anchor, compare_scripts + strategy_anchor)
+    shell_anchor='<script src="js/app-shell.js?v=2"></script>'
+    if text.count(shell_anchor)!=1:raise ValueError('DEV_SHELL_ANCHOR_CHANGED')
+    text=text.replace(shell_anchor, '<script src="js/page-diagnostics.js?v=1"></script>\n'+shell_anchor)
     auth_anchor = '<script src="js/auth.js?v=14-transport"></script>'
     if text.count(auth_anchor) != 1:
         raise ValueError('DEV_AUTH_ANCHOR_CHANGED')

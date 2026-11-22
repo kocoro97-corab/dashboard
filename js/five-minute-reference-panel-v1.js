@@ -35,7 +35,7 @@ function mount(host){
   catch(error){if(alive&&run===version&&Number.isInteger(error?.http))lastHttp=error.http;throw error}
  }});
  function clear(){version++;approved=false;pending=false;lastReport=null;lastHttp=null;copy.disabled=true;copyStatus.textContent='';fallback.hidden=true;fallback.value='';reader.invalidate();read.disabled=false;output.replaceChildren();output.dataset.fiveMinuteResult='empty'}
- function report(state){lastReport=evidence({...state,build,http:lastHttp});copy.disabled=false}
+ function report(state){lastReport=evidence({...state,build,http:lastHttp});root.DevelopmentDiagnostics?.verification('aapl5m',lastReport);copy.disabled=false}
  async function copyReport(){
   if(!alive||!lastReport)return;const text=JSON.stringify(lastReport),current=version;
   try{await root.navigator.clipboard.writeText(text);if(alive&&version===current)copyStatus.textContent='인증정보를 제외한 연결 결과를 복사했습니다.'}

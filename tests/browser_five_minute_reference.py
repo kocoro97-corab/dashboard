@@ -18,7 +18,7 @@ async def main():
    for width in [1440,690,344]:
     h=await Harness(browser,artifact,feeds,width,published=args.published).start_browser(tmp);page=h.page
     try:
-     await page.clock.set_fixed_time('2026-11-22T01:00:00Z');await h.login('strategy')
+     await page.clock.set_fixed_time('2026-11-22T01:00:00Z');await h.login('diagnostics')
      panel=page.locator('[data-module=five-minute-reference-v1]');await expect(panel).to_have_count(1)
      await expect(panel.get_by_role('button',name='연결 결과 복사',exact=True,include_hidden=True)).to_be_disabled()
      reads=lambda:sum(r.get('url')==URL for r in h.requests)
@@ -57,7 +57,7 @@ async def main():
       # A missing server capability cannot cause a public read.
       await page.evaluate('''()=>{window.__fiveTransport=DashboardTransport;window.__fiveMetaMode='missing';window.DashboardTransport=Object.freeze({...DashboardTransport,post:async body=>body.action==='appVersion'?new Response(__fiveMetaMode==='missing'?JSON.stringify({success:true,freshTestEnvironment:true,testEnvironment:'nh-staging',developmentPublicMarket:true}):__fiveMetaMode==='refused'?JSON.stringify({success:false,code:'PRIVATE_SERVER_TEXT',message:'PRIVATE_VALUE'}):'PRIVATE_NON_JSON_BODY',{status:__fiveMetaMode==='missing'?200:__fiveMetaMode==='refused'?403:502}):__fiveTransport.post(body)})}''')
       # Panel captures its transport at mount; remount to exercise the old server contract.
-      await h.go('news');await h.go('strategy')
+      await h.go('news');await h.go('diagnostics')
       panel=page.locator('[data-module=five-minute-reference-v1]');await panel.locator('summary').click()
       n=reads();await panel.get_by_role('button',name='AAPL 5분봉 조회',exact=True).click()
       await expect(panel).to_contain_text('개발 중계의 AAPL 5분봉 연결이 아직 활성화되지 않았습니다.');assert reads()==n
@@ -71,10 +71,10 @@ async def main():
        failed=json.loads(await panel.get_by_label('공유용 연결 결과').input_value());assert failed['status']=='FAIL' and failed['phase']=='CAPABILITY' and failed['http']==http
        assert 'PRIVATE_' not in json.dumps(failed) and reads()==n
       await page.evaluate('()=>{window.DashboardTransport=window.__fiveTransport;delete window.__fiveTransport}')
-      await h.go('news');await h.go('strategy');panel=page.locator('[data-module=five-minute-reference-v1]');await panel.locator('summary').click()
+      await h.go('news');await h.go('diagnostics');panel=page.locator('[data-module=five-minute-reference-v1]');await panel.locator('summary').click()
       h.overrides[URL]={'text':json.dumps(fixture()),'delayMs':700};n=reads();await panel.get_by_role('button',name='AAPL 5분봉 조회',exact=True).click();await expect(panel).to_contain_text('AAPL 5분봉 수신 중')
       await h.go('news');await expect(page.locator('[data-module=five-minute-reference-v1]')).to_have_count(0)
-      await h.go('strategy');panel=page.locator('[data-module=five-minute-reference-v1]');await panel.locator('summary').click();await expect(panel.locator('svg')).to_have_count(0)
+      await h.go('diagnostics');panel=page.locator('[data-module=five-minute-reference-v1]');await panel.locator('summary').click();await expect(panel.locator('svg')).to_have_count(0)
       await page.wait_for_timeout(800) # Allow the deliberately late old response to settle.
       await expect(panel.locator('svg')).to_have_count(0)
       await panel.get_by_role('button',name='AAPL 5분봉 조회',exact=True).click();await expect(panel).to_contain_text('AAPL 5분봉 수신 중')

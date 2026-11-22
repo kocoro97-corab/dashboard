@@ -94,6 +94,16 @@ class StrategyComparisonDevBundle(unittest.TestCase):
   self.assertIn('js/dev_session.js',self.manifest)
   self.assertLess(self.html.index('src="js/auth.js?'),self.html.index('src="js/dev_session.js?'))
 
+ def test_diagnostics_is_development_only_and_replaces_the_strategy_probe(self):
+  self.assertIn('window.MYINVEST_DEV_DIAGNOSTICS=true',self.html)
+  self.assertIn('js/development-diagnostics.js',self.manifest)
+  self.assertIn('js/page-diagnostics.js',self.manifest)
+  self.assertNotIn('page-diagnostics.js',(ROOT/'index.html').read_text())
+  self.assertNotIn('MYInvestFiveMinuteReferencePanelV1',(self.output/'js/page-strategy.js').read_text())
+  self.assertIn('MYInvestFiveMinuteReferencePanelV1',(self.output/'js/page-diagnostics.js').read_text())
+  self.assertLess(self.html.index('src="js/development-diagnostics.js?'),self.html.index('src="js/debug.js?'))
+  self.assertLess(self.html.index('src="js/page-diagnostics.js?'),self.html.index('src="js/app-shell.js?'))
+
  def test_session_build_refuses_an_unreviewed_duration_marker(self):
   from unittest.mock import patch
   original=Path.read_text

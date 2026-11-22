@@ -1,5 +1,6 @@
 (function(){
   'use strict';const {node,note,button}=DashboardPages;
+  if(window.DevelopmentDiagnostics){DashboardPages.register('settings',()=>DashboardPages.legacy({build(view){const actions=node('div',null,'hr');actions.append(button('지표 표시·우선순위 설정',()=>openModal()),button('검증·진단 열기',()=>DashboardShell.navigate('/diagnostics')));view.append(actions)}}));return}
   DashboardPages.register('settings',()=>DashboardPages.legacy({
     build(view){const actions=node('div',null,'hr');actions.dataset.shellControl='true';actions.append(button('지표 표시·우선순위 설정',()=>openModal()),button('연결 진단',()=>openDg()));view.append(actions,node('div',null,'settings-status'),note('기존 사용자 설정 저장 방식을 유지합니다. 개발 점검 환경의 저장 제한·권한은 확대하지 않습니다. 인증정보·토큰·API 키는 표시하지 않습니다.'))},
     update(view,ctx){const target=view.querySelector('.settings-status'),state=ctx.state();target.replaceChildren();

@@ -1,6 +1,6 @@
 (function(root){
   'use strict';
-  const routes=Object.freeze(['home','market','sectors','stocks','strategy','news','accounts','settings']);
+  const routes=Object.freeze(['home','market','sectors','stocks','strategy','news','accounts','settings',...(root.MYINVEST_DEV_DIAGNOSTICS===true?['diagnostics']:[])]);
   const accountTabs=Object.freeze(['overview','nh','special','ocr','holdings','analysis']);
   function parse(hash){
     const match=/^#\/([a-z]+)(?:\/([a-z]+))?$/.exec(hash||'');
