@@ -82,9 +82,12 @@ class CalendarIntegratedDeveloperBundleTests(unittest.TestCase):
   self.assertFalse(meta['published'])
 
  def test_google_oauth_not_enabled_by_default(self):
-  self.assertNotIn('accounts.google.com/gsi/client',self.calendar_html)
-  self.assertNotIn('https://www.googleapis.com',self.calendar_html)
-  self.assertIn("script-src 'self' 'unsafe-inline'",self.calendar_html)
+  # Opt-in calendar builds allow Google domains in CSP, but load no SDK
+  # until a user explicitly supplies a public ID and clicks prepare.
+  self.assertNotIn('<script src="https://accounts.google.com/gsi/client"',self.calendar_html)
+  self.assertNotIn('MYINVEST_GOOGLE_CALENDAR_CLIENT_ID=',self.calendar_html)
+  self.assertIn("script-src 'self' https://accounts.google.com",self.calendar_html)
+  self.assertIn("connect-src 'self' https://www.googleapis.com",self.calendar_html)
   self.assertIn("form-action 'none'",self.calendar_html)
   self.assertIn("base-uri 'none'",self.calendar_html)
 
