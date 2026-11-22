@@ -20,7 +20,7 @@ let date=nowKST(),ym=monthOf(date),dialog=null,panel=null,priorFocus=null,keyboa
 let editing=null,notification='',notificationType='notice',gItems=[],gMonth='',generation=0;
 let gCalendars=[],gListPartial=false,selectedCal=new Set(['primary']);
 const included=new Set(['personal','google','holidays','market']);
-const official=root.MYInvestOfficialMarketEventsV1;
+const official=root.MYInvestUnifiedMarketCalendarV1;
 const groupFor=x=>{
  if(x.sourceStatus==='OFFICIAL_SOURCE_SNAPSHOT')
   return ['holiday','early-close'].includes(x.type)?'holidays':'market';
@@ -146,6 +146,19 @@ function render(){
   filters.append(button);
  }
  panel.append(filters);
+ const marketStatus=official?.sourceStatus?.(ym.y,ym.m);
+ if(marketStatus){
+  const statusText='KRX 자료: '+
+   (marketStatus.krxCoverage==='UNVERIFIED_YEAR'?
+     '해당 연도 공식 거래일표 미확인':
+     '2026년 공식자료 중 일부 날짜 확인')+
+   ' · 마지막 원천 확인 '+marketStatus.lastCheckedAt+
+   (marketStatus.reviewDue?' · 공식 출처 재확인 권장':'')+
+   ' · 시장 개장 여부 실시간 인증 아님';
+  const evidence=create('p',statusText,'mcv2-muted');
+  evidence.setAttribute('data-calendar-source-status',marketStatus.status);
+  panel.append(evidence);
+ }
  const layout=create('div',undefined,'mcv2-layout');
  const cal=create('section',undefined,'mcv2-sheet');
  const week=create('div',undefined,'mcv2-week');
@@ -183,7 +196,7 @@ function render(){
    (entry.tentative?' · 잠정 일정':'')+
    (entry.readOnly?' · 읽기 전용':'')));
   if(entry.sourceStatus==='OFFICIAL_SOURCE_SNAPSHOT'){
-   const caution=create('p',entry.note+' · 미국 현지 날짜 기준 · 마지막 확인 '+entry.checkedAt,'mcv2-muted');
+   const caution=create('p',entry.note+' · '+(entry.market==='KR'?'한국 현지 날짜 기준':'미국 동부 현지 날짜 기준')+' · 마지막 확인 '+entry.checkedAt,'mcv2-muted');
    box.append(caution);
    const sourceLink=create('a','공식 발표 원문 보기');sourceLink.href=entry.sourceUrl;
    sourceLink.target='_blank';sourceLink.rel='noopener noreferrer';
@@ -283,7 +296,7 @@ function render(){
   }finally{root.setTimeout(()=>root.URL.revokeObjectURL(url),0)}
  });
  fileSection.append(exportButton,marketExport,
-  create('p','공식 시장 일정 .ics를 Google에 수동 가져오기 할 수 있습니다. 직접 선택한 경우에만 파일이 만들어지며 Google에 자동 등록하지 않습니다.','mcv2-muted'),
+  create('p','국내 KRX·미국 NYSE/FOMC 공식 시장 일정 .ics를 Google에 수동 가져오기 할 수 있습니다. 자동 등록·실시간 휴장 인증은 하지 않습니다.','mcv2-muted'),
   create('p','ICS 파일 선택 후 일정 병합','mcv2-muted'),file);
  aside.append(fileSection);
  const gg=create('section',undefined,'mcv2-sheet mcv2-section mcv2-google');
