@@ -268,7 +268,23 @@ function render(){
  const file=create('input');file.type='file';file.accept='.ics,text/calendar';
  file.className='mcv2-file';file.setAttribute('aria-label','ICS 일정 파일 선택');
  file.addEventListener('change',()=>{if(file.files?.[0])void importFile(file.files[0])});
- fileSection.append(exportButton,create('p','ICS 파일 선택 후 일정 병합','mcv2-muted'),file);
+ const marketExport=create('button','이 달 공식 시장 일정 .ics 내보내기');
+ marketExport.type='button';marketExport.setAttribute('data-market-ics-export','');
+ marketExport.disabled=!official?.list?.(ym.y,ym.m)?.length;
+ marketExport.addEventListener('click',()=>{
+  if(!official?.exportMonthICS)return;
+  const contents=official.exportMonthICS(ym.y,ym.m);
+  const data=new Blob([contents],{type:'text/calendar;charset=utf-8'});
+  const url=root.URL.createObjectURL(data);
+  try{
+   const a=create('a');a.href=url;
+   a.download='myinvest-official-market-'+ym.y+'-'+String(ym.m).padStart(2,'0')+'.ics';
+   root.document.body.append(a);a.click();a.remove();
+  }finally{root.setTimeout(()=>root.URL.revokeObjectURL(url),0)}
+ });
+ fileSection.append(exportButton,marketExport,
+  create('p','공식 시장 일정 .ics를 Google에 수동 가져오기 할 수 있습니다. 직접 선택한 경우에만 파일이 만들어지며 Google에 자동 등록하지 않습니다.','mcv2-muted'),
+  create('p','ICS 파일 선택 후 일정 병합','mcv2-muted'),file);
  aside.append(fileSection);
  const gg=create('section',undefined,'mcv2-sheet mcv2-section mcv2-google');
  gg.append(create('h3','Google 캘린더 읽기 전용'));
