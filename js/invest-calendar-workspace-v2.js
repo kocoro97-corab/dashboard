@@ -18,8 +18,24 @@ const nowKST=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',
 const monthOf=date=>({y:Number(date.slice(0,4)),m:Number(date.slice(5,7))});
 let date=nowKST(),ym=monthOf(date),dialog=null,panel=null,priorFocus=null,keyboard=null;
 let editing=null,notification='',notificationType='notice',gItems=[],gMonth='',generation=0;
+let gCalendars=[],gListPartial=false,selectedCal=new Set(['primary']);
+const included=new Set(['personal','google','holidays','market']);
+const official=root.MYInvestOfficialMarketEventsV1;
+const groupFor=x=>{
+ if(x.sourceStatus==='OFFICIAL_SOURCE_SNAPSHOT')
+  return ['holiday','early-close'].includes(x.type)?'holidays':'market';
+ if(x.sourceStatus==='GOOGLE_USER_CALENDAR')
+  return x.holidayCalendar?'holidays':'google';
+ return 'personal';
+};
+const labelFor=x=>{
+ if(x.sourceStatus==='OFFICIAL_SOURCE_SNAPSHOT')return x.sourceLabel+' 공식 일정표';
+ if(x.sourceStatus==='GOOGLE_USER_CALENDAR')return x.sourceLabel||'Google 캘린더';
+ return '직접 입력';
+};
 const note=(msg,kind='notice')=>{notification=msg;notificationType=kind;render()};
 const clearGoogle=()=>{gItems=[];gMonth=''};
+const clearGoogleCalendars=()=>{clearGoogle();gCalendars=[];gListPartial=false;selectedCal=new Set(['primary'])};
 function close(){
  generation++;
  if(keyboard)root.document.removeEventListener('keydown',keyboard);
@@ -60,25 +76,42 @@ async function importFile(file){
 }
 async function googleConnect(){
  if(!google?.status().configured){
-  note('실시간 Google 연결은 OAuth 웹 클라이언트 설정 후 활성화됩니다. 현재는 .ics 가져오기를 이용할 수 있습니다.');return;
+  note('Google Cloud 웹 OAuth 클라이언트 설정이 필요합니다. .ics 가져오기 기능은 사용 가능합니다.');return;
  }
- const g=++generation;
+ const seq=++generation;
  try{
   await google.connect();
-  if(dialog&&g===generation)note('Google 연결 승인됨 · 이 달 Google 일정 조회 버튼을 눌러주세요.','success');
- }catch(e){if(dialog&&g===generation)note('Google 인증 실패: '+(e?.code||'UNKNOWN'))}
+  if(!dialog||generation!==seq)return;
+  const listing=await google.listCalendars();
+  if(!dialog||generation!==seq)return;
+  gCalendars=listing.calendars;gListPartial=listing.partial;
+  selectedCal=new Set(['primary']);
+  for(const item of gCalendars)if(item.holiday)selectedCal.add(item.id);
+  note('Google 동의 완료 · 기본 달력과 휴일 달력을 선택했습니다. 이 달 일정 조회를 누르면 불러옵니다.','success');
+ }catch(e){if(dialog&&seq===generation)note('Google 연결·목록 확인 실패: '+(e?.code||'UNKNOWN'))}
 }
 async function googleRefresh(){
- if(!google?.status().connected){note('Google 연결이 필요합니다.');return}
- const g=++generation;
+ if(!google?.status().connected){note('Google 읽기 전용 연결이 필요합니다.');return}
+ const ids=[...selectedCal].filter(id=>id==='primary'||
+  gCalendars.some(item=>item.id===id));
+ if(!ids.length){note('가져올 Google 캘린더를 선택하세요.');return}
+ if(ids.length>10){note('한 번에 최대 10개 캘린더를 조회할 수 있습니다.');return}
+ const seq=++generation;
  try{
-  const result=await google.events(ym.y,ym.m);
-  if(!dialog||generation!==g)return;
-  gItems=result.records;
-  gMonth=ym.y+'-'+ym.m;
-  note('Google 기본 캘린더 '+gItems.length+'건 조회 ·'+
-   (result.partial?' 일부 결과만 표시 ·':'')+' 브라우저 메모리에만 유지','success');
- }catch(e){if(dialog&&generation===g){clearGoogle();note('Google 조회 실패: '+(e?.code||'UNKNOWN'))}}
+  const results=await Promise.allSettled(ids.map(id=>google.events(ym.y,ym.m,id)));
+  if(!dialog||seq!==generation)return;
+  const accepted=results.filter(x=>x.status==='fulfilled').map(x=>x.value);
+  const unique=new Map();
+  for(const result of accepted)for(const row of result.records)
+   if(!unique.has(row.id))unique.set(row.id,row);
+  gItems=[...unique.values()];gMonth=ym.y+'-'+ym.m;
+  const failed=results.length-accepted.length;
+  const partial=accepted.some(x=>x.partial);
+  note('Google '+accepted.length+'/'+ids.length+'개 캘린더에서 일정 '+gItems.length+
+    '건 조회'+(failed?' · '+failed+'개 실패':'')+
+    (partial?' · 일부 일정 페이지는 미조회':'')+
+    ' · 브라우저 메모리에만 표시',failed?'notice':'success');
+ }catch(e){if(dialog&&generation===seq){clearGoogle();note('Google 일정 조회 실패: '+(e?.code||'UNKNOWN'))}}
 }
 function render(){
  if(!panel)return;
@@ -99,21 +132,38 @@ function render(){
   const b=create('button',name);b.type='button';b.addEventListener('click',cb);nav.append(b);
  }
  toolbar.append(nav);panel.append(toolbar);
+ const filters=create('div',undefined,'mcv2-inline');
+ filters.setAttribute('data-calendar-filters','');
+ for(const [key,text] of [['personal','내 일정·기념일'],['google','Google 일반 일정'],
+  ['holidays','공휴일·휴장일'],['market','시장 주요 일정']]){
+  const button=create('button',text);
+  button.type='button';button.setAttribute('aria-pressed',String(included.has(key)));
+  button.setAttribute('data-calendar-filter',key);
+  button.addEventListener('click',()=>{
+   if(included.has(key))included.delete(key);else included.add(key);
+   render();
+  });
+  filters.append(button);
+ }
+ panel.append(filters);
  const layout=create('div',undefined,'mcv2-layout');
  const cal=create('section',undefined,'mcv2-sheet');
  const week=create('div',undefined,'mcv2-week');
  for(const w of ['일','월','화','수','목','금','토'])week.append(create('b',w));
  const manual=core.read(root.localStorage);
  const googleData=gMonth===ym.y+'-'+ym.m?gItems:[];
- const combined=manual.concat(googleData);
- for(const day of core.month(ym.y,ym.m,combined)){
+ const officialRows=official?.list?.(ym.y,ym.m)||[];
+ const combined=manual.concat(googleData,officialRows)
+  .filter(x=>included.has(groupFor(x)));
+ const monthly=core.month(ym.y,ym.m,combined);
+ for(const day of monthly){
   if(!day){week.append(create('div',undefined,'mcv2-blank'));continue}
   const b=create('button',undefined,'mcv2-day');
   b.type='button';b.setAttribute('data-calendar-day',day.date);
   b.setAttribute('data-selected',String(day.date===date));
   b.setAttribute('aria-label',day.date+' 일정 '+day.items.length+'건');
   b.append(create('span',String(day.day)));
-  for(const event of day.items.slice(0,2))b.append(create('small',(event.readOnly?'G · ':'')+event.title));
+  for(const event of day.items.slice(0,2))b.append(create('small',(event.readOnly?(event.sourceStatus==='OFFICIAL_SOURCE_SNAPSHOT'?'공식 · ':'G · '):'')+event.title));
   if(day.items.length>2)b.append(create('small','외 '+(day.items.length-2)+'건'));
   b.addEventListener('click',()=>choose(day.date));week.append(b);
  }
@@ -121,13 +171,24 @@ function render(){
  const detail=create('section',undefined,'mcv2-section');
  detail.append(create('h3',date+' 일정'));
  const items=create('div',undefined,'mcv2-items');
- const daily=combined.filter(e=>e.date===date);
+ const daily=monthly.find(x=>x?.date===date)?.items||[];
  if(!daily.length)items.append(create('p','이 날짜에 등록된 일정이 없습니다.','mcv2-muted'));
  for(const entry of daily){
   const box=create('div',undefined,'mcv2-event');
-  box.append(create('b',(entry.readOnly?'Google · ':'')+entry.title),
-   create('small',(entry.time||'종일')+' · '+(core.LABELS[entry.category]||'기타')+
-    (entry.readOnly?' · 읽기 전용':'')));
+  box.append(create('b',(entry.sourceStatus==='OFFICIAL_SOURCE_SNAPSHOT'?'공식 · ':
+   entry.readOnly?'Google · ':'')+entry.title),
+   create('small',(entry.kstTime&&entry.kstDate===date?entry.kstTime+' KST':
+    entry.sourceTime?entry.sourceTime+' ET':entry.time||'종일')+
+   ' · '+labelFor(entry)+(entry.repeat==='yearly'?' · 매년 반복':'')+
+   (entry.tentative?' · 잠정 일정':'')+
+   (entry.readOnly?' · 읽기 전용':'')));
+  if(entry.sourceStatus==='OFFICIAL_SOURCE_SNAPSHOT'){
+   const caution=create('p',entry.note+' · 미국 현지 날짜 기준 · 마지막 확인 '+entry.checkedAt,'mcv2-muted');
+   box.append(caution);
+   const sourceLink=create('a','공식 발표 원문 보기');sourceLink.href=entry.sourceUrl;
+   sourceLink.target='_blank';sourceLink.rel='noopener noreferrer';
+   box.append(sourceLink);
+  }
   if(entry.note)box.append(create('p',entry.note,'mcv2-muted'));
   if(!entry.readOnly){
    const actions=create('div',undefined,'mcv2-inline');
@@ -161,6 +222,12 @@ function render(){
  const titleField=field('제목','text','일정 제목',existing?.title||'');
  titleField.input.required=true;titleField.input.maxLength=100;
  titleField.input.placeholder='예: FOMC 발표 확인';
+ const repeatBox=create('label','반복');
+ const repeat=create('select');repeat.setAttribute('aria-label','일정 반복');
+ for(const [value,label] of [['none','반복 안 함'],['yearly','매년 같은 날짜']]){
+  const option=create('option',label);option.value=value;repeat.append(option);
+ }
+ repeat.value=existing?.repeat||'none';repeatBox.append(repeat);
  const grid=create('div',undefined,'mcv2-form-grid');
  const tm=field('시간 (선택)','time','일정 시간',existing?.time||'');
  const categoryLabel=create('label','일정 분류'),category=create('select');
@@ -180,13 +247,13 @@ function render(){
   cancel.addEventListener('click',()=>{editing=null;notification='';render()});
   buttons.append(cancel);
  }
- form.append(dt.label,titleField.label,grid,memoLabel,buttons);
+ form.append(dt.label,titleField.label,grid,repeatBox,memoLabel,buttons);
  form.addEventListener('submit',e=>{
   e.preventDefault();
   const saved=core.upsert(root.localStorage,{
    ...(existing?{id:existing.id}:{}),date:dt.input.value,
    title:titleField.input.value,time:tm.input.value,
-   category:category.value,note:memo.value
+   category:category.value,note:memo.value,repeat:repeat.value
   });
   if(!saved.ok){note('저장 실패: '+saved.code);return}
   date=saved.event.date;ym=monthOf(date);editing=null;
@@ -204,25 +271,54 @@ function render(){
  fileSection.append(exportButton,create('p','ICS 파일 선택 후 일정 병합','mcv2-muted'),file);
  aside.append(fileSection);
  const gg=create('section',undefined,'mcv2-sheet mcv2-section mcv2-google');
- gg.append(create('h3','Google 캘린더 연결'));
+ gg.append(create('h3','Google 캘린더 읽기 전용'));
  const st=google?.status()||{configured:false,connected:false};
  const buttonsGoogle=create('div',undefined,'mcv2-inline');
  if(st.connected){
   const refresh=create('button','이 달 Google 일정 조회');refresh.type='button';
   refresh.addEventListener('click',()=>void googleRefresh());
+  const reloadList=create('button','구독 캘린더 목록 다시 확인');
+  reloadList.type='button';reloadList.addEventListener('click',async()=>{
+   try{
+    const r=await google.listCalendars();
+    if(!dialog)return;
+    gCalendars=r.calendars;gListPartial=r.partial;render();
+   }catch(e){if(dialog)note('Google 목록 조회 실패: '+(e?.code||'UNKNOWN'))}
+  });
   const disconnect=create('button','Google 연결 해제');disconnect.type='button';
   disconnect.addEventListener('click',()=>{
-   generation++;google.disconnect();clearGoogle();note('Google 연결을 해제했습니다.','success');
+   generation++;google.disconnect();clearGoogleCalendars();
+   note('Google 연결을 해제했습니다.','success');
   });
-  buttonsGoogle.append(refresh,disconnect);
+  buttonsGoogle.append(refresh,reloadList,disconnect);
  }else{
   const connect=create('button','Google 읽기 전용 연결');connect.type='button';
   connect.disabled=!st.configured;connect.addEventListener('click',()=>void googleConnect());
   buttonsGoogle.append(connect);
  }
- gg.append(buttonsGoogle,create('p',st.connected?
-  '읽기 전용 인증됨 · 조회는 수동이며 이 화면의 메모리에만 표시됩니다.':
-  '웹 OAuth 클라이언트 ID와 Google 계정 승인이 필요합니다. 현재 실시간 일정은 연결되지 않았습니다.','mcv2-muted'));
+ gg.append(buttonsGoogle);
+ if(st.connected){
+  gg.append(create('p','보이는 Google 구독 캘린더를 선택하세요. 휴일 구독은 기본 선택되며, 다른 개인·업무 달력은 명시적으로 선택할 때만 조회됩니다.','mcv2-muted'));
+  const choices=create('div',undefined,'mcv2-google-calendars');
+  choices.setAttribute('data-google-calendar-list','');
+  for(const calendar of gCalendars.slice(0,30)){
+   const label=create('label',undefined,'mcv2-calendar-choice');
+   const box=create('input');box.type='checkbox';
+   box.checked=selectedCal.has(calendar.id);
+   box.setAttribute('aria-label',calendar.name+' 일정 포함');
+   box.addEventListener('change',()=>{
+    if(box.checked)selectedCal.add(calendar.id);else selectedCal.delete(calendar.id);
+    clearGoogle();render();
+   });
+   label.append(box,create('span',calendar.name+(calendar.holiday?' · 휴일·기념일 구독':'')));
+   choices.append(label);
+  }
+  gg.append(choices);
+  if(gListPartial)gg.append(create('p','캘린더 목록 100개 중 일부만 제공됐습니다.','mcv2-muted'));
+ }
+ gg.append(create('p',st.connected?
+  'Google은 이 달 선택한 캘린더만 클릭 시 조회합니다. Google 휴일은 KRX 휴장 확정자료가 아닙니다.':
+  '웹 OAuth 클라이언트 ID와 Google 계정 승인이 필요합니다. 구독 중인 휴일·기념일 달력도 연결 전에는 표시할 수 없습니다.','mcv2-muted'));
  const link=create('a','Google 캘린더 사이트 열기');
  link.href='https://calendar.google.com/calendar/u/0/r/month';
  link.target='_blank';link.rel='noopener noreferrer';gg.append(link);
@@ -260,7 +356,7 @@ function open(){
  render();panel.querySelector('[data-calendar-close]')?.focus();
  return true;
 }
-function logout(){close();google?.disconnect?.()}
+function logout(){close();google?.disconnect?.();clearGoogleCalendars()}
 const api=Object.freeze({open,close,logout,googleStatus:()=>google?.status()||{configured:false}});
 if(typeof module==='object'&&module.exports)module.exports=api;
 else root.MYInvestCalendarWorkspaceV2=api;
