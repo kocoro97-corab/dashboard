@@ -22,6 +22,9 @@ SCRIPTS = (
     'investment-research-report-v1.js',
     'investment-research-report-panel-v1.js',
     'research-report-harness-fixture-v1.js',
+    'research-native-data-contract-audit-v1.js',
+    'research-native-contract-synthetic-fixture-v1.js',
+    'research-native-contract-audit-panel-v1.js',
     'research-report-strategy-review-hook-v1.js',
 )
 
