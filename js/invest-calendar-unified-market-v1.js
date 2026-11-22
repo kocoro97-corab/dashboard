@@ -1,0 +1,119 @@
+/* MY INVEST — unified, read-only market event evidence. Reuses the EXISTING
+ * U.S. official snapshot + sparse verified KRX documents; no fetch.
+ * Neither Google subscription nor this registry certifies market opening.
+ */
+(function(root){
+'use strict';
+function dependencies(){
+ const us=root.MYInvestOfficialMarketEventsV1;
+ const kr=root.MYInvestKrxOfficialCalendarV1;
+ if(!us||typeof us.list!=='function'||!kr||typeof kr.list!=='function')
+  return null;
+ return {us,kr};
+}
+function list(year,month){
+ const src=dependencies();
+ if(!src)return Object.freeze([]);
+ const seen=new Set(),result=[];
+ for(const x of src.us.list(year,month).concat(src.kr.list(year,month))){
+  if(!x||typeof x.id!=='string'||seen.has(x.id))continue;
+  seen.add(x.id);result.push(x);
+ }
+ return Object.freeze(result.sort((a,b)=>a.date.localeCompare(b.date)||
+  (a.market==='KR'?-1:1)-(b.market==='KR'?-1:1)||
+  a.title.localeCompare(b.title)));
+}
+function sourceStatus(year,month,{now}={}){
+ const src=dependencies();
+ if(!src)return Object.freeze({status:'MISSING_SOURCES',lastCheckedAt:null,
+  ageDays:null,reviewDue:true,liveVerified:false,krxCoverage:'UNAVAILABLE'});
+ const checkedAt='2026-11-22';
+ const today=typeof now==='string'?now:
+  new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',
+   month:'2-digit',day:'2-digit'}).format(new Date());
+ const date=/^20\d{2}-\d{2}-\d{2}$/.test(today)&&
+  Number.isFinite(Date.parse(today))?Date.parse(today+'T00:00:00Z'):NaN;
+ const ageDays=Number.isFinite(date)?
+  Math.max(0,Math.floor((date-Date.parse(checkedAt+'T00:00:00Z'))/86400000)):null;
+ const krxCoverage=src.kr.coverage(year,month);
+ const reviewDue=ageDays===null||ageDays>21||krxCoverage.status==='UNVERIFIED_YEAR';
+ return Object.freeze({
+  status:reviewDue?'SOURCE_RECHECK_REQUIRED':'SOURCE_SNAPSHOT_ONLY',
+  lastCheckedAt:checkedAt,ageDays,reviewDue,
+  krxCoverage:krxCoverage.status,
+  krxMessage:krxCoverage.message||'',
+  liveVerified:false,tradeSessionCertified:false,
+  autoRefreshAvailable:false,
+  note:'공식 원문 스냅샷이며 온라인 자동 재확인 기능은 아직 연결되지 않음',
+  sources:Object.freeze([
+   src.kr.primarySource,src.us.sourceUrls.nyse,
+   src.us.sourceUrls.fed26,src.us.sourceUrls.fed27,
+   src.us.sourceUrls.bls,src.us.sourceUrls.bea
+  ])
+ });
+}
+const enc=new TextEncoder();
+function fold(line){
+ let bytes=0,out='';
+ for(const c of Array.from(line)){
+  const needed=enc.encode(c).length;
+  if(bytes+needed>73){
+   out+='\r\n ';
+   bytes=1;
+  }
+  out+=c;bytes+=needed;
+ }
+ return out;
+}
+function escapeIcs(s){
+ return String(s).replace(/\\/g,'\\\\').replace(/\r\n?|\n/g,'\\n')
+  .replace(/,/g,'\\,').replace(/;/g,'\\;');
+}
+function compact(ms){
+ return new Date(ms).toISOString().replace(/[-:]|\.\d{3}/g,'');
+}
+function oneDay(date){
+ const [y,m,d]=date.split('-').map(Number);
+ return new Date(Date.UTC(y,m-1,d+1)).toISOString().slice(0,10).replace(/-/g,'');
+}
+function exportMonthICS(year,month){
+ const items=list(year,month);
+ const lines=[
+  'BEGIN:VCALENDAR','VERSION:2.0',
+  'PRODID:-//MY INVEST//Official KR and US Market Snapshots//KO',
+  'CALSCALE:GREGORIAN','METHOD:PUBLISH',
+  'X-WR-CALNAME:MY INVEST KR-US market calendar snapshot'
+ ];
+ for(const item of items){
+  lines.push('BEGIN:VEVENT',
+   fold('UID:'+item.id.replace(/[^A-Za-z0-9._:-]/g,'-')+'@myinvest-evidence'),
+   'DTSTAMP:20261122T000000Z');
+  if(item.sourceTime&&item.kstDate&&item.kstTime){
+   const [y,m,d]=item.kstDate.split('-').map(Number);
+   const [h,min]=item.kstTime.split(':').map(Number);
+   const utc=Date.UTC(y,m-1,d,h-9,min);
+   lines.push('DTSTART:'+compact(utc),
+    'DTEND:'+compact(utc+60*60000));
+  }else{
+   lines.push('DTSTART;VALUE=DATE:'+item.date.replace(/-/g,''),
+    'DTEND;VALUE=DATE:'+oneDay(item.date));
+  }
+  const detail=item.sourceLabel+' | 기준일: '+item.checkedAt+
+   ' | '+(item.market==='US'?'미국 현지 날짜 기준':'한국 날짜 기준')+
+   ' | 실시간 휴장/시장 개장 검증 아님 | '+(item.note||'')+
+   ' | 공식 출처: '+item.sourceUrl;
+  lines.push(fold('SUMMARY:'+escapeIcs(item.title)),
+   fold('DESCRIPTION:'+escapeIcs(detail)),
+   fold('URL:'+item.sourceUrl),
+   'END:VEVENT');
+ }
+ lines.push('END:VCALENDAR');
+ return lines.join('\r\n')+'\r\n';
+}
+const api=Object.freeze({
+ list,sourceStatus,exportMonthICS,
+ checkedAt:'2026-11-22',isLive:false
+});
+if(typeof module==='object'&&module.exports)module.exports=api;
+else root.MYInvestUnifiedMarketCalendarV1=api;
+})(typeof globalThis!=='undefined'?globalThis:this);
