@@ -166,3 +166,63 @@ test('market sources are read only; no new HTTP, provider credentials, GAS write
   'sessionStorage.', 'NH_ACCOUNT', 'executeOrder(', 'placeOrder(', 'PropertiesService'])
   assert.ok(!content.includes(banned),banned);
 });
+
+
+test('global market page can request evidence only for the relevant US date window',()=>{
+ const r=c.evidenceForRange({market:'US',startDate:'2026-12-01',
+  endDate:'2026-12-12',now:'2026-11-22'});
+ assert.equal(r.status,'EVIDENCE_SNAPSHOT_ONLY');
+ assert.ok(r.records.some(x=>x.type==='fomc'));
+ assert.ok(r.records.some(x=>x.title.includes('CPI')));
+ assert.equal(r.records.some(x=>x.market==='KR'),false);
+ assert.equal(r.canBeShownAsEvidence,true);
+ assert.equal(r.shownByDefault,false);
+ assert.equal(r.providerCalls,0);
+ assert.equal(r.calendarFetches,0);
+});
+test('strategy may request only KR December closures without any US events or re-fetch',()=>{
+ const r=c.evidenceForRange({market:'KR',startDate:'2026-12-24',
+  endDate:'2026-12-31',types:['holiday'],now:'2026-11-22'});
+ assert.deepEqual(r.records.map(x=>x.date),['2026-12-25','2026-12-31']);
+ assert.ok(r.records.every(x=>x.market==='KR'&&x.type==='holiday'));
+ assert.equal(r.tradingSessionCertified,false);
+ assert.equal(r.accountAccessed,false);
+ assert.equal(r.ordersPlaced,0);
+});
+test('KR and US shared source records remain references rather than duplicate queries',()=>{
+ const range=c.evidenceForRange({market:'ALL',startDate:'2026-12-24',
+  endDate:'2026-12-31',now:'2026-11-22'});
+ const month=c.list(2026,12);
+ assert.ok(range.records.some(x=>x.market==='KR'));
+ assert.ok(range.records.some(x=>x.market==='US'));
+ assert.equal(range.records[0],month.find(x=>x.id===range.records[0].id));
+ assert.equal(range.providerCalls,0);
+});
+test('unverified 2027 Korean sessions are withheld even when US FOMC exists',()=>{
+ const range=c.evidenceForRange({market:'KR',startDate:'2027-01-01',
+  endDate:'2027-01-31',now:'2026-11-22'});
+ assert.equal(range.records.length,0);
+ assert.equal(range.status,'SOURCE_RECHECK_REQUIRED');
+ assert.equal(range.liveVerified,false);
+});
+test('market evidence source recheck after threshold does not invent replacements',()=>{
+ const r=c.evidenceForRange({market:'US',startDate:'2026-12-01',
+  endDate:'2026-12-12',now:'2027-01-01'});
+ assert.equal(r.status,'SOURCE_RECHECK_REQUIRED');
+ assert.ok(r.records.some(x=>x.type==='fomc'));
+ assert.equal(r.providerCalls,0);
+});
+test('invalid and unbounded evidence queries fail closed, no API calls',()=>{
+ for(const x of [
+  {market:'KR',startDate:'2026-12-01',endDate:'2027-12-01'},
+  {market:'US',startDate:'2026-12-31',endDate:'2026-12-01'},
+  {market:'US',startDate:'2026-02-30',endDate:'2026-03-01'},
+  {market:'ALL',startDate:'2026-12-01',endDate:'2027-03-31'},
+  {market:'KR',startDate:'2026-12-01',endDate:'2026-12-06',types:'all'}
+ ]){
+  const r=c.evidenceForRange(x);
+  assert.equal(r.status,'INVALID_QUERY');
+  assert.equal(r.providerCalls,0);
+  assert.equal(r.records.length,0);
+ }
+});
