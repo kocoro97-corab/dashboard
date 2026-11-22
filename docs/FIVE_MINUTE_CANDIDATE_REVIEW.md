@@ -1,6 +1,6 @@
 # Five-minute read candidate and Korean source comparison — 2026-11-22 KST
 
-Status: **candidate implemented and disabled; Korean source qualification PARTIAL**. No active relay permission, application page, Worker configuration or development publication changes.
+Historical status (before user activation approval; superseded by [approved integration](FIVE_MINUTE_REFERENCE_ACTIVATION.md)): **candidate implemented and disabled; Korean source qualification PARTIAL**. No active relay permission, application page, Worker configuration or development publication changes.
 
 ## Korean late-session comparison
 

@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 NAME = 'myinvest-v2-dev-relay'
 ROLE = 'myinvest-isolated-relay-v1'
 ENDPOINT = 'https://myinvest-v2-dev-relay.kocoro97.workers.dev/api'
-WORKER_HASH = '74a29ad355e25d89747a5bde82cc276fb03c7e6fdf52c59667a4bb3923e8f10f'
+WORKER_HASH = '8d133ead746191de6c4f35c32d4a25eb666f69cd67427c42f43dd8c74a4a9dec'
 POLICY_HASH = 'f17d278de6a2f20680a29d4da7995131c5075df3f3c0d0a978f4028de8e837a5'
 UUID = re.compile(r'^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$')
 CAPABILITIES = ('freshTestEnvironment', 'testEnvironment', 'scriptHash', 'sheetHash',
@@ -419,7 +419,7 @@ def activate_candidate(api, base, before, settings, old, candidate, public_probe
             new, exposed = public_probe()
             if any(new.get(k) != old.get(k) for k in CAPABILITIES):
                 raise Stop('POST_ACTIVATION_CAPABILITIES_CHANGED')
-            if new.get('developmentReadResilienceVersion') == 1 and exposed:
+            if new.get('developmentReadResilienceVersion') == 1 and new.get('developmentFiveMinuteReferenceVersion') == (1 if old.get('developmentPublicMarket') is True else 0) and exposed:
                 break
             if attempt == 2:
                 raise Stop('POST_ACTIVATION_MARKER_UNCONFIRMED')

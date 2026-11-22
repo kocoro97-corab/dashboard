@@ -41,10 +41,10 @@ class IntradayProbeTest(unittest.TestCase):
   self.assertIsNone(r['providerSessionEndLocal']);self.assertIsNone(r['providerQuoteLocal']);self.assertEqual(r['status'],'PARTIAL')
  def test_input_not_mutated_or_private_fields_echoed(self):
   d=fixture();d['privateToken']='PRIVATE_VALUE';before=copy.deepcopy(d);r=self.inspect(d);self.assertEqual(d,before);self.assertNotIn('PRIVATE_VALUE',json.dumps(r))
- def test_fixed_targets_and_existing_relay_remain_closed(self):
+ def test_fixed_targets_allow_only_the_approved_five_minute_pilot(self):
   sys.path.insert(0,str(ROOT/'relay'));from market_routes import allowed_market_url
   for symbol in probe.SYMBOLS:
-   for interval in probe.INTERVALS:self.assertFalse(allowed_market_url(probe.target(symbol,interval)))
+   for interval in probe.INTERVALS:self.assertEqual(allowed_market_url(probe.target(symbol,interval)),symbol=='AAPL' and interval=='5m')
   with self.assertRaises(ValueError):probe.target('OTHER','1m')
   with self.assertRaises(ValueError):probe.target('AAPL','1d')
  def test_existing_capture_directory_refused_before_network(self):

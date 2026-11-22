@@ -1,4 +1,4 @@
-"""Review-only patch exercised in a temporary tree, never the active relay."""
+"""Approved narrow pilot security contract, exercised without live requests."""
 import importlib.util,os,shutil,subprocess,tempfile,unittest
 from pathlib import Path
 
@@ -10,15 +10,13 @@ class FiveMinuteProposalTest(unittest.TestCase):
   cls.tmp=tempfile.TemporaryDirectory();cls.tree=Path(cls.tmp.name)
   for name in ['relay/worker/worker.mjs','relay/worker/policy.json','relay/market_routes.py','tests/worker-relay.test.cjs']:
    p=cls.tree/name;p.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(ROOT/name,p)
-  for flags in [['--check'],[]]:
-   subprocess.run(['git','apply',*flags,str(ROOT/'proposals/aapl-five-minute-reference.patch')],cwd=cls.tree,check=True,capture_output=True)
  @classmethod
  def tearDownClass(cls):cls.tmp.cleanup()
- def test_python_scope_and_current_relay_still_closed(self):
+ def test_python_scope_of_approved_relay(self):
   def load(file,name):
    spec=importlib.util.spec_from_file_location(name,file);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m
   live=load(ROOT/'relay/market_routes.py','current_routes');proposed=load(self.tree/'relay/market_routes.py','proposed_routes')
-  self.assertFalse(live.allowed_market_url(URL));self.assertTrue(proposed.allowed_market_url(URL))
+  self.assertTrue(live.allowed_market_url(URL));self.assertTrue(proposed.allowed_market_url(URL))
   for bad in [URL+'&token=x',URL+'#x',URL.replace('AAPL','MSFT'),URL.replace('5m','1m'),URL.replace('1d','5d'),URL.replace('https:','http:'),URL.replace('AAPL','%41APL')]:self.assertFalse(proposed.allowed_market_url(bad),bad)
   daily=URL.replace('5m','1d');self.assertTrue(live.allowed_market_url(daily));self.assertTrue(proposed.allowed_market_url(daily))
  def test_existing_worker_security_suite_against_proposed_copy(self):

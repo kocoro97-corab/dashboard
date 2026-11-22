@@ -17,7 +17,7 @@ function plan({capital,riskPct,entry,stop,target,allocation}){
 function create(){
  const legacy=DashboardPages.legacy({ids:['strategySection'],intro:'기존 규칙 기반 시장 시나리오 · 실제 주문 없음',refresh(){generateScenario()}});
  let view,head,output,holdingPanel,conditional,selector=null,unsubscribe=null,requestVersion=0,latestData=null,lastSelectionKey='',inputs={},mode='swing',active=false,ctxRef=null;
- let compareDisclosure=null,compareHost=null,compareInstance=null;
+ let compareDisclosure=null,compareHost=null,compareInstance=null,fiveMinutePanel=null;
 
  const css='.str4{margin-bottom:18px;color:inherit}.str4 button{cursor:pointer}.str4-nav,.str4-modes{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.str4-nav button,.str4-modes button{border:1px solid #465775;background:#172238;color:#e7eef9;border-radius:7px;padding:8px 12px}.str4-modes button[aria-pressed="true"]{background:#264365;border-color:#72b5ff}.str4-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.str4-field{display:flex;flex-direction:column;gap:5px;padding:10px;border:1px solid #344158;border-radius:9px;background:#172238;color:#e7eef9}.str4-field input{min-width:0;padding:9px;border-radius:6px;border:1px solid #52637c;background:#101a2a;color:#fff}.str4-output{padding:12px;border:1px solid #465775;border-radius:9px;margin-top:12px}.str4-muted{font-size:12px;color:#b6c5d9}.str4-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.str4-cards div{padding:10px;border-radius:8px;background:#172238;color:#e7eef9}.str4-cards strong{display:block;font-size:17px;margin-top:5px}@media(max-width:550px){.str4-grid,.str4-cards{grid-template-columns:1fr}}';
  const field=(label,key,initial,step)=>{const wrap=make('label',undefined,'str4-field');wrap.append(make('span',label));const input=make('input');input.type='number';input.min='0';input.step=step;input.inputMode='decimal';input.value=initial;input.addEventListener('input',calculate);inputs[key]=input;wrap.append(input);return wrap};
@@ -101,8 +101,9 @@ function create(){
  const comparisonStyle=make('style');
  comparisonStyle.textContent='#pageViewport .str4-compare-host .msc1 header{display:block}';
  view.append(comparisonStyle,compareDisclosure);
+ fiveMinutePanel=root.MYInvestFiveMinuteReferencePanelV1?.mount(view)||null;
  legacy.mount(container,ctx);container.prepend(view);calculate();unsubscribe=ctx.subscribe?.(()=>{if(active){renderHolding();if(latestData&&readSelection())drawConditional(latestData,readSelection())}});void loadStrategy()}
- return {mount,refresh:async(ctx,force)=>{await legacy.refresh(ctx,force);renderHeader();renderHolding();void loadStrategy(force)},unmount(){active=false;requestVersion++;latestData=null;compareDisclosure?.removeEventListener('toggle',toggleComparison);cleanupComparison();compareDisclosure=null;compareHost=null;selector?.destroy();selector=null;unsubscribe?.();unsubscribe=null;view?.remove();legacy.unmount()},getStatus:()=>({status:active?'ready':'unmounted',mode})};
+ return {mount,refresh:async(ctx,force)=>{await legacy.refresh(ctx,force);renderHeader();renderHolding();void loadStrategy(force)},unmount(){fiveMinutePanel?.destroy();fiveMinutePanel=null;active=false;requestVersion++;latestData=null;compareDisclosure?.removeEventListener('toggle',toggleComparison);cleanupComparison();compareDisclosure=null;compareHost=null;selector?.destroy();selector=null;unsubscribe?.();unsubscribe=null;view?.remove();legacy.unmount()},getStatus:()=>({status:active?'ready':'unmounted',mode})};
 }
 DashboardPages.register('strategy',create);
 root.MYInvestStrategyMath=Object.freeze({plan});

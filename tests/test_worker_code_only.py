@@ -81,6 +81,9 @@ class Cloud:
             'developmentAccountReads': True, 'developmentIndustryMarket': True, 'sheetHash': 'synthetic'}
         if self.version == NEW:
             doc['developmentReadResilienceVersion'] = 1
+            doc['developmentFiveMinuteReferenceVersion'] = 1
+            if self.fault == 'reference-marker':
+                doc.pop('developmentFiveMinuteReferenceVersion')
             if self.fault == 'capability':
                 doc['developmentAccountReads'] = False
             if self.fault == 'concurrent-after-activation':
@@ -90,6 +93,14 @@ class Cloud:
 
 
 class CodeOnlyTests(unittest.TestCase):
+    def test_missing_reference_marker_cannot_report_activation_pass(self):
+        c = Cloud()
+        c.fault = 'reference-marker'
+        with patch.object(m.time, 'sleep'):
+            result = m.deploy(c, 'a' * 32, lambda _: None, public_probe=c.probe, code=b'// synthetic code')
+        self.assertEqual(result['rollback'], 'PASS_PREVIOUS_VERSION_RESTORED')
+        self.assertEqual(c.version, OLD)
+
     def make_pending(self, c, folder):
         m.private_checkpoint(folder / 'before.json', {'worker': m.NAME,
             'deployment': {'id': 'deployment-' + OLD, 'version': OLD},
