@@ -127,7 +127,48 @@ function list(year,month,{types=['holiday','early-close','fomc','macro']}={}){
  const prefix=year+'-'+String(month).padStart(2,'0')+'-';
  return Object.freeze(immutable.filter(x=>x.date.startsWith(prefix)&&selected.has(x.type)));
 }
-const api=Object.freeze({list,all:()=>immutable,sourceUrls:S,
+function escapeIcs(s){
+ return String(s).replace(/\\/g,'\\\\').replace(/\r\n?|\n/g,'\\n')
+  .replace(/,/g,'\\,').replace(/;/g,'\\;');
+}
+function utcString(ms){return new Date(ms).toISOString().replace(/[-:]|\.\d{3}/g,'')}
+function nextDay(day){
+ const [y,m,d]=day.split('-').map(Number);
+ return new Date(Date.UTC(y,m-1,d+1)).toISOString().slice(0,10).replace(/-/g,'');
+}
+function toKstUtc(date,time){
+ const [y,m,d]=date.split('-').map(Number),[hh,mm]=time.split(':').map(Number);
+ return Date.UTC(y,m-1,d,hh-9,mm);
+}
+function exportMonthICS(year,month){
+ const rows=list(year,month);
+ const result=['BEGIN:VCALENDAR','VERSION:2.0',
+  'PRODID:-//MY INVEST//Official Market Schedule Snapshot//KO',
+  'CALSCALE:GREGORIAN','METHOD:PUBLISH',
+  'X-WR-CALNAME:MY INVEST official market schedule snapshot'];
+ for(const item of rows){
+  const date=item.date.replace(/-/g,'');
+  result.push('BEGIN:VEVENT',
+   'UID:'+item.id.replace(/[^a-zA-Z0-9._:-]/g,'-')+'@myinvest-official',
+   'DTSTAMP:20261122T000000Z');
+  if(item.sourceTime&&item.kstDate&&item.kstTime){
+   const utc=toKstUtc(item.kstDate,item.kstTime);
+   result.push('DTSTART:'+utcString(utc),
+    'DTEND:'+utcString(utc+60*60000));
+  }else result.push('DTSTART;VALUE=DATE:'+date,
+   'DTEND;VALUE=DATE:'+nextDay(item.date));
+  result.push('SUMMARY:'+escapeIcs(item.title),
+   'DESCRIPTION:'+escapeIcs(
+    item.sourceLabel+' '+item.note+
+    ' / 미국 동부 현지일 기준 / 2026-11-22 기준 일정표(실시간 미검증)'+
+    ' / 공식 출처: '+item.sourceUrl),
+   'URL:'+item.sourceUrl,
+   'END:VEVENT');
+ }
+ result.push('END:VCALENDAR');
+ return result.join('\r\n')+'\r\n';
+}
+const api=Object.freeze({list,exportMonthICS,all:()=>immutable,sourceUrls:S,
  checkedAt:'2026-11-22',isLive:false,timezone:'America/New_York'});
 if(typeof module==='object'&&module.exports)module.exports=api;
 else root.MYInvestOfficialMarketEventsV1=api;
