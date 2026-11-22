@@ -11,6 +11,13 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGE = 'https://kocoro97-corab.github.io/dashboard-v2-dev/'
+CALENDAR_MODULES = (
+    'invest-calendar-core-v2.js',
+    'invest-calendar-style-v2.js',
+    'invest-calendar-google-readonly-v2.js',
+    'invest-calendar-workspace-v2.js',
+)
+CALENDAR_CLIENT_RE = re.compile(r'^[0-9]{8,32}-[A-Za-z0-9_-]{12,80}\.apps\.googleusercontent\.com$')
 
 
 def fixed_relay(value):
@@ -22,7 +29,10 @@ def fixed_relay(value):
     return value
 
 
-def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
+def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True,
+          include_calendar=False, google_calendar_client_id=None):
+    if google_calendar_client_id is not None and not include_calendar:
+        raise ValueError('GOOGLE_OAUTH_REQUIRES_CALENDAR_PREVIEW')
     public_config=root/'config/development-relay.json'
     if use_public_config and relay_endpoint is None and public_config.is_file():
         doc=json.loads(public_config.read_text())
@@ -67,6 +77,31 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
     compare_scripts = ''.join('<script src="js/' + name + '?v=1"></script>\n'
                               for name in strategy_optional_modules)
     text = text.replace(strategy_anchor, compare_scripts + strategy_anchor)
+    # Calendar is explicitly OPT-IN for an isolated developer build, not a
+    # change to standard Pages/production output. The OAuth ID is public only.
+    if include_calendar:
+        news_anchor = '<script src="js/page-news.js?v=2"></script>'
+        if text.count(news_anchor) != 1:
+            raise ValueError('DEV_CALENDAR_NEWS_ANCHOR_CHANGED')
+        google_preface = ''
+        if google_calendar_client_id is not None:
+            if (not isinstance(google_calendar_client_id, str) or
+                    not CALENDAR_CLIENT_RE.fullmatch(google_calendar_client_id)):
+                raise ValueError('GOOGLE_PUBLIC_OAUTH_CLIENT_ID_INVALID')
+            text = text.replace("script-src 'self' ", "script-src 'self' https://accounts.google.com ")
+            text = text.replace("connect-src 'self' data:", "connect-src 'self' https://www.googleapis.com data:")
+            text = text.replace("frame-src https://s.tradingview.com;",
+                                "frame-src https://s.tradingview.com https://accounts.google.com;")
+            google_preface = (
+                '<script>window.MYINVEST_GOOGLE_CALENDAR_CLIENT_ID=' +
+                json.dumps(google_calendar_client_id) + ';</script>\n' +
+                '<script src="https://accounts.google.com/gsi/client"></script>\n'
+            )
+        calendar_scripts = ''.join(
+            '<script src="js/' + filename + '?calendar=v2"></script>\n'
+            for filename in CALENDAR_MODULES
+        )
+        text = text.replace(news_anchor, news_anchor + '\n' + google_preface + calendar_scripts)
     text = re.sub(r'(src="js/[^"?]+\?[^" ]+)(")', lambda m: m[1] + '&dev=' + revision[:12] + m[2], text)
     (output / 'index.html').write_text(text)
     assets = {'js': set(re.findall(r'src="js/([A-Za-z0-9_-]+\.js)', text)),
@@ -100,7 +135,19 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
     shutil.copyfile(ocr / 'manifest.json', output / 'vendor/ocr/manifest.json')
     (output / '.nojekyll').write_text('')
     (output / 'robots.txt').write_text('User-agent: *\nDisallow: /\n')
-    (output / 'development-only.json').write_text(json.dumps({'myinvestDevelopmentOnly': True, 'authOnly': False, 'publicMarketCapable': True, 'nhAccountQueries': False, 'storageWrites': False, 'screenInspection': True, 'sourceBranch': 'feat/nh-integration-v2', 'sourceCommit': revision}))
+    dev_metadata = {'myinvestDevelopmentOnly': True, 'authOnly': False, 'publicMarketCapable': True, 'nhAccountQueries': False, 'storageWrites': False, 'screenInspection': True, 'sourceBranch': 'feat/nh-integration-v2', 'sourceCommit': revision}
+    if include_calendar:
+        dev_metadata.update({
+            'calendarReview': 'LOCAL_MANUAL_AND_OPTIONAL_GOOGLE_READ_ONLY',
+            'googleOAuthClientConfigured': bool(google_calendar_client_id),
+            'googleScope': 'calendar.events.readonly',
+            'googleEventWrites': False,
+            'browserLocalCalendarWrites': True,
+            'calendarGASWrites': False,
+            'calendarNHCalls': False,
+            'published': False
+        })
+    (output / 'development-only.json').write_text(json.dumps(dev_metadata))
     manifest = {p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in sorted(output.rglob('*')) if p.is_file()}
     (output / 'asset-manifest.json').write_text(json.dumps(manifest, sort_keys=True))
@@ -111,6 +158,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--relay-endpoint',help='Verified fixed development Worker URL; never a GAS URL or credential')
+    parser.add_argument('--include-calendar',action='store_true',help='Enable calendar only in this developer artifact')
+    parser.add_argument('--google-calendar-client-id',help='Public Google Web OAuth client ID, not a secret')
     args = parser.parse_args()
-    build(args.output,relay_endpoint=args.relay_endpoint)
+    build(args.output,relay_endpoint=args.relay_endpoint,include_calendar=args.include_calendar,
+          google_calendar_client_id=args.google_calendar_client_id)
     print(json.dumps({'status': 'PASS', 'artifact': 'DEV_FRONTEND_ONLY', 'secretsIncluded': False}))
