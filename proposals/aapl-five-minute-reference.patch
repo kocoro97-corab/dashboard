@@ -1,0 +1,31 @@
+--- a/relay/worker/worker.mjs
++++ b/relay/worker/worker.mjs
+@@ -20,6 +20,8 @@
+  return {upstream:env.MYINVEST_GAS_URL,host:env.MYINVEST_PUBLIC_HOST,expected,market:env.MYINVEST_PUBLIC_MARKET==='true',futures:env.MYINVEST_PUBLIC_MARKET==='true'&&env.MYINVEST_PUBLIC_FUTURES==='true',accounts:env.MYINVEST_ACCOUNT_READS==='true',store:env.MYINVEST_EXTERNAL_STORE==='true'};
+ }
+ export function allowedMarketUrl(value){
++  // Proposed pilot: exact authenticated public read; no other intraday URL.
++  if(value==='https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=5m&range=1d')return true;
+  if(typeof value!=='string'||value.length>2048||!/^https:\/\/[^/?#]+\//i.test(value)||/[\x00-\x20\\]/.test(value)||/%(?![a-fA-F0-9]{2})/.test(value))return false;
+  try{
+   const u=new URL(value);const rawPath=value.match(/^https:\/\/[^/?#]+([^?#]*)/i)?.[1]||'/';if(decodeURIComponent(rawPath).split('/').some(x=>x==='.'||x==='..')||/(?:&&|&$|^\?&)/.test(u.search))return false;if(u.protocol!=='https:'||u.port||u.username||u.password||u.hash)return false;
+@@ -126,7 +128,7 @@
+   if(!quota.ok){headers['Retry-After']=quota.status===429?'60':'5';throw failure(quota.status===429?'RELAY_RATE_LIMIT':'RELAY_BUSY',quota.status)}
+   lease=(await quota.json()).lease;if(typeof lease!=='string')throw failure('RELAY_CONFIG_INVALID',503);
+   const readSignal=action==='publicFetch'?readDeadline():null,gateway=gatewayFactory(config,fetcher,proof,readSignal),metadata=await readWithin(()=>gateway.verify(),readSignal);let result;
+-  if(action==='appVersion')result={...metadata,relayProfile:'persistent',developmentPublicMarket:config.market,developmentPublicFutures:config.futures,developmentIndustryMarket:config.market,developmentFuturesReadVersion:2,developmentReadResilienceVersion:1,developmentAccountReads:config.accounts,developmentExternalStore:config.store,developmentExternalTestStore:false};
++  if(action==='appVersion')result={...metadata,relayProfile:'persistent',developmentPublicMarket:config.market,developmentPublicFutures:config.futures,developmentIndustryMarket:config.market,developmentFuturesReadVersion:2,developmentReadResilienceVersion:1,developmentFiveMinuteReferenceVersion:config.market?1:0,developmentAccountReads:config.accounts,developmentExternalStore:config.store,developmentExternalTestStore:false};
+   else if(action==='publicFetch')result={success:true,text:await readWithin(()=>gateway.public(body.url,body.token),readSignal)};
+   else{attemptedWrite=writes.has(action);result=await gateway.post(body);if(action==='nhQuotes')result=futureResult(result,body.items)}
+   if(result.success!==true)result={success:false,code:safeCode.has(result.code)?result.code:'GAS_REJECTED',layer:['gas','storage','nh'].includes(result.layer)?result.layer:'gas',...(safeMessages.has(result.message)?{message:result.message}:{}),mustChangePassword:result.mustChangePassword===true};
+--- a/relay/market_routes.py
++++ b/relay/market_routes.py
+@@ -9,6 +9,8 @@
+ 
+ 
+ def allowed_market_url(value):
++    # Proposed pilot only; existing caller authentication remains required.
++    if value == 'https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=5m&range=1d':return True
+     if not isinstance(value, str) or len(value) > 2048 or re.search(r'[\x00-\x20\\]', value):return False
+     try:
+         p = urlsplit(value)

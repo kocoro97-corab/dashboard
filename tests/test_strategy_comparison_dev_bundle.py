@@ -49,6 +49,7 @@ class StrategyComparisonDevBundle(unittest.TestCase):
   self.assertNotIn('tools/inspect_strategy_risk_v1.cjs',paths)
   self.assertNotIn('gas/Code.gs',paths)
   self.assertNotIn('js/market-quality-diagnostics-v1.js',paths)
+  self.assertNotIn('js/five-minute-read-candidate-v1.js',paths)
   self.assertTrue(set('js/'+s for s in MODULES).issubset(paths))
 
  def test_lazy_opt_in_and_route_cleanup_persist_in_export(self):
