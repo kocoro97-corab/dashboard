@@ -10,12 +10,12 @@ const core=require('../js/invest-calendar-core-v2.js');
 function combined(){
  // Browser-only module intentionally shares its instance dependencies via
  // globalThis; isolate in this file's V8 context to avoid test contamination.
- const context={window:{MYInvestOfficialMarketEventsV1:us,
-  MYInvestKrxOfficialCalendarV1:krx},Intl,Date,TextEncoder};
+ const context={MYInvestOfficialMarketEventsV1:us,
+  MYInvestKrxOfficialCalendarV1:krx,Intl,Date,TextEncoder};
  const s=fs.readFileSync(path.join(__dirname,
   '../js/invest-calendar-unified-market-v1.js'),'utf8');
  vm.runInNewContext(s,context,{timeout:4000});
- return context.window.MYInvestUnifiedMarketCalendarV1;
+ return context.MYInvestUnifiedMarketCalendarV1;
 }
 const c=combined();
 test('KRX source registry contains only four traceable, immutable market dates',()=>{
