@@ -61,6 +61,8 @@ Evidence: `/workspace/output/intraday-candidate-20261122/` contains the public p
 
 Local validation: **10 new reader tests; full Node 643 PASS; full Python 361 PASS**. The reader and patch are not in the development artifact. Actual owner intraday access remains NOT_RUN.
 
+The first push CI run (44971211247) exposed an existing asynchronous JSON-import test race at 344px: `set_input_files()` returned before the panel's awaited `File.text()` completed. `browser_news_briefing_panel_v1.py` now waits for the success/rejection UI before checking content or preserved storage, and deliberately delays file reads to exercise this ordering. The corrected test passes at 1440/690/344px; no news runtime code was changed.
+
 Commands:
 
 ```sh

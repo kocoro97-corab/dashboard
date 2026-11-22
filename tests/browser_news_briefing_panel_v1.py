@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tools'))
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 from build_dev_pages import build
 from public_integration_support import Harness, synthetic_feeds, ENDPOINT
 
@@ -43,12 +43,21 @@ async def main():
                           if(!out.ok)throw new Error(out.code);
                           return {date, json:out.json};
                         }""")
+                        # File input dispatch does not await the async file.text() handler.
+                        # Exercise delayed reads so CI cannot pass by incidental timing.
+                        await h.page.evaluate("""() => {
+                          const read=File.prototype.text;
+                          File.prototype.text=async function(){
+                            await new Promise(resolve=>setTimeout(resolve,100));
+                            return read.call(this);
+                          };
+                        }""")
                         await panel.locator('input[type=file]').set_input_files({
                             'name':'public-market-test.json',
                             'mimeType':'application/json',
                             'buffer':data['json'].encode('utf-8')
                         })
-                        assert '합성 7시 공개 브리핑' in await panel.inner_text()
+                        await expect(panel).to_contain_text('합성 7시 공개 브리핑')
                         assert '원문·생성 경로·시장 수치' in await panel.inner_text()
                         assert await panel.get_by_role('link', name='합성 외부 출처').count() == 1
                         assert await h.page.evaluate('window.__XSS__ === undefined')
@@ -75,10 +84,10 @@ async def main():
                         await panel.locator('input[type=file]').set_input_files({
                             'name':'bad.json','mimeType':'application/json','buffer':b'{"bad":true}'
                         })
+                        await expect(panel).to_contain_text('가져오기 거부')
                         after=await h.page.evaluate(
                             "localStorage.getItem('myinvest_public_briefing_archive_v1')")
                         assert before==after, 'invalid import must preserve data'
-                        assert '가져오기 거부' in await panel.inner_text()
 
                         await h.go('market')
                         await h.go('news')
