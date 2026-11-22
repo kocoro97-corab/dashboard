@@ -69,6 +69,10 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
     compare_scripts = ''.join('<script src="js/' + name + '?v=1"></script>\n'
                               for name in strategy_optional_modules)
     text = text.replace(strategy_anchor, compare_scripts + strategy_anchor)
+    auth_anchor = '<script src="js/auth.js?v=14-transport"></script>'
+    if text.count(auth_anchor) != 1:
+        raise ValueError('DEV_AUTH_ANCHOR_CHANGED')
+    text = text.replace(auth_anchor, auth_anchor + '\n<script src="js/dev_session.js?v=1"></script>')
     text = re.sub(r'(src="js/[^"?]+\?[^" ]+)(")', lambda m: m[1] + '&dev=' + revision[:12] + m[2], text)
     (output / 'index.html').write_text(text)
     assets = {'js': set(re.findall(r'src="js/([A-Za-z0-9_-]+\.js)', text)),
@@ -82,6 +86,11 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
                 raise ValueError('DEV_ASSET_SYMLINK')
             if source.name == 'auth.js':
                 closed = re.sub(r'const (DEFAULT_GAS_URL|LEGACY_GAS_URL)="[^"]*";', r'const \1="";', source.read_text())
+                session_marker = 'const SESSION_MS=300000;   // 5분. 절대 시각 기준이라 화면 꺼짐·백그라운드에서도 정확히 만료'
+                if closed.count(session_marker) != 1:
+                    raise ValueError('DEV_SESSION_DURATION_MARKER_CHANGED')
+                if relay_endpoint:
+                    closed = closed.replace(session_marker, 'const SESSION_MS=3600000; // Development-only: one hour of user inactivity; background checks do not reset it.')
                 (target / source.name).write_text(closed)
             else:
                 shutil.copyfile(source, target / source.name)

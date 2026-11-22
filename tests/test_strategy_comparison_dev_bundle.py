@@ -79,5 +79,30 @@ class StrategyComparisonDevBundle(unittest.TestCase):
    self.assertIn('js/'+name,self.manifest)
   self.assertNotIn('data/myinvest-public-briefings-v1.json',self.manifest)
 
+ def test_only_the_development_artifact_changes_inactivity_duration(self):
+  original=(ROOT/'js/auth.js').read_text()
+  with tempfile.TemporaryDirectory() as tmp:
+   output=Path(tmp)/'persistent'
+   build(output,relay_endpoint='https://myinvest-v2-dev-relay.synthetic.workers.dev/api')
+   built=(output/'js/auth.js').read_text()
+  self.assertIn('const SESSION_MS=300000;',original)
+  self.assertIn('const SESSION_MS=300000;',(self.output/'js/auth.js').read_text())
+  self.assertIn('const SESSION_MS=3600000;',built)
+  self.assertNotIn('const SESSION_MS=3600000;',original)
+  self.assertIn('const SECURITY_IDLE_MS = 5 * 60 * 1000;', (ROOT/'gas/Security.gs').read_text())
+  self.assertNotIn('dev_session.js',(ROOT/'index.html').read_text())
+  self.assertIn('js/dev_session.js',self.manifest)
+  self.assertLess(self.html.index('src="js/auth.js?'),self.html.index('src="js/dev_session.js?'))
+
+ def test_session_build_refuses_an_unreviewed_duration_marker(self):
+  from unittest.mock import patch
+  original=Path.read_text
+  def changed(path,*args,**kwargs):
+   text=original(path,*args,**kwargs)
+   return text.replace('const SESSION_MS=300000;','const SESSION_MS=1;') if path==ROOT/'js/auth.js' else text
+  with tempfile.TemporaryDirectory() as tmp,patch.object(Path,'read_text',changed):
+   with self.assertRaisesRegex(ValueError,'DEV_SESSION_DURATION_MARKER_CHANGED'):
+    build(Path(tmp)/'site',use_public_config=False)
+
 if __name__=='__main__':
  unittest.main()
