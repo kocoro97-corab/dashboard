@@ -100,9 +100,9 @@ function foldICS(line){
  chunks.push(line);return chunks.join('\r\n');
 }
 function ymdDate(date){return date.replace(/-/g,'')}
-function utcKST(date,time){
+function utcKST(date,time,addMinutes=0){
  const [y,m,d]=date.split('-').map(Number),[h,min]=time.split(':').map(Number);
- return new Date(Date.UTC(y,m-1,d,h-9,min)).toISOString().replace(/[-:]|\.\d{3}/g,'');
+ return new Date(Date.UTC(y,m-1,d,h-9,min+addMinutes)).toISOString().replace(/[-:]|\.\d{3}/g,'');
 }
 function plusDay(date){
  const [y,m,d]=date.split('-').map(Number);
@@ -115,9 +115,9 @@ function exportICS(storage){
   'CALSCALE:GREGORIAN','METHOD:PUBLISH'];
  for(const x of rows){
   lines.push('BEGIN:VEVENT',foldICS('UID:'+x.id.replace(/:/g,'-')+'@myinvest-local'),
-   'DTSTAMP:20261122T000000Z',
+   'DTSTAMP:'+new Date().toISOString().replace(/[-:]|\.\d{3}/g,''),
    x.time?'DTSTART:'+utcKST(x.date,x.time):'DTSTART;VALUE=DATE:'+ymdDate(x.date),
-   ...(x.time?['DTEND:'+utcKST(x.date,x.time)]:['DTEND;VALUE=DATE:'+ymdDate(plusDay(x.date))]),
+   ...(x.time?['DTEND:'+utcKST(x.date,x.time,60)]:['DTEND;VALUE=DATE:'+ymdDate(plusDay(x.date))]),
    foldICS('SUMMARY:'+escapeICS(x.title)),
    foldICS('CATEGORIES:'+escapeICS(LABELS[x.category]||'기타')));
   if(x.note)lines.push(foldICS('DESCRIPTION:'+escapeICS(x.note)));
@@ -188,7 +188,11 @@ function importICS(storage,data){
  if(!parsed.ok)return parsed;
  const before=read(storage);const ids=new Set(before.map(x=>x.id));
  const space=CAP-before.length;
- const adds=parsed.events.filter(x=>!ids.has(x.id));
+ const importedIds=new Set(ids),adds=[];
+ for(const x of parsed.events){
+  if(importedIds.has(x.id))continue;
+  importedIds.add(x.id);adds.push(x);
+ }
  const taken=adds.slice(0,Math.max(0,space));
  const result=persist(storage,before.concat(taken));
  return result.ok?{ok:true,added:taken.length,
@@ -204,11 +208,18 @@ function normalizeGoogle(list){
    !x.summary.trim()||x.summary.length>100||typeof x.id!=='string')continue;
   const raw=x.start?.date||x.start?.dateTime;
   if(typeof raw!=='string')continue;
-  const date=raw.slice(0,10);
-  if(!validDate(date))continue;
-  const time=x.start?.dateTime?
-   (/^(\d{4}-\d{2}-\d{2})T(\d\d:\d\d)/.exec(raw)?.[2]||''):'';
-  if(!validTime(time))continue;
+  let date,time='';
+  if(x.start?.dateTime){
+   const parsed=Date.parse(raw);
+   if(!Number.isFinite(parsed))continue;
+   const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Seoul',
+    year:'numeric',month:'2-digit',day:'2-digit',
+    hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(parsed));
+   const get=k=>parts.find(p=>p.type===k)?.value;
+   date=get('year')+'-'+get('month')+'-'+get('day');
+   time=get('hour')+':'+get('minute');
+  }else date=raw;
+  if(!validDate(date)||!validTime(time))continue;
   rows.push(Object.freeze({id:'google:'+digest(x.id+'|'+raw),date,time,
    title:x.summary.trim(),category:'other',note:'',readOnly:true}));
  }
