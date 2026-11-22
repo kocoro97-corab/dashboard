@@ -24,7 +24,8 @@ Google Calendar '대한민국의 휴일' 구독 자료와 **한국거래소 거�
 - `js/invest-calendar-krx-official-v1.js` — 한국거래소 공식 문서에서 확인한 최소 일정만 포함. 모든 원본 날짜·출처·KST·마지막 확인일(`2026-11-22`)을 보존하고 `verified:false`, `tradeSessionCertified:false`를 강제한다.
 - `js/invest-calendar-unified-market-v1.js` — 기존 `MYInvestOfficialMarketEventsV1`(미국)과 KRX 자료를 재수집 없이 조합하여 시장별 근거를 표시한다. `list(year,month)`, `sourceStatus(year,month,{now})`, `exportMonthICS(year,month)`를 제공한다.
 - `js/invest-calendar-workspace-v2.js` — 기존 '공휴일·휴장일' / '시장 주요 일정' 필터 재사용. KRX 일정은 '한국 현지 날짜 기준', NYSE/FOMC는 '미국 동부 현지 날짜 기준'으로 명확히 구분한다. 각 날짜별 공식 출처 링크를 표시하고 위변조·정확한 거래일 인증으로 오해하지 않도록 한다.
-- **2026년 데이터 일부만 수록** 안내 및 2027년 **KRX 거래일표 미확인** 경고. 공표된 자료 확인일에서 21일 넘게 경과하면 '공식 출처 재확인 권장' 표시. 이 기간은 서비스 내부 사용자 알림 기준이며 **공급자의 공식 유효기간이 아니다**.
+- **2026년 데이터 일부만 수록** 안내 및 2027년 **KRX 거래일표 미확인** 경고.
+- 글로벌 시장/투자전략에서는 `MYInvestUnifiedMarketCalendarV1.evidenceForRange({market:'KR'|'US'|'ALL',startDate,endDate,types?,now?})`를 **필요할 때만 호출**해 이미 수록된 공식 일정 근거를 재사용한다. 최대 62일 구간, 신규 네트워크 요청 0회, `shownByDefault:false`와 `tradingSessionCertified:false`를 보장한다. 이 API가 실제 두 메뉴에 자동으로 붙은 것은 아니다. 공표된 자료 확인일에서 21일 넘게 경과하면 '공식 출처 재확인 권장' 표시. 이 기간은 서비스 내부 사용자 알림 기준이며 **공급자의 공식 유효기간이 아니다**.
 - '이 달 공식 시장 일정 .ics 내보내기'는 KR+US 양쪽 스냅샷을 함께 포함하고 `URL`, `DESCRIPTION`에 원천 링크와 확인일을 기록한다. KRX는 종일 일정으로, 미국의 확인된 발표시각은 KST/UTC 시차를 반영해 정확히 출력한다.
 - Google 캘린더로 **자동 쓰기 0건**. 내보낸 `.ics`를 사용자가 Google 일정에 **직접 가져오기** 하는 방법만 제공한다. 이 파일은 실시간 자동 동기화가 아니다.
 
