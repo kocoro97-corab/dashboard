@@ -46,6 +46,13 @@ async def main():
       assert await page.locator('.irr1 .stock').count()==2
       assert await page.locator('.irr1 .sector').count()==2
       assert await page.locator('.irr1 .history-day').count()==3
+      audit=page.locator('[data-native-contract-audit] .native-contract-panel')
+      await audit.wait_for()
+      assert '실제 리포트 실데이터 연결: 보류' in await audit.inner_text()
+      assert '미충족 확인항목' in await audit.inner_text()
+      assert await audit.locator('.gate-card').count()>=7
+      assert await audit.locator('[data-contract-reasons]').count()==1
+      assert await page.locator('.irr1 .stock').count()==2
       assert '미국' in await page.locator('.irr1 .hero').inner_text()
       assert 'SERV' in await page.locator('.irr1').inner_text()
       assert await page.locator('.str4-nav').count()==1
@@ -67,6 +74,8 @@ async def main():
       assert '005930' in await page.locator('.irr1').inner_text()
       assert '000660' in await page.locator('.irr1').inner_text()
       assert 'SERV' not in await page.locator('.irr1').inner_text()
+      assert '한국' in await audit.inner_text()
+      assert '산업 구성종목 표본' in await audit.inner_text()
       assert await page.locator('[data-research-sample="KR"]').get_attribute('aria-pressed')=='true'
 
       # The latest date is invalid; no previous positive classification reused.
@@ -75,6 +84,7 @@ async def main():
       assert '근거 검증 보류' in await page.locator('.irr1').inner_text()
       assert await page.locator('.irr1 .history-day').count()==0
       assert await page.locator('.irr1 .metric').count()==0
+      assert '검증 보류' in await audit.inner_text()
       await page.locator('[data-research-sample="US"]').click()
       assert await page.locator('.irr1 .stock').count()==2
       assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth+1'),width
@@ -85,6 +95,7 @@ async def main():
       assert not await sidecar.evaluate('(el)=>el.open')
       await harness.go('news')
       assert await page.locator('[data-research-harness]').count()==0
+      assert await page.locator('[data-native-contract-audit]').count()==0
       assert await page.locator('.irr1').count()==0
       assert await page.locator('.mifv1').count()>=1
       await harness.go('home')
