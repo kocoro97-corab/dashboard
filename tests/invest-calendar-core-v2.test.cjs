@@ -298,3 +298,67 @@ test('page-news calendar trigger retains native route and forwards opens to work
  assert.match(source,/calendarEventsListener=\(\)=>\{if\(active\)events\(\)\}/);
  assert.match(source,/MYInvestCalendarWorkspaceV2\?\.logout\?\.\(\)/);
 });
+
+
+test('anniversary category and annual recurrence survive local storage and monthly projection',()=>{
+ const s=memory();
+ const r=c.upsert(s,event({date:'2025-06-03',title:'기념일',category:'anniversary',repeat:'yearly'}));
+ assert.equal(r.ok,true);
+ assert.equal(read(s)[0].repeat,'yearly');
+ assert.equal(read(s)[0].category,'anniversary');
+ assert.equal(c.LABELS.anniversary,'기념일');
+ const june=c.month(2027,6,read(s));
+ const day=june.find(x=>x?.date==='2027-06-03');
+ assert.equal(day.items.length,1);
+ assert.equal(day.items[0].date,'2027-06-03');
+ assert.equal(day.items[0].originalDate,'2025-06-03');
+ assert.equal(day.items[0].occurrence,true);
+ assert.equal(read(s)[0].date,'2025-06-03');
+});
+test('yearly anniversary does not appear in years before the original date',()=>{
+ const s=memory();
+ c.upsert(s,event({date:'2027-09-18',title:'기념일',category:'anniversary',repeat:'yearly'}));
+ const cell=c.month(2026,9,read(s)).find(x=>x?.date==='2026-09-18');
+ assert.equal(cell.items.length,0);
+});
+test('February 29 anniversary is never silently reinterpreted as February 28',()=>{
+ const s=memory();
+ c.upsert(s,event({date:'2028-02-29',title:'윤년 기념일',
+  category:'anniversary',repeat:'yearly'}));
+ const jan=c.month(2029,2,read(s));
+ assert.equal(jan.flatMap(x=>x?.items||[]).length,0);
+ const future=c.month(2032,2,read(s));
+ assert.equal(future.find(x=>x?.date==='2032-02-29').items.length,1);
+});
+test('anniversary can be edited and deleted by original id without creating yearly copies',()=>{
+ const s=memory();
+ const e=c.upsert(s,event({date:'2026-03-12',title:'주년',
+  category:'anniversary',repeat:'yearly'})).event;
+ const projected=c.month(2027,3,read(s)).find(x=>x?.date==='2027-03-12').items[0];
+ assert.equal(projected.id,e.id);
+ const edit=c.upsert(s,{...projected,id:e.id,date:'2026-03-12',
+  title:'수정 기념일',repeat:'yearly'});
+ assert.equal(edit.ok,true);
+ assert.equal(read(s).length,1);
+ assert.equal(c.remove(s,e.id).ok,true);
+ assert.equal(read(s).length,0);
+});
+test('anniversary iCalendar export includes RFC5545 yearly rule and roundtrips',()=>{
+ const s=memory();
+ c.upsert(s,event({date:'2026-08-15',title:'연례행사',
+  category:'anniversary',repeat:'yearly'}));
+ const raw=c.exportICS(s);
+ assert.match(raw,/RRULE:FREQ=YEARLY/);
+ const other=memory();
+ const r=c.importICS(other,raw);
+ assert.equal(r.added,1);
+ assert.equal(read(other)[0].repeat,'yearly');
+});
+test('ICS complex recurring rules remain safely omitted rather than inventing occurrences',()=>{
+ const s=memory();
+ const x=sampleICS(icsEvent('more','20261125','매주',
+  ['RRULE:FREQ=WEEKLY;BYDAY=MO']));
+ const r=c.importICS(s,x);
+ assert.equal(r.added,0);
+ assert.equal(r.skipped,1);
+});
