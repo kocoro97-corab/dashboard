@@ -77,6 +77,15 @@ async def main():
       assert '공식 발표 원문 보기' in await modal.inner_text()
       assert '마지막 확인 2026-11-22' in await modal.inner_text()
       assert await page.locator('.mcv2-event a[href*="nyse.com"]').count()>=1
+      async with page.expect_download() as market_info:
+       await page.locator('[data-market-ics-export]').click()
+      market_file=await market_info.value
+      assert market_file.suggested_filename=='myinvest-official-market-2026-11.ics'
+      content=Path(await market_file.path()).read_text()
+      assert 'BEGIN:VCALENDAR' in content
+      assert 'NYSE' in content
+      assert 'nyse.com/trade/hours-calendars' in content
+      assert 'BEGIN:VEVENT' in content
 
       # Market visibility must be optional, not enforced in all contexts.
       await page.locator('[data-calendar-filter="holidays"]').click()
