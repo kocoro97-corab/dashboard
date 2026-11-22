@@ -4,7 +4,8 @@
 (function(root){
 'use strict';
 const core=root.MYInvestCalendarCoreV2;
-const google=root.MYInvestGoogleCalendarReadonlyV2?.create?.({
+const oauthSetup=root.MYInvestGoogleOAuthSetupV1?.create?.({host:root})||null;
+let google=root.MYInvestGoogleCalendarReadonlyV2?.create?.({
  clientId:root.MYINVEST_GOOGLE_CALENDAR_CLIENT_ID||''
 });
 const create=(tag,value,cls)=>{
@@ -73,6 +74,30 @@ async function importFile(file){
  editing=null;
  note('ICS 일정 '+result.added+'건 추가 · 중복 '+result.duplicate+
   '건 · 미지원/초과 '+result.skipped+'건','success');
+}
+async function applyGoogleClientId(raw){
+ if(!oauthSetup||!root.MYInvestGoogleCalendarReadonlyV2?.create){
+  note('Google 개발용 OAuth 설정 모듈이 준비되지 않았습니다.');return
+ }
+ if(google?.status()?.connected){
+  note('연결된 Google 캘린더를 먼저 해제하세요.');return
+ }
+ const seq=++generation;
+ try{
+  // On user action only: load Google Identity Services library, no consent yet.
+  const ready=await oauthSetup.prepare(raw);
+  if(!dialog||generation!==seq)return;
+  google?.disconnect?.();
+  google=root.MYInvestGoogleCalendarReadonlyV2.create({
+   clientId:ready.clientId,google:root.google,fetcher:root.fetch
+  });
+  clearGoogleCalendars();
+  note('공개 웹 OAuth ID 설정을 확인했습니다. Google 연결 버튼으로 읽기 전용 동의를 진행하세요.','success');
+ }catch(e){
+  if(dialog&&generation===seq)note(
+   'Google OAuth 준비 실패: '+(e?.code||'GOOGLE_SDK_UNAVAILABLE')+
+   ' · Google Cloud의 JavaScript Origin 등록과 네트워크/CSP를 확인하세요.');
+ }
 }
 async function googleConnect(){
  if(!google?.status().configured){
@@ -326,6 +351,40 @@ function render(){
   buttonsGoogle.append(connect);
  }
  gg.append(buttonsGoogle);
+ if(!st.connected&&oauthSetup){
+  const configuration=create('details',undefined,'mcv2-oauth-config');
+  configuration.setAttribute('data-google-oauth-config','');
+  const summary=create('summary',st.configured?
+   '웹 OAuth 클라이언트 ID 변경 (개발용)':'Google 웹 OAuth 클라이언트 ID 설정 (개발용)');
+  configuration.append(summary);
+  configuration.append(create('p',
+   'Google Cloud의 웹 애플리케이션용 공개 Client ID만 입력하세요. 설정은 화면 메모리에만 유지되며 Google 계정에 접근하거나 동의하지 않습니다. Client Secret·토큰은 입력하지 마세요.',
+   'mcv2-muted'));
+  const form=create('form',undefined,'mcv2-form');
+  form.setAttribute('data-google-oauth-form','');
+  form.autocomplete='off';
+  const label=create('label','Google 공개 OAuth 클라이언트 ID');
+  const input=create('input');
+  input.type='text';input.maxLength=150;input.required=true;
+  input.autocomplete='off';input.spellcheck=false;input.autocapitalize='off';
+  input.placeholder='123456789012-…apps.googleusercontent.com';
+  input.setAttribute('aria-label','Google 공개 OAuth 클라이언트 ID');
+  label.append(input);
+  const submit=create('button','설정 적용·Google SDK 준비');
+  submit.type='submit';
+  form.append(label,submit);
+  form.addEventListener('submit',e=>{
+   e.preventDefault();void applyGoogleClientId(input.value.trim());
+  });
+  configuration.append(form);
+  const help=create('a','Google Cloud OAuth 웹 클라이언트 설정 안내');
+  help.href='https://developers.google.com/identity/oauth2/web/guides/get-google-api-clientid';
+  help.target='_blank';help.rel='noopener noreferrer';
+  configuration.append(help);
+  const origin=create('p','등록할 JavaScript Origin: https://kocoro97-corab.github.io','mcv2-muted');
+  configuration.append(origin);
+  gg.append(configuration);
+ }
  if(st.connected){
   gg.append(create('p','보이는 Google 구독 캘린더를 선택하세요. 휴일 구독은 기본 선택되며, 다른 개인·업무 달력은 명시적으로 선택할 때만 조회됩니다.','mcv2-muted'));
   const choices=create('div',undefined,'mcv2-google-calendars');
@@ -385,7 +444,13 @@ function open(){
  render();panel.querySelector('[data-calendar-close]')?.focus();
  return true;
 }
-function logout(){close();google?.disconnect?.();clearGoogleCalendars()}
+function logout(){
+ close();google?.disconnect?.();oauthSetup?.reset?.();clearGoogleCalendars();
+ // Any runtime-only OAuth ID is discarded on page exit/logout.
+ google=root.MYInvestGoogleCalendarReadonlyV2?.create?.({
+  clientId:root.MYINVEST_GOOGLE_CALENDAR_CLIENT_ID||''
+ });
+}
 const api=Object.freeze({open,close,logout,googleStatus:()=>google?.status()||{configured:false}});
 if(typeof module==='object'&&module.exports)module.exports=api;
 else root.MYInvestCalendarWorkspaceV2=api;
