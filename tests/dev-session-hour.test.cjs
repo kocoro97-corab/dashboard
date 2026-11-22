@@ -38,3 +38,6 @@ test('server password-change requirement stops renewal and preserves the existin
 test('an unresponsive session check times out and cannot keep the display authenticated indefinitely',async()=>{
  const f=fixture();f.transport((body,{signal})=>new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(Error('TIMEOUT')))));f.ctx.startSessionTimer(true);const pending=f.advance(120000);await Promise.resolve();await f.advance(15000);await pending;assert.equal(f.logout,1);assert.equal(f.timers.size,0);
 });
+test('user activity near the original deadline starts another full hour without a new login',async()=>{
+ const f=fixture();f.ctx.startSessionTimer(true);await f.advance(58*60000);f.touch();await f.advance(3599999);assert.equal(f.logout,0);assert.equal(f.starts,1);await f.advance(1);assert.equal(f.logout,1);
+});

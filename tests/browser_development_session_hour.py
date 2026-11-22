@@ -26,10 +26,19 @@ async def main():
      assert await page.locator('.str4-field input').first.input_value()=='123456'
      assert any(r['action']=='sessionInfo' for r in h.requests)
      await expect(page.locator('#appContainer')).to_be_visible()
+     # Existing trusted user input restarts the full hour; checks alone do not.
+     await page.locator('.str4-field input').first.fill('234567')
+     active_after_input=await page.evaluate('()=>{renderSession();return lastActive()}')
+     assert active_after_input>baseline
+     await expect(page.locator('#sessionTimeTxt')).to_have_text('60:00')
+     await page.clock.fast_forward(2*60000)
+     await page.wait_for_function('()=>!DevelopmentSession.getStatus().checking&&DevelopmentSession.getStatus().scheduled')
+     assert await page.evaluate('lastActive()')==active_after_input
+     await expect(page.locator('#sessionTimeTxt')).to_have_text('58:00')
      # No browser activity is manufactured by the successful background check.
      await page.screenshot(path=str(args.output/(str(width)+'-after-six-minutes.png')))
      await page.reload(wait_until='domcontentloaded');await page.wait_for_function('()=>DashboardShell.getStatus().page==="strategy"')
-     assert await page.evaluate('lastActive()')==baseline
+     assert await page.evaluate('lastActive()')==active_after_input
      # Test exact wall-clock expiry, including reload and background suspension.
      await page.evaluate('()=>{AUTH_STORAGE.setItem("invest_last_active",String(Date.now()-3600000));renderSession()}')
      await page.wait_for_function('()=>!LS("invest_session_token")&&DashboardShell.getStatus().page===null')
@@ -37,7 +46,7 @@ async def main():
      assert await page.locator('[data-module=five-minute-reference-v1]').count()==0
      assert not h.errors,h.errors
      assert not any(r['action'] in ['nhAccounts','nhQuotes','saveExternalHoldings','restoreExternalHoldings','order'] for r in h.requests)
-     print(json.dumps({'width':width,'status':'PASS','auth':'SYNTHETIC','publishedAssets':args.published,'inactivityMinutes':60,'sixMinuteSession':'PASS','noInputReset':'PASS','reload':'PASS','expiryCleanup':'PASS','actualNhCalls':0}),flush=True)
+     print(json.dumps({'width':width,'status':'PASS','auth':'SYNTHETIC','publishedAssets':args.published,'inactivityMinutes':60,'sixMinuteSession':'PASS','activityRestartsFullHour':'PASS','backgroundDoesNotExtend':'PASS','noInputReset':'PASS','reload':'PASS','expiryCleanup':'PASS','actualNhCalls':0}),flush=True)
     finally:await h.close()
    await browser.close()
 asyncio.run(main())
