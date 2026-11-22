@@ -33,7 +33,7 @@ else{
  const syncButton=btn('이번 달 일정 동기화',async()=>{
   const request=++googleRequest,month=currentMonth;googleLoading=true;googleError='';draw();
   try{const rows=await sync.events(calendarMonth.getFullYear(),calendarMonth.getMonth()+1,true);
-   if(request!==googleRequest||!calendarDialog||month!==googleMonth&&googleMonth!=='')return;
+   if(request!==googleRequest||!calendarDialog||month!==calendarMonth.getFullYear()+'-'+String(calendarMonth.getMonth()+1).padStart(2,'0'))return;
    googleRows=rows;googleMonth=month;
   }catch{if(request===googleRequest){googleRows=[];googleMonth='';googleError='읽기 전용 일정 조회에 실패했습니다. 연결 상태를 확인하세요.'}}
   finally{if(request===googleRequest){googleLoading=false;draw()}}
