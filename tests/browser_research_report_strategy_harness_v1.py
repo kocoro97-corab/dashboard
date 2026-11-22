@@ -54,7 +54,7 @@ async def main():
              'saveExternalHoldings','restoreExternalHoldings','order')
              for r in harness.requests[baseline:])
 
-      await page.get_by_role('button',name='검증 보류',exact=True).click()
+      await page.locator('.irr1 [data-filter="insufficient-evidence"]').click()
       assert await page.locator('.irr1 .stock').count()==0
       assert '선택 조건에 맞는 관측 종목' in await page.locator('.irr1').inner_text()
       await page.get_by_role('button',name='전체 2개',exact=True).click()
