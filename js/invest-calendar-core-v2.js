@@ -7,8 +7,8 @@
 'use strict';
 const STORAGE_KEY='myinvest_events_manual_v1';
 const CAP=100,ICS_CAP=2*1024*1024;
-const CATEGORIES=Object.freeze(['macro','earnings','policy','other']);
-const LABELS=Object.freeze({macro:'경제지표',earnings:'기업실적',policy:'금리·정책',other:'기타'});
+const CATEGORIES=Object.freeze(['macro','earnings','policy','anniversary','other']);
+const LABELS=Object.freeze({macro:'경제지표',earnings:'기업실적',policy:'금리·정책',anniversary:'기념일',other:'기타'});
 const validDate=s=>{
  if(typeof s!=='string'||!/^20\d{2}-\d{2}-\d{2}$/.test(s))return false;
  const t=Date.parse(s+'T00:00:00Z');
@@ -21,11 +21,13 @@ function normalize(row){
  if(!row||typeof row!=='object'||Array.isArray(row))return null;
  const date=clean(row.date),title=clean(row.title),category=clean(row.category);
  const time=row.time===undefined?'':clean(row.time),note=row.note===undefined?'':clean(row.note);
+ const repeat=row.repeat===undefined?'none':clean(row.repeat);
  if(!validDate(date)||title.length<1||title.length>100||
   !CATEGORIES.includes(category)||!validTime(time)||note.length>500||
+  !['none','yearly'].includes(repeat)||
   typeof row.id!=='string'||row.id.length<1||row.id.length>90||
   !/^[A-Za-z0-9._:-]+$/.test(row.id))return null;
- return Object.freeze({id:row.id,date,time,title,category,note});
+ return Object.freeze({id:row.id,date,time,title,category,note,repeat});
 }
 function read(storage){
  try{
@@ -83,7 +85,12 @@ function month(y,m,events){
  for(let d=1;d<=daysInMonth(y,m);d++){
   const date=y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
   cells.push(Object.freeze({date,day:d,
-   items:Object.freeze(events.filter(x=>x.date===date))}));
+   items:Object.freeze(events.flatMap(x=>{
+    if(x.date===date)return [x];
+    if(x.repeat!=='yearly'||typeof x.date!=='string'||x.date>=date||
+       x.date.slice(5)!==date.slice(5))return [];
+    return [Object.freeze({...x,date,originalDate:x.date,occurrence:true})];
+   }))}));
  }
  return cells;
 }
@@ -122,6 +129,7 @@ function exportICS(storage){
    foldICS('SUMMARY:'+escapeICS(x.title)),
    foldICS('CATEGORIES:'+escapeICS(LABELS[x.category]||'기타')));
   if(x.note)lines.push(foldICS('DESCRIPTION:'+escapeICS(x.note)));
+  if(x.repeat==='yearly')lines.push('RRULE:FREQ=YEARLY');
   lines.push('END:VEVENT');
  }
  lines.push('END:VCALENDAR');
@@ -149,6 +157,7 @@ function parseICS(data){
    if(!active)continue;
    const uid=active.UID||'no-uid',raw=active.DTSTART||'',summary=active.SUMMARY||'';
    const recurring=active.RRULE||active['RECURRENCE-ID'];
+   const supportedYearly=recurring==='FREQ=YEARLY';
    let date=null,time='';
    const all=/^(\d{4})(\d{2})(\d{2})$/.exec(raw);
    const utc=/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(?:\d{2})?Z$/.exec(raw);
@@ -162,10 +171,11 @@ function parseICS(data){
     date=zoned[1]+'-'+zoned[2]+'-'+zoned[3];time=zoned[4]+':'+zoned[5];
    }
    const title=unescapeICS(summary);
-   if(!recurring&&date&&validDate(date)&&title&&title.length<=100){
+   if((!recurring||supportedYearly)&&date&&validDate(date)&&title&&title.length<=100){
     const id='ics:'+digest(uid+'|'+raw+'|'+title);
     const item=normalize({id,date,time,title,category:'other',
-     note:unescapeICS(active.DESCRIPTION||'').slice(0,500)});
+     note:unescapeICS(active.DESCRIPTION||'').slice(0,500),
+     repeat:supportedYearly?'yearly':'none'});
     if(item)events.push(item);else skipped++;
    }else skipped++;
    active=null;continue;
