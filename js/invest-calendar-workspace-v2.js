@@ -36,7 +36,9 @@ function shift(delta){
  editing=null;notification='';clearGoogle();render();
 }
 function choose(day){
- date=day;ym=monthOf(day);editing=null;notification='';clearGoogle();render();
+ const next=monthOf(day);
+ if(next.y!==ym.y||next.m!==ym.m)clearGoogle();
+ date=day;ym=next;editing=null;notification='';render();
 }
 function saveDownload(contents){
  const data=new Blob([contents],{type:'text/calendar;charset=utf-8'});
