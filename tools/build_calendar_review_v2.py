@@ -61,6 +61,7 @@ def build_calendar_review(output, *, root=ROOT, relay_endpoint=None,
  meta['googleOAuthClientConfigured']=bool(google_client_id)
  meta['googleScope']='calendar.events.readonly'
  meta['googleEventWrites']=False
+ meta['browserLocalCalendarWrites']=True
  meta['calendarGASWrites']=False
  meta['calendarNHCalls']=False
  meta['published']=False
