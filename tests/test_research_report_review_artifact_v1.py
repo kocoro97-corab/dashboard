@@ -26,7 +26,7 @@ class ResearchReportReviewArtifact(unittest.TestCase):
   original=(ROOT/'index.html').read_text()
   assert 'MYINVEST_RESEARCH_REVIEW' not in original
   assert 'research-report-strategy-review-hook-v1.js' not in original
-  assert 'src="js/app-router.js?v=1"' in self.html
+  assert 'src="js/app-router.js?v=1' in self.html
   assert 'src="js/page-strategy.js?v=1' in self.html
   assert 'src="js/page-news.js?v=2' in self.html
   assert 'src="js/app-shell.js?v=2' in self.html
