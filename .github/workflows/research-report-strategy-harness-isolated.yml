@@ -1,0 +1,52 @@
+name: Synthetic research report inside Codex strategy shell (no deploy)
+on:
+  push:
+    branches:
+      - feat/research-report-strategy-harness-isolated
+permissions:
+  contents: read
+jobs:
+  offline-integration-review:
+    name: 210 original research tests + 5 artifact guards + PC/Fold shell
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out fixed integration baseline and standalone review sources
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Validate all new JS and Python syntax
+        run: |
+          node --check js/market-sector-stock-alignment-v1.js
+          node --check js/market-sector-stock-adapter-v1.js
+          node --check js/investment-evidence-explanation-v1.js
+          node --check js/investment-evidence-timeline-v1.js
+          node --check js/investment-research-report-v1.js
+          node --check js/investment-research-report-panel-v1.js
+          node --check js/research-report-harness-fixture-v1.js
+          node --check js/research-report-strategy-review-hook-v1.js
+          python3 -m py_compile tools/build_research_report_review_v1.py
+          python3 -m py_compile tests/browser_research_report_strategy_harness_v1.py
+      - name: Prior evidence / sector / stock alignment tests (39)
+        run: node tests/market-sector-stock-alignment-v1.test.cjs
+      - name: Prior legacy sector metrics reuse and stock adapter tests (43)
+        run: node tests/market-sector-stock-adapter-v1.test.cjs
+      - name: Prior Korean evidence explanation tests (35)
+        run: node tests/investment-evidence-explanation-v1.test.cjs
+      - name: Prior explanation CLI privacy tests (9)
+        run: node tests/investment-evidence-inspector-v1.test.cjs
+      - name: Prior timeline provenance checks (46)
+        run: node tests/investment-evidence-timeline-v1.test.cjs
+      - name: Prior timeline inspector tests (8)
+        run: node tests/investment-evidence-timeline-cli-v1.test.cjs
+      - name: Prior full research report model tests (30)
+        run: node tests/investment-research-report-v1.test.cjs
+      - name: Synthetic-only temporary build guards
+        run: python3 -m unittest discover -s tests -p 'test_research_report_review_artifact_v1.py'
+      - name: Install Chromium for synthetic-only PC and Fold UI review
+        run: |
+          python3 -m venv .venv-review
+          .venv-review/bin/python -m pip install playwright==1.56.0
+          .venv-review/bin/python -m playwright install --with-deps chromium
+      - name: Login / Codex strategy / synthetic report / news / logout
+        run: .venv-review/bin/python tests/browser_research_report_strategy_harness_v1.py
