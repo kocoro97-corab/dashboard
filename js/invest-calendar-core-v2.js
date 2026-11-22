@@ -51,6 +51,7 @@ function persist(storage,items){
  try{
   if(!storage||typeof storage.setItem!=='function')return {ok:false,code:'STORAGE_UNAVAILABLE'};
   storage.setItem(STORAGE_KEY,JSON.stringify(items));
+  try{root.dispatchEvent?.(new Event('myinvest:calendar-changed'))}catch{}
   return {ok:true,count:items.length};
  }catch{return {ok:false,code:'STORAGE_UNAVAILABLE'}}
 }
