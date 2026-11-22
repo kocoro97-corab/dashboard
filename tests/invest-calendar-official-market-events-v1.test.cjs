@@ -9,6 +9,7 @@ test('official source snapshot is immutable and not portrayed as live verified',
  assert.ok(a.length>=45);
  assert.ok(a.every(x=>Object.isFrozen(x)));
  assert.ok(a.every(x=>x.status==='OFFICIAL_SOURCE_SNAPSHOT'&&
+  x.sourceStatus==='OFFICIAL_SOURCE_SNAPSHOT'&&
   x.liveVerified===false&&x.tradeSessionCertified===false&&x.readOnly===true));
  assert.equal(cal.checkedAt,'2026-11-22');
  assert.equal(cal.isLive,false);
