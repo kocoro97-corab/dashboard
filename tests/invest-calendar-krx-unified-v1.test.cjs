@@ -183,7 +183,7 @@ test('global market page can request evidence only for the relevant US date wind
 test('strategy may request only KR December closures without any US events or re-fetch',()=>{
  const r=c.evidenceForRange({market:'KR',startDate:'2026-12-24',
   endDate:'2026-12-31',types:['holiday'],now:'2026-11-22'});
- assert.deepEqual(r.records.map(x=>x.date),['2026-12-25','2026-12-31']);
+ assert.deepEqual(Array.from(r.records,x=>x.date),['2026-12-25','2026-12-31']);
  assert.ok(r.records.every(x=>x.market==='KR'&&x.type==='holiday'));
  assert.equal(r.tradingSessionCertified,false);
  assert.equal(r.accountAccessed,false);
