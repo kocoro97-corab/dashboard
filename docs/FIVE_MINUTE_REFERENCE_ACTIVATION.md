@@ -51,8 +51,11 @@ The detached checkout creates no new branch. Stop if the read-only diagnosis is 
 - Synthetic browser at 1440 / 690 / 344: explicit read, no auto request, missing server capability with zero reads, invalid currency refusal, delayed response after navigation, logout, close and no overflow PASS.
 - Previously captured real Yahoo AAPL response replayed through synthetic authentication and the real local Worker handler at all three widths: PASS. This is not a new live or owner-session result.
 - Existing daily strategy market-link browser regression at all three widths: PASS.
+- A new direct public Yahoo GET during this task returned HTTP 200 and 78 validated AAPL five-minute bars. This is source reachability, not authenticated relay verification; raw data is local only.
 - Actual remote relay `appVersion` probe from this execution environment: HTTP 403, both before and after adding the required development-client header. This is a relay-host HTTP refusal, not developer-page DNS failure. No authenticated public read was attempted. Do not infer Worker activation or a particular Cloudflare/GAS fault from this response.
 - Development Pages publication and final CI result are reported separately in the task result; an exported page alone does not certify live relay activation.
+
+The first CI run (45004555608) hit the existing futures display test’s clock mismatch: the browser was frozen at November 18 while the local synthetic Worker used wall time past the quote’s four-day age limit. The bridge now accepts an explicit synthetic-futures-only fixed clock matching that browser date. All three futures widths pass after this test-only fix; production freshness, contract and clock validation were unchanged.
 
 Evidence (local, not public fixtures): `/workspace/output/five-minute-activation-20261122/`. Existing source captures remain outside the repository. No automatic 07:00 publication, paid API or production change.
 

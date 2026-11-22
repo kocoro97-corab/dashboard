@@ -16,6 +16,7 @@ async def main():
   observed=1794981044000
   fixture=Path(tmp)/'future.json';fixture.write_text(json.dumps([{'data':{'k4':quote(1234.5,observed)}},{'data':{'k4':quote(1240,observed+60000)}},{'errors':{'k4':'NH_OBSERVATION'}},{'data':{'k4':quote(1250,observed+90000)},'delayMs':500}]))
   os.environ['MYINVEST_TEST_FUTURE_FIXTURE']=str(fixture)
+  os.environ['MYINVEST_TEST_FIXED_TIME']='2026-11-18T05:53:00Z'
   async with async_playwright() as pw:
    browser=await pw.chromium.launch(headless=True)
    try:
@@ -33,6 +34,6 @@ async def main():
       row={'width':width,'status':'FAIL','reason':(str(e).splitlines() or [type(e).__name__])[0][:600]};await h.page.screenshot(path=str(args.output/(str(width)+'-FAIL.png')))
      finally:await h.close()
      results.append(row);print(json.dumps(row),flush=True)
-   finally:await browser.close();os.environ.pop('MYINVEST_TEST_FUTURE_FIXTURE',None)
+   finally:await browser.close();os.environ.pop('MYINVEST_TEST_FUTURE_FIXTURE',None);os.environ.pop('MYINVEST_TEST_FIXED_TIME',None)
  args.output.joinpath('results.json').write_text(json.dumps(results,indent=2));return int(any(r['status']=='FAIL' for r in results))
 raise SystemExit(asyncio.run(main()))

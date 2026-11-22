@@ -6,6 +6,13 @@ import {createHandler,RelayGate,allowedMarketUrl} from '../relay/worker/worker.m
 // No live credentials, supplier requests, or account fixtures are loaded here.
 const publicFixtures=process.env.MYINVEST_TEST_PUBLIC_FIXTURE?JSON.parse(fs.readFileSync(process.env.MYINVEST_TEST_PUBLIC_FIXTURE,'utf8')):{};
 const futuresFixture=process.env.MYINVEST_TEST_FUTURE_FIXTURE?JSON.parse(fs.readFileSync(process.env.MYINVEST_TEST_FUTURE_FIXTURE,'utf8')):null;let futureIndex=0;
+// Explicit synthetic-futures clock only: keep browser and Worker age/expiry
+// checks on the same test date, without weakening production freshness checks.
+if(futuresFixture&&process.env.MYINVEST_TEST_FIXED_TIME){
+ const clock=Date.parse(process.env.MYINVEST_TEST_FIXED_TIME),NativeDate=Date;
+ if(!Number.isSafeInteger(clock))throw Error('INVALID_TEST_CLOCK');
+ globalThis.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:[clock]))}static now(){return clock}};
+}
 const expected={freshTestEnvironment:true,testEnvironment:'nh-staging',scriptHash:'a'.repeat(64),sheetHash:'b'.repeat(64),sourceDigest:'c'.repeat(64),gatewayVersion:2,storeEngine:'account-store-v2'};
 let gateTail=Promise.resolve();
 const host='myinvest-v2-dev-relay.synthetic.workers.dev',token='a'.repeat(64),store=new Map(),storage={get:async k=>structuredClone(store.get(k)),put:async(k,v)=>store.set(k,structuredClone(v)),transaction(fn){const job=gateTail.then(()=>fn(this));gateTail=job.catch(()=>{});return job}};
