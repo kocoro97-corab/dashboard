@@ -110,3 +110,41 @@ test('source modules provide data records only: no network, localStorage, OAuth 
   'NH_ACCOUNT','placeOrder(','createEvent(','PropertiesService'])
   assert.equal(text.includes(forbidden),false,forbidden);
 });
+
+
+test('manual official market ICS exports verified source evidence, never personal Google data',()=>{
+ const ics=cal.exportMonthICS(2026,11);
+ assert.match(ics,/^BEGIN:VCALENDAR\r\nVERSION:2.0/m);
+ assert.match(ics,/METHOD:PUBLISH/);
+ assert.match(ics,/SUMMARY:NYSE 휴장/);
+ assert.match(ics,/https:\/\/www\.nyse\.com\/trade\/hours-calendars/);
+ assert.match(ics,/DTSTAMP:20261122T000000Z/);
+ assert.ok(!ics.includes('access_token'));
+ assert.ok(!ics.includes('google:'));
+ assert.ok(!ics.includes('myinvest_events_manual_v1'));
+ assert.match(ics,/END:VCALENDAR/);
+});
+test('official NYSE early closing ICS has actual UTC instant and one-hour event',()=>{
+ const ics=cal.exportMonthICS(2026,11);
+ assert.match(ics,/DTSTART:20261127T180000Z/);
+ assert.match(ics,/DTEND:20261127T190000Z/);
+});
+test('CPI time conversion to UTC is precise and market snapshots remain source-linked',()=>{
+ const ics=cal.exportMonthICS(2026,12);
+ assert.match(ics,/SUMMARY:미국 소비자물가지수\(CPI\)/);
+ assert.match(ics,/DTSTART:20261210T133000Z/);
+ assert.match(ics,/DTEND:20261210T143000Z/);
+ assert.match(ics,/https:\/\/www\.bls\.gov/);
+});
+test('no calendar-date fabrication for untimed FOMC policy decisions in ICS',()=>{
+ const ics=cal.exportMonthICS(2027,10);
+ assert.match(ics,/DTSTART;VALUE=DATE:20271027/);
+ assert.match(ics,/금리표결 없음/);
+ assert.ok(!ics.includes('DTSTART:20271027T'));
+});
+test('exporting empty out-of-range market month produces empty valid .ics envelope',()=>{
+ const ics=cal.exportMonthICS(2028,1);
+ assert.match(ics,/BEGIN:VCALENDAR/);
+ assert.ok(!ics.includes('BEGIN:VEVENT'));
+ assert.match(ics,/END:VCALENDAR/);
+});
