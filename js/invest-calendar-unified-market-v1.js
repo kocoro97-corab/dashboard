@@ -110,8 +110,56 @@ function exportMonthICS(year,month){
  lines.push('END:VCALENDAR');
  return lines.join('\r\n')+'\r\n';
 }
+/* Optional evidence interface for global-market and strategy screens.
+ * The caller decides whether to show it. This NEVER makes a fresh request.
+ * One query spans at most 62 calendar days, preventing unbounded processing.
+ */
+function evidenceForRange({market,startDate,endDate,types=null,now}={}){
+ const invalid=Object.freeze({status:'INVALID_QUERY',
+  records:Object.freeze([]),sourceSnapshot:true,
+  tradingSessionCertified:false,liveVerified:false,providerCalls:0});
+ if(!['KR','US','ALL'].includes(market)||
+  typeof startDate!=='string'||typeof endDate!=='string'||
+  !/^20\d{2}-\d{2}-\d{2}$/.test(startDate)||
+  !/^20\d{2}-\d{2}-\d{2}$/.test(endDate)||
+  (types!==null&&!Array.isArray(types)))return invalid;
+ const from=Date.parse(startDate+'T00:00:00Z');
+ const to=Date.parse(endDate+'T00:00:00Z');
+ if(!Number.isFinite(from)||!Number.isFinite(to)||to<from||
+  to-from>62*86400000||
+  new Date(from).toISOString().slice(0,10)!==startDate||
+  new Date(to).toISOString().slice(0,10)!==endDate)return invalid;
+ const permitted=types===null?null:
+  new Set(types.filter(x=>['holiday','early-close','fomc','macro','market'].includes(x)));
+ const rows=[],states=[];
+ const first=new Date(Date.UTC(Number(startDate.slice(0,4)),
+  Number(startDate.slice(5,7))-1,1));
+ for(let monthDate=first;monthDate.getTime()<=to;){
+  const year=monthDate.getUTCFullYear(),month=monthDate.getUTCMonth()+1;
+  const monthEvents=list(year,month);
+  for(const item of monthEvents){
+   if(item.date>=startDate&&item.date<=endDate&&
+    (market==='ALL'||item.market===market)&&
+    (permitted===null||permitted.has(item.type)))
+    rows.push(item);
+  }
+  states.push(sourceStatus(year,month,{now}));
+  monthDate=new Date(Date.UTC(year,month,1));
+ }
+ const reviewDue=states.some(x=>x.ageDays===null||x.ageDays>21||
+  (market!=='US'&&x.krxCoverage==='UNVERIFIED_YEAR'));
+ return Object.freeze({
+  status:reviewDue?'SOURCE_RECHECK_REQUIRED':'EVIDENCE_SNAPSHOT_ONLY',
+  market,startDate,endDate,records:Object.freeze(rows),
+  sourceSnapshot:true,reviewDue,liveVerified:false,
+  tradingSessionCertified:false,providerCalls:0,
+  calendarFetches:0,accountAccessed:false,ordersPlaced:0,
+  shownByDefault:false,canBeShownAsEvidence:true,
+  checkedAt:'2026-11-22'
+ });
+}
 const api=Object.freeze({
- list,sourceStatus,exportMonthICS,
+ list,sourceStatus,exportMonthICS,evidenceForRange,
  checkedAt:'2026-11-22',isLive:false
 });
 if(typeof module==='object'&&module.exports)module.exports=api;
