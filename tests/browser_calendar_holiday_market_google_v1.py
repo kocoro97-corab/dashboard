@@ -107,6 +107,32 @@ async def main():
       assert len(urls)==0
       await page.get_by_role('button',name='다음 달 ▶').click()
       assert '2026년 12월' in await modal.inner_text()
+      # KRX official 2026 sources are separate from the Google holiday feed.
+      await page.locator('[data-calendar-day="2026-12-31"]').click()
+      assert 'KRX 연말 휴장' in await modal.inner_text()
+      assert await page.locator('.mcv2-event a[href*="kind.krx.co.kr"]').count()>=1
+      assert '한국 현지 날짜 기준' in await modal.inner_text()
+      assert await page.locator('[data-calendar-source-status="SOURCE_SNAPSHOT_ONLY"]').count()==1
+      await page.locator('[data-calendar-day="2026-12-30"]').click()
+      assert 'KRX 2026년 마지막 매매거래일' in await modal.inner_text()
+      await page.locator('[data-calendar-filter="market"]').click()
+      assert 'KRX 2026년 마지막 매매거래일' not in await modal.inner_text()
+      await page.locator('[data-calendar-filter="market"]').click()
+      assert 'KRX 2026년 마지막 매매거래일' in await modal.inner_text()
+      # One explicitly exported ICS contains KRX and US source evidence.
+      async with page.expect_download() as combined_info:
+       await page.locator('[data-market-ics-export]').click()
+      combined_file=await combined_info.value
+      assert combined_file.suggested_filename=='myinvest-official-market-2026-12.ics'
+      combined=Path(await combined_file.path()).read_text().replace('\n ', '')
+      assert 'KRX 연말 휴장' in combined
+      assert 'NYSE' in combined
+      assert 'kind.krx.co.kr' in combined
+      # Future Korean market sessions are UNKNOWN until an attributable source.
+      await page.get_by_role('button',name='다음 달 ▶').click()
+      assert '해당 연도 공식 거래일표 미확인' in await modal.inner_text()
+      assert await page.locator('[data-calendar-source-status="SOURCE_RECHECK_REQUIRED"]').count()==1
+      await page.get_by_role('button',name='◀ 이전 달').click()
       assert await page.get_by_role('button',name='Google 읽기 전용 연결').is_enabled()
       await page.get_by_role('button',name='Google 읽기 전용 연결').click()
       await page.locator('[data-google-calendar-list] input[type="checkbox"]').first.wait_for()
