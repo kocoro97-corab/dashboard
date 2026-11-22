@@ -16,6 +16,8 @@ CALENDAR_MODULES = (
     'invest-calendar-style-v2.js',
     'invest-calendar-google-readonly-v2.js',
     'invest-calendar-official-market-events-v1.js',
+    'invest-calendar-krx-official-v1.js',
+    'invest-calendar-unified-market-v1.js',
     'invest-calendar-workspace-v2.js',
 )
 CALENDAR_CLIENT_RE = re.compile(r'^[0-9]{8,32}-[A-Za-z0-9_-]{12,80}\.apps\.googleusercontent\.com$')
