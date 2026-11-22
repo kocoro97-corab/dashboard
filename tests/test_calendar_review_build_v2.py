@@ -36,7 +36,7 @@ class CalendarReviewBuildTests(unittest.TestCase):
  def test_calendar_is_appended_after_news_and_before_shell(self):
   anchor=self.html.index('src="js/page-news.js?v=2')
   app=self.html.index('src="js/app-shell.js?v=2')
-  order=[self.html.index('src="js/'+name+'?review=calendar-v2"') for name in FILES]
+  order=[self.html.index('src="js/'+name+'?calendar=v2"') for name in FILES]
   self.assertEqual(order,sorted(order))
   self.assertGreater(order[0],anchor)
   self.assertLess(order[-1],app)
