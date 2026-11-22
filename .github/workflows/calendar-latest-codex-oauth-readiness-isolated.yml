@@ -1,0 +1,55 @@
+name: Latest Codex + verified investment calendar with Google OAuth preflight
+on:
+  push:
+    branches:
+      - feat/calendar-latest-codex-oauth-readiness-isolated
+permissions:
+  contents: read
+jobs:
+  calendar-latest-dev-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - name: Checkout isolated review with no saved credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Syntax and latest Codex bundle compatibility checks
+        run: |
+          node --check js/page-news.js
+          node --check js/invest-calendar-core-v2.js
+          node --check js/invest-calendar-google-readonly-v2.js
+          node --check js/invest-calendar-official-market-events-v1.js
+          node --check js/invest-calendar-krx-official-v1.js
+          node --check js/invest-calendar-unified-market-v1.js
+          node --check js/invest-calendar-workspace-v2.js
+          python3 -m py_compile tools/build_dev_pages.py tools/build_calendar_review_v2.py tools/calendar_oauth_preflight_v1.py tests/browser_calendar_workspace_v2.py tests/browser_calendar_holiday_market_google_v1.py
+      - name: All inherited Codex plus calendar Node unit tests
+        run: |
+          for file in tests/*.test.cjs; do
+            echo "Checking $file"
+            node "$file" >/dev/null || exit 1
+          done
+      - name: Default developer build regression and calendar read-only OAuth preflight
+        run: |
+          python3 -m unittest discover -s tests -p 'test_calendar_review_build_v2.py' -v
+          python3 -m unittest discover -s tests -p 'test_calendar_dev_bundle_v2.py' -v
+          python3 -m unittest discover -s tests -p 'test_calendar_oauth_preflight_v1.py' -v
+          python3 -m unittest discover -s tests -p 'test_strategy_comparison_dev_bundle.py' -v
+          python3 tools/calendar_oauth_preflight_v1.py > /tmp/calendar-preflight-output.json
+      - name: Install Playwright Chromium for offline browser review only
+        run: |
+          python3 -m venv .venv-codex-calendar
+          .venv-codex-calendar/bin/python -m pip install playwright==1.56.0
+          .venv-codex-calendar/bin/python -m playwright install --with-deps chromium
+      - name: Codex app shell, news, strategy and extended-session browser compatibility
+        run: |
+          .venv-codex-calendar/bin/python tests/browser_app_shell.py
+          .venv-codex-calendar/bin/python tests/browser_news_final_v1.py
+          .venv-codex-calendar/bin/python tests/browser_news_strategy_integration.py
+          .venv-codex-calendar/bin/python tests/browser_development_session_hour.py
+          .venv-codex-calendar/bin/python tests/browser_five_minute_reference.py
+      - name: Calendar CRUD ICS and Google holiday/market evidence desktop and Fold6
+        run: |
+          .venv-codex-calendar/bin/python tests/browser_calendar_workspace_v2.py
+          .venv-codex-calendar/bin/python tests/browser_calendar_holiday_market_google_v1.py

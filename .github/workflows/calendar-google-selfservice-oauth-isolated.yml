@@ -1,0 +1,53 @@
+name: Google Calendar self-service OAuth developer preview (no deployment)
+on:
+  push:
+    branches:
+      - feat/calendar-google-selfservice-oauth-isolated
+permissions:
+  contents: read
+jobs:
+  isolated-calendar-selfservice:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - name: Checkout detached developer code without credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Syntax check latest Codex routes, calendar OAuth, and builder
+        run: |
+          node --check js/page-news.js
+          node --check js/invest-calendar-google-oauth-setup-v1.js
+          node --check js/invest-calendar-google-readonly-v2.js
+          node --check js/invest-calendar-workspace-v2.js
+          python3 -m py_compile tools/build_dev_pages.py tools/calendar_oauth_preflight_v1.py tests/browser_calendar_oauth_selfservice_v1.py
+      - name: Run ALL inherited Codex and calendar Node regressions
+        run: |
+          for file in tests/*.test.cjs; do
+            echo "Checking $file"
+            node "$file" >/dev/null || exit 1
+          done
+      - name: Native build and Google OAuth no-token CSP safeguards
+        run: |
+          python3 -m unittest discover -s tests -p 'test_calendar_review_build_v2.py' -v
+          python3 -m unittest discover -s tests -p 'test_calendar_dev_bundle_v2.py' -v
+          python3 -m unittest discover -s tests -p 'test_calendar_oauth_preflight_v1.py' -v
+          python3 -m unittest discover -s tests -p 'test_strategy_comparison_dev_bundle.py' -v
+      - name: Install synthetic-browser-only Chromium runner
+        run: |
+          python3 -m venv .venv-calendar-selfservice
+          .venv-calendar-selfservice/bin/python -m pip install playwright==1.56.0
+          .venv-calendar-selfservice/bin/python -m playwright install --with-deps chromium
+      - name: Preserve existing app news strategy session and 5min technical analysis
+        run: |
+          .venv-calendar-selfservice/bin/python tests/browser_app_shell.py
+          .venv-calendar-selfservice/bin/python tests/browser_news_final_v1.py
+          .venv-calendar-selfservice/bin/python tests/browser_news_strategy_integration.py
+          .venv-calendar-selfservice/bin/python tests/browser_development_session_hour.py
+          .venv-calendar-selfservice/bin/python tests/browser_five_minute_reference.py
+      - name: Existing calendar CRUD/KRX and static Google OAuth contract tests
+        run: |
+          .venv-calendar-selfservice/bin/python tests/browser_calendar_workspace_v2.py
+          .venv-calendar-selfservice/bin/python tests/browser_calendar_holiday_market_google_v1.py
+      - name: New user-supplied Google public OAuth ID and click-loaded SDK test
+        run: .venv-calendar-selfservice/bin/python tests/browser_calendar_oauth_selfservice_v1.py
