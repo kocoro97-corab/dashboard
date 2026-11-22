@@ -25,6 +25,14 @@ function setup(options={}){
  }}};
  const fetcher=async(url,init)=>{
   calls.push({type:'fetch',url,init});
+  if(url.includes('/users/me/calendarList')){
+   return {ok:true,status:200,json:async()=>options.calendarListResult||{
+    items:[{id:'personal@example.com',summary:'일정',primary:true,accessRole:'owner'},
+     {id:'ko.south_korea#holiday@group.v.calendar.google.com',
+      summary:'대한민국의 휴일',primary:false,accessRole:'reader'},
+     {id:'private-finance@example.com',summary:'회계',primary:false,accessRole:'owner'}
+    ]}};
+  }
   if(options.networkFail)throw Error('PRIVATE_NETWORK_FAILURE');
   if(options.httpError)return {ok:false,status:options.httpError};
   return {ok:true,status:200,json:async()=>result};
@@ -52,7 +60,7 @@ test('Google OAuth connection is consent driven by an explicit call',async()=>{
  const r=await x.api.connect();
  assert.equal(r.connected,true);
  assert.equal(r.storage,'memory-only');
- assert.equal(x.auth().scope,Google.SCOPE);
+ assert.equal(x.auth().scope,Google.AUTH_SCOPE);
  assert.equal(x.auth().client_id,ID);
  assert.deepEqual(x.calls[0].props,{prompt:'consent'});
  assert.equal(x.calls.filter(c=>c.type==='fetch').length,0);
@@ -168,4 +176,92 @@ test('Google module source contains no browser storage, GAS, broker or API key',
  for(const forbidden of ['localStorage.', 'sessionStorage.', 'PropertiesService',
   'NH_ACCOUNT', 'placeOrder(', 'executeOrder(', 'calendar/v3/calendars/primary/events/insert'])
   assert.equal(source.includes(forbidden),false,forbidden);
+});
+
+test('Google calendar list requires only calendarlist readonly and events readonly scopes',()=>{
+ assert.equal(Google.LIST_SCOPE,
+  'https://www.googleapis.com/auth/calendar.calendarlist.readonly');
+ assert.equal(Google.AUTH_SCOPE,Google.SCOPE+' '+Google.LIST_SCOPE);
+ assert.ok(!Google.AUTH_SCOPE.includes('calendar.events '));
+});
+test('subscribed Republic of Korea holiday calendar can be discovered without fetching events',async()=>{
+ const x=setup();await x.api.connect();
+ const result=await x.api.listCalendars();
+ assert.equal(result.calendars.length,3);
+ const holiday=result.calendars.find(c=>c.holiday);
+ assert.ok(holiday);
+ assert.equal(holiday.name,'대한민국의 휴일');
+ assert.ok(holiday.id.includes('#holiday'));
+ assert.equal(holiday.readOnly,true);
+ assert.equal(x.calls.filter(c=>c.type==='fetch').length,1);
+ assert.ok(x.calls.find(c=>c.type==='fetch').url.includes('/users/me/calendarList?'));
+});
+test('holiday subscribed calendar must be discovered before its events can be queried',async()=>{
+ const x=setup();await x.api.connect();
+ await assert.rejects(
+  x.api.events(2026,12,'ko.south_korea#holiday@group.v.calendar.google.com'),
+  e=>e.code==='GOOGLE_CALENDAR_NOT_SELECTED'
+ );
+ assert.equal(x.calls.filter(c=>c.type==='fetch').length,0);
+});
+test('selected Google holiday calendar reads only that calendar and classifies its provenance',async()=>{
+ const x=setup({result:{items:[
+  {id:'christmas',summary:'기독탄신일',start:{date:'2026-12-25'},status:'confirmed'}
+ ]}});
+ await x.api.connect();
+ const list=await x.api.listCalendars();
+ const id=list.calendars.find(c=>c.holiday).id;
+ const result=await x.api.events(2026,12,id);
+ assert.equal(result.calendar,id);
+ assert.equal(result.records.length,1);
+ assert.equal(result.records[0].sourceCalendar,id);
+ assert.equal(result.records[0].sourceLabel,'대한민국의 휴일');
+ assert.equal(result.records[0].holidayCalendar,true);
+ assert.equal(result.records[0].readOnly,true);
+ assert.equal(result.records[0].sourceStatus,'GOOGLE_USER_CALENDAR');
+ const request=x.calls.filter(c=>c.type==='fetch')[1];
+ assert.ok(request.url.includes(encodeURIComponent(id)+'/events?'));
+ assert.equal(request.init.method,'GET');
+ assert.equal(result.records[0].title,'기독탄신일');
+});
+test('private secondary calendars are never automatically fetched with holiday calendar',async()=>{
+ const x=setup();await x.api.connect();
+ await x.api.listCalendars();
+ await x.api.events(2026,12,'ko.south_korea#holiday@group.v.calendar.google.com');
+ assert.equal(x.calls.filter(c=>c.type==='fetch').length,2);
+ assert.ok(!x.calls.some(c=>c.url?.includes('private-finance')));
+});
+test('event results cached for five minutes avoid duplicate monthly Google reads',async()=>{
+ const x=setup();await x.api.connect();
+ await x.api.events(2026,11);
+ const reused=await x.api.events(2026,11);
+ assert.equal(reused.cached,true);
+ assert.equal(x.calls.filter(c=>c.type==='fetch').length,1);
+});
+test('calendar list cache respects partial results and avoids repeat network calls',async()=>{
+ const x=setup({calendarListResult:{items:[],nextPageToken:'future-page'}});
+ await x.api.connect();
+ const a=await x.api.listCalendars();
+ const b=await x.api.listCalendars();
+ assert.equal(a.partial,true);assert.equal(b.partial,true);
+ assert.equal(b.cached,true);
+ assert.equal(x.calls.filter(c=>c.type==='fetch').length,1);
+});
+test('disconnect resets selected calendar access and cached records',async()=>{
+ const x=setup();await x.api.connect();
+ const cal=(await x.api.listCalendars()).calendars.find(c=>c.holiday).id;
+ await x.api.events(2026,11,cal);
+ x.api.disconnect();
+ await x.api.connect();
+ await assert.rejects(x.api.events(2026,11,cal),e=>e.code==='GOOGLE_CALENDAR_NOT_SELECTED');
+});
+test('invalid Google calendar ID fails before network access',async()=>{
+ const x=setup();await x.api.connect();await x.api.listCalendars();
+ await assert.rejects(x.api.events(2026,12,'unknown-calendar@not-listed'),
+  e=>e.code==='GOOGLE_CALENDAR_NOT_SELECTED');
+ assert.equal(x.calls.filter(c=>c.type==='fetch').length,1);
+});
+test('holiday read-only scope never gives create, update, patch or delete methods',()=>{
+ const x=setup();for(const k of ['createEvent','deleteEvent','updateEvent','insert'])
+  assert.equal(Object.hasOwn(x.api,k),false);
 });
