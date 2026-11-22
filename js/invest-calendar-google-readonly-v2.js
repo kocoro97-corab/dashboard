@@ -6,16 +6,22 @@
 (function(root){
 'use strict';
 const SCOPE='https://www.googleapis.com/auth/calendar.events.readonly';
+const LIST_SCOPE='https://www.googleapis.com/auth/calendar.calendarlist.readonly';
+const AUTH_SCOPE=SCOPE+' '+LIST_SCOPE;
+const CACHE_MS=5*60*1000;
 const ID_RE=/^[0-9]{8,32}-[A-Za-z0-9_-]{12,80}\.apps\.googleusercontent\.com$/;
 const now=()=>Date.now();
 const error=code=>Object.assign(new Error(code),{code});
 function create({clientId,google=root.google,fetcher=root.fetch,clock=now}={}){
  const eligible=typeof clientId==='string'&&ID_RE.test(clientId);
  let token=null,expires=0,request=null,connected=false;
+ let available=null,availableAt=0;
+ const eventsCache=new Map();
+ function resetView(){available=null;availableAt=0;eventsCache.clear()}
  function status(){return Object.freeze({
   configured:eligible,connected:!!connected&&!!token&&clock()<expires,
   expiresAt:connected&&clock()<expires?expires:null,
-  scope:'primary-calendar-events-read-only',mayWrite:false,
+  scope:'selected-calendars-events-and-list-read-only',mayWrite:false,
   storage:'memory-only'
  })}
  function connect(){
@@ -27,13 +33,13 @@ function create({clientId,google=root.google,fetcher=root.fetch,clock=now}={}){
    let client;
    try{
     client=google.accounts.oauth2.initTokenClient({
-     client_id:clientId,scope:SCOPE,
+     client_id:clientId,scope:AUTH_SCOPE,
      callback:response=>{
       if(!request)return;
       const active=request;request=null;
       if(response?.error||!response?.access_token||
        !/^[A-Za-z0-9_.~-]{10,4096}$/.test(response.access_token)){
-       token=null;connected=false;expires=0;
+       token=null;connected=false;expires=0;resetView();
        active.reject(error('GOOGLE_AUTH_DECLINED'));return;
       }
       const secs=Number(response.expires_in);
@@ -54,7 +60,7 @@ function create({clientId,google=root.google,fetcher=root.fetch,clock=now}={}){
   });
  }
  function disconnect(){
-  const revoke=token;token=null;expires=0;connected=false;
+  const revoke=token;token=null;expires=0;connected=false;resetView();
   if(request){const active=request;request=null;active.reject(error('GOOGLE_AUTH_CANCELLED'))}
   if(revoke&&typeof google?.accounts?.oauth2?.revoke==='function')
    try{google.accounts.oauth2.revoke(revoke,()=>{})}catch{}
@@ -69,17 +75,12 @@ function create({clientId,google=root.google,fetcher=root.fetch,clock=now}={}){
   const end=y+'-'+day(m)+'-01T00:00:00+09:00';
   return [start,end];
  }
- async function events(year,month){
+ async function googleGet(url){
   if(!eligible)throw error('GOOGLE_CLIENT_NOT_CONFIGURED');
   if(!token||!connected||clock()>=expires){
-   token=null;connected=false;throw error('GOOGLE_AUTH_REQUIRED');
+   token=null;connected=false;resetView();throw error('GOOGLE_AUTH_REQUIRED');
   }
   if(typeof fetcher!=='function')throw error('GOOGLE_FETCH_UNAVAILABLE');
-  const [begin,end]=span(year,month);
-  const url='https://www.googleapis.com/calendar/v3/calendars/primary/events?'+
-   new URLSearchParams({timeMin:begin,timeMax:end,singleEvents:'true',
-    orderBy:'startTime',maxResults:'200',
-    fields:'items(id,summary,start,status),nextPageToken'}).toString();
   let response;
   try{
    response=await fetcher(url,{method:'GET',headers:{
@@ -87,28 +88,82 @@ function create({clientId,google=root.google,fetcher=root.fetch,clock=now}={}){
    },credentials:'omit',cache:'no-store',redirect:'error',referrerPolicy:'no-referrer'});
   }catch{throw error('GOOGLE_NETWORK_FAILED')}
   if(response?.status===401||response?.status===403){
-   token=null;connected=false;expires=0;throw error('GOOGLE_ACCESS_EXPIRED_OR_DENIED');
+   token=null;connected=false;expires=0;resetView();
+   throw error('GOOGLE_ACCESS_EXPIRED_OR_DENIED');
   }
   if(!response?.ok)throw error('GOOGLE_EVENTS_UNAVAILABLE');
-  let payload;
-  try{payload=await response.json()}catch{throw error('GOOGLE_INVALID_RESPONSE')}
+  try{return await response.json()}
+  catch{throw error('GOOGLE_INVALID_RESPONSE')}
+ }
+ async function listCalendars(){
+  if(available&&clock()-availableAt<CACHE_MS&&clock()<expires)
+   return Object.freeze({calendars:available,partial:false,cached:true});
+  const url='https://www.googleapis.com/calendar/v3/users/me/calendarList?'+
+    new URLSearchParams({maxResults:'100',
+     fields:'items(id,summary,primary,accessRole),nextPageToken'}).toString();
+  const payload=await googleGet(url);
+  if(!payload||!Array.isArray(payload.items)||payload.items.length>100)
+   throw error('GOOGLE_INVALID_CALENDAR_LIST');
+  const data=[],ids=new Set();
+  for(const row of payload.items){
+   if(typeof row?.id!=='string'||!row.id||row.id.length>300||
+    /[\x00-\x1f]/.test(row.id)||ids.has(row.id))continue;
+   if(!['reader','owner','writer','writerWithoutPrivateAccess'].includes(row.accessRole))continue;
+   ids.add(row.id);
+   const name=typeof row.summary==='string'&&row.summary.trim()?
+    row.summary.trim().slice(0,100):'이름 없는 캘린더';
+   data.push(Object.freeze({
+    id:row.primary?'primary':row.id,name,
+    primary:row.primary===true,
+    holiday:/holiday|휴일|공휴일/i.test(name),
+    readOnly:true
+   }));
+  }
+  // Legacy default primary access remains valid even if list API omits it.
+  available=Object.freeze(data);
+  availableAt=clock();
+  return Object.freeze({
+   calendars:available,partial:!!payload.nextPageToken,
+   cached:false
+  });
+ }
+ async function events(year,month,calendarId='primary'){
+  const [begin,end]=span(year,month);
+  if(typeof calendarId!=='string'||calendarId.length<1||calendarId.length>300)
+   throw error('GOOGLE_CALENDAR_NOT_SELECTED');
+  if(calendarId!=='primary'&&
+   !(available?.some(x=>x.id===calendarId)))
+   throw error('GOOGLE_CALENDAR_NOT_SELECTED');
+  const key=calendarId+'|'+year+'-'+month;
+  const cached=eventsCache.get(key);
+  if(cached&&clock()-cached.at<CACHE_MS&&clock()<expires)
+   return Object.freeze({...cached.result,cached:true});
+  const url='https://www.googleapis.com/calendar/v3/calendars/'+
+   encodeURIComponent(calendarId)+'/events?'+
+   new URLSearchParams({timeMin:begin,timeMax:end,singleEvents:'true',
+    orderBy:'startTime',maxResults:'200',
+    fields:'items(id,summary,start,status),nextPageToken'}).toString();
+  const payload=await googleGet(url);
   if(!payload||!Array.isArray(payload.items)||payload.items.length>200)
    throw error('GOOGLE_INVALID_RESPONSE');
   const clean=payload.items.filter(x=>x?.status!=='cancelled');
   const core=root.MYInvestCalendarCoreV2;
   if(!core||typeof core.normalizeGoogle!=='function')
    throw error('GOOGLE_CALENDAR_CORE_UNAVAILABLE');
-  return Object.freeze({
-   records:core.normalizeGoogle(clean),
-   partial:!!payload.nextPageToken,
-   retrievedAt:clock(),
-   calendar:'primary',
-   authenticated:true,readOnly:true
-  });
+  const records=core.normalizeGoogle(clean).map(x=>Object.freeze({
+   ...x,id:'google:'+calendarId+':'+x.id,sourceCalendar:calendarId,
+   sourceLabel:available?.find(c=>c.id===calendarId)?.name||'기본 캘린더',
+   sourceStatus:'GOOGLE_USER_CALENDAR',readOnly:true
+  }));
+  const result=Object.freeze({records:Object.freeze(records),
+   partial:!!payload.nextPageToken,retrievedAt:clock(),
+   calendar:calendarId,authenticated:true,readOnly:true,cached:false});
+  eventsCache.set(key,{at:clock(),result});
+  return result;
  }
- return Object.freeze({connect,events,disconnect,status});
+ return Object.freeze({connect,events,listCalendars,disconnect,status});
 }
-const api=Object.freeze({create,SCOPE});
+const api=Object.freeze({create,SCOPE,LIST_SCOPE,AUTH_SCOPE});
 if(typeof module==='object'&&module.exports)module.exports=api;
 else root.MYInvestGoogleCalendarReadonlyV2=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
