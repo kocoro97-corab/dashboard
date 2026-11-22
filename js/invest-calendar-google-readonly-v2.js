@@ -15,9 +15,9 @@ const error=code=>Object.assign(new Error(code),{code});
 function create({clientId,google=root.google,fetcher=root.fetch,clock=now}={}){
  const eligible=typeof clientId==='string'&&ID_RE.test(clientId);
  let token=null,expires=0,request=null,connected=false;
- let available=null,availableAt=0;
+ let available=null,availableAt=0,listPartial=false;
  const eventsCache=new Map();
- function resetView(){available=null;availableAt=0;eventsCache.clear()}
+ function resetView(){available=null;availableAt=0;listPartial=false;eventsCache.clear()}
  function status(){return Object.freeze({
   configured:eligible,connected:!!connected&&!!token&&clock()<expires,
   expiresAt:connected&&clock()<expires?expires:null,
@@ -97,7 +97,7 @@ function create({clientId,google=root.google,fetcher=root.fetch,clock=now}={}){
  }
  async function listCalendars(){
   if(available&&clock()-availableAt<CACHE_MS&&clock()<expires)
-   return Object.freeze({calendars:available,partial:false,cached:true});
+   return Object.freeze({calendars:available,partial:listPartial,cached:true});
   const url='https://www.googleapis.com/calendar/v3/users/me/calendarList?'+
     new URLSearchParams({maxResults:'100',
      fields:'items(id,summary,primary,accessRole),nextPageToken'}).toString();
@@ -121,9 +121,9 @@ function create({clientId,google=root.google,fetcher=root.fetch,clock=now}={}){
   }
   // Legacy default primary access remains valid even if list API omits it.
   available=Object.freeze(data);
-  availableAt=clock();
+  availableAt=clock();listPartial=!!payload.nextPageToken;
   return Object.freeze({
-   calendars:available,partial:!!payload.nextPageToken,
+   calendars:available,partial:listPartial,
    cached:false
   });
  }
@@ -153,6 +153,7 @@ function create({clientId,google=root.google,fetcher=root.fetch,clock=now}={}){
   const records=core.normalizeGoogle(clean).map(x=>Object.freeze({
    ...x,id:'google:'+calendarId+':'+x.id,sourceCalendar:calendarId,
    sourceLabel:available?.find(c=>c.id===calendarId)?.name||'기본 캘린더',
+   holidayCalendar:!!available?.find(c=>c.id===calendarId)?.holiday,
    sourceStatus:'GOOGLE_USER_CALENDAR',readOnly:true
   }));
   const result=Object.freeze({records:Object.freeze(records),
