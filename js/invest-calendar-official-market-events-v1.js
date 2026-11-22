@@ -51,7 +51,8 @@ function row(date,type,title,sourceId,{time='',note='',tentative=false}={}){
   sourceUrl,sourceLabel:sourceId==='nyse'?'NYSE':sourceId.startsWith('fed')?'Federal Reserve':
    sourceId==='bls'?'BLS':'BEA',
   checkedAt:'2026-11-22',tentative,sourceTime:time,
-  kstDate,kstTime,note,status:'OFFICIAL_SOURCE_SNAPSHOT',readOnly:true,
+  kstDate,kstTime,note,status:'OFFICIAL_SOURCE_SNAPSHOT',
+  sourceStatus:'OFFICIAL_SOURCE_SNAPSHOT',readOnly:true,
   liveVerified:false,tradeSessionCertified:false
  });
 }
