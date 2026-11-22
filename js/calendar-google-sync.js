@@ -34,7 +34,7 @@ function hide(id,yes){if(typeof id!=='string')return;yes?hidden.add(id):hidden.d
 function isHidden(id){return hidden.has(id)}
 async function events(year,month,force=false){
  if(!Number.isInteger(year)||year<2020||year>2100||!Number.isInteger(month)||month<1||month>12)throw Error('CALENDAR_RANGE_INVALID');
- const list=await calendars(force),visible=list.filter(x=>!hidden.has(x.id));if(!visible.length)return [];
+ const list=await calendars(false),visible=list.filter(x=>!hidden.has(x.id));if(!visible.length)return [];
  const period=String(year)+'-'+String(month).padStart(2,'0');
  return cached('events:'+period+':'+visible.map(x=>x.id).join(','),async()=>{
   const raw=await provider.listEvents({year,month,calendarIds:visible.map(x=>x.id)});
