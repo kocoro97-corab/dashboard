@@ -1,0 +1,45 @@
+name: Isolated investment calendar and Google readonly preview CI
+on:
+  push:
+    branches:
+      - feat/calendar-workspace-google-readonly-isolated
+permissions:
+  contents: read
+jobs:
+  calendar-review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Checkout with no persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check calendar syntax and existing news compatibility
+        run: |
+          node --check js/page-news.js
+          node --check js/invest-calendar-core-v2.js
+          node --check js/invest-calendar-style-v2.js
+          node --check js/invest-calendar-google-readonly-v2.js
+          node --check js/invest-calendar-workspace-v2.js
+          node --check tests/invest-calendar-core-v2.test.cjs
+          node --check tests/invest-calendar-google-readonly-v2.test.cjs
+          python3 -m py_compile tools/build_calendar_review_v2.py tests/browser_calendar_workspace_v2.py tests/test_calendar_review_build_v2.py
+      - name: All existing and new Node regression tests (synthetic only)
+        run: |
+          for file in tests/*.test.cjs; do
+            echo "Checking $file"
+            node "$file" >/dev/null || exit 1
+          done
+      - name: Isolated development artifact build guards
+        run: python3 -m unittest discover -s tests -p 'test_calendar_review_build_v2.py' -v
+      - name: Install Chromium in CI only
+        run: |
+          python3 -m venv .venv-calendar
+          .venv-calendar/bin/python -m pip install playwright==1.56.0
+          .venv-calendar/bin/python -m playwright install --with-deps chromium
+      - name: Existing app shell and news calendar backward compatibility
+        run: |
+          .venv-calendar/bin/python tests/browser_app_shell.py
+          .venv-calendar/bin/python tests/browser_news_final_v1.py
+      - name: Full native calendar CRUD/ICS and Google-disabled PC Fold browser journeys
+        run: .venv-calendar/bin/python tests/browser_calendar_workspace_v2.py
