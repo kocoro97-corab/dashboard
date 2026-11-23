@@ -29,8 +29,10 @@ function build(input,{now=new Date()}={}){
   if(e.dateStatus==='estimated'&&e.licenseApproved!==true)throw Error('EARNINGS_VENDOR_LICENSE_NOT_APPROVED');
   if(ids.has(e.eventId))throw Error('EARNINGS_DUPLICATE_ID');
   ids.add(e.eventId);
-  const {verifiedAt,licenseApproved, ...publicFields}=e;
-  return publicFields;
+  // Public output is an ALLOWLIST, not input spread. Never leak accidental
+  // account fields, holdings, private notes, credentials or reviewer metadata.
+  const approved=['eventId','market','symbol','name','period','eventType','date','dateStatus','evidence','sourceUrl','startsAt','earningsRelated'];
+  return Object.fromEntries(approved.filter(key=>Object.prototype.hasOwnProperty.call(e,key)).map(key=>[key,e[key]]));
  });
  const out={schemaVersion:1,source:'VERIFIED_EARNINGS',retrievedAt:at,events:rows};
  const checked=normalize(out,day);
