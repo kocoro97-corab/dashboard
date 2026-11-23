@@ -60,6 +60,7 @@ function component(input,{name,nowDay,now,market,mode}){
    const s=sourceEvidence(ev,now);
    if(s.state!=='known'){status=s.state;reasons.push(s.reason);break}
    if(s.receivedAgeMinutes>REQUIREMENTS[mode].quoteMaxMinutes){status='stale';reasons.push('시장 지수 수신시각 오래됨')}
+   if(s.observedAgeMinutes>4*DAY/MIN){status='stale';reasons.push('원천 지수 관측시각 오래됨 · 재수신과 별개')}
    basis.push({kind:'market-quote',symbol:clean(ev.symbol,32),source:s.source,observedAt:s.observedAt,
     receivedAt:s.receivedAt,referenceDay:ev.referenceDay});
   }
