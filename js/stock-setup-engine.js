@@ -111,7 +111,8 @@ function assess({symbol,market,currency,bars,benchmark=null,mode='swing',source,
  }
  const setup=classify(values,mode),references=riskLevels(values,{market,mode});
  let relative={status:'unavailable',reason:'시장 기준지수 미연결'};
- if(benchmark?.market===market&&benchmark.verified===true&&typeof benchmark.source==='string'&&benchmark.source.trim()&&typeof benchmark.symbol==='string'&&/^(?:\^KS11|SPY|\^GSPC|\^IXIC|\^KQ11)$/.test(benchmark.symbol)){
+ if(benchmark?.market===market&&benchmark.currency===currency&&benchmark.verified===true&&typeof benchmark.source==='string'&&benchmark.source.trim()&&typeof benchmark.symbol==='string'&&
+  (market==='KR'?/^(?:\^KS11|\^KQ11)$/:/^(?:SPY|\^GSPC|\^IXIC)$/).test(benchmark.symbol)){
   const b=normalizeBars(benchmark.bars);
   if(b.status==='ready'&&b.asOf===checked.asOf){
    relative={status:'ready',period5:alignedRelative(values,b.bars,5),
