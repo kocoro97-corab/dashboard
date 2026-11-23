@@ -25,7 +25,7 @@ function dayAge(nowDay,asOf){return (Date.parse(nowDay+'T00:00:00Z')-Date.parse(
 function clean(s,length=120){return typeof s==='string'?s.replace(/[\x00-\x1f]/g,' ').trim().slice(0,length):''}
 function sourceEvidence(raw,now){
  if(!raw||typeof raw!=='object'||!clean(raw.source))return {state:'missing',reason:'출처·공급자 식별 미확인'};
- const observed=timestamp(raw.observedAt),received=timestamp(raw.receivedAt);
+ const observed=timestamp(raw.observedAt??raw.asOf),received=timestamp(raw.receivedAt);
  if(observed===null||received===null)return {state:'missing',reason:'관측시각 또는 수신시각 미확인'};
  if(observed>now+5*MIN||received>now+5*MIN||observed>received+5*MIN)return {state:'invalid',reason:'시각 순서·미래 관측 오류'};
  if(raw.failed===true)return {state:'failed',reason:'원천 데이터 최근 요청 실패'};
