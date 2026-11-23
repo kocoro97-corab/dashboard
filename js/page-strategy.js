@@ -39,18 +39,25 @@ const eventPanel=make('section',undefined,'str4-output');
 eventPanel.setAttribute('aria-label','공식 경제지표 발표 일정 위험 점검');view.append(eventPanel);
 function showEconomicRisk(){
  eventPanel.replaceChildren();eventPanel.append(make('h3','향후 14일 · 공식 경제 이벤트'));
- const source=root.MYInvestEconomicCalendar,snapshot=source?.current();
- if(snapshot?.status!=='ready'){eventPanel.append(make('p','검증된 경제 일정 자료가 없습니다. 발표 이벤트가 없다는 뜻이 아닙니다. 신규 진입 전 공식 일정 확인이 필요합니다.','str4-muted'));return}
- const rows=source.horizon(14).slice(0,8);
- if(!rows.length){eventPanel.append(make('p','현재 수신된 BLS 일정에서 향후 14일 이벤트가 확인되지 않았습니다. FOMC·BEA·한국은행 등 다른 기관 일정은 이 자료에 포함되지 않습니다.','str4-muted'));return}
+ const source=root.MYInvestEconomicCalendar,bea=root.MYInvestBeaCalendar,fed=root.MYInvestFomcSchedule,snapshot=source?.current(),beaStatus=bea?.current();
+ if(snapshot?.status!=='ready'&&beaStatus?.status!=='ready')eventPanel.append(make('p','BLS·BEA 공식 일정 수신이 불완전합니다. 발표 이벤트가 없다는 뜻이 아닙니다. 신규 진입 전 공식 일정 확인이 필요합니다.','str4-muted'));
+ const now=Date.now(),upcoming=[...(source?.horizon(14,now)||[]),...(bea?.horizon(14,now)||[])];
+ const fedDays=[...new Set([new Date(now).getUTCFullYear(),new Date(now+14*86400000).getUTCFullYear()])];
+ for(const year of fedDays)for(const meeting of fed?.list(year)||[]){
+  // FOMC is date-only US Eastern; show date without assuming release hour.
+  const midnight=Date.parse(meeting.date+'T00:00:00Z');
+  if(midnight>=now-86400000&&midnight<=now+14*86400000)upcoming.push(meeting);
+ }
+ const rows=upcoming.sort((a,b)=>(a.startsAt||a.date).localeCompare(b.startsAt||b.date)).slice(0,8);
+ if(!rows.length){eventPanel.append(make('p','연결된 공식 일정에서 향후 14일 이벤트가 확인되지 않았습니다. 한국은행 등 미연결 기관 일정은 포함되지 않습니다.','str4-muted'));return}
  for(const item of rows){
-  const date=new Date(item.startsAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false});
-  eventPanel.append(make('p',(item.priority==='critical'?'🔴 매우 높음':'🟠 높음')+' · '+date+' · '+item.title+' · 출처 BLS'));
+  const date=item.startsAt?new Date(item.startsAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false}):item.date+' (미국 현지 날짜 · 시간 미확인)';
+  eventPanel.append(make('p',(item.priority==='critical'?'🔴 매우 높음':'🟠 높음')+' · '+date+' · '+item.title+' · 출처 '+item.source));
  }
  eventPanel.append(make('p','발표시간 전후 변동성·갭 위험을 점검하세요. 실제치·예상치 및 시장 반응은 미연결이며 매수·매도 신호를 생성하지 않습니다.','str4-muted'));
 }
 showEconomicRisk();
-root.MYInvestEconomicCalendar?.refresh().then(()=>{if(active&&view?.isConnected)showEconomicRisk()}).catch(()=>{});
+Promise.allSettled([root.MYInvestEconomicCalendar?.refresh(),root.MYInvestBeaCalendar?.refresh()]).then(()=>{if(active&&view?.isConnected)showEconomicRisk()});
 head=make('div',undefined,'str4-nav');view.append(head);renderHeader();selector=root.InvestWorkflow.selector({ctx,searchId:'strategyStockSearch',onSelect:selected=>{mode=selected.mode;renderHeader();void loadStrategy()}});view.append(selector.element);conditional=make('section',undefined,'str4-output workflow-conditional');view.append(conditional);const modes=make('div',undefined,'str4-modes');const checklist=make('div');for(const [value,label] of [['day','단타'],['swing','스윙']]){const b=button(label,()=>{mode=value;const selection=readSelection();if(selection){root.InvestWorkflow.select(selection.symbol,{...selection,mode});void loadStrategy()}for(const x of modes.querySelectorAll('button'))x.setAttribute('aria-pressed',String(x===b));drawChecklist()});b.dataset.mode=value;modes.append(b)}view.append(modes,checklist);
  function drawChecklist(){for(const b of modes.querySelectorAll('button'))b.setAttribute('aria-pressed',String(b.dataset.mode===mode));checklist.replaceChildren(make('h3',mode==='day'?'단타 진입 전 점검':'스윙 진입 전 점검'));const list=make('ul');(mode==='day'?['시장 방향 및 해당 테마 당일 강도 확인','분봉·VWAP·거래량과 호가 데이터 확인 (현재 미연결)','진입·손절·목표·1회 손실한도 사전 설정','뉴스 급변·갭 리스크 및 유동성 점검']:['시장 국면과 테마 추세의 지속성 확인','일봉 MA20·MA60 및 최근 고저점 점검','실적 발표·주요 뉴스·기관 수급 확인 (현재 미연결)','2~3주 보유 가정 시 갭·오버나이트 위험 반영']).forEach(t=>list.append(make('li',t)));checklist.append(list)}drawChecklist();
  view.append(make('h3','매매계획 계산기'),make('p','모든 금액은 동일 통화 단위입니다. 예: 한국 종목은 원, 미국 종목은 달러. 조건부 계산값 또는 직접 입력값이며 실시간 주문가격이 아닙니다.','str4-muted'));const grid=make('div',undefined,'str4-grid');grid.append(field('계획 자본금','capital','1000000','any'),field('1회 허용 손실 (%)','riskPct','1','0.1'),field('최대 투자금 배분 (%)','allocation','30','1'),field('가정 진입가','entry','','any'),field('가정 손절가','stop','','any'),field('가정 목표가','target','','any'));view.append(grid);holdingPanel=make('div',undefined,'str4-output');view.append(holdingPanel);output=make('div',undefined,'str4-output');output.setAttribute('aria-live','polite');view.append(output);legacy.mount(container,ctx);container.prepend(view);calculate();unsubscribe=ctx.subscribe?.(()=>{if(active){renderHolding();if(latestData&&readSelection())drawConditional(latestData,readSelection())}});void loadStrategy()}
