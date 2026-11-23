@@ -36,15 +36,12 @@ function canonical(entry,mode,intent,nowDay){
  return {valid:true,age};
 }
 const STRONG_VETO=['market-high-risk','event-near'];
-const NEEDS_EVIDENCE=new Set(['market-unverified','sector-unverified','events-unverified','relative-unverified',
- 'holding-unverified','market-risk-unknown','market-trend-unknown','risk-reference-unverified',
- 'stock-trend-unknown','stock-unverified','stale-stock']);
 function summarize(entry,nowDay){
  const result=canonical(entry,entry?.mode,entry?.intent,nowDay);
  if(!result.valid)return {status:'invalid',reason:result.reason};
  const blocker=cleanList(entry.blocking,30),reasons=cleanList(entry.reasons,25),conditions=cleanList(entry.conditions,25);
  const veto=blocker.some(x=>STRONG_VETO.includes(x));
- const unknown=blocker.some(x=>NEEDS_EVIDENCE.has(x))||entry.status==='insufficient';
+ const unknown=blocker.some(x=>!STRONG_VETO.includes(x))||entry.status==='insufficient'||entry.status==='review-required'&&!blocker.length;
  const technical=conditions.some(x=>x.includes('확정봉 돌파')||x.includes('확정 일봉 스윙'));
  const direction=entry.marketContext?.status==='verified'?entry.marketContext.direction:'unknown';
  const downTrend=entry.intent==='holding'&&reasons.some(x=>x.includes('하락 추세')||x.includes('추세 훼손'));
