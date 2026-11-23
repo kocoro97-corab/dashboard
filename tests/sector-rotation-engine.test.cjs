@@ -37,7 +37,7 @@ assert.equal(first.candidates[0].turnover.value,6000);
 assert.equal(first.candidates[0].turnover.currency,'USD');
 assert.equal(first.candidates[0].memberRank.status,'sample-only');
 assert.equal(first.candidates[0].memberRank.leaders[0].symbol,'NVDA');
-const gap=E.assess({market:'US',benchmark,candidates:[sector('GAP',1.0,{bars:bars(85,{step:1,missing:78})})]});
+const gap=E.assess({market:'US',benchmark,candidates:[sector('GAP',1.0,{bars:bars(85,{step:1,missing:81})})]});
 assert.equal(gap.candidates[0].periods['5d'].status,'insufficient');
 assert.equal(gap.candidates[0].periods['20d'].status,'insufficient');
 assert.equal(gap.candidates[0].rotation.status,'insufficient');
