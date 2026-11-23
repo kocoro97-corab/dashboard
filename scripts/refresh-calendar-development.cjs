@@ -8,7 +8,7 @@ async function refresh({directory=path.resolve(__dirname,'../data'),collectors={
  return Promise.all(SOURCES.map(async([source,file,module])=>{
   const dest=path.join(directory,file);
   try{const data=await (collectors[source]||require('./'+module).collect)({now});const result=validate(data,now.getTime());const temporary=dest+'.'+process.pid+'.tmp';fs.writeFileSync(temporary,JSON.stringify(data,null,2)+'\n');fs.renameSync(temporary,dest);return {source,status:'PASS',...result}}
-  catch{return {source,status:'FAIL',previousSnapshotPreserved:fs.existsSync(dest)}}
+  catch(error){const m=/^BLS_HTTP_FAILED_([45][0-9]{2})$/.exec(error?.message||'');return {source,status:'FAIL',previousSnapshotPreserved:fs.existsSync(dest),...(m?{http:Number(m[1])}:{})}}
  }));
 }
 if(require.main===module)refresh().then(rows=>{console.log(JSON.stringify({mode:'DEVELOPMENT_PUBLIC_CALENDAR_REFRESH',rows,scheduled:false,nhCalls:0,accountCalls:0,orderCalls:0}));if(rows.some(r=>r.status!=='PASS'))process.exitCode=1});

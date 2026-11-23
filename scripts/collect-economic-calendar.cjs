@@ -9,7 +9,7 @@ async function collect({fetchImpl=globalThis.fetch,now=new Date()}={}){
  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
  try{
   const res=await fetchImpl(SOURCE,{signal:controller.signal,redirect:'error',headers:{Accept:'text/calendar'},cache:'no-store'});
-  if(!res?.ok)throw Error('BLS_HTTP_FAILED');
+  if(!res?.ok)throw Error('BLS_HTTP_FAILED_'+(Number.isInteger(res?.status)?res.status:'UNKNOWN'));
   const data=await res.text();if(data.length>1500000)throw Error('BLS_TOO_LARGE');
   const parsed=parse(data,{retrievedAt:now.toISOString()});
   if(parsed.events.length<1)throw Error('BLS_NO_VERIFIED_EVENTS');
