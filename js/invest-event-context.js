@@ -21,6 +21,7 @@ const validateDate=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&Number
 let refreshJob=null;
 let collectionRows=[],collectionAt=0;
 async function refreshCollection(force=false){
+ if(root.MYINVEST_TRANSPORT_CONFIG?.devSession!==true)return;
  if(!force&&collectionAt&&Date.now()-collectionAt<900000)return;
  try{const r=await root.fetch('calendar-data-status.json',{credentials:'omit',cache:'no-store',redirect:'error'});if(!r.ok)throw Error('STATUS_UNAVAILABLE');const text=await r.text();if(text.length>16384)throw Error('STATUS_OVERSIZED');const rows=JSON.parse(text);if(!Array.isArray(rows)||rows.length>5)throw Error('STATUS_INVALID');collectionRows=rows.filter(x=>['economic-events.json','bea-events.json','bok-stats-events.json','earnings-events.json','policy-events.json'].includes(x?.file)&&['VERIFIED','FAILED','MISSING','UNAVAILABLE'].includes(x.status)).map(x=>Object.freeze({file:x.file,status:x.status,source:['BLS','BEA','BOK','VERIFIED_EARNINGS','OFFICIAL_POLICY'].includes(x.source)?x.source:null,retrievedAt:Number.isFinite(Date.parse(x.retrievedAt))?x.retrievedAt:null}));}catch{collectionRows=[]}collectionAt=Date.now();
 }
