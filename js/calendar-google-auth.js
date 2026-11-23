@@ -12,7 +12,7 @@ const allowedUrl=raw=>{
   const u=new URL(raw);
   return u.protocol==='https:'&&u.origin==='https://accounts.google.com'&&u.pathname==='/o/oauth2/v2/auth'&&
     u.searchParams.get('response_type')==='code'&&
-    (u.searchParams.get('scope')||'').split(/\s+/).includes(REQUIRED_SCOPE)&&
+    (u.searchParams.get('scope')||'').trim()===REQUIRED_SCOPE&&
     !!u.searchParams.get('state')&&!!u.searchParams.get('client_id')&&!!u.searchParams.get('redirect_uri')?u.href:null;
  }catch{return null}
 };
@@ -28,7 +28,7 @@ async function verify(){
  try{
   const value=await client.getStatus();
   if(version!==revision||backend!==client)throw Error('AUTH_SESSION_CHANGED');
-  const connected=value?.connected===true&&value?.readOnly===true&&Array.isArray(value.scopes)&&value.scopes.includes(REQUIRED_SCOPE);
+  const connected=value?.connected===true&&value?.readOnly===true&&Array.isArray(value.scopes)&&value.scopes.length===1&&value.scopes[0]===REQUIRED_SCOPE;
   bound=connected;
   if(connected){
    root.MYInvestGoogleCalendarSync?.connect({listCalendars:()=>client.listCalendars(),listEvents:args=>client.listEvents(args)});
