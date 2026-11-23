@@ -39,7 +39,7 @@ Parallel PR #9 (`84825a939691f216a8364912b30aadf9e89af7e3`) was inspected and pr
 
 ## Development-only refresh and release limits
 
-The existing source collectors are retained with a shared concurrency group, avoiding concurrent source-branch snapshot pushes. `refresh-calendar-development.cjs` independently validates each source and retains previous bytes on collection failure. The manual source workflow creates a development frontend artifact without deployment credentials.
+The existing source collectors are retained as read-only CI artifact jobs, avoiding source-branch snapshot pushes. Their concurrency groups stay independent so all three jobs can run. `refresh-calendar-development.cjs` independently validates each source and retains previous bytes on collection failure. The manual source workflow creates a development frontend artifact without deployment credentials.
 
 The development Pages repository's default branch is already **dev-pages**, independently of protected source **main**. A scheduled public-data refresh can therefore reside there without changing source main, production Pages, GAS or account stores. Its exact tested revision and actual run result are tracked in the final task result; no source-main schedule or operating scheduler is activated.
 

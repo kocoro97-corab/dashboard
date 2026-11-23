@@ -10,9 +10,9 @@ on:
       - '.github/workflows/economic-calendar.yml'
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 concurrency:
-  group: calendar-public-dev-snapshots
+  group: economic-calendar-dev-snapshot
   cancel-in-progress: false
 jobs:
   validate-and-refresh:
@@ -34,12 +34,7 @@ jobs:
           node tests/economic-collector.test.cjs
       - name: Fetch official BLS schedule and validate it
         run: node scripts/collect-economic-calendar.cjs
-      - name: Publish verified snapshot on development branch only
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- data/economic-events.json
-          if ! git diff --cached --quiet; then
-            git commit -m 'data(economic-calendar): refresh verified BLS release snapshot'
-            git push origin HEAD:feat/nh-integration-v2
-          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: economic-calendar-dev-snapshot
+          path: data/economic-events.json

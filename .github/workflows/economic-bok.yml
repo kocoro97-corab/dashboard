@@ -10,9 +10,9 @@ on:
       - '.github/workflows/economic-bok.yml'
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 concurrency:
-  group: calendar-public-dev-snapshots
+  group: bok-economic-calendar-dev
   cancel-in-progress: false
 jobs:
   validate-and-collect:
@@ -35,12 +35,7 @@ jobs:
           node tests/economic-bok-collector.test.cjs
       - name: Fetch BOK official HTML release schedule
         run: node scripts/collect-bok-calendar.cjs
-      - name: Commit verified BOK schedule snapshot to dev only
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- data/bok-stats-events.json
-          if ! git diff --cached --quiet; then
-            git commit -m 'data(economic-calendar): refresh verified BOK publication schedule'
-            git push origin HEAD:feat/nh-integration-v2
-          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bok-economic-calendar-dev
+          path: data/bok-stats-events.json

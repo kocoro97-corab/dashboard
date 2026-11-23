@@ -12,9 +12,9 @@ on:
       - '.github/workflows/economic-bea.yml'
   workflow_dispatch:
 permissions:
-  contents: write
+  contents: read
 concurrency:
-  group: calendar-public-dev-snapshots
+  group: bea-economic-calendar-dev-snapshot
   cancel-in-progress: false
 jobs:
   validate-and-refresh:
@@ -38,12 +38,7 @@ jobs:
           node tests/economic-bea-collector.test.cjs
       - name: Collect official BEA release schedule
         run: node scripts/collect-bea-calendar.cjs
-      - name: Commit verified snapshot only to development branch
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- data/bea-events.json
-          if ! git diff --cached --quiet; then
-            git commit -m 'data(economic-calendar): refresh official BEA schedule'
-            git push origin HEAD:feat/nh-integration-v2
-          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bea-economic-calendar-dev-snapshot
+          path: data/bea-events.json
