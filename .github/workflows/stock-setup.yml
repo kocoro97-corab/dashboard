@@ -1,0 +1,28 @@
+name: Stock day swing setup tests
+on:
+  push:
+    branches: [feat/nh-integration-v2]
+    paths:
+      - 'js/stock-setup-engine.js'
+      - 'js/stock-setup-adapter.js'
+      - 'tests/stock-setup-*.cjs'
+      - '.github/workflows/stock-setup.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  stock-setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate isolated stock engine and adapters
+        run: |
+          node --check js/stock-setup-engine.js
+          node --check js/stock-setup-adapter.js
+          node --check tests/stock-setup-engine.test.cjs
+          node --check tests/stock-setup-adapter.test.cjs
+          node tests/stock-setup-engine.test.cjs
+          node tests/stock-setup-adapter.test.cjs
