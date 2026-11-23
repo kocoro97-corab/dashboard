@@ -122,7 +122,12 @@ function assess({market,benchmark,candidates=[],nowDay=null}={}){
  const benchmarkInfo=normalizeBenchmark(benchmark,market);
  if(benchmarkInfo.status!=='ready')return {status:'insufficient',market,reason:'기준지수: '+(benchmarkInfo.reason||'일봉 미확인'),candidates:[],rotation:[],coverage:{benchmark:false}};
  const observed=benchmarkInfo.bars,benchmarkDay=observed.at(-1).date;
- if(nowDay!==null&&(!day(nowDay)||nowDay<benchmarkDay))return {status:'insufficient',market,reason:'기준지수 기준일 오류',candidates:[],rotation:[],coverage:{benchmark:false}};
+ if(nowDay!==null){
+  const requested=day(nowDay);
+  if(!requested||requested<benchmarkDay)return {status:'insufficient',market,reason:'기준지수 기준일 오류',candidates:[],rotation:[],coverage:{benchmark:false}};
+  const age=(Date.parse(requested+'T00:00:00Z')-Date.parse(benchmarkDay+'T00:00:00Z'))/86400000;
+  if(age>10)return {status:'insufficient',market,reason:'기준지수 일봉 오래됨 · 최신 시장 국면 판단 불가',candidates:[],rotation:[],coverage:{benchmark:false}};
+ }
  const benchmarkChanges=compareAtDays(observed,observed);
  const results=[],ids=new Set();
  for(const item of candidates){
