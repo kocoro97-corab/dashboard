@@ -99,6 +99,18 @@ function horizon(days=21,now=Date.now(),symbols=null){
  const whitelist=Array.isArray(symbols)?new Set(symbols.filter(s=>typeof s==='string').map(s=>s.toUpperCase())):null;
  return store.events.filter(e=>e.date>=today&&e.date<=end&&(!whitelist||whitelist.has(e.symbol)));
 }
-const api=Object.freeze({normalize,current,reset,refresh,month,matches,horizon,sourceOK,dateOK,SOURCE});
+function assessRisk(event,{mode='swing',now=Date.now()}={}){
+ if(!event||!dateOK(event.date)||!['confirmed','estimated'].includes(event.dateStatus)||!Number.isFinite(now))return {level:'unknown',label:'일정 미확인',daysUntil:null};
+ const timezone=event.localTimeBasis==='America/New_York'?'America/New_York':'Asia/Seoul';
+ const todayParts={};for(const x of new Intl.DateTimeFormat('en-US',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(now)))if(x.type!=='literal')todayParts[x.type]=x.value;
+ const today=todayParts.year+'-'+todayParts.month+'-'+todayParts.day;
+ const daysUntil=Math.round((Date.parse(event.date+'T00:00:00Z')-Date.parse(today+'T00:00:00Z'))/86400000);
+ if(event.dateStatus==='estimated')return {level:'unconfirmed',label:'예상일 · 회사 확인 필요',daysUntil};
+ if(daysUntil<0)return {level:'past',label:'발표일 경과 · 결과 확인 필요',daysUntil};
+ const window=mode==='day'?2:14;
+ if(daysUntil<=window)return {level:'elevated',label:mode==='day'?'단타 진입 전 발표 일정 점검':'스윙 보유기간 내 실적 위험 점검',daysUntil};
+ return {level:'scheduled',label:'확정 발표일 확인',daysUntil};
+}
+const api=Object.freeze({normalize,current,reset,refresh,month,matches,horizon,assessRisk,sourceOK,dateOK,SOURCE});
 if(typeof module==='object'&&module.exports)module.exports=api;else root.MYInvestEarningsCalendar=api;
 })(globalThis);
