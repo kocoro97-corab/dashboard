@@ -56,8 +56,8 @@ function matchSector(sector,stock,sectorLink){
   relative5dPp:round(sector.rotation.relative5dPp),relative20dPp:round(sector.rotation.relative20dPp),
   isProxy:sector.type==='sector_etf_proxy',source:sector.source,asOf:sector.asOf};
 }
-function checkEvent(event,stock,mode){
- if(!event||event.status!=='ready')return {status:'unknown',reason:'실적·거시 일정 위험 미확인'};
+function checkEvent(event,stock,mode,referenceDay){
+ if(!event||event.status!=='ready'||event.coverageVerified!==true)return {status:'unknown',reason:'실적·거시 일정 수집 범위 미확인'};
  // Ingest only PUBLIC aggregate event status for the selected symbol; never
  // accept private Google Calendar events as investment evidence.
  const rows=Array.isArray(event.events)?event.events:[];
@@ -65,7 +65,7 @@ function checkEvent(event,stock,mode){
  for(const e of rows){
   if(!e||!validDay(e.date)||!['economic','earnings'].includes(e.kind)||e.verified!==true||e.dateStatus==='estimated')continue;
   if(e.kind==='earnings'&&(e.symbol!==stock.symbol||e.market!==stock.market))continue;
-  const distance=dayDiff(e.date,stock.asOf);
+  const distance=dayDiff(e.date,referenceDay);
   if(distance>=0&&distance<=limit)found.push({kind:e.kind,date:e.date,type:typeof e.type==='string'?e.type.slice(0,50):'미상',symbol:e.kind==='earnings'?stock.symbol:null});
  }
  return {status:'verified',nearby:found.length>0,count:found.length,
@@ -94,7 +94,7 @@ function assess({mode='swing',intent='candidate',stock,regime=null,sector=null,s
  if(!verified.ok)return {...base,status:'insufficient',label:'근거 부족 · 판단 보류',reasons:[verified.reason],evidence:[],conditions:[],blocking:['stock-unverified'],action:'no-action'};
  if(nowDay!==null&&(!validDay(nowDay)||nowDay<stock.asOf||dayDiff(nowDay,stock.asOf)>10))
   return {...base,status:'insufficient',label:'일봉 기준일 오래됨 · 판단 보류',reasons:['기준일 검증 실패'],evidence:[],conditions:[],blocking:['stale-stock'],action:'no-action'};
- const context=matchRegime(regime,stock,mode),group=matchSector(sector,stock,sectorLink),calendar=checkEvent(event,stock,mode);
+ const context=matchRegime(regime,stock,mode),group=matchSector(sector,stock,sectorLink),calendar=checkEvent(event,stock,mode,nowDay||stock.asOf);
  const owned=intent==='holding'?holdingEvidence(holding,stock):{status:'not-applicable'};
  const reasons=[],blocking=[],conditions=[],evidence=[{kind:'stock',symbol:stock.symbol,asOf:stock.asOf,source:stock.evidence.source}];
  if(context.status!=='verified'){blocking.push('market-unverified');reasons.push(context.reason)}
