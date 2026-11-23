@@ -68,7 +68,11 @@ function validHistory(raw,now,zone){
   if(!item||!finitePositive(item.close))return {ok:false,reason:'일봉 종가 오류'};
   const timestamp=numberTime(item.at??item.date);
   if(timestamp===null||timestamp>now+5*MINUTE)return {ok:false,reason:'일봉 날짜 오류'};
-  const date=dayOf(timestamp,zone);
+  // A provider's YYYY-MM-DD daily bar is an exchange SESSION DATE,
+  // not midnight UTC (which can map to the prior US calendar day).
+  const declared=typeof item.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(item.date)?item.date:null;
+  if(declared&&new Date(declared+'T00:00:00Z').toISOString().slice(0,10)!==declared)return {ok:false,reason:'일봉 기준일 오류'};
+  const date=declared||dayOf(timestamp,zone);
   if(dates.has(date))return {ok:false,reason:'일봉 기준일 중복'};
   if(bars.length&&timestamp<=bars[bars.length-1].at)return {ok:false,reason:'일봉 순서 불일치'};
   dates.add(date);bars.push({at:timestamp,date,close:item.close});
@@ -88,13 +92,13 @@ function historyMetrics(history,now,zone){
   count:b.length,source:'검증된 일봉 종가'};
 }
 function marketDecision(core){
- if(core.some(x=>!x.usable))return {state:'insufficient',label:'시장 국면 판단 보류',score:null};
- if(core[0].referenceDay!==core[1].referenceDay)return {state:'insufficient',label:'시장 국면 판단 보류',score:null,reason:'핵심 지수 관측 기준일 불일치'};
+ if(core.some(x=>!x.usable))return {state:'insufficient',label:'시장 국면 판단 보류',averageDailyChangePct:null};
+ if(core[0].referenceDay!==core[1].referenceDay)return {state:'insufficient',label:'시장 국면 판단 보류',averageDailyChangePct:null,reason:'핵심 지수 관측 기준일 불일치'};
  const deltas=core.map(x=>x.delta);
  const positive=deltas.every(x=>x>=0.2),negative=deltas.every(x=>x<=-0.2);
  const state=positive?'up':negative?'down':'mixed';
  return {state,label:positive?'당일 상승 우위':negative?'당일 하락 우위':'당일 혼조·보합',
-  score:Number(((deltas[0]+deltas[1])/2).toFixed(4))};
+  averageDailyChangePct:Number(((deltas[0]+deltas[1])/2).toFixed(4))};
 }
 function momentumClass(metrics){
  if(metrics.some(m=>m.status!=='ready'))return {state:'unknown',label:'5·20일 추세 판단 보류'};
@@ -136,9 +140,17 @@ function assess({region,observations={},histories={},now=Date.now(),eventRisk=nu
  if(!MARKET[region]||!isNumber(now)||now<0)throw Error('REGIME_INPUT_INVALID');
  const config=MARKET[region],core=config.core.map(s=>validateQuote(observations[s],s,now,config.zone));
  const decision=marketDecision(core),history=config.core.map(s=>historyMetrics(histories[s],now,config.zone));
+ // Never mix future/mismatched daily history with an earlier validated quote.
+ for(let i=0;i<history.length;i++){
+  const metrics=history[i],quote=core[i];
+  if(metrics.basis&&quote.usable&&metrics.basis>quote.referenceDay){
+   history[i]={status:'unavailable',reason:'일봉 기준일이 시세 관측일보다 늦음',ret5:null,ret20:null,aboveMA20:null};
+  }
+ }
  const momentum=momentumClass(history);
  const risk=riskAssessment({region,observations,now,eventRisk,core});
  const coreValid=decision.state!=='insufficient',historical=core.filter(x=>x.usable).some(x=>x.delayed);
+ if(historical&&coreValid)decision.label='최근 확인 종가 기준 · '+decision.label;
  const evidence=core.filter(x=>x.usable).map(x=>({symbol:x.symbol,delta:x.delta,asOf:x.asOf,receivedAt:x.received,source:x.source,referenceDay:x.referenceDay}));
  const missing=core.filter(x=>!x.usable).map(x=>({symbol:x.symbol,reason:x.reason}));
  if(coreValid&&decision.reason)missing.push({symbol:'CORE',reason:decision.reason});
