@@ -10,6 +10,8 @@ const out=build(input,{now});
 assert.equal(out.schemaVersion,1);assert.equal(out.events.length,1);
 assert.equal(out.events[0].verifiedAt,undefined,'verification metadata stays private');
 assert.equal(out.events[0].symbol,'SERV');
+const privateInput=build({events:[{...record,accountNumber:'PRIVATE_ACCOUNT',shares:172,averagePrice:100.5,apiToken:'PRIVATE_KEY',memo:'Do not share'}]},{now});
+assert.ok(!JSON.stringify(privateInput).includes('PRIVATE_')&&!JSON.stringify(privateInput).includes('172')&&!JSON.stringify(privateInput).includes('Do not share'),'public snapshot drops all extra account and note fields');
 assert.throws(()=>build({events:[]},{now}),/EARNINGS_INPUT_EMPTY_OR_OVERSIZED/);
 assert.throws(()=>build({events:[{...record,verifiedAt:'2026-11-19T00:00:00Z'}]},{now}),/EARNINGS_EVIDENCE_STALE/);
 assert.throws(()=>build({events:[{...record,dateStatus:'confirmed',evidence:'vendor_estimate'}]},{now}),/EARNINGS_EVIDENCE_INVALID/);
