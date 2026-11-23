@@ -28,10 +28,10 @@ const candidateRisk=Integrated.assess({...base,intent:'candidate',event:{status:
  events:[{kind:'economic',type:'CPI',date:'2026-11-24',verified:true}]}});
 assert.equal(candidateRisk.status,'review-required');
 const result=Queue.collect({mode:'swing',nowDay:date,candidates:[candidate,candidateRisk],holdings:[holding]});
-assert.equal(result.candidateQueue.reviewed,1,'duplicate candidate symbols must be deduplicated');
-assert.equal(result.candidateQueue.errors.length,1);
+assert.equal(result.candidateQueue.reviewed,0,'duplicate candidate reports must be rejected together to preserve risk warning');
+assert.equal(result.candidateQueue.errors.length,2);
 assert.equal(result.holdingQueue.reviewed,1);
-assert.equal(result.candidateQueue.items[0].reviewLane,'technical-watch');
+assert.equal(result.candidateQueue.items.length,0);
 assert.equal(result.holdingQueue.items[0].reviewLane,'monitor');
 const riskOnly=Queue.collect({mode:'swing',nowDay:date,candidates:[candidateRisk]});
 assert.equal(riskOnly.candidateQueue.items[0].reviewLane,'risk-review');
