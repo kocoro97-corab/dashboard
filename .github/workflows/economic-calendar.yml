@@ -1,0 +1,43 @@
+name: Economic calendar source validation and snapshot
+on:
+  push:
+    branches: [feat/nh-integration-v2]
+    paths:
+      - 'js/economic-*.js'
+      - 'scripts/collect-economic-calendar.cjs'
+      - 'tests/economic-*.js'
+      - '.github/workflows/economic-calendar.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: economic-calendar-dev-snapshot
+  cancel-in-progress: false
+jobs:
+  validate-and-refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/nh-integration-v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify parser and browser modules
+        run: |
+          node --check js/economic-bls-parser.js
+          node --check js/economic-calendar.js
+          node --check scripts/collect-economic-calendar.cjs
+          node tests/economic-bls-parser.test.js
+          node tests/economic-calendar.test.js
+      - name: Fetch official BLS schedule and validate it
+        run: node scripts/collect-economic-calendar.cjs
+      - name: Publish verified snapshot on development branch only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- data/economic-events.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'data(economic-calendar): refresh verified BLS release snapshot'
+            git push origin HEAD:feat/nh-integration-v2
+          fi
