@@ -15,7 +15,7 @@ const regime={status:'descriptive',region:'US',direction:{state:'up'},
 const sector={id:'US_TECH',name:'Technology',market:'US',type:'sector_etf_proxy',status:'descriptive',source:'verified constituent list',asOf:date,
  rotation:{status:'descriptive',relative5dPp:3,relative20dPp:5}};
 const sectorLink={verified:true,symbol,market:'US',sectorId:'US_TECH',asOf:date,source:'verified membership'};
-const event={status:'ready',events:[]};
+const event={status:'ready',coverageVerified:true,events:[]};
 const holding={verified:true,symbol,market:'US',currency:'USD',quantity:172,avgPrice:10,
  accountNumber:'PRIVATE-1234',broker:'PRIVATE-BROKER',token:'PRIVATE-TOKEN'};
 const input={intent:'candidate',mode:'swing',stock,regime,sector,sectorLink,event,nowDay:date};
@@ -50,14 +50,16 @@ r=E.assess({...input,regime:{...regime,risk:{level:'unknown'}}});
 assert.equal(r.blocking.includes('market-risk-unknown'),true);
 r=E.assess({...input,event:null});
 assert.equal(r.blocking.includes('events-unverified'),true);
-r=E.assess({...input,event:{status:'ready',events:[{kind:'economic',date:'2026-11-25',type:'CPI',verified:true}]}});
+r=E.assess({...input,event:{status:'ready',events:[]}});
+assert.equal(r.blocking.includes('events-unverified'),true,'missing coverage must not be treated as no events');
+r=E.assess({...input,event:{status:'ready',coverageVerified:true,events:[{kind:'economic',date:'2026-11-25',type:'CPI',verified:true}]}});
 assert.equal(r.blocking.includes('event-near'),true);
 assert.equal(r.events.count,1);
-r=E.assess({...input,event:{status:'ready',events:[{kind:'earnings',symbol,market:'US',date:'2026-11-27',verified:true}]}});
+r=E.assess({...input,event:{status:'ready',coverageVerified:true,events:[{kind:'earnings',symbol,market:'US',date:'2026-11-27',verified:true}]}});
 assert.equal(r.blocking.includes('event-near'),true);
-r=E.assess({...input,event:{status:'ready',events:[{kind:'earnings',symbol:'SPCH',market:'US',date:'2026-11-27',verified:true}]}});
+r=E.assess({...input,event:{status:'ready',coverageVerified:true,events:[{kind:'earnings',symbol:'SPCH',market:'US',date:'2026-11-27',verified:true}]}});
 assert.equal(r.events.count,0,'unrelated issuer events ignored');
-r=E.assess({...input,event:{status:'ready',events:[{kind:'earnings',symbol,market:'US',date:'2026-11-25',verified:false,dateStatus:'estimated'}]}});
+r=E.assess({...input,event:{status:'ready',coverageVerified:true,events:[{kind:'earnings',symbol,market:'US',date:'2026-11-25',verified:false,dateStatus:'estimated'}]}});
 assert.equal(r.events.count,0,'unverified estimates never treated as confirmed');
 r=E.assess({...input,nowDay:'2027-01-01'});
 assert.equal(r.status,'insufficient');
