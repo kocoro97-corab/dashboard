@@ -36,7 +36,7 @@ function alignedRelative(bars,benchmark,n){
  return {status:'ready',stockReturnPct:round(stock),benchmarkReturnPct:round(base),relativePp:round(stock-base),startDate:dates[0],endDate:dates.at(-1)};
 }
 function riskLevels(bars,{market,mode}={}){
- const last=bars.at(-1),recent=bars.slice(-10),ma20=sma(bars,20),atr=(()=>{if(bars.length<15)return null;
+ const last=bars.at(-1),ma20=sma(bars,20),atr=(()=>{if(bars.length<15)return null;
   const last15=bars.slice(-15);let sum=0;
   for(let i=1;i<last15.length;i++){
    const b=last15[i],prior=last15[i-1].c;
@@ -48,7 +48,7 @@ function riskLevels(bars,{market,mode}={}){
  const dayStop=low5!==null?last.l:null;
  const stop=mode==='day'?dayStop:swingStop;
  const riskPct=stop!==null&&stop<last.c?round((last.c-stop)/last.c*100):null;
- return {atr14:round(atr),atrPct:round(pct(last.c+ (atr||0),last.c)),
+ return {atr14:round(atr),atrPct:atr===null?null:round(atr/last.c*100),
   lastClose:last.c,referenceLow5:low5,priorHigh20:previous20,ma20,
   observedSupport:stop,riskToObservedSupportPct:riskPct,
   supportStatus:stop!==null&&stop<last.c?'reference-only':'unavailable',
@@ -111,7 +111,7 @@ function assess({symbol,market,currency,bars,benchmark=null,mode='swing',source,
  }
  const setup=classify(values,mode),references=riskLevels(values,{market,mode});
  let relative={status:'unavailable',reason:'시장 기준지수 미연결'};
- if(benchmark?.market===market&&benchmark.verified===true&&typeof benchmark.source==='string'){
+ if(benchmark?.market===market&&benchmark.verified===true&&typeof benchmark.source==='string'&&benchmark.source.trim()&&typeof benchmark.symbol==='string'&&/^(?:\^KS11|SPY|\^GSPC|\^IXIC|\^KQ11)$/.test(benchmark.symbol)){
   const b=normalizeBars(benchmark.bars);
   if(b.status==='ready'&&b.asOf===checked.asOf){
    relative={status:'ready',period5:alignedRelative(values,b.bars,5),
