@@ -83,10 +83,12 @@ function collect({mode='swing',candidates=[],holdings=[],nowDay=null,maxResults=
   !validDay(nowDay))throw Error('OPPORTUNITY_INPUT_INVALID');
  const build=(input,intent)=>{
   const items=[],errors=[],seen=new Set();
+  const counts=new Map();
+  for(const raw of input){const key=typeof raw?.symbol==='string'?raw.symbol.toUpperCase():null;if(key&&VALID_SYMBOL.test(key))counts.set(key,(counts.get(key)||0)+1)}
   for(let i=0;i<input.length;i++){
    const raw=input[i],key=typeof raw?.symbol==='string'?raw.symbol.toUpperCase():null;
-   if(!key||!VALID_SYMBOL.test(key)||seen.has(key)){
-    errors.push({index:i,reason:key&&seen.has(key)?'종목 중복':'종목코드 미확인'});continue;
+   if(!key||!VALID_SYMBOL.test(key)||counts.get(key)>1||seen.has(key)){
+    errors.push({index:i,reason:key&&counts.get(key)>1?'중복 결과 전체 제외 · 위험정보 숨김 방지':'종목코드 미확인'});continue;
    }
    seen.add(key);
    const record=summarize(raw,nowDay);
