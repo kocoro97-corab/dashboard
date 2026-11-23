@@ -42,7 +42,19 @@ function parse(ics,{retrievedAt=new Date().toISOString()}={}){
  for(const line of lines){
   if(line==='BEGIN:VEVENT'){row={};continue}
   if(line==='END:VEVENT'&&row){
-   const entry=classify(row.summary),time=fromNewYork(row.start);
+   let time=null;
+   if(row.mode==='eastern')time=fromNewYork(row.start);
+   else if(row.mode==='utc'&&/^\d{8}T\d{6}Z$/.test(row.start||'')){
+    const s=row.start;
+    const year=Number(s.slice(0,4)),month=Number(s.slice(4,6)),day=Number(s.slice(6,8));
+    const hh=Number(s.slice(9,11)),mm=Number(s.slice(11,13)),ss=Number(s.slice(13,15));
+    const ymd=s.slice(0,4)+'-'+s.slice(4,6)+'-'+s.slice(6,8);
+    if(dateOK(ymd)&&hh<24&&mm<60&&ss<60){
+     const val=new Date(Date.UTC(year,month-1,day,hh,mm,ss));
+     if(Number.isFinite(val.getTime()))time=val.toISOString();
+    }
+   }
+   const entry=classify(row.summary);
    if(!entry||!time||row.cancelled){ignored++;row=null;continue}
    const kst=localParts(new Date(time),'Asia/Seoul'),date=kst.year+'-'+kst.month+'-'+kst.day;
    if(!dateOK(date)){ignored++;row=null;continue}
@@ -59,7 +71,11 @@ function parse(ics,{retrievedAt=new Date().toISOString()}={}){
   if(head==='SUMMARY')row.summary=value;
   else if(head==='UID')row.uid=value;
   else if(head==='STATUS'&&value.toUpperCase()==='CANCELLED')row.cancelled=true;
-  else if(head==='DTSTART;TZID=AMERICA/NEW_YORK'||head==='DTSTART;TZID=US/EASTERN'||head==='DTSTART')row.start=value; // BLS official schedule uses US Eastern wall clock for floating times.
+  else if(head==='DTSTART;TZID=AMERICA/NEW_YORK'||head==='DTSTART;TZID=US/EASTERN'||head==='DTSTART;TZID=AMERICA/WASHINGTON_DC'){row.start=value;row.mode='eastern'}
+  else if(head==='DTSTART'){
+   row.start=value;row.mode=value.endsWith('Z')?'utc':'eastern';
+  }
+  // VALUE=DATE and unknown TZID cannot carry verified announcement time.
   // Unknown TZ or all-day date intentionally unsupported; no fabricated hour.
  }
  const events=[...result.values()].sort((a,b)=>a.startsAt.localeCompare(b.startsAt)).slice(0,MAX_EVENTS);
