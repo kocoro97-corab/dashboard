@@ -55,6 +55,9 @@ assert.equal(r.blocking.includes('events-unverified'),true,'missing coverage mus
 r=E.assess({...input,event:{status:'ready',coverageVerified:true,events:[{kind:'economic',date:'2026-11-25',type:'CPI',verified:true}]}});
 assert.equal(r.blocking.includes('event-near'),true);
 assert.equal(r.events.count,1);
+r=E.assess({...input,event:{status:'partial',coverageVerified:false,events:[{kind:'economic',date:'2026-11-25',type:'CPI',verified:true}]}});
+assert.equal(r.blocking.includes('events-unverified'),true);
+assert.equal(r.blocking.includes('event-near'),true,'known event remains a risk veto even with incomplete source coverage');
 r=E.assess({...input,event:{status:'ready',coverageVerified:true,events:[{kind:'earnings',symbol,market:'US',date:'2026-11-27',verified:true}]}});
 assert.equal(r.blocking.includes('event-near'),true);
 r=E.assess({...input,event:{status:'ready',coverageVerified:true,events:[{kind:'earnings',symbol:'SPCH',market:'US',date:'2026-11-27',verified:true}]}});
