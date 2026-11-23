@@ -8,17 +8,9 @@
  *  exchange,instrumentType,last,...}.
  * The page still owns the verified symbols and the actual cache.
  */
-const DAY='YYYY-MM-DD';
 const EXCHANGE={KR:/^(KSC|KOE|KOSPI|KOSDAQ|KRX|SEOUL)$/i,
  US:/^(NMS|NYQ|NCM|NGM|NASDAQ|NYSE|ASE|PCX|BTS|NYS|ARCX)$/i};
 const validSymbol=s=>typeof s==='string'&&/^(?:[0-9]{6}(?:\.(?:KS|KQ))?|[A-Z^][A-Z0-9.^=-]{0,19})$/.test(s);
-const cleanDate=(unixSeconds,market)=>{
- const ms=unixSeconds*1000;if(!Number.isFinite(ms)||ms<=0||ms>Date.now()+300000)return null;
- // The timestamp for a provider daily candle may be UTC midnight rather
- // than an exchange session close. Use local SESSION DATE when verified by
- // the provider; if no explicit date was supplied, do not guess US day.
- return null;
-};
 function adapt(input,{symbol,market,source='Yahoo chart',instrumentType=null,dates=null}={}){
  if(!input||!['US','KR'].includes(market)||!validSymbol(symbol))return {status:'unavailable',reason:'심볼/시장 식별 미확인'};
  const currency=market==='KR'?'KRW':'USD';
