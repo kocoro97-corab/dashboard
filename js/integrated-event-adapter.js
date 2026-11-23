@@ -17,11 +17,13 @@ function eventsFromPublicContext(report,{symbol,market,asOf,mode='swing'}={}){
  for(const item of report.events){
   if(!item||!validDay(item.date)||!item.sourceUrl||typeof item.sourceUrl!=='string'||
    !/^https:\/\//.test(item.sourceUrl)||!['macro','policy','earnings'].includes(item.category)||
-   !['BLS','BEA','BOK','FED','EARNINGS'].includes(item.publisher))continue;
+   !['BLS','BEA','BOK','FED','EARNINGS',item.category==='earnings'?'':'INVALID'].includes(item.publisher))continue;
   if(item.dateStatus==='estimated'||item.category==='earnings'&&item.dateStatus!=='confirmed')continue;
-  if(item.category==='earnings'&&(item.symbol!==symbol||item.market!==market))continue;
+  if(item.category==='earnings'&&(item.symbol!==symbol||(/^[0-9]{6}$/.test(item.symbol)?'KR':'US')!==market||item.market&&item.market!==market))continue;
   const kind=item.category==='earnings'?'earnings':'economic';
-  if(item.verified!==true)continue;
+  // MYInvestEventContext.collect() already discards unverified rows, but
+  // intentionally strips 'verified' and earnings 'market' from its DTO.
+  if(item.verified===false)continue;
   const key=kind+'|'+item.publisher+'|'+item.type+'|'+(item.symbol||'')+'|'+item.date;
   if(seen.has(key))continue;
   seen.add(key);events.push({kind,date:item.date,type:String(item.type||'').slice(0,50),
