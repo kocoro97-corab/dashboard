@@ -56,11 +56,11 @@ const queue=Queue.collect({mode:'swing',nowDay:date,
  candidates:[weak,base,candidateRisk,incomplete,{...base,symbol:'SERV'},null],
  holdings:[holding,heldNeeds,heldRisk]});
 assert.equal(queue.status,'ready');
-assert.deepEqual(queue.candidateQueue.items.map(x=>x.symbol),['SPCH','JOBY','SMR','SERV']);
+assert.deepEqual(queue.candidateQueue.items.map(x=>x.symbol),['SPCH','JOBY','SMR']);
 assert.deepEqual(queue.holdingQueue.items.map(x=>x.symbol),['000660','035420','005930']);
-assert.equal(queue.candidateQueue.errors.length,2);
+assert.equal(queue.candidateQueue.errors.length,3);
 assert.equal(queue.coverage.candidates.total,6);
-assert.equal(queue.coverage.candidates.verified,4);
+assert.equal(queue.coverage.candidates.verified,3);
 assert.equal(queue.coverage.holdings.verified,3);
 assert.equal(queue.candidateQueue.items.every(x=>x.intent==='candidate'),true);
 assert.equal(queue.holdingQueue.items.every(x=>x.intent==='holding'),true);
