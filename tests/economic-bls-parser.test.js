@@ -16,5 +16,5 @@ assert.equal(fromNewYork('20260308T023000'),null,'DST nonexistent local time mus
 assert.equal(classify('Unknown data'),null);
 assert.throws(()=>parse('NOT A VCALENDAR'),/BLS_ICS_INVALID/);
 assert.equal(parse(sample.replace('America/New_York','Unknown/Zone'),{retrievedAt:'2026-11-23T00:00:00Z'}).events.length,2);
-assert.equal(parse(sample.replace('DTSTART;TZID=America/New_York:20261124T083000','DTSTART:20261124T083000'),{retrievedAt:'2026-11-23T00:00:00Z'}).events.length,2);
+assert.equal(parse(sample.replace('DTSTART;TZID=America/New_York:20261124T083000','DTSTART:20261124T083000'),{retrievedAt:'2026-11-23T00:00:00Z'}).events.length,3,'BLS floating times are explicitly Eastern');
 console.log('Economic BLS parser PASS');
