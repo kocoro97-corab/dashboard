@@ -28,7 +28,7 @@ const krCand={...kr,id:'KR_TECH',name:'한국 기술산업',type:'industry',memb
  {symbol:'005930',changePct:1.5,turnover:8000000,sourceVerified:true,source:'KR verified'},
  {symbol:'000660',changePct:2.0,turnover:6000000,sourceVerified:true,source:'KR verified'},
  {symbol:'035420',changePct:-1,turnover:2000000,sourceVerified:true,source:'KR verified'}
- ],universeCount:3,turnoverCurrency:'KRW'};
+ ],universeCount:3,turnoverCurrency:'KRW',membersAsOf:dates.at(-1)};
 const result=E.assess({market:'KR',benchmark,candidates:[krCand]});
 assert.equal(result.status,'descriptive');
 assert.equal(result.candidates[0].periods['60d'].relativePp,0);
