@@ -18,6 +18,11 @@ const day=(date,zone)=>{const p=toParts(date,zone);return p.year+'-'+p.month+'-'
 const offsetDay=(date,count)=>new Date(Date.parse(date+'T00:00:00Z')+count*86400000).toISOString().slice(0,10);
 const validateDate=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&Number.isFinite(Date.parse(s+'T00:00:00Z'))&&new Date(s+'T00:00:00Z').toISOString().slice(0,10)===s;
 let refreshJob=null;
+let collectionRows=[],collectionAt=0;
+async function refreshCollection(force=false){
+ if(!force&&collectionAt&&Date.now()-collectionAt<900000)return;
+ try{const r=await root.fetch('calendar-data-status.json',{credentials:'omit',cache:'no-store',redirect:'error'});if(!r.ok)throw Error('STATUS_UNAVAILABLE');const text=await r.text();if(text.length>16384)throw Error('STATUS_OVERSIZED');const rows=JSON.parse(text);if(!Array.isArray(rows)||rows.length>4)throw Error('STATUS_INVALID');collectionRows=rows.filter(x=>['economic-events.json','bea-events.json','bok-stats-events.json','earnings-events.json'].includes(x?.file)&&['VERIFIED','FAILED','MISSING','UNAVAILABLE'].includes(x.status)).map(x=>Object.freeze({file:x.file,status:x.status,source:['BLS','BEA','BOK','VERIFIED_EARNINGS'].includes(x.source)?x.source:null,retrievedAt:Number.isFinite(Date.parse(x.retrievedAt))?x.retrievedAt:null}));}catch{collectionRows=[]}collectionAt=Date.now();
+}
 function coverage(){
  return Object.freeze({
   BLS:root.MYInvestEconomicCalendar?.current()?.status==='ready',
@@ -80,9 +85,9 @@ function assessment({mode='swing',now=Date.now(),symbols=[]}={}){
 }
 async function refreshAll(force=false){
  if(refreshJob)return refreshJob;
- const job=Promise.allSettled(SOURCES.map(([_,key])=>typeof root[key]?.refresh==='function'?root[key].refresh(force):Promise.resolve(null))).then(()=>coverage());
+ const job=Promise.allSettled(SOURCES.map(([_,key])=>typeof root[key]?.refresh==='function'?root[key].refresh(force):Promise.resolve(null)).concat([refreshCollection(force)])).then(()=>coverage());
  refreshJob=job;try{return await job}finally{if(refreshJob===job)refreshJob=null}
 }
-const api=Object.freeze({collect,assessment,coverage,refreshAll});
+const api=Object.freeze({collect,assessment,coverage,refreshAll,collectionStatus:()=>collectionRows.slice()});
 if(typeof module==='object'&&module.exports)module.exports=api;else root.MYInvestEventContext=api;
 })(globalThis);

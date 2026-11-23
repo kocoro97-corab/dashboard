@@ -62,6 +62,7 @@ if(enabled){
 }
 panel.append(syncBox);
 const economy=root.MYInvestEconomicCalendar,bea=root.MYInvestBeaCalendar,fomc=root.MYInvestFomcSchedule,bok=root.MYInvestBokStatsCalendar,bokPolicy=root.MYInvestBokPolicySchedule,eco=economy?.current(),beaStatus=bea?.current(),bokStatus=bok?.current(),ecoBox=el('section',undefined,'nev5-muted');
+for(const row of root.MYInvestEventContext?.collectionStatus?.()||[])if(row.status==='FAILED')ecoBox.append(el('p',(row.source||row.file)+' 최근 수집 실패 · 이전 자료 수집 '+(row.retrievedAt||'미확인')+' · 공식 원문 확인 필요'));
 ecoBox.append(el('strong','공식 경제일정 · BLS '+(eco?.status==='ready'?eco.events.length+'건':'미연결')+' / BEA '+(beaStatus?.status==='ready'?beaStatus.events.length+'건':'미연결')+' / 한국은행 통계 '+(bokStatus?.status==='ready'?bokStatus.events.length+'건':'미연결')+' / FOMC·금통위 회의일'))
 ecoBox.append(el('p',eco?.status==='ready'?'BLS 발표 일정 · 마지막 수집 '+eco.retrievedAt+' · 발표시각은 한국시간 날짜로 표시됩니다.':'BLS 공식 일정 스냅샷이 아직 없거나 48시간 이상 경과했습니다. 임의의 발표 날짜를 표시하지 않습니다.'));
 ecoBox.append(btn('공식 일정 확인',async()=>{
@@ -169,5 +170,5 @@ function create(){
  return {mount,refresh:async(ctx,force)=>{try{await legacy.refresh(ctx,force);if(active)status.textContent='기존 뉴스 원천 갱신 요청 완료 · 각 기사 출처와 게시시각 확인'}catch(e){if(active)status.textContent='기존 뉴스 수신 실패 · 외부 원천 연결을 확인하세요.';throw e}symbols();await annotateNews()},unmount(){active=false;newsVersion++;archivePanel?.destroy?.();archivePanel=null;sharedPublicFeed?.destroy?.();sharedPublicFeed=null;ctxRef=null;newsHoldings=()=>[];briefingArea=null;view?.remove();legacy.unmount()},getStatus:()=>({status:active?'ready':'unmounted',events:loadEvents().length})};
 
 }
-root.MYInvestCalendar=Object.freeze({open:()=>{openCalendar();const id=++economicRequest;Promise.allSettled([root.MYInvestEconomicCalendar?.refresh(),root.MYInvestBeaCalendar?.refresh(),root.MYInvestBokStatsCalendar?.refresh(),root.MYInvestEarningsCalendar?.refresh()]).then(()=>{if(id===economicRequest&&calendarDialog?.isConnected)calendarRedraw?.()});return true},close:closeCalendar});DashboardPages.register('news',create);
+root.MYInvestCalendar=Object.freeze({open:()=>{openCalendar();const id=++economicRequest;Promise.resolve(root.MYInvestEventContext?.refreshAll()).then(()=>{if(id===economicRequest&&calendarDialog?.isConnected)calendarRedraw?.()});return true},close:closeCalendar});DashboardPages.register('news',create);
 })(window);
