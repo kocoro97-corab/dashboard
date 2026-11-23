@@ -70,6 +70,8 @@
       if(!data||typeof data!=='object'||Array.isArray(data))reject('DEV_RESPONSE_INVALID');
       if(!response.ok||data.success!==true)reject(known(data.code)?data.code:'DEV_REJECTED');
       if(data.freshTestEnvironment!==true||data.testEnvironment!=='nh-staging'||data.gatewayVersion!==2||data.storeEngine!=='account-store-v2')reject('DEV_METADATA_MISMATCH');
+      config.sessionPolicyVersion=data.developmentSessionPolicyVersion===1?1:0;
+      config.sessionIdleMs=config.sessionPolicyVersion===1&&[300000,3600000].includes(data.sessionIdleMs)?data.sessionIdleMs:null;
       config.publicMarket=data.developmentPublicMarket===true;
       config.publicFutures=config.publicMarket&&data.developmentPublicFutures===true;config.publicIndustries=config.publicMarket&&data.developmentIndustryMarket===true;
       config.accountReads=data.developmentAccountReads===true;

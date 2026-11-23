@@ -1,0 +1,30 @@
+name: Development calendar refresh artifact
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: calendar-development-artifact
+  cancel-in-progress: false
+jobs:
+  refresh:
+    if: github.ref == 'refs/heads/feat/nh-integration-v2'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: feat/nh-integration-v2
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate and collect official schedules, preserve failed sources
+        run: node scripts/refresh-calendar-development.cjs
+      - name: Build development-only frontend
+        run: python3 tools/build_dev_pages.py --output /tmp/calendar-development
+      - uses: actions/upload-artifact@v4
+        with:
+          name: calendar-development-frontend
+          path: /tmp/calendar-development
+# No schedule: enabling one requires an approved default-branch/runtime change.
+# No Pages credentials, Google secrets, production deployment or source commits.

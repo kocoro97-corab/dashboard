@@ -9,7 +9,7 @@ const SOURCE='/data/earnings-events.json';
 const VALID=/^(?:[0-9]{6}|[A-Z][A-Z0-9.=-]{0,14})$/;
 let store={status:'unavailable',events:[],retrievedAt:null,reason:'NOT_LOADED'},lastFetch=0,inflight=null,epoch=0;
 function dateOK(v){if(typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;const d=new Date(v+'T00:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===v}
-function sourceOK(u,market,dateStatus='confirmed'){
+function sourceOK(u,market,dateStatus='confirmed',symbol=null){
  try{
   if(typeof u!=='string'||u.length>600||/[%\s]/.test(u))return false;
   const url=new URL(u);if(url.protocol!=='https:'||url.username||url.password||url.port||url.hash)return false;
@@ -20,6 +20,8 @@ function sourceOK(u,market,dateStatus='confirmed'){
   // until a real approved host and redistribution entitlement are reviewed.
   if(dateStatus==='estimated')return false;
   if(dateStatus!=='confirmed')return false;
+  if(market==='KR'&&symbol==='005930'&&host==='news.samsung.com')return /^\/global\/samsung-electronics-announces-(?:first|second|third|fourth)-quarter-\d{4}-results$/.test(url.pathname);
+  if(market==='US'&&symbol==='NVDA'&&host==='nvidianews.nvidia.com')return /^\/news\/nvidia-announces-financial-results-for-(?:first|second|third|fourth)-quarter-fiscal-\d{4}$/.test(url.pathname);
   if(market==='KR')return host==='dart.fss.or.kr'||host==='opendart.fss.or.kr'||host==='kind.krx.co.kr';
   if(market==='US')return host==='www.sec.gov'||host==='sec.gov';
   return false;
@@ -40,7 +42,7 @@ function normalize(payload,now=Date.now()){
      (raw.market==='KR'&&!/^\d{6}$/.test(raw.symbol))||(raw.market==='US'&&/^\d{6}$/.test(raw.symbol))||
      !dateOK(raw.date)||!['confirmed','estimated'].includes(raw.dateStatus)||
      typeof raw.name!=='string'||!raw.name.trim()||raw.name.length>100||
-     typeof raw.sourceUrl!=='string'||!sourceOK(raw.sourceUrl,raw.market,raw.dateStatus)||
+     typeof raw.sourceUrl!=='string'||!sourceOK(raw.sourceUrl,raw.market,raw.dateStatus,raw.symbol)||
      typeof raw.period!=='string'||!/^[A-Za-z0-9 -]{1,32}$/.test(raw.period)||
      typeof raw.eventId!=='string'||!/^[A-Za-z0-9_.:-]{1,100}$/.test(raw.eventId)||
      !['earnings','earnings_call','ir'].includes(raw.eventType)||(raw.eventType==='ir'&&raw.earningsRelated!==true))continue;
@@ -65,7 +67,7 @@ function normalize(payload,now=Date.now()){
  output.push(...seen.values());
  return {status:'ready',retrievedAt:payload.retrievedAt,reason:null,events:output.sort((a,b)=>a.date.localeCompare(b.date)||a.symbol.localeCompare(b.symbol))};
 }
-function current(){return {...store,events:store.events.slice()}}
+function current(){if(store.status==='ready'&&(!Number.isFinite(Date.parse(store.retrievedAt))||Date.now()-Date.parse(store.retrievedAt)>TTL))store={status:'unavailable',events:[],retrievedAt:store.retrievedAt,reason:'SNAPSHOT_EXPIRED'};return {...store,events:store.events.slice()}}
 function reset(){epoch++;lastFetch=0;inflight=null;store={status:'unavailable',retrievedAt:null,reason:'RESET',events:[]}}
 async function refresh(force=false,fetcher=root.fetch){
  if(!force&&lastFetch&&Date.now()-lastFetch<FETCH_TTL)return current();
@@ -85,8 +87,8 @@ async function refresh(force=false,fetcher=root.fetch){
  })();inflight=job;
  try{return await job}finally{if(inflight===job)inflight=null}
 }
-function month(y,m){if(!Number.isInteger(y)||!Number.isInteger(m)||m<1||m>12)return [];const prefix=y+'-'+String(m).padStart(2,'0');return store.status==='ready'?store.events.filter(e=>e.date.startsWith(prefix)):[]}
-function matches({holdings=[],watch=[],selected=[]}={}){
+function month(y,m){current();if(!Number.isInteger(y)||!Number.isInteger(m)||m<1||m>12)return [];const prefix=y+'-'+String(m).padStart(2,'0');return store.status==='ready'?store.events.filter(e=>e.date.startsWith(prefix)):[]}
+function matches({holdings=[],watch=[],selected=[]}={}){current();
  const holdingsSet=new Set(holdings.filter(x=>typeof x==='string'&&VALID.test(x)).map(x=>x.toUpperCase()));
  const watchSet=new Set(watch.filter(x=>typeof x==='string'&&VALID.test(x)).map(x=>x.toUpperCase()));
  const selectedSet=new Set(selected.filter(x=>typeof x==='string'&&VALID.test(x)).map(x=>x.toUpperCase()));
@@ -94,7 +96,7 @@ function matches({holdings=[],watch=[],selected=[]}={}){
  return store.events.filter(e=>holdingsSet.has(e.symbol)||watchSet.has(e.symbol)||selectedSet.has(e.symbol))
   .map(e=>({...e,relation:holdingsSet.has(e.symbol)?'holding':watchSet.has(e.symbol)?'watch':'selected'}));
 }
-function horizon(days=21,now=Date.now(),symbols=null){
+function horizon(days=21,now=Date.now(),symbols=null){current();
  if(!Number.isInteger(days)||days<1||days>90||store.status!=='ready')return [];
  const today=kstDay(new Date(now).toISOString());
  const end=kstDay(new Date(now+days*86400000).toISOString());

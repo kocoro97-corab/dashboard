@@ -71,3 +71,10 @@ GitHub workflow `.github/workflows/earnings-calendar.yml` runs Node 22 source ch
 - `MYInvestEarningsCalendar.assessRisk` is a display-only rule: 0–2 US/KR local days before a confirmed announcement for a day-trading check, or 0–14 days for a swing-trading check. Estimated dates remain unconfirmed regardless of proximity. The rule is not a probability, signal, or position-size recommendation.
 - The News page’s calendar button and shell button both use the same cached snapshot refresh path; no extra source call is made merely by rendering the same calendar data in other menus.
 - The source record must supply an explicit timestamp before the calendar uses a KST clock time. US date-only records remain US-local with an explicit label.
+
+## Actual issuer evidence collected — 2026-11-23
+
+`scripts/collect-earnings-official.cjs` retrieves two fixed public issuer releases:
+NVIDIA fiscal 2027 Q3 (2026-11-17, US local date) and Samsung Electronics 2026 Q3 (2026-10-29, Korean date). The title, issuer's explicit “today reported” statement and published date are checked together. These are **historical reported releases**, not inferred future earnings dates or filing receipt dates. No release clock time is invented.
+
+The allowlist is issuer-and-symbol bound: `nvidianews.nvidia.com/news/nvidia-announces-financial-results-for-…` for NVDA and `news.samsung.com/global/samsung-electronics-announces-…-results` for 005930 only. SEC/DART/KRX support remains; estimates remain disabled. The publisher strips reviewer metadata and accepts no holdings input. Future-date company coverage and a wider issuer universe remain incomplete.

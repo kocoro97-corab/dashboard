@@ -9,7 +9,8 @@ async function main(){
   async takePending(k){const v=pending.get(k);pending.delete(k);return v},
   async getAccount(k){return accounts.get(k)},
   async putAccount(k,v){accounts.set(k,v)},
-  async deleteAccount(k){accounts.delete(k)}
+  async deleteAccount(k){accounts.delete(k)},
+  async compareAccount(k,previous,next){if(accounts.get(k)!==previous)return false;accounts.set(k,next);return true}
  };
  const serviceClient=service({
   verifySession:async token=>token==='good-session'?'user-alpha':null,
@@ -32,10 +33,10 @@ async function main(){
  assert.equal(url.searchParams.get('code_challenge_method'),'S256');
  assert.ok(url.searchParams.get('state'));
  assert.equal(pending.size,1);
- await serviceClient.callback({state:url.searchParams.get('state'),code:'authorization-code'});
+ await serviceClient.callback({state:url.searchParams.get('state'),code:'authorization-code'},'good-session');
  assert.equal(exchanges,1);
  assert.equal(pending.size,0);
- await assert.rejects(()=>serviceClient.callback({state:url.searchParams.get('state'),code:'authorization-code'}),/OAUTH_STATE_REPLAY_OR_EXPIRED/);
+ await assert.rejects(()=>serviceClient.callback({state:url.searchParams.get('state'),code:'authorization-code'},'good-session'),/OAUTH_STATE_REPLAY_OR_EXPIRED/);
  const accountBlob=[...accounts.values()][0];assert.equal(accountBlob.includes('access-token'),false,'encrypted token at rest');
  const status=await serviceClient.handle('googleCalendarStatus','good-session');
  assert.equal(status.connected,true);assert.deepEqual(status.scopes,[SCOPE]);

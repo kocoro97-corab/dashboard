@@ -97,3 +97,12 @@ Development tests:
 These tests are committed but **have not been run against a live Google account**. Server source/tests passed JavaScript syntax inspection; full Node test execution and CI outcomes remain to be verified in the actual repository runtime.
 
 Deployment checklist: secret manager (client secret and AES-256 key), durable private KV with atomic one-shot state deletion, authoritative MY INVEST session verification, HTTPS callback route, server-side Google provider adapter, relay action allowlist, Google Cloud consent screen and permitted redirect URI, test Google account, revoke/refresh and cross-user isolation tests. Do not activate the existing `googleCalendarReadOnly` flag before every item passes.
+
+## Codex runtime completion — 2026-11-23
+
+- `server/google-calendar-http.cjs` provides the five exact action routes, same-origin allowlist, JSON-only bounded action contract, no-store replies and safe error codes. Its callback requires an authoritative MY INVEST session as well as one-use OAuth state. GET callbacks require the host's injected HttpOnly session resolver; absence fails closed.
+- `server/google-calendar-durable-store.cjs` supplies atomic pending-state consumption/expiry and compare-and-swap encrypted account storage using injected private Durable Object storage. No binding or credentials are created by this module.
+- The core callback now checks that the current MY INVEST principal matches the pending authorization. Token refresh cannot resurrect a linkage revoked concurrently.
+- Tests cover cross-user reads/callbacks, replay/expiry, encryption, read-only actions, revocation/refresh races, disallowed origins and private-data exclusion. The HTTP and storage adapters are exercised offline.
+- **Still not deployed:** authoritative session resolver/HTTPS host wiring, the private storage binding, Google OAuth client/redirect/consent and secret-manager credentials. The current public Worker has not been granted Google routes or modified. Existing backend deployment/configuration must be reviewed together with the real OAuth setup; real account tests remain NOT_RUN, feature flag OFF.
+- Node modules use Node crypto and require a supported private runtime. No new paid service, namespace or runtime flag was provisioned.

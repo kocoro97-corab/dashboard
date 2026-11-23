@@ -23,7 +23,7 @@ function normalize(payload,now=Date.now()){
  }
  return {events:events.sort((a,b)=>a.startsAt.localeCompare(b.startsAt)),status:'ready',retrievedAt:payload.retrievedAt,reason:null};
 }
-function current(){return {...state,events:state.events.slice()}}
+function current(){if(state.status==='ready'&&(!Number.isFinite(Date.parse(state.retrievedAt))||Date.now()-Date.parse(state.retrievedAt)>MAX_AGE))state={status:'unavailable',events:[],retrievedAt:state.retrievedAt,reason:'SNAPSHOT_EXPIRED'};return {...state,events:state.events.slice()}}
 function reset(){epoch++;loading=null;cacheAt=0;state={events:[],status:'unavailable',retrievedAt:null,reason:'RESET'}}
 async function refresh(force=false,fetcher=root.fetch){
  if(!force&&cacheAt&&Date.now()-cacheAt<15*60*1000)return current();
@@ -42,10 +42,10 @@ async function refresh(force=false,fetcher=root.fetch){
  })();
  loading=job;try{return await job}finally{if(loading===job)loading=null}
 }
-function month(year,month){if(!Number.isInteger(year)||!Number.isInteger(month)||month<1||month>12)return [];
+function month(year,month){current();if(!Number.isInteger(year)||!Number.isInteger(month)||month<1||month>12)return [];
  const p=String(year)+'-'+String(month).padStart(2,'0');return state.status==='ready'?state.events.filter(x=>x.date.slice(0,7)===p):[];
 }
-function horizon(days=14,now=Date.now()){
+function horizon(days=14,now=Date.now()){current();
  if(!Number.isInteger(days)||days<1||days>60)return [];
  return state.status==='ready'?state.events.filter(x=>{const t=Date.parse(x.startsAt);return t>=now&&t<=now+days*86400000}):[];
 }

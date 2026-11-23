@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "source": "VERIFIED_EARNINGS",
+  "retrievedAt": "2026-11-23T06:03:03.632Z",
+  "events": [
+    {
+      "eventId": "NVDA-FY2027-Q3",
+      "market": "US",
+      "symbol": "NVDA",
+      "name": "NVIDIA",
+      "period": "FY2027 Q3",
+      "eventType": "earnings",
+      "date": "2026-11-17",
+      "dateStatus": "confirmed",
+      "evidence": "issuer_announcement",
+      "sourceUrl": "https://nvidianews.nvidia.com/news/nvidia-announces-financial-results-for-third-quarter-fiscal-2027"
+    },
+    {
+      "eventId": "005930-2026-Q3",
+      "market": "KR",
+      "symbol": "005930",
+      "name": "삼성전자",
+      "period": "2026 Q3",
+      "eventType": "earnings",
+      "date": "2026-10-29",
+      "dateStatus": "confirmed",
+      "evidence": "issuer_announcement",
+      "sourceUrl": "https://news.samsung.com/global/samsung-electronics-announces-third-quarter-2026-results"
+    }
+  ]
+}

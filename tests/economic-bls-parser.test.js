@@ -25,4 +25,5 @@ const parsedUTC=parse(utcSample,{retrievedAt:'2026-11-23T00:00:00Z'});
 assert.equal(parsedUTC.events.length,1,'UTC timestamp accepted, all-day time never invented');
 assert.equal(parsedUTC.events[0].startsAt,'2026-11-24T13:30:00.000Z');
 assert.equal(parsedUTC.events[0].localTime,'22:30');
+assert.equal(parse(sample.replaceAll('America/New_York','US-Eastern')).events.length,3,'official BLS hyphenated TZID');
 console.log('Economic BLS parser PASS');

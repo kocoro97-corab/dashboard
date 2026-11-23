@@ -12,7 +12,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: bok-economic-calendar-dev
+  group: calendar-public-dev-snapshots
   cancel-in-progress: false
 jobs:
   validate-and-collect:

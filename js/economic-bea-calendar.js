@@ -18,7 +18,7 @@ function normalize(input,now=Date.now()){
  if(!items.length)throw Error('BEA_NO_VALID_EVENTS');
  return {events:items.sort((a,b)=>a.startsAt.localeCompare(b.startsAt)),status:'ready',retrievedAt:input.retrievedAt};
 }
-function current(){return {...snapshot,events:snapshot.events.slice()}}
+function current(){if(snapshot.status==='ready'&&(!Number.isFinite(Date.parse(snapshot.retrievedAt))||Date.now()-Date.parse(snapshot.retrievedAt)>MAX_AGE))snapshot={status:'unavailable',events:[],retrievedAt:snapshot.retrievedAt,reason:'SNAPSHOT_EXPIRED'};return {...snapshot,events:snapshot.events.slice()}}
 function reset(){++epoch;lastFetch=0;inflight=null;snapshot={events:[],status:'unavailable',retrievedAt:null}}
 async function refresh(force=false,fetcher=root.fetch){
  if(!force&&lastFetch&&Date.now()-lastFetch<15*60000)return current();
@@ -36,8 +36,8 @@ async function refresh(force=false,fetcher=root.fetch){
  })();inflight=task;
  try{return await task}finally{if(inflight===task)inflight=null}
 }
-function month(year,month){if(!Number.isInteger(year)||!Number.isInteger(month)||month<1||month>12)return [];const p=year+'-'+String(month).padStart(2,'0');return snapshot.status==='ready'?snapshot.events.filter(e=>e.date.startsWith(p)):[]}
-function horizon(days=14,now=Date.now()){if(!Number.isInteger(days)||days<1||days>60)return [];return snapshot.status==='ready'?snapshot.events.filter(e=>{const at=Date.parse(e.startsAt);return at>=now&&at<=now+days*86400000}):[]}
+function month(year,month){current();if(!Number.isInteger(year)||!Number.isInteger(month)||month<1||month>12)return [];const p=year+'-'+String(month).padStart(2,'0');return snapshot.status==='ready'?snapshot.events.filter(e=>e.date.startsWith(p)):[]}
+function horizon(days=14,now=Date.now()){current();if(!Number.isInteger(days)||days<1||days>60)return [];return snapshot.status==='ready'?snapshot.events.filter(e=>{const at=Date.parse(e.startsAt);return at>=now&&at<=now+days*86400000}):[]}
 const api=Object.freeze({normalize,current,reset,refresh,month,horizon});
 if(typeof module==='object'&&module.exports)module.exports=api;else root.MYInvestBeaCalendar=api;
 })(globalThis);

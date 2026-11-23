@@ -58,7 +58,7 @@ async def features(browser,artifact,tmp,width):
    await h.page.screenshot(path=str(args.output/(str(width)+'-us-equity-themes.png')))
   await check(h,'FIVE_US_THEMES_REAL_EQUITY_MEMBERS_AND_STOCK_LINK',us_equities)
   async def bad_identity():
-   bad=json.loads(feeds[history_url('TSLA')]);bad['chart']['result'][0]['meta']['instrumentType']='ETF';h.overrides[history_url('TSLA')]={'text':json.dumps(bad)};await h.page.get_by_role('button',name='현재 시장 섹터·테마 새로고침',exact=True).click();await h.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("TSLA (SERIES_UNAVAILABLE)")');assert '확인 '+str(MAX_MEMBERS-1)+'/'+str(MAX_MEMBERS)+'종목' in await h.page.locator('.stv2-us-themes').inner_text();assert '상승비율' in await h.page.locator('.stv2-us-themes').inner_text()
+   bad=json.loads(feeds[history_url('TSLA')]);bad['chart']['result'][0]['meta']['instrumentType']='ETF';h.overrides[history_url('TSLA')]={'text':json.dumps(bad)};await h.page.get_by_role('button',name='현재 시장 섹터·테마 새로고침',exact=True).click();await h.page.wait_for_function('()=>DevelopmentDiagnostics.snapshot().issues.some(r=>r.page==="sectors"&&r.code==="SERIES_UNAVAILABLE"&&r.active)');assert '확인 '+str(MAX_MEMBERS-1)+'/'+str(MAX_MEMBERS)+'종목' in await h.page.locator('.stv2-us-themes').inner_text();assert '상승비율' in await h.page.locator('.stv2-us-themes').inner_text()
    assert await h.page.locator('.stv2-status:not([open])').count()>0
   await check(h,'ETF_RESPONSE_REJECTED_FOR_GENERAL_STOCK_MEMBER',bad_identity)
   if width==1440:
@@ -67,7 +67,7 @@ async def features(browser,artifact,tmp,width):
     for member in target['instruments'][:6]:
      h.overrides[history_url(member['symbol'])]={'text':json.dumps({'chart':{'result':[]}})}
     await h.page.get_by_role('button',name='현재 시장 섹터·테마 새로고침',exact=True).click()
-    await h.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("SAMPLE_COVERAGE_INSUFFICIENT")')
+    await h.page.wait_for_function('()=>DevelopmentDiagnostics.snapshot().issues.some(r=>r.page==="sectors"&&r.code==="SAMPLE_COVERAGE_INSUFFICIENT"&&r.active)')
     assert await h.page.locator('.stv2-us-themes .stv2-card').filter(has=h.page.locator('strong',has_text=target['name'])).count()==0
     assert '표본 충족률 60% 이상' in await h.page.locator('.stv2').inner_text()
    await check(h,'THEME_RANK_WITHHELD_WHEN_VERIFIED_MEMBER_COVERAGE_BELOW_60_PERCENT',insufficient_coverage)

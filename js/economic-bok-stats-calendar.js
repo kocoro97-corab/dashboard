@@ -24,7 +24,7 @@ function normalize(payload,now=Date.now()){
  if(result.length===0)throw Error('BOK_NO_VERIFIED_EVENTS');
  return {status:'ready',events:result.sort((a,b)=>a.startsAt.localeCompare(b.startsAt)),retrievedAt:payload.retrievedAt};
 }
-function current(){return {...value,events:value.events.slice()}}
+function current(){if(value.status==='ready'&&(!Number.isFinite(Date.parse(value.retrievedAt))||Date.now()-Date.parse(value.retrievedAt)>MAX_AGE))value={status:'unavailable',events:[],retrievedAt:value.retrievedAt,reason:'SNAPSHOT_EXPIRED'};return {...value,events:value.events.slice()}}
 function reset(){version++;last=0;flight=null;value={status:'unavailable',events:[],retrievedAt:null}}
 async function refresh(force=false,fetcher=root.fetch){
  if(!force&&last&&Date.now()-last<900000)return current();
@@ -38,8 +38,8 @@ async function refresh(force=false,fetcher=root.fetch){
  }catch{if(token===version){value={status:'unavailable',events:[],retrievedAt:null};last=Date.now()}}
  return current()})();flight=run;try{return await run}finally{if(flight===run)flight=null}
 }
-function month(y,m){if(!Number.isInteger(y)||!Number.isInteger(m)||m<1||m>12)return [];const prefix=y+'-'+String(m).padStart(2,'0');return value.status==='ready'?value.events.filter(e=>e.date.startsWith(prefix)):[]}
-function horizon(days=14,now=Date.now()){if(!Number.isInteger(days)||days<1||days>60)return [];return value.status==='ready'?value.events.filter(e=>Date.parse(e.startsAt)>=now&&Date.parse(e.startsAt)<=now+days*86400000):[]}
+function month(y,m){current();if(!Number.isInteger(y)||!Number.isInteger(m)||m<1||m>12)return [];const prefix=y+'-'+String(m).padStart(2,'0');return value.status==='ready'?value.events.filter(e=>e.date.startsWith(prefix)):[]}
+function horizon(days=14,now=Date.now()){current();if(!Number.isInteger(days)||days<1||days>60)return [];return value.status==='ready'?value.events.filter(e=>Date.parse(e.startsAt)>=now&&Date.parse(e.startsAt)<=now+days*86400000):[]}
 const api=Object.freeze({normalize,refresh,current,reset,month,horizon});
 if(typeof module==='object'&&module.exports)module.exports=api;else root.MYInvestBokStatsCalendar=api;
 })(globalThis);

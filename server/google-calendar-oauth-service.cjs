@@ -26,7 +26,7 @@ function service({verifySession,store,google,clientId,redirectUri,secretKey,now=
  if(typeof verifySession!=='function'||!store||!google||typeof clientId!=='string'||!clientId.trim())throw fail('CONFIG_INVALID');
  if(!/^https:\/\//.test(redirectUri||''))throw fail('REDIRECT_INVALID');
  if(!Buffer.isBuffer(secretKey)||secretKey.length!==32)throw fail('ENCRYPTION_KEY_INVALID');
- for(const m of ['putPending','takePending','getAccount','putAccount','deleteAccount'])if(typeof store[m]!=='function')throw fail('STORE_CONTRACT_INVALID');
+ for(const m of ['putPending','takePending','getAccount','putAccount','deleteAccount','compareAccount'])if(typeof store[m]!=='function')throw fail('STORE_CONTRACT_INVALID');
  for(const m of ['exchange','refresh','revoke','calendars','events'])if(typeof google[m]!=='function')throw fail('GOOGLE_CONTRACT_INVALID');
  const encrypt=(obj)=>{
   const iv=crypto.randomBytes(12),cipher=crypto.createCipheriv('aes-256-gcm',secretKey,iv);
@@ -55,7 +55,7 @@ function service({verifySession,store,google,clientId,redirectUri,secretKey,now=
   if(!updated||typeof updated.accessToken!=='string'||!Number.isFinite(updated.expiresIn)||updated.expiresIn<=60)throw fail('GOOGLE_REFRESH_FAILED');
   if(updated.scope&&updated.scope!==SCOPE)throw fail('GOOGLE_SCOPE_INVALID');
   const newRecord={...record,accessToken:updated.accessToken,refreshToken:updated.refreshToken||record.refreshToken,expiresAt:now()+updated.expiresIn*1000};
-  await store.putAccount(user,encrypt(newRecord));
+  if(!await store.compareAccount(user,stored,encrypt(newRecord)))throw fail('GOOGLE_CONNECTION_CHANGED');
   return newRecord.accessToken;
  };
  async function begin(token){
@@ -70,12 +70,14 @@ function service({verifySession,store,google,clientId,redirectUri,secretKey,now=
   u.searchParams.set('prompt','consent');
   return {success:true,authorizationUrl:u.href};
  }
- async function callback({state,code}){
+ async function callback({state,code},sessionToken){
+  const user=await principal(sessionToken);
   if(typeof state!=='string'||state.length>256||typeof code!=='string'||!code||code.length>2048)throw fail('OAUTH_CALLBACK_INVALID');
   const saved=await store.takePending(hexHash(state));
   if(!saved)throw fail('OAUTH_STATE_REPLAY_OR_EXPIRED');
   const pending=decrypt(saved);
-  if(pending.expiresAt<now()||typeof pending.user!=='string'||typeof pending.verifier!=='string')throw fail('OAUTH_STATE_EXPIRED');
+  if(pending.user!==user)throw fail('OAUTH_ACCOUNT_MISMATCH');
+  if(pending.expiresAt<=now()||typeof pending.user!=='string'||typeof pending.verifier!=='string')throw fail('OAUTH_STATE_EXPIRED');
   const data=await google.exchange({code,codeVerifier:pending.verifier,redirectUri});
   if(!data||data.scope!==SCOPE||typeof data.accessToken!=='string'||typeof data.refreshToken!=='string'||!Number.isFinite(data.expiresIn)||data.expiresIn<=60)throw fail('OAUTH_SCOPE_OR_TOKEN_INVALID');
   await store.putAccount(pending.user,encrypt({scope:SCOPE,accessToken:data.accessToken,refreshToken:data.refreshToken,expiresAt:now()+data.expiresIn*1000}));

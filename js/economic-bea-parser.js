@@ -21,7 +21,7 @@ function parse(payload,{retrievedAt=new Date().toISOString()}={}){
   if(!Array.isArray(dates)||dates.length>160)throw Error('BEA_SCHEMA_INVALID');
   for(const value of dates){
    if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$/.test(value))continue;
-   const instant=Date.parse(value);if(!Number.isFinite(instant))continue;
+   const instant=Date.parse(value);if(!Number.isFinite(instant)||new Date(value.slice(0,10)+'T00:00:00Z').toISOString().slice(0,10)!==value.slice(0,10))continue;
    const startsAt=new Date(instant).toISOString(),date=dateKST(instant),id='bea-'+meta.type+'-'+startsAt;
    if(seen.has(id))continue;seen.add(id);
    rows.push({id,date,title:meta.title,category:'macro',priority:meta.priority,publisher:'BEA',type:meta.type,

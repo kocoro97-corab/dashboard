@@ -172,14 +172,16 @@ function logout(){
 async function checkAuthentication(){
   const token=LS('invest_session_token');if(!token)return;
   if(sessionLeftMs()<=0){logout();return}
+  const run=AUTH_LOGIN_RUN,development=window.DevelopmentSession;
   try{
-    const response=await post({action:'sessionInfo',token});const data=await response.json();
-    if(token!==LS('invest_session_token'))return;
-    if(!data.success){logout();return}
+    const data=development?.restore?await development.restore(token):await(await post({action:'sessionInfo',token})).json();
+    if(token!==LS('invest_session_token')||run!==AUTH_LOGIN_RUN)return;
+    if(sessionLeftMs()<=0){logout();return}
+    if(!data.success){if(development?.failRestore)development.failRestore('SESSION_REJECTED');else logout();return}
     LS('invest_is_admin',data.isAdmin?'true':'false');LS('invest_password_change',!!data.mustChangePassword);
     if(data.mustChangePassword){showPasswordChange();return}
-    startSessionTimer(false);enterDashboard(data.isAdmin);
-  }catch(error){if(token===LS('invest_session_token'))logout()}
+    startSessionTimer(false);if(token!==LS('invest_session_token')||sessionLeftMs()<=0){logout();return}enterDashboard(data.isAdmin);
+  }catch(error){if(token===LS('invest_session_token')&&run===AUTH_LOGIN_RUN){if(development?.failRestore)development.failRestore(error?.code==='SESSION_RESTORE_UNAVAILABLE'?'SESSION_VERIFY_UNAVAILABLE':'SESSION_REJECTED');else logout()}}
 }
 
 function enterDashboard(isAdmin){

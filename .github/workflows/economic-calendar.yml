@@ -12,7 +12,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: economic-calendar-dev-snapshot
+  group: calendar-public-dev-snapshots
   cancel-in-progress: false
 jobs:
   validate-and-refresh:

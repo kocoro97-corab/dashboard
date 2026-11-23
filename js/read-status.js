@@ -1,7 +1,7 @@
 /* Local, bounded read diagnostics. Never stores request bodies, tokens or replies. */
 (function(root){
 'use strict';
-const errors=new Map(),pending=new Map(),layers=new Set(['browser','relay','gas','nh','storage']);let serial=0;
+const errors=new Map(),pending=new Map(),layers=new Set(['browser','relay','gas','nh','storage']);let serial=0,diagnosticSerial=0;
 const known=new Set('AUTH_REQUIRED RELAY_PUBLIC_URL_DENIED RELAY_PUBLIC_FAILED RELAY_RATE_LIMIT RELAY_BUSY RELAY_UPSTREAM_NETWORK RELAY_REDIRECT_DENIED RELAY_GAS_ACCESS_REQUIRED RELAY_TARGET_MISMATCH RELAY_ACCESS_CLOSED RELAY_RESPONSE_INVALID GAS_REJECTED GAS_HTTP GAS_NON_JSON NH_HTTP NH_NETWORK NH_TOKEN NH_RSP NH_NO_PRICE NH_CONTRACT NH_CONTRACT_CODE NH_CONTRACT_NAME NH_CONTRACT_EXPIRY NH_OBSERVATION NH_STALE NH_TIMEOUT NH_NETWORK_ERROR NH_RESPONSE_INVALID NH_DATA_INVALID NH_AUTH_MISSING NH_RESPONSE_REJECTED NH_UPSTREAM NH_IDENTITY_UNVERIFIED NH_IDENTITY_AMBIGUOUS NH_SYMBOL_MISMATCH NH_REFERENCE_UNAVAILABLE NH_REFERENCE_INVALID NH_NO_BLOCK NH_UNSUPPORTED NH_PATH NH_CURRENCY_MISMATCH READ_TIMEOUT READ_NETWORK READ_FORMAT READ_CANCELLED READ_QUEUE_FULL SESSION_CHANGED'.split(' '));
 const identity=()=>root.crypto?.randomUUID?.()||'read-'+Date.now().toString(36)+'-'+(++serial);
 function classify(error,meta={}){const http=Number.isInteger(error?.http)&&error.http>=100&&error.http<=599?error.http:null,code=known.has(error?.code)?error.code:error?.name==='AbortError'?'READ_TIMEOUT':error?.name==='SyntaxError'?'READ_FORMAT':'READ_NETWORK';let type=[502,503,504].includes(http)?'SERVER':[401,403].includes(http)?'ACCESS':['READ_TIMEOUT','NH_TIMEOUT'].includes(code)?'TIMEOUT':['READ_FORMAT','RELAY_RESPONSE_INVALID','NH_RESPONSE_INVALID','NH_DATA_INVALID'].includes(code)?'FORMAT':code==='NH_AUTH_MISSING'?'ACCESS':code==='NH_NETWORK_ERROR'?'NETWORK':code.startsWith('NH_')?'NH':code.startsWith('GAS_')?'GAS':'NETWORK';const retryable=!['READ_CANCELLED','READ_QUEUE_FULL','SESSION_CHANGED','AUTH_REQUIRED','RELAY_PUBLIC_URL_DENIED','RELAY_REDIRECT_DENIED','RELAY_GAS_ACCESS_REQUIRED','RELAY_TARGET_MISMATCH','RELAY_ACCESS_CLOSED'].includes(code)&&![401,403].includes(http)&&([502,503,504].includes(http)||['RELAY_BUSY','RELAY_UPSTREAM_NETWORK','READ_NETWORK','READ_TIMEOUT'].includes(code));return {id:meta.id||identity(),at:new Date().toISOString(),scope:meta.scope==='account'?'account':'public',layer:layers.has(error?.verifiedLayer)?error.verifiedLayer:'unknown',http,code,type,retryable,attempts:meta.attempts||1}}
@@ -26,6 +26,7 @@ const safeTarget=key=>SAFE_TARGETS[key]||'요청 범위 미확인';
 const timeKST=value=>{const d=new Date(value);return Number.isFinite(d.getTime())?d.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hourCycle:'h23',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'})+' KST':'발생시각 미확인'};
 function render(){
  if(typeof document==='undefined')return;
+ if(root.DevelopmentDiagnostics){document.getElementById('readConnectionStatus')?.remove();return}
  const viewport=document.getElementById('pageViewport');if(!viewport)return;
  let panel=document.getElementById('readConnectionStatus');
  if(!errors.size){panel?.remove();return}
@@ -58,7 +59,7 @@ function render(){
  actions.append(hint);panel.append(actions);
 }
 function emit(){render();root.dispatchEvent?.(new Event('myinvest:read-status'))}
-function note(error,meta={}){const key=meta.key||meta.scope||'public';errors.set(key,classify(error,meta));while(errors.size>20)errors.delete(errors.keys().next().value);emit()}
+function note(error,meta={}){const key=meta.key||meta.scope||'public';const row=classify(error,meta);if(root.DevelopmentDiagnostics){row.diagnosticSlot=errors.get(key)?.diagnosticSlot||++diagnosticSerial;root.DevelopmentDiagnostics.readIssue(row)}errors.set(key,row);while(errors.size>20)errors.delete(errors.keys().next().value);emit()}
 function clear(key){if(key==null)errors.clear();else errors.delete(key);emit()}
 function retryDelay(error,attempt,now=Date.now(),random=Math.random()){
  const raw=error?.retryAfter;let hinted=0;

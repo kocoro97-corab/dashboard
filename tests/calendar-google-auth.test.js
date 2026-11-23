@@ -1,6 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict');
 const sync=require('../js/calendar-google-sync.js');
+globalThis.MYInvestGoogleCalendarSync=sync; // Browser script dependency, explicit in CommonJS harness.
 const auth=require('../js/calendar-google-auth.js');
 const transport=require('../js/calendar-google-transport.js');
 const SCOPE='https://www.googleapis.com/auth/calendar.readonly';

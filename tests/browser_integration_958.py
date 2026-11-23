@@ -153,7 +153,7 @@ async def sectors_checks(browser,artifact,tmp,width):
   await case(h,'KR_REGISTERED_EXCHANGES_SAMPLE_5_20_60_RETURNS_RS',kr)
   async def partial():
    if args.public_feeds:return
-   h.overrides[history_url('XLE')]={'text':json.dumps({'chart':{'result':[]}})};await select_sector_market(h,'US');await h.page.locator('.stv2-tabs button',has_text='단타').click();await h.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click();await h.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("XLE (SERIES_UNAVAILABLE)")');assert '검증 수신 10/11개 ETF' in await h.page.locator('.stv2').text_content();assert await h.page.locator('.stv2-etfs table tr').count()==11
+   h.overrides[history_url('XLE')]={'text':json.dumps({'chart':{'result':[]}})};await select_sector_market(h,'US');await h.page.locator('.stv2-tabs button',has_text='단타').click();await h.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click();await h.page.wait_for_function('()=>DevelopmentDiagnostics.snapshot().issues.some(r=>r.page==="sectors"&&r.code==="SERIES_UNAVAILABLE"&&r.active)');assert '검증 수신 10/11개 ETF' in await h.page.locator('.stv2').text_content();assert await h.page.locator('.stv2-etfs table tr').count()==11
   if not args.public_feeds:await case(h,'API_FAILURE_IS_SEPARATE_FROM_VALID_ROWS',partial)
   async def rapid():
    if args.public_feeds:return

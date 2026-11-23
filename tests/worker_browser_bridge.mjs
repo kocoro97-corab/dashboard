@@ -1,6 +1,7 @@
 /* Test-only loopback bridge for the real Worker handler and synthetic GAS. */
 import http from 'node:http';
 import fs from 'node:fs';
+if(process.env.MYINVEST_TEST_FIXED_TIME){const fixed=Date.parse(process.env.MYINVEST_TEST_FIXED_TIME);if(!Number.isFinite(fixed))throw Error('INVALID_TEST_CLOCK');Date.now=()=>fixed;}
 import {createHandler,RelayGate,allowedMarketUrl} from '../relay/worker/worker.mjs';
 // Optional public-only captured/synthetic response map for focused UI review.
 // No live credentials, supplier requests, or account fixtures are loaded here.

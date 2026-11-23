@@ -71,7 +71,7 @@ function parse(ics,{retrievedAt=new Date().toISOString()}={}){
   if(head==='SUMMARY')row.summary=value;
   else if(head==='UID')row.uid=value;
   else if(head==='STATUS'&&value.toUpperCase()==='CANCELLED')row.cancelled=true;
-  else if(head==='DTSTART;TZID=AMERICA/NEW_YORK'||head==='DTSTART;TZID=US/EASTERN'||head==='DTSTART;TZID=AMERICA/WASHINGTON_DC'){row.start=value;row.mode='eastern'}
+  else if(head==='DTSTART;TZID=AMERICA/NEW_YORK'||head==='DTSTART;TZID=US/EASTERN'||head==='DTSTART;TZID=US-EASTERN'||head==='DTSTART;TZID=AMERICA/WASHINGTON_DC'){row.start=value;row.mode='eastern'}
   else if(head==='DTSTART'){
    row.start=value;row.mode=value.endsWith('Z')?'utc':'eastern';
   }

@@ -8,7 +8,7 @@ const date=parts.year+'-'+parts.month+'-'+parts.day;
 const row={id:'bea-GDP-'+future,date,title:'미국 GDP 발표',category:'macro',priority:'critical',publisher:'BEA',type:'GDP',verified:true,sourceUrl:globalThis.MYInvestBeaSchedule.SOURCE,startsAt:future};
 const payload={source:'BEA',sourceUrl:globalThis.MYInvestBeaSchedule.SOURCE,retrievedAt:new Date(now).toISOString(),events:[row,row]};
 assert.equal(calendar.normalize(payload,now).events.length,1);
-assert.equal(calendar.normalize({...payload,events:[{...row,date:'1900-01-01'}]},now).events.length,0);
+assert.throws(()=>calendar.normalize({...payload,events:[{...row,date:'1900-01-01'}]},now),/BEA_NO_VALID_EVENTS/);
 assert.throws(()=>calendar.normalize({...payload,retrievedAt:new Date(now-4*86400000).toISOString()},now),/BEA_STALE/);
 async function main(){
  let calls=0;const success=async()=>{calls++;return {ok:true,text:async()=>JSON.stringify(payload)}};

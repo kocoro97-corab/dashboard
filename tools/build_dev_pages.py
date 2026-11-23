@@ -44,6 +44,9 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
     if relay_endpoint:
         from urllib.parse import urlsplit
         text=text.replace("https://*.trycloudflare.com;","https://*.trycloudflare.com "+urlsplit(relay_endpoint).scheme+'://'+urlsplit(relay_endpoint).netloc+';')
+    debug_anchor = '<script src="js/debug.js?v=3-safe"></script>'
+    if text.count(debug_anchor) != 1:raise ValueError('DEV_DIAGNOSTIC_ANCHOR_CHANGED')
+    text = text.replace(debug_anchor, '<script>window.MYINVEST_DEV_DIAGNOSTICS=true;</script>\n<script src="js/development-diagnostics.js?v=1"></script>\n'+debug_anchor)
     marker = '<script src="js/transport.js?v=1"></script>'
     if text.count(marker) != 1:
         raise ValueError('DEV_TRANSPORT_MARKER_CHANGED')
@@ -51,6 +54,31 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
         text=text.replace(marker, '<script>window.MYINVEST_PERSISTENT_RELAY=Object.freeze('+json.dumps({'profile':'isolated','endpoint':relay_endpoint},separators=(',',':'))+');</script>\n'+marker)
     text = text.replace(marker, '<script>window.MYINVEST_TRANSPORT_CONFIG={mode:"relay",endpoint:"",devSession:true};</script>\n<script src="js/dev_market.js?v=1"></script>\n<script src="js/dev_inspection.js?v=1"></script>\n<script src="js/dev_connect.js?v=1"></script>\n' + marker)
     text = text.replace(marker, '<script src="vendor/ocr/tesseract.min.js"></script>\n<script src="js/dev_ocr.js?v=1"></script>\n'+marker)
+    # Only the isolated development artifact receives the optional manual strategy
+    # comparator. Production index.html, NEWS/PR#8 and live endpoints stay untouched.
+    strategy_anchor = '<script src="js/page-strategy.js?v=1"></script>'
+    if text.count(strategy_anchor) != 1:
+        raise ValueError('DEV_STRATEGY_ANCHOR_CHANGED')
+    strategy_optional_modules = (
+        'market-evidence-gate-v1.js',
+        'market-session-context-v1.js',
+        'strategy-risk-capacity-v1.js',
+        'strategy-scenario-compare-v1.js',
+        'strategy-market-link-v1.js',
+        'five-minute-read-candidate-v1.js',
+        'five-minute-reference-panel-v1.js',
+        'strategy-scenario-compare-panel-v1.js',
+    )
+    compare_scripts = ''.join('<script src="js/' + name + '?v=1"></script>\n'
+                              for name in strategy_optional_modules)
+    text = text.replace(strategy_anchor, compare_scripts + strategy_anchor)
+    shell_anchor='<script src="js/app-shell.js?v=2"></script>'
+    if text.count(shell_anchor)!=1:raise ValueError('DEV_SHELL_ANCHOR_CHANGED')
+    text=text.replace(shell_anchor, '<script src="js/page-diagnostics.js?v=1"></script>\n'+shell_anchor)
+    auth_anchor = '<script src="js/auth.js?v=14-transport"></script>'
+    if text.count(auth_anchor) != 1:
+        raise ValueError('DEV_AUTH_ANCHOR_CHANGED')
+    text = text.replace(auth_anchor, auth_anchor + '\n<script src="js/dev_session.js?v=1"></script>')
     text = re.sub(r'(src="js/[^"?]+\?[^" ]+)(")', lambda m: m[1] + '&dev=' + revision[:12] + m[2], text)
     (output / 'index.html').write_text(text)
     assets = {'js': set(re.findall(r'src="js/([A-Za-z0-9_-]+\.js)', text)),
@@ -64,6 +92,11 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
                 raise ValueError('DEV_ASSET_SYMLINK')
             if source.name == 'auth.js':
                 closed = re.sub(r'const (DEFAULT_GAS_URL|LEGACY_GAS_URL)="[^"]*";', r'const \1="";', source.read_text())
+                session_marker = 'const SESSION_MS=300000;   // 5분. 절대 시각 기준이라 화면 꺼짐·백그라운드에서도 정확히 만료'
+                if closed.count(session_marker) != 1:
+                    raise ValueError('DEV_SESSION_DURATION_MARKER_CHANGED')
+                if relay_endpoint:
+                    closed = closed.replace(session_marker, 'const SESSION_MS=3600000; // Development-only: one hour of user inactivity; background checks do not reset it.')
                 (target / source.name).write_text(closed)
             else:
                 shutil.copyfile(source, target / source.name)
@@ -72,6 +105,19 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
     shutil.copyfile(root / 'data/us-theme-instruments.json', output / 'data/us-theme-instruments.json')
     shutil.copyfile(root / 'data/us-instruments.json', output / 'data/us-instruments.json')
     shutil.copyfile(root / 'data/account-test-holdings.json', output / 'data/account-test-holdings.json')
+    # Explicit calendar files only; server/OAuth/private files are never exported.
+    calendar_validation=[]
+    for name in ['economic-events.json','bea-events.json','bok-stats-events.json','earnings-events.json']:
+        source=root/'data'/name
+        if not source.exists():
+            calendar_validation.append({'file':name,'status':'MISSING'});continue
+        if source.is_symlink():raise ValueError('DEV_CALENDAR_ASSET_SYMLINK')
+        check=subprocess.run(['node',str(root/'scripts/validate-calendar-snapshots.cjs'),str(source)],cwd=root,capture_output=True,text=True)
+        if check.returncode:
+            calendar_validation.append({'file':name,'status':'UNAVAILABLE'});continue
+        shutil.copyfile(source,output/'data'/name)
+        calendar_validation.append({'file':name,'status':'VERIFIED',**json.loads(check.stdout)})
+    (output/'calendar-data-status.json').write_text(json.dumps(calendar_validation))
     ocr = root / 'vendor/ocr'
     pinned = json.loads((ocr / 'manifest.json').read_text())
     for name, digest in pinned['sha256'].items():
