@@ -83,3 +83,17 @@ Google provider API references:
 Required storage contract: `takePending` must be an atomic consume operation; do not implement as separate read-then-delete. `verifySession` must return a stable per-user ID only after verifying the MY INVEST session against its authoritative issuer. The private store must encrypt at rest and restrict service access in addition to the application-level AES encryption. Encrypt/rotate keys via a managed secret service; never use a hardcoded default.
 
 This module has no listener, deployment configuration, user-facing Google credentials, or auto-activation. It is not a functioning hosted OAuth service until those dependencies are supplied and the release gates pass.
+
+## Google provider adapter added
+
+`server/google-calendar-google-api.cjs` provides dependency-injected HTTPS calls to Google's OAuth token/revoke endpoints and read-only `calendarList`/`events` endpoints. The event request uses `Asia/Seoul`, expands concrete recurrence instances with `singleEvents=true`, and normalizes date-time events into KST date-only DTOs. It requires a server-side OAuth client ID and client secret supplied by a secret manager.
+
+Development tests:
+- `node tests/calendar-oauth-backend.test.cjs`
+- `node tests/calendar-google-api.test.cjs`
+- `node tests/calendar-google-auth.test.js`
+- `node tests/calendar-google-sync.test.js`
+
+These tests are committed but **have not been run against a live Google account**. Server source/tests passed JavaScript syntax inspection; full Node test execution and CI outcomes remain to be verified in the actual repository runtime.
+
+Deployment checklist: secret manager (client secret and AES-256 key), durable private KV with atomic one-shot state deletion, authoritative MY INVEST session verification, HTTPS callback route, server-side Google provider adapter, relay action allowlist, Google Cloud consent screen and permitted redirect URI, test Google account, revoke/refresh and cross-user isolation tests. Do not activate the existing `googleCalendarReadOnly` flag before every item passes.
