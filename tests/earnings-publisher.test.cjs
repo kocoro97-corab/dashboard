@@ -15,4 +15,10 @@ assert.throws(()=>build({events:[{...record,verifiedAt:'2026-11-19T00:00:00Z'}]}
 assert.throws(()=>build({events:[{...record,dateStatus:'confirmed',evidence:'vendor_estimate'}]},{now}),/EARNINGS_EVIDENCE_INVALID/);
 assert.throws(()=>build({events:[{...record,sourceUrl:'https://attacker.example/file'}]},{now}),/EARNINGS_EVIDENCE_INVALID/);
 assert.throws(()=>build({events:[record,record]},{now}),/EARNINGS_DUPLICATE_ID/);
+const vendor={...record,eventId:'vendor-fixture-1',dateStatus:'estimated',evidence:'vendor_estimate',
+ sourceUrl:'https://api.earningscalendar.net/calendar',licenseApproved:true};
+assert.equal(build({events:[vendor]},{now}).events[0].licenseApproved,undefined,'license details not published');
+assert.throws(()=>build({events:[{...vendor,licenseApproved:false}]},{now}),/EARNINGS_VENDOR_LICENSE_NOT_APPROVED/);
+assert.throws(()=>build({events:[{...record,eventType:'ir'}]},{now}),/EARNINGS_EVIDENCE_INVALID/);
+
 console.log('Verified earnings publisher tests PASS');
