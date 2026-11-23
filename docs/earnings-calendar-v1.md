@@ -62,3 +62,12 @@ GitHub workflow `.github/workflows/earnings-calendar.yml` runs Node 22 source ch
 - Verify account-watch matching on actual read-only account snapshots without leaking private data.
 - Run full Node tests, CI and PC/Fold6 browser regression. Confirm public snapshot is present on development site.
 - No changes to `main`, `release/pages`, operating GAS, Sheets, Properties, OAuth or order permissions without separate approval.
+
+## Security and trading-risk hardening
+
+- The trusted publisher **selects only an explicit allowlist** of issuer fields. Arbitrary input fields such as `accountNumber`, `shares`, `apiToken`, `reviewerMemo` and verification credentials can never reach the public snapshot.
+- For US vendor estimates, only a separately authorized publisher with `licenseApproved:true` may pass the event through, and its source URL must use the explicitly reviewed vendor domain. Official SEC/DART hosts are NOT accepted as the provenance for mere vendor estimates.
+- A generic corporate IR notice is excluded unless the reviewer confirms it is about actual earnings (`earningsRelated:true`). Official filing *receipt* dates do not become earnings announcement dates.
+- `MYInvestEarningsCalendar.assessRisk` is a display-only rule: 0–2 US/KR local days before a confirmed announcement for a day-trading check, or 0–14 days for a swing-trading check. Estimated dates remain unconfirmed regardless of proximity. The rule is not a probability, signal, or position-size recommendation.
+- The News page’s calendar button and shell button both use the same cached snapshot refresh path; no extra source call is made merely by rendering the same calendar data in other menus.
+- The source record must supply an explicit timestamp before the calendar uses a KST clock time. US date-only records remain US-local with an explicit label.
