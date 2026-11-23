@@ -15,6 +15,13 @@ assert.equal(svc.normalize({...payload,events:[{...a,startsAt:'2026-11-24T14:00:
 assert.throws(()=>svc.normalize({...payload,retrievedAt:'2026-11-20T00:00:00.000Z'},now),/EARNINGS_SNAPSHOT_STALE/);
 assert.throws(()=>svc.normalize({...payload,events:new Array(501).fill(a)},now),/EARNINGS_SCHEMA_INVALID/);
 assert.equal(svc.normalize({...payload,events:[a,a]},now).events.length,1,'duplicate symbol quarter collapsed');
+const verified=svc.normalize(payload,now).events[0];
+assert.equal(svc.assessRisk(verified,{mode:'day',now}).level,'elevated');
+assert.equal(svc.assessRisk(verified,{mode:'swing',now}).level,'elevated');
+assert.equal(svc.assessRisk({...verified,dateStatus:'estimated'},{mode:'swing',now}).level,'unconfirmed');
+assert.equal(svc.assessRisk({...verified,date:'2026-12-30'},{mode:'day',now}).level,'scheduled');
+assert.equal(svc.assessRisk(null,{mode:'day',now}).level,'unknown');
+
 assert.equal(svc.normalize({...payload,events:[{...a,dateStatus:'estimated',evidence:'vendor_estimate',date:'2026-11-24'},a]},now).events.length,1);
 async function main(){
  let read=0;const livePayload={...payload,retrievedAt:new Date().toISOString()};const fetcher=async()=>{read++;return {ok:true,text:async()=>JSON.stringify(livePayload)}};
