@@ -17,4 +17,12 @@ assert.equal(classify('Unknown data'),null);
 assert.throws(()=>parse('NOT A VCALENDAR'),/BLS_ICS_INVALID/);
 assert.equal(parse(sample.replace('America/New_York','Unknown/Zone'),{retrievedAt:'2026-11-23T00:00:00Z'}).events.length,2);
 assert.equal(parse(sample.replace('DTSTART;TZID=America/New_York:20261124T083000','DTSTART:20261124T083000'),{retrievedAt:'2026-11-23T00:00:00Z'}).events.length,3,'BLS floating times are explicitly Eastern');
+const utcSample=['BEGIN:VCALENDAR','BEGIN:VEVENT','UID:utc-fixture',
+ 'DTSTART:20261124T133000Z','SUMMARY:Consumer Price Index','END:VEVENT',
+ 'BEGIN:VEVENT','UID:allday-fixture','DTSTART;VALUE=DATE:20261126',
+ 'SUMMARY:Employment Situation','END:VEVENT','END:VCALENDAR'].join('\\r\\n');
+const parsedUTC=parse(utcSample,{retrievedAt:'2026-11-23T00:00:00Z'});
+assert.equal(parsedUTC.events.length,1,'UTC timestamp accepted, all-day time never invented');
+assert.equal(parsedUTC.events[0].startsAt,'2026-11-24T13:30:00.000Z');
+assert.equal(parsedUTC.events[0].localTime,'22:30');
 console.log('Economic BLS parser PASS');
