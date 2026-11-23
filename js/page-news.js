@@ -28,7 +28,24 @@ let calendarDialog=null,calendarMonth=new Date(),calendarFocus=null,calendarKeys
 const importRow=el('div',undefined,'nev5-nav'),icsLabel=el('label','Google 캘린더 일정 파일(.ics) 가져오기'),icsInput=el('input');icsInput.type='file';icsInput.accept='.ics,text/calendar';icsInput.setAttribute('aria-label','Google 캘린더 ICS 파일 선택');icsLabel.append(icsInput);icsLabel.style.display='inline-grid';icsLabel.style.gap='4px';importRow.append(icsLabel,btn('가져온 일정 지우기',()=>{root.MYInvestIcsCalendar?.clear();icsStatus='가져온 일정을 지웠습니다.';draw()}));icsInput.addEventListener('change',async()=>{const file=icsInput.files?.[0];if(!file)return;if(file.size>1048576){icsStatus='1MB 이하 ICS 파일만 가져올 수 있습니다.';draw();return}try{const result=root.MYInvestIcsCalendar?.importText(await file.text());icsStatus='일정 '+result.events.length+'건 가져옴 · 반복 규칙 '+result.recurrences+'건은 시작일만 표시 · 생략 '+result.skipped+'건. 브라우저를 닫으면 삭제됩니다.';}catch{icsStatus='파일 형식 또는 용량 오류 · 기존 가져오기 자료는 유지됩니다.'}draw()});panel.append(importRow,el('p',icsStatus||'Google 캘린더에서 내보낸 .ics 파일을 선택하세요. 개인 일정은 이 브라우저의 현재 세션에서만 표시됩니다. 실시간 연동은 아닙니다.','nev5-muted'));
 const sync=root.MYInvestGoogleCalendarSync,enabled=sync?.status()?.connected===true,syncBox=el('section',undefined,'nev5-muted');
 syncBox.append(el('strong','Google 캘린더 자동 조회 · '+(enabled?'연결됨':'미연결')));
-if(!enabled)syncBox.append(el('p','읽기 전용 OAuth 백엔드가 아직 연결되지 않아 자동 동기화를 실행할 수 없습니다. 위 .ics 가져오기는 사용 가능합니다.'));
+const googleAuth=root.MYInvestGoogleCalendarAuth,authReady=googleAuth?.state()?.available===true;
+if(!enabled){
+ syncBox.append(el('p',authReady?'Google 캘린더 접근에 동의한 다음 연결 상태를 확인하세요. 기존 대시보드 로그인만으로는 Google 권한이 부여되지 않습니다.':'읽기 전용 OAuth 백엔드가 아직 연결되지 않아 자동 동기화를 실행할 수 없습니다. 위 .ics 가져오기는 사용 가능합니다.'));
+ if(authReady){
+  const authActions=el('div',undefined,'nev5-nav');
+  authActions.append(btn('Google 읽기 전용 연결',async()=>{
+   // Open a blank tab synchronously to preserve a user gesture; no token enters URL.
+   const tab=root.open('about:blank','_blank');if(!tab){googleError='브라우저에서 새 탭 열기를 허용하세요.';draw();return}
+   try{const url=await googleAuth.begin();tab.location.replace(url);googleError='Google 인증을 마친 후 여기에서 연결 확인을 누르세요.'}
+   catch{tab.close();googleError='인증 준비 실패 · 서버 연결 또는 권한 구성을 확인하세요.'}
+   draw();
+  }),btn('연결 확인',async()=>{const result=await googleAuth.verify();googleError=result.connected?'읽기 전용 연결이 확인되었습니다.':'연결 확인 실패 또는 아직 승인되지 않았습니다.';draw()}));
+  syncBox.append(authActions);
+ }
+}else if(authReady){
+ syncBox.append(btn('Google 연결 해제',async()=>{try{await googleAuth.revoke();googleRows=[];googleMonth='';googleError='Google 캘린더 연결을 해제했습니다.'}catch{googleError='연결 해제 요청 실패. 서버 상태를 확인하세요.'}draw()}));
+}
+if(googleError)syncBox.append(el('p',googleError));
 else{
  const syncButton=btn('이번 달 일정 동기화',async()=>{
   const request=++googleRequest,month=currentMonth;googleLoading=true;googleError='';draw();
