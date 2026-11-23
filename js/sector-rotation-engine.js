@@ -139,7 +139,7 @@ function assess({market,benchmark,candidates=[],nowDay=null}={}){
   }
   const groupBreadth=breadth(item.members,{declaredCount:item.universeCount??null});
   const activity=turnover(item.members,item.currency,item.turnoverCurrency);
-  const ranks=memberRank(item.members);
+  const ranks=item.turnoverCurrency===item.currency?memberRank(item.members):{status:'unavailable',leaders:[],laggards:[],reason:'주도주 표본의 거래대금 통화 미검증'};
   const possible=period['5d'].status==='ready'&&period['20d'].status==='ready';
   const rotation=possible?{
    status:'descriptive',relative5dPp:period['5d'].relativePp,relative20dPp:period['20d'].relativePp,
