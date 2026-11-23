@@ -26,6 +26,8 @@ def fixture():
             return {'subdomain': 'kocoro97'}
         if path.endswith('/settings'):
             return settings
+        if path.endswith('/secrets'):
+            return [row for row in settings['bindings'] if row.get('type') == 'secret_text']
         if path.endswith('/deployments'):
             return deployments
         if path.endswith('/versions'):
@@ -87,7 +89,7 @@ class CalendarOwnerPreflightTest(unittest.TestCase):
             with self.assertRaises(mod.Stop):
                 get('/accounts/' + ACCOUNT + '/workers/scripts/production/settings')
             with self.assertRaises(mod.Stop):
-                get('/accounts/' + ACCOUNT + '/workers/scripts/' + mod.WORKER + '/secrets')
+                get('/accounts/' + ACCOUNT + '/workers/scripts/' + mod.WORKER + '/secrets/GOOGLE_CALENDAR_CLIENT_SECRET')
         self.assertEqual(len(seen), 1)
         self.assertIsNone(seen[0][1].get('data'))
 
@@ -141,6 +143,87 @@ class CalendarOwnerDiagnosticsTest(unittest.TestCase):
             mod.public_probe()
             self.assertEqual(read.call_args.kwargs['stage'], 'PUBLIC_RELAY')
             self.assertIsNone(read.call_args.kwargs.get('token'))
+
+class CalendarBindingPresenceTest(unittest.TestCase):
+    def test_separate_secret_names_endpoint_can_confirm_binding_omitted_by_settings(self):
+        presence, states = mod.secret_presence({}, [{'name': 'GOOGLE_CALENDAR_CLIENT_ID', 'type': 'secret_text', 'text': 'PRIVATE_CANARY'}], True)
+        self.assertTrue(presence['GOOGLE_CALENDAR_CLIENT_ID'])
+        self.assertEqual(states['GOOGLE_CALENDAR_CLIENT_ID'], 'SECRET_CONFIRMED')
+        self.assertEqual(states['GOOGLE_CALENDAR_CLIENT_SECRET'], 'MISSING')
+        self.assertNotIn('CANARY', json.dumps([presence, states]))
+
+    def test_plain_variable_unknown_query_and_name_mismatch_are_not_called_missing(self):
+        name = 'GOOGLE_CALENDAR_CLIENT_SECRET'
+        p, s = mod.secret_presence({name: {'name': name, 'type': 'plain_text', 'text': 'PRIVATE_CANARY'}}, [], True)
+        self.assertFalse(p[name])
+        self.assertEqual(s[name], 'WRONG_BINDING_TYPE')
+        p, s = mod.secret_presence({}, [], False)
+        self.assertIsNone(p[name])
+        self.assertEqual(s[name], 'UNVERIFIED')
+        p, s = mod.secret_presence({}, [{'name': name.lower(), 'type': 'secret_text'}], True)
+        self.assertFalse(p[name])
+        self.assertEqual(s[name], 'NAME_MISMATCH')
+
+    def test_conflicting_views_require_review_and_never_dump_other_secret_names(self):
+        name = 'GOOGLE_CALENDAR_CLIENT_ID'
+        p, s = mod.secret_presence({name: {'name': name, 'type': 'plain_text'}}, [{'name': name, 'type': 'secret_text'}, {'name': 'SYNTHETIC_PRIVATE_CANARY', 'type': 'secret_text'}], True)
+        self.assertIsNone(p[name])
+        self.assertEqual(s[name], 'METADATA_CONFLICT')
+        self.assertNotIn('PRIVATE', json.dumps([p, s]))
+
+    def test_list_is_the_only_new_read_route(self):
+        with patch.object(mod, 'read_json', return_value={'success': True, 'result': []}) as read:
+            get = mod.api_client(ACCOUNT, 'synthetic-api-token')
+            get('/accounts/' + ACCOUNT + '/workers/scripts/' + mod.WORKER + '/secrets')
+            self.assertEqual(read.call_args.kwargs['stage'], 'WORKER_SECRET_NAMES_READ')
+            self.assertIsNone(read.call_args.kwargs.get('data'))
+            with self.assertRaises(mod.Stop):
+                get('/accounts/' + ACCOUNT + '/workers/scripts/' + mod.WORKER + '/secrets/private-key')
+
+    def test_unavailable_list_does_not_destroy_other_checks_or_claim_absent_secrets(self):
+        api, settings, _, _ = fixture()
+        settings['bindings'] = settings['bindings'][:2]
+
+        def unavailable(path):
+            if path.endswith('/secrets'):
+                raise mod.Stop('PREFLIGHT_HTTP_REJECTED', 403)
+            return api(path)
+        result = mod.inspect(unavailable, ACCOUNT, probe=lambda: {'success': True, 'freshTestEnvironment': True, 'testEnvironment': 'nh-staging'})
+        self.assertEqual(result['secretNamesInspection']['status'], 'UNAVAILABLE')
+        self.assertIsNone(result['googleSecretBindings']['GOOGLE_CALENDAR_CLIENT_SECRET'])
+        self.assertIn('GOOGLE_CALENDAR_CLIENT_SECRET_UNVERIFIED', result['blockers'])
+        self.assertNotIn('GOOGLE_CALENDAR_CLIENT_SECRET_MISSING', result['blockers'])
+
+
+class CalendarOwnerLayoutTest(unittest.TestCase):
+    def test_existing_flat_bundle_and_clasp_rootdir_layouts_are_verified_without_source_output(self):
+        import tempfile
+        import hashlib
+        script_id = 'synthetic-owner-script-0123456789'
+        revision = 'b' * 40
+        metadata = {'scriptHash': hashlib.sha256(script_id.encode()).hexdigest(), 'revision': revision}
+        bridge = "const NH_STAGING_SCRIPT_ID='" + script_id + "';\nconst NH_STAGING_REVISION='" + revision + "';\nfunction stagingProjectGuard_(){}"
+        for layout in ['FLAT', 'BUNDLE', 'CLASP_ROOTDIR']:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                source = root if layout == 'FLAT' else root / 'bundle'
+                source.mkdir(exist_ok=True)
+                (source / 'StagingBridge.gs').write_text(bridge)
+                config = root if layout == 'CLASP_ROOTDIR' else source
+                (config / '.clasp.json').write_text(json.dumps({'scriptId': script_id, 'rootDir': 'bundle' if layout == 'CLASP_ROOTDIR' else '.'}))
+                (root / 'fresh-plan.json').write_text(json.dumps({'scriptId': script_id, 'privateValue': 'PRIVATE_CANARY'}))
+                result = mod.owner_checkout(root, metadata)
+                self.assertTrue(result['verified'])
+                self.assertTrue(result['sourceRevisionMatches'])
+                self.assertEqual(result['layout'], layout)
+                self.assertNotIn(script_id, json.dumps(result))
+                self.assertNotIn('CANARY', json.dumps(result))
+                self.assertFalse(mod.owner_checkout(root, {'scriptHash': '0' * 64})['verified'])
+
+    def test_missing_directory_has_specific_status(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(mod.owner_checkout(Path(tmp) / 'missing', {})['status'], 'BASE_NOT_FOUND')
 
 
 if __name__ == '__main__':

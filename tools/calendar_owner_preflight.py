@@ -4,6 +4,7 @@ Credential values are accepted only in environment or hidden terminal prompts.
 """
 import argparse
 import getpass
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -20,7 +21,8 @@ ROLE = 'myinvest-isolated-relay-v1'
 PRODUCTION_SCRIPT_ID = '1WwqTZuH36L3sYdwmz8POXLmW-1Xw4oC4AGkFPSeueaEVBMB31ua_CkYL'
 UUID = re.compile(r'^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$')
 USER_AGENT = 'MYInvest-Calendar-Owner-Preflight/1.0'
-STAGES = {'ACCOUNT_SUBDOMAIN_READ', 'WORKER_SETTINGS_READ', 'DEPLOYMENTS_READ', 'VERSIONS_READ', 'PUBLIC_RELAY', 'UNCLASSIFIED_READ'}
+STAGES = {'ACCOUNT_SUBDOMAIN_READ', 'WORKER_SETTINGS_READ', 'WORKER_SECRET_NAMES_READ', 'DEPLOYMENTS_READ', 'VERSIONS_READ', 'PUBLIC_RELAY', 'UNCLASSIFIED_READ'}
+CALENDAR_SECRETS = ('GOOGLE_CALENDAR_CLIENT_ID', 'GOOGLE_CALENDAR_CLIENT_SECRET', 'CALENDAR_IDENTITY_BRIDGE_KEY', 'GOOGLE_CALENDAR_ENCRYPTION_KEY')
 RELAY_CODES = {'AUTH_REQUIRED', 'DEV_PAGE_REQUIRED', 'RELAY_ORIGIN_DENIED', 'RELAY_ACCESS_CLOSED', 'RELAY_PATH_DENIED', 'RELAY_CONFIG_INVALID', 'RELAY_SCOPE_BLOCKED', 'RELAY_ISOLATION_REQUIRED', 'RELAY_TARGET_MISMATCH', 'RELAY_RATE_LIMIT', 'RELAY_BUSY'}
 
 
@@ -96,10 +98,10 @@ def api_client(account, token):
         # Fixed account/subdomain and exact existing Worker read endpoints only.
         allowed = {prefix + '/workers/subdomain'}
         base = prefix + '/workers/scripts/' + WORKER
-        allowed.update(base + suffix for suffix in ['/settings', '/deployments', '/versions'])
+        allowed.update(base + suffix for suffix in ['/settings', '/secrets', '/deployments', '/versions'])
         if path not in allowed:
             raise Stop('READ_ONLY_ROUTE_DENIED')
-        stages = {'/subdomain': 'ACCOUNT_SUBDOMAIN_READ', '/settings': 'WORKER_SETTINGS_READ', '/deployments': 'DEPLOYMENTS_READ', '/versions': 'VERSIONS_READ'}
+        stages = {'/subdomain': 'ACCOUNT_SUBDOMAIN_READ', '/settings': 'WORKER_SETTINGS_READ', '/secrets': 'WORKER_SECRET_NAMES_READ', '/deployments': 'DEPLOYMENTS_READ', '/versions': 'VERSIONS_READ'}
         stage = next(value for suffix, value in stages.items() if path.endswith(suffix))
         result = read_json('https://api.cloudflare.com/client/v4' + path, token=token, stage=stage)
         if result.get('success') is not True:
@@ -111,6 +113,78 @@ def api_client(account, token):
 
 def public_probe():
     return read_json(ENDPOINT, data=b'{"action":"appVersion"}', headers={'Origin': ORIGIN, 'X-MyInvest-Dev-Client': 'dashboard-v2-dev', 'Content-Type': 'application/json'}, stage='PUBLIC_RELAY')
+
+
+def secret_presence(by_name, rows, available):
+    listed = {r['name']: r for r in rows}
+    presence, states = {}, {}
+    for name in CALENDAR_SECRETS:
+        setting, secret = by_name.get(name), listed.get(name)
+        if setting and secret and setting.get('type') != secret.get('type'):
+            state, found = 'METADATA_CONFLICT', None
+        elif (setting or secret or {}).get('type') == 'secret_text':
+            state, found = 'SECRET_CONFIRMED', True
+        elif setting or secret:
+            state, found = 'WRONG_BINDING_TYPE', False
+        elif any(key != name and key.strip().upper() == name for key in (*by_name, *listed)):
+            state, found = 'NAME_MISMATCH', False
+        elif available:
+            state, found = 'MISSING', False
+        else:
+            state, found = 'UNVERIFIED', None
+        presence[name], states[name] = found, state
+    return presence, states
+
+
+def owner_checkout(owner_dir, metadata):
+    """Inspect bounded existing metadata layouts, not credentials or the whole home."""
+    if not owner_dir or not Path(owner_dir).is_dir():
+        return {'verified': False, 'status': 'BASE_NOT_FOUND'}
+    owner = Path(owner_dir).resolve()
+    plan = {}
+    try:
+        if (owner / 'fresh-plan.json').is_file() and not (owner / 'fresh-plan.json').is_symlink():
+            plan = json.loads((owner / 'fresh-plan.json').read_text())
+    except (ValueError, OSError):
+        return {'verified': False, 'status': 'PLAN_REVIEW_REQUIRED'}
+    candidates, seen_sources = [], set()
+    for folder, layout in [(owner, 'FLAT'), (owner / 'bundle', 'BUNDLE')]:
+        if folder.is_symlink() or not folder.is_dir():
+            continue
+        config_path = folder / '.clasp.json'
+        config = {}
+        try:
+            if config_path.is_file() and not config_path.is_symlink():
+                config = json.loads(config_path.read_text())
+            script_id = config.get('scriptId') or (plan.get('scriptId') if layout == 'BUNDLE' else None)
+            root = config.get('rootDir', '.')
+            if not isinstance(root, str):
+                continue
+            source = (folder / root).resolve()
+            if source != owner and owner not in source.parents:
+                continue
+            bridge = source / 'StagingBridge.gs'
+            if not bridge.is_file() or bridge.is_symlink() or not isinstance(script_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{20,200}', script_id) or script_id == PRODUCTION_SCRIPT_ID:
+                continue
+            text = bridge.read_text()
+            match = re.search(r"NH_STAGING_SCRIPT_ID\s*=\s*['\"]([A-Za-z0-9_-]+)['\"]", text)
+            if not match or match[1] != script_id or 'function stagingProjectGuard_()' not in text:
+                continue
+            if hashlib.sha256(script_id.encode()).hexdigest() != metadata.get('scriptHash'):
+                continue
+            revision = re.search(r"NH_STAGING_REVISION\s*=\s*['\"]([a-f0-9]{40})['\"]", text)
+            marker = (source, script_id)
+            if marker in seen_sources:
+                continue
+            seen_sources.add(marker)
+            label = 'CLASP_ROOTDIR' if source != folder else layout
+            candidates.append({'verified': True, 'status': 'VERIFIED_TARGET', 'layout': label,
+                               'sourceRevisionMatches': bool(revision and revision[1] == metadata.get('revision'))})
+        except (ValueError, OSError, TypeError, AttributeError):
+            continue
+    if len(candidates) == 1:
+        return candidates[0]
+    return {'verified': False, 'status': 'AMBIGUOUS_LAYOUT' if candidates else 'EXISTING_TARGET_NOT_VERIFIED'}
 
 
 def inspect(api_get, account, *, probe=public_probe, owner_dir=None):
@@ -128,6 +202,21 @@ def inspect(api_get, account, *, probe=public_probe, owner_dir=None):
         raise Stop('EXISTING_WORKER_ROLE_MISMATCH')
     gate = by_name.get('GATE', {})
     gate_ok = gate.get('type') == 'durable_object_namespace' and gate.get('class_name') == 'RelayGate'
+    secret_rows, secret_available = [], False
+    secret_inspection = {'status': 'UNAVAILABLE'}
+    try:
+        secret_rows = api_get(base + '/secrets')
+        if not isinstance(secret_rows, list) or any(not isinstance(r, dict) or not isinstance(r.get('name'), str) for r in secret_rows) or len({r['name'] for r in secret_rows}) != len(secret_rows):
+            raise Stop('SECRET_NAMES_RESPONSE_INVALID')
+        secret_available = True
+        secret_inspection = {'status': 'PASS'}
+    except Stop as error:
+        secret_rows = []
+        secret_inspection = {'status': 'UNAVAILABLE', 'code': error.code}
+        if error.http:
+            secret_inspection['http'] = error.http
+        if error.diagnostic:
+            secret_inspection['diagnostic'] = error.diagnostic
     deployments = api_get(base + '/deployments')
     rows = deployments.get('deployments') if isinstance(deployments, dict) else None
     if not isinstance(rows, list) or not rows:
@@ -149,18 +238,10 @@ def inspect(api_get, account, *, probe=public_probe, owner_dir=None):
     if after != deployments:
         raise Stop('CONCURRENT_CHANGE_NO_WRITE')
     flags = settings.get('compatibility_flags', [])
-    secrets = {name: by_name.get(name, {}).get('type') == 'secret_text' for name in ['GOOGLE_CALENDAR_CLIENT_ID', 'GOOGLE_CALENDAR_CLIENT_SECRET', 'CALENDAR_IDENTITY_BRIDGE_KEY', 'GOOGLE_CALENDAR_ENCRYPTION_KEY']}
-    owner_files = False
-    if owner_dir:
-        owner = Path(owner_dir)
-        if (owner / '.clasp.json').is_file() and (owner / 'StagingBridge.gs').is_file():
-            try:
-                script_id = json.loads((owner / '.clasp.json').read_text()).get('scriptId')
-                bridge = (owner / 'StagingBridge.gs').read_text()
-                owner_files = isinstance(script_id, str) and bool(re.fullmatch(r'[A-Za-z0-9_-]{20,200}', script_id)) and script_id != PRODUCTION_SCRIPT_ID and f"NH_STAGING_SCRIPT_ID='{script_id}'" in bridge
-            except (OSError, ValueError):
-                owner_files = False
-    blockers = [name + '_MISSING' for name, present in secrets.items() if not present]
+    secrets, secret_states = secret_presence(by_name, secret_rows, secret_available)
+    owner_info = owner_checkout(owner_dir, metadata)
+    owner_files = owner_info['verified']
+    blockers = [name + '_' + state for name, state in secret_states.items() if state != 'SECRET_CONFIRMED']
     if not gate_ok:
         blockers.append('EXISTING_PRIVATE_STORAGE_BINDING_REQUIRED')
     if 'nodejs_compat' not in flags:
@@ -169,10 +250,13 @@ def inspect(api_get, account, *, probe=public_probe, owner_dir=None):
         blockers.append('PENDING_VERSION_REVIEW_REQUIRED')
     if not owner_files:
         blockers.append('EXISTING_OWNER_CHECKOUT_NOT_VERIFIED')
+    elif not owner_info.get('sourceRevisionMatches'):
+        blockers.append('OWNER_SOURCE_REVISION_REVIEW_REQUIRED')
     return {'status': 'PASS', 'phase': 'CALENDAR_OWNER_READ_ONLY_PREFLIGHT', 'activeVersion': version,
             'latestVersionIsActive': latest_active, 'googleSecretBindings': secrets,
+            'googleBindingStates': secret_states, 'secretNamesInspection': secret_inspection,
             'existingGateBinding': gate_ok, 'nodeCompatibilityEnabled': 'nodejs_compat' in flags,
-            'ownerCheckoutVerified': owner_files, 'serverHourPolicyObserved': metadata.get('sessionIdleMs') == 3600000,
+            'ownerCheckoutVerified': owner_files, 'ownerCheckoutInspection': owner_info, 'serverHourPolicyObserved': metadata.get('sessionIdleMs') == 3600000,
             'googleCapabilityAdvertised': metadata.get('developmentGoogleCalendarReadOnly') is True,
             'blockers': blockers, 'readyForActivation': False, 'liveGoogleConsent': 'NOT_RUN',
             'deploymentAttempted': False, 'settingsWriteCalls': 0, 'secretWriteCalls': 0,
