@@ -36,13 +36,16 @@ function coverage(){
   BOK_MPC:root.MYInvestBokPolicySchedule?.current?root.MYInvestBokPolicySchedule.current().status==='ready':!!root.MYInvestBokPolicySchedule?.list
  });
 }
-function collect({from=null,to=null,now=Date.now(),includeEarnings=true}={}){
+function collect({from=null,to=null,now=Date.now(),includeEarnings=true,horizonDays=21}={}){
  const current=Number.isFinite(now)?new Date(now):new Date();
- const start=from||day(current,'Asia/Seoul'),end=to||offsetDay(start,21);
- if(!validateDate(start)||!validateDate(end)||end<start)return {events:[],coverage:coverage(),incomplete:true};
+ const start=from||day(current,'Asia/Seoul'),end=to||offsetDay(start,horizonDays);
+ if(!Number.isInteger(horizonDays)||horizonDays<1||horizonDays>90||!validateDate(start)||!validateDate(end)||end<start)return {events:[],coverage:coverage(),incomplete:true};
  const available={...coverage()},out=new Map();
  const add=item=>{
-  if(!item||!validateDate(item.date)||item.date<start||item.date>end||!item.verified||typeof item.sourceUrl!=='string'||!/^https:\/\//.test(item.sourceUrl))return;
+  if(!item||!validateDate(item.date)||!item.verified||typeof item.sourceUrl!=='string'||!/^https:\/\//.test(item.sourceUrl))return;
+  const usDateOnly=!item.startsAt&&(item.dateBasis==='America/New_York'||item.localTimeBasis==='America/New_York');
+  const first=usDateOnly&&!from?day(current,'America/New_York'):start,last=usDateOnly&&!to?offsetDay(first,horizonDays):end;
+  if(item.date<first||item.date>last)return;
   if(item.category==='googlePersonal'||item.source==='google-calendar')return;
   if(item.category==='earnings'&&(!includeEarnings||item.dateStatus!=='confirmed'))return;
   const key=String(item.publisher||'')+'|'+String(item.type||'')+'|'+String(item.symbol||'')+'|'+item.date+'|'+String(item.startsAt||'');
@@ -52,7 +55,8 @@ function collect({from=null,to=null,now=Date.now(),includeEarnings=true}={}){
    sourceUrl:item.sourceUrl,category:item.category||'macro',
    priority:item.priority==='critical'?'critical':'high',
    publisher:String(item.publisher||''),type:String(item.type||''),symbol:item.symbol||null,
-   startsAt:item.startsAt||null,dateStatus:item.dateStatus||'confirmed',
+   startsAt:item.startsAt||null,dateStatus:item.dateStatus||'confirmed',verified:true,
+   retrievedAt:Number.isFinite(Date.parse(item.retrievedAt||item.observedAt))?(item.retrievedAt||item.observedAt):null,
    dateBasis:item.dateBasis||item.localTimeBasis||(item.publisher==='FED'?'America/New_York':'Asia/Seoul')
   }));
  };
@@ -73,7 +77,7 @@ function collect({from=null,to=null,now=Date.now(),includeEarnings=true}={}){
 }
 function assessment({mode='swing',now=Date.now(),symbols=[]}={}){
  const zone='Asia/Seoul',start=day(new Date(now),zone),horizon=mode==='day'?2:21;
- const period=collect({from:start,to:offsetDay(start,horizon),now});
+ const period=collect({now,horizonDays:horizon});
  const owned=new Set(Array.isArray(symbols)?symbols.filter(s=>typeof s==='string').map(s=>s.toUpperCase()):[]);
  const relevant=period.events.filter(e=>e.category!=='earnings'||owned.has(String(e.symbol).toUpperCase()));
  const critical=relevant.filter(e=>e.priority==='critical');
