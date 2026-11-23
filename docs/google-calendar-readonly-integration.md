@@ -65,3 +65,21 @@ Google provider API references:
 - https://developers.google.com/identity/protocols/oauth2/web-server
 - https://developers.google.com/workspace/calendar/api/v3/reference/calendarList/list
 - https://developers.google.com/workspace/calendar/api/v3/reference/events/list
+
+## Standalone server implementation (development branch)
+
+`server/google-calendar-oauth-service.cjs` implements an environment-independent service with:
+- `service({verifySession,store,google,clientId,redirectUri,secretKey,now})`
+- `handle(action,myInvestSessionToken,payload)` for exactly five read-only/link/unlink actions
+- `callback({state,code})` for the Google redirect flow
+- PKCE-S256 challenge, cryptographically random single-use state, 10-minute expiration
+- AES-256-GCM encrypted pending verifier and Google tokens at rest
+- stable user identifier derived only after `verifySession` checks an authoritative MY INVEST session
+- server-side calendar membership checks (never trust requested IDs)
+- token refresh and revoke, 30 calendars / 300 events caps
+
+**Not included:** deployed session verifier, HTTPS OAuth callback HTTP endpoint, Google Cloud OAuth client credentials, persistent atomic storage, encryption key management, Google SDK/REST adapter, deployed relay action whitelist, domain callback registration, real-account end-to-end verification. These are required before flipping `googleCalendarReadOnly` on.
+
+Required storage contract: `takePending` must be an atomic consume operation; do not implement as separate read-then-delete. `verifySession` must return a stable per-user ID only after verifying the MY INVEST session against its authoritative issuer. The private store must encrypt at rest and restrict service access in addition to the application-level AES encryption. Encrypt/rotate keys via a managed secret service; never use a hardcoded default.
+
+This module has no listener, deployment configuration, user-facing Google credentials, or auto-activation. It is not a functioning hosted OAuth service until those dependencies are supplied and the release gates pass.
