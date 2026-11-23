@@ -1,0 +1,47 @@
+name: BEA economic calendar snapshot
+on:
+  push:
+    branches: [feat/nh-integration-v2]
+    paths:
+      - 'js/economic-bea-*.js'
+      - 'js/economic-fomc-schedule.js'
+      - 'scripts/collect-bea-calendar.cjs'
+      - 'tests/economic-bea-*.js'
+      - 'tests/economic-fomc.test.js'
+      - '.github/workflows/economic-bea.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: bea-economic-calendar-dev-snapshot
+  cancel-in-progress: false
+jobs:
+  validate-and-refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/nh-integration-v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate BEA and FOMC modules
+        run: |
+          node --check js/economic-bea-parser.js
+          node --check js/economic-bea-calendar.js
+          node --check js/economic-fomc-schedule.js
+          node --check scripts/collect-bea-calendar.cjs
+          node tests/economic-bea-parser.test.js
+          node tests/economic-bea-calendar.test.js
+          node tests/economic-fomc.test.js
+      - name: Collect official BEA release schedule
+        run: node scripts/collect-bea-calendar.cjs
+      - name: Commit verified snapshot only to development branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- data/bea-events.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'data(economic-calendar): refresh official BEA schedule'
+            git push origin HEAD:feat/nh-integration-v2
+          fi
