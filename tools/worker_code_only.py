@@ -40,6 +40,8 @@ class Stop(Exception):
 
 
 def request_stage(method, path):
+    if method == 'PATCH' and '/workers/workers/' in path and path.endswith('/versions/latest'):
+        return 'VERSION_SECRET_PATCH'
     if path.endswith('/workers/subdomain'):
         return 'ACCOUNT_SUBDOMAIN_READ'
     if path.endswith('/content/v2'):

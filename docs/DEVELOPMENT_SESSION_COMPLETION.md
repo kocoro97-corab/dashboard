@@ -52,34 +52,46 @@ The tool:
 1. Proves the private baseline source, identity and immutable deployment.
 2. Refuses any changed GAS module beyond `Security` and `StagingBridge`, or any
    OAuth manifest change. Refuses an unactivated latest Worker candidate.
-3. Confirms settings belong to the existing development Worker, then captures
-   its exact active entrypoint and module bytes. It does not require a local
-   build to match the provider's existing compiled representation.
+3. Confirms settings belong to the existing development Worker, then records the active version's provider
+   script ETag, runtime, other bindings and cache configuration. It neither
+   downloads nor rebuilds the source bundle.
 4. Uses the existing isolated GAS upgrader and private source/version backups.
-5. Creates a candidate with identical Worker code, strictly inherits every
-   binding except `MYINVEST_EXPECTED_METADATA`, and replaces only that target
-   proof with the new GAS source digest. Existing credentials, flags, upstream,
+5. Uses Cloudflare's secret-only merge PATCH to create an inactive candidate,
+   replacing only `MYINVEST_EXPECTED_METADATA` with the new GAS source proof.
+   Checks its provider script ETag, runtime and other bindings before activation. Existing credentials, flags, upstream,
    Durable Object, logs, limits and all other settings stay unchanged.
 6. Activates and reads back the exact source identity plus policy version 1,
    idle 3,600,000 ms and absolute 28,800,000 ms. Parallel actor changes are never
    overwritten. A failed readback restores the owned Worker/GAS connection, or
    explicitly returns `OWNER_REVIEW_REQUIRED` if concurrency prevents recovery.
 
-The original `ACTIVE_WORKER_CODE_MISMATCH` preflight incorrectly assumed a
-single locally generated `worker.mjs` must byte-match the active deployment.
-That assumption is unnecessary for a metadata-only update and blocked the
-owner before any mutation. The corrected tool clones the **active** bundle:
-observed entrypoint, all supported ESM/CommonJS/JSON/text/binary/Wasm/source-map module names and
-exact decoded payload bytes. No minification or whitespace equivalence is used.
-It verifies the module SHA-256/size/type manifest before the GAS change, after
-candidate upload **before activation**, during final verification and on rollback.
-Malformed, ambiguous, oversized or unsupported bundles still stop; unreadable
-code is never replaced with a local fallback. Multipart ESM and CommonJS types
-are distinct and preserved. A raw main-module HTTP response's JavaScript MIME
-alias is interpreted only with provider entrypoint evidence; it does not change
-a multipart CommonJS helper into ESM. Local files and code hashes are
-not uploaded as substitutes. Checkpoint files contain code manifests rather
-than raw module bodies, and source bodies never enter result JSON.
+The original local bundle comparison caused `ACTIVE_WORKER_CODE_MISMATCH`.
+The attempted active-bundle copy then used a version-scoped `/content/v2` path
+that is not the official script-content API contract and caused
+`WORKER_BUNDLE_INVALID` in the owner environment. Neither preflight attempted
+mutation. The correction removes source retrieval and multipart re-upload
+entirely instead of guessing another response format.
+
+The request follows Cloudflare Wrangler's
+[`patchLatestWorkerVersionWithSecrets`](https://github.com/cloudflare/workers-sdk/blob/main/packages/wrangler/src/versions/secrets/index.ts):
+
+```text
+PATCH /accounts/{account}/workers/workers/{existing-worker}/versions/latest
+Content-Type: application/merge-patch+json
+{"env":{"MYINVEST_EXPECTED_METADATA":{"type":"secret_text","text":"..."}}}
+```
+
+No source files, annotations, other settings or other bindings are sent. The
+existing legacy version GET supplies `resources.script.etag` (provider hash of
+script content), `script_runtime`, bindings and cache options. Those must match
+before GAS changes, before candidate activation, after activation and during
+rollback. Only the selected metadata binding and audit-only `last_deployed_from`
+are excluded from that proof. Full active settings are separately checked.
+Missing code proof stops with `ACTIVE_VERSION_CODE_PROOF_REQUIRED`; it never
+falls back to uploading a local bundle. Public errors include only a fixed API
+stage, numeric HTTP status and numeric provider codes, never API bodies.
+This is provider metadata verification, not an independent byte download/hash.
+Private checkpoints contain the configuration proof, without source bodies.
 
 Phase checkpoints are separate private files. Failed inactive candidate versions
 are retained as evidence, not automatically activated or deleted. Do not repeat
@@ -126,7 +138,7 @@ new hour token; a pre-activation legacy token is deliberately not upgraded.
   recovery, unchanged inputs, policy display, expiry and private-state cleanup.
   This is neither live NH/GAS validation nor a physical Fold6 observation.
 - Python activation tests simulate the Google/Cloudflare version APIs, exact
-  single-binding change, read-only preflight, manifest/module refusal, full
+  single-binding change, read-only preflight, missing-hash/runtime/binding refusal, full
   activation, recovery and concurrent-actor preservation. No live credentials
   or network are used.
 - Full Node, Python, browser CI, frontend source/publication SHAs and public

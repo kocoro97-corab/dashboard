@@ -10,9 +10,26 @@ REV='b'*40
 
 class PreservedCloud(Cloud):
  def __call__(self,method,path,body=None,mime=None):
-  out=super().__call__(method,path,body,mime)
-  if path.endswith('/versions/'+NEW+'/content/v2') and self.fault=='candidate-code':out={**out,'body':b'// unexpected candidate change'}
-  return out
+  if '/content' in path:raise AssertionError('session update must never retrieve or reupload Worker source')
+  if method=='PATCH':
+   self.calls.append((method,path,body));self.patchBody=copy.deepcopy(body);self.patchMime=mime
+   assert path=='/accounts/'+'a'*32+'/workers/workers/'+s.worker.NAME+'/versions/latest'
+   if self.fault=='patch-denied':raise s.worker.Stop('CLOUDFLARE_REQUEST_REJECTED',403,'VERSION_SECRET_PATCH',[10000])
+   self.uploads.append({'id':NEW,'number':max(x['number'] for x in self.uploads)+1})
+   if self.fault=='upload-after':self.uploads.append({'id':OTHER,'number':3})
+   if self.fault=='concurrent':self.version=OTHER
+   return {'id':NEW}
+  if method=='GET' and any(path.endswith('/versions/'+v) for v in [OLD,NEW]):
+   self.calls.append((method,path,body));version=path.rsplit('/',1)[1]
+   resources={'script':{'etag':'SYNTHETIC_SAME_CODE_HASH','handlers':['fetch'],'named_handlers':[{'name':'RelayGate','handlers':['fetch']}],'last_deployed_from':'api' if version==NEW else 'wrangler'},'script_runtime':{'compatibility_date':self.settings['compatibility_date'],'compatibility_flags':self.settings['compatibility_flags'],'limits':self.settings['limits']},'bindings':copy.deepcopy(self.settings['bindings'])}
+   if self.fault=='missing-etag':resources['script'].pop('etag')
+   if version==NEW:
+    if self.fault=='candidate-code':resources['script']['etag']='SYNTHETIC_DIFFERENT_CODE_HASH'
+    if self.fault=='candidate-runtime':resources['script_runtime']['compatibility_flags']=['nodejs_compat']
+    if self.fault=='candidate-binding':resources['bindings'][0]['text']='different-role'
+    resources['bindings'].reverse()
+   return {'id':version,'resources':resources,'cache_options':{'enabled':True}}
+  return super().__call__(method,path,body,mime)
 
 def cloud():
  c=PreservedCloud();c.settings['bindings'].append({'name':'MYINVEST_EXPECTED_METADATA','type':'secret_text'});return c
@@ -26,19 +43,47 @@ class BindingTests(unittest.TestCase):
  def prepare(self):return s.prepare(self.c,'a'*32,self.old,lambda:metadata(self.old))
  def test_preflight_is_read_only(self):
   self.prepare();self.assertTrue(all(c[0]=='GET' for c in self.c.calls))
- def test_existing_compiled_code_and_entrypoint_are_preserved_instead_of_replaced_by_local_code(self):
-  self.c.content.update(body=b'// existing compiled code\r\n',entrypoint='index.js')
+ def test_source_format_does_not_require_bundle_parser_or_local_code(self):
+  self.c.content={'body':b'unknown compiled format','contentType':'application/octet-stream'}
   with patch.object(s.worker,'bundle',side_effect=AssertionError('must not upload local worker code')):
    cp=self.prepare();s.bind(self.c,cp,self.old)
-  parts=list(self.c.multipart.iter_parts());self.assertEqual(json.loads(parts[0].get_payload(decode=True))['main_module'],'index.js');self.assertEqual(parts[1].get_filename(),'index.js');self.assertEqual(parts[1].get_payload(decode=True),b'// existing compiled code\r\n')
- def test_unreadable_active_bundle_stops_before_any_upload(self):
-  self.c.content['body']='not bytes'
-  with self.assertRaisesRegex(s.bundle_reader.Stop,'WORKER_BUNDLE_INVALID'):self.prepare()
+  self.assertFalse(any('/content' in path for _,path,_ in self.c.calls))
+  self.assertFalse(any(method=='POST' and '/versions' in path for method,path,_ in self.c.calls))
+ def test_missing_provider_code_proof_stops_before_any_change(self):
+  self.c.fault='missing-etag'
+  with self.assertRaisesRegex(s.Stop,'ACTIVE_VERSION_CODE_PROOF_REQUIRED'):self.prepare()
   self.assertTrue(all(c[0]=='GET' for c in self.c.calls))
- def test_multi_module_deployment_is_copied_without_losing_json_or_binary_data(self):
-  value={'entrypoint':'index.js','modules':[{'name':'index.js','type':'application/javascript+module','body':b'import "./helper.js";export default {}'},{'name':'helper.js','type':'application/javascript+module','body':b'export const value=1;'},{'name':'policy.json','type':'application/json','body':b'{"unchanged": true}\n'},{'name':'data.bin','type':'application/octet-stream','body':b'\x00\xff\x01'}]}
-  body,kind=s.bundle_reader.multipart({'main_module':'index.js'},value);self.c.content={'body':body,'contentType':kind,'entrypoint':'index.js'}
-  cp=self.prepare();s.bind(self.c,cp,self.old);parts=list(self.c.multipart.iter_parts());copied={p.get_filename():p.get_payload(decode=True) for p in parts[1:]};self.assertEqual(copied,{m['name']:m['body'] for m in value['modules']});self.assertEqual(len(cp['codeManifest']['modules']),4)
+ def test_checkpoint_contains_configuration_proof_without_source_bodies(self):
+  cp=self.prepare();self.assertIn('codeProof',cp);self.assertNotIn('code',cp);self.assertNotIn('codeManifest',cp);json.dumps(cp)
+ def test_runtime_and_unrelated_binding_change_are_detected_before_activation(self):
+  for fault in ['candidate-runtime','candidate-binding']:
+   with self.subTest(fault=fault):
+    self.c=cloud();cp=self.prepare();self.c.fault=fault
+    with self.assertRaisesRegex(s.Stop,'CANDIDATE_WORKER_CODE_MISMATCH'):s.bind(self.c,cp,self.old)
+    self.assertEqual(self.c.version,OLD)
+ def test_invalid_code_proof_shapes_are_rejected(self):
+  base=self.c('GET','/versions/'+OLD)
+  cases=[None,{'id':OLD},{**base,'id':OTHER}]
+  for path,value in [('script',{}),('script_runtime',None),('bindings',[])]:
+   v=copy.deepcopy(base);v['resources'][path]=value;cases.append(v)
+  for value in cases:
+   with self.subTest(value=value),self.assertRaises(s.Stop):s.version_proof(value,OLD)
+ def test_secret_patch_rejection_exposes_only_fixed_diagnostics(self):
+  cp=self.prepare();self.c.fault='patch-denied'
+  try:s.bind(self.c,cp,self.old)
+  except s.worker.Stop as e:self.assertEqual(s.safe_error(e),{'code':'CLOUDFLARE_REQUEST_REJECTED','http':403,'requestStage':'VERSION_SECRET_PATCH','providerCodes':[10000]})
+  else:self.fail('rejection not propagated')
+  self.assertEqual(self.c.version,OLD)
+ def test_real_transport_serializes_merge_patch_without_source_files(self):
+  payload={'env':{'MYINVEST_EXPECTED_METADATA':{'type':'secret_text','text':'SYNTHETIC_METADATA_ONLY'}}}
+  with patch.object(s.worker.urllib.request,'build_opener') as opener:
+   response=opener.return_value.open.return_value.__enter__.return_value
+   response.read.return_value=json.dumps({'success':True,'result':{'id':NEW}}).encode()
+   result=s.worker.api_client('SYNTHETIC_TOKEN')('PATCH','/accounts/'+'a'*32+'/workers/workers/'+s.worker.NAME+'/versions/latest',payload,'application/merge-patch+json')
+   request=opener.return_value.open.call_args.args[0]
+  self.assertEqual(result,{'id':NEW});self.assertEqual(request.method,'PATCH');self.assertEqual(request.get_header('Content-type'),'application/merge-patch+json');self.assertEqual(json.loads(request.data),payload)
+ def test_secret_patch_api_stage_is_distinct_from_source_upload(self):
+  self.assertEqual(s.worker.request_stage('PATCH','/accounts/'+'a'*32+'/workers/workers/'+s.worker.NAME+'/versions/latest'),'VERSION_SECRET_PATCH')
  def test_candidate_code_change_is_detected_before_activation(self):
   cp=self.prepare();self.c.fault='candidate-code'
   with self.assertRaisesRegex(s.Stop,'CANDIDATE_WORKER_CODE_MISMATCH'):s.bind(self.c,cp,self.old)
@@ -47,8 +92,8 @@ class BindingTests(unittest.TestCase):
  def test_pending_candidate_is_not_activated(self):
   self.c.uploads.append({'id':OTHER,'number':2})
   with self.assertRaisesRegex(s.Stop,'LATEST_VERSION_NOT_ACTIVE'):self.prepare()
- def test_only_one_metadata_binding_changes_and_code_stays_identical(self):
-  cp=self.prepare();s.bind(self.c,cp,dict(self.old,sourceDigest='f'*64));parts=list(self.c.multipart.iter_parts());m=json.loads(parts[0].get_payload(decode=True));bindings=m['bindings'];changed=[b for b in bindings if b['type']!='inherit'];self.assertEqual([b['name'] for b in changed],['MYINVEST_EXPECTED_METADATA']);self.assertEqual(json.loads(changed[0]['text'])['sourceDigest'],'f'*64);self.assertTrue(all(b.get('version_id')=='latest' for b in bindings if b['type']=='inherit'));self.assertEqual(parts[1].get_payload(decode=True),b'// synthetic code');self.assertEqual(self.c.version,NEW)
+ def test_only_one_metadata_binding_changes_without_code_upload(self):
+  cp=self.prepare();s.bind(self.c,cp,dict(self.old,sourceDigest='f'*64));self.assertEqual(self.c.patchMime,'application/merge-patch+json');self.assertEqual(set(self.c.patchBody),{'env'});self.assertEqual(set(self.c.patchBody['env']),{'MYINVEST_EXPECTED_METADATA'});binding=self.c.patchBody['env']['MYINVEST_EXPECTED_METADATA'];self.assertEqual(binding['type'],'secret_text');self.assertEqual(json.loads(binding['text']),s.edge.expected(dict(self.old,sourceDigest='f'*64)));self.assertEqual(self.c.version,NEW)
  def test_changed_worker_before_binding_is_not_overwritten(self):
   cp=self.prepare();self.c.version=OTHER
   with self.assertRaisesRegex(s.Stop,'CONCURRENT_WORKER_CHANGE'):s.bind(self.c,cp,self.old)
@@ -88,7 +133,7 @@ class RolloutTests(unittest.TestCase):
   patches=[patch.object(s.gas,'revision',return_value=REV),patch.object(s.gas,'historical_bundle',return_value=(self.before,'c'*64)),patch('nh_v2_fresh.has_git_parent',return_value=False),patch.object(s.gas,'upgrade_clasp',self.client),patch.object(s.gas,'upgrade',side_effect=lambda path:raw(path,client=self.client,metadata=meta)),patch.object(s.worker,'api_client',return_value=self.c),patch.object(s.worker,'bundle',return_value=b'// synthetic code'),patch.object(s.edge,'public_request',side_effect=public),patch.object(s,'WebApp',App),patch.object(s.time,'sleep',return_value=None)]
   for p in patches:p.start();self.addCleanup(p.stop)
  def test_coordinated_upgrade_retains_scope_and_verifies_hour_policy(self):
-  result=s.apply(self.env,self.old,'a'*32,'SYNTHETIC_ONLY');self.assertEqual(result['status'],'PASS');self.assertEqual(self.client.version,2);self.assertEqual(self.c.version,NEW);self.assertEqual(result['metadataBindingUpdates'],1);self.assertTrue(all(c[0] in ['GET','POST'] for c in self.c.calls));self.assertTrue(all(c[0] in ['pull','push','list-deployments','create-version','update-deployment'] for c in self.client.calls))
+  result=s.apply(self.env,self.old,'a'*32,'SYNTHETIC_ONLY');self.assertEqual(result['status'],'PASS');self.assertEqual(self.client.version,2);self.assertEqual(self.c.version,NEW);self.assertEqual(result['metadataBindingUpdates'],1);self.assertTrue(all(c[0] in ['GET','PATCH','POST'] for c in self.c.calls));self.assertTrue(all(c[0] in ['pull','push','list-deployments','create-version','update-deployment'] for c in self.client.calls))
  def test_failed_hour_readback_restores_both_connections_without_data_restore(self):
   self.bad=True;result=s.apply(self.env,self.old,'a'*32,'SYNTHETIC_ONLY');self.assertEqual(result['status'],'FAIL');self.assertEqual(result['recovery'],'PASS_PREVIOUS_CONNECTION_RESTORED');self.assertEqual(self.client.version,1);self.assertEqual(self.c.version,OLD);self.assertEqual(json.loads((self.env/'fresh-plan.json').read_text()),self.old);self.assertEqual(s.logical(self.env/'bundle'),self.before)
  def test_concurrent_deployment_is_not_overwritten_by_rollback(self):

@@ -7,17 +7,22 @@ from pathlib import Path
 import nh_v2_upgrade as gas
 import nh_v2_persistent as edge
 import worker_code_only as worker
-import worker_active_bundle as bundle_reader
 from nh_v2_fresh import private_path, target, logical, pull
 from nh_staging_test import WebApp
 from build_nh_staging import ROOT, build, source_digest
 
 class Stop(Exception): pass
-SAFE=set('OWNER_PRIVATE_ENVIRONMENT_UNAVAILABLE OWNER_SESSION_PREFLIGHT_FAILED OLD_SOURCE_PROOF_FAILED AUTH_MANIFEST_CHANGED_STOP UNRELATED_GAS_CHANGE_STOP CLEAN_REVIEWED_SOURCE_REQUIRED ACCOUNT_ID_INVALID EXISTING_SUBDOMAIN_MISMATCH LATEST_VERSION_NOT_ACTIVE ACTIVE_WORKER_CODE_MISMATCH WORKER_BUNDLE_INVALID CANDIDATE_WORKER_CODE_MISMATCH CONCURRENT_WORKER_CODE_CHANGE METADATA_BINDING_REQUIRED CONCURRENT_WORKER_CHANGE PENDING_CANDIDATE_STOP SESSION_POLICY_READBACK_FAILED UPGRADE_FAILED ROLLBACK_PROOF_FAILED CONCURRENT_GAS_CHANGE_STOP ROLLBACK_READBACK_FAILED SOURCE_ALREADY_CURRENT CHECKPOINT_EXISTS CLOUDFLARE_REQUEST_REJECTED CLOUDFLARE_RESULT_UNCONFIRMED OWNER_GOOGLE_LOGIN_REQUIRED OWNER_GOOGLE_SCOPE_REQUIRED OWNER_APPS_SCRIPT_API_REQUIRED OWNER_CLASP_AUTH_OR_COMMAND_FAILED'.split())
+SAFE=set('OWNER_PRIVATE_ENVIRONMENT_UNAVAILABLE OWNER_SESSION_PREFLIGHT_FAILED OLD_SOURCE_PROOF_FAILED AUTH_MANIFEST_CHANGED_STOP UNRELATED_GAS_CHANGE_STOP CLEAN_REVIEWED_SOURCE_REQUIRED ACCOUNT_ID_INVALID EXISTING_SUBDOMAIN_MISMATCH LATEST_VERSION_NOT_ACTIVE ACTIVE_WORKER_CODE_MISMATCH ACTIVE_VERSION_CODE_PROOF_REQUIRED CANDIDATE_WORKER_CODE_MISMATCH CONCURRENT_WORKER_CODE_CHANGE METADATA_BINDING_REQUIRED CONCURRENT_WORKER_CHANGE PENDING_CANDIDATE_STOP SESSION_POLICY_READBACK_FAILED UPGRADE_FAILED ROLLBACK_PROOF_FAILED CONCURRENT_GAS_CHANGE_STOP ROLLBACK_READBACK_FAILED SOURCE_ALREADY_CURRENT CHECKPOINT_EXISTS CLOUDFLARE_REQUEST_REJECTED CLOUDFLARE_RESULT_UNCONFIRMED OWNER_GOOGLE_LOGIN_REQUIRED OWNER_GOOGLE_SCOPE_REQUIRED OWNER_APPS_SCRIPT_API_REQUIRED OWNER_CLASP_AUTH_OR_COMMAND_FAILED'.split())
 def safe_error(error):
  code=getattr(error,'code',str(error));out={'code':code if code in SAFE else 'OWNER_SESSION_PREFLIGHT_FAILED'}
  http=getattr(error,'http',None)
  if type(http) is int and 100<=http<=599:out['http']=http
+ stage=getattr(error,'stage',None)
+ if stage in {'VERSION_SECRET_PATCH','ACTIVE_VERSION_READ','WORKER_SETTINGS_READ','VERSION_ACTIVATE','VERSIONS_LIST_READ','DEPLOYMENTS_READ','ACCOUNT_SUBDOMAIN_READ'}:out['requestStage']=stage
+ codes=getattr(error,'provider_codes',[])
+ if isinstance(codes,list):
+  numbers=[c for c in codes[:10] if type(c) is int]
+  if numbers:out['providerCodes']=numbers
  return out
 
 def load_private(directory):
@@ -49,6 +54,23 @@ def compatible_settings(before,after):
   return value
  return worker.settings_equivalent(redact(before),redact(after))
 
+def version_proof(details,version):
+ if not isinstance(details,dict) or details.get('id')!=version:raise Stop('ACTIVE_VERSION_CODE_PROOF_REQUIRED')
+ resources=copy.deepcopy(details.get('resources'))
+ script=resources.get('script') if isinstance(resources,dict) else None
+ if not isinstance(script,dict):raise Stop('ACTIVE_VERSION_CODE_PROOF_REQUIRED')
+ etag=script.get('etag')
+ if not isinstance(etag,str) or not 1<=len(etag)<=256 or any(ord(c)<32 for c in etag):raise Stop('ACTIVE_VERSION_CODE_PROOF_REQUIRED')
+ if not isinstance(resources.get('script_runtime'),dict):raise Stop('ACTIVE_VERSION_CODE_PROOF_REQUIRED')
+ bindings=resources.get('bindings')
+ if not isinstance(bindings,list) or any(not isinstance(b,dict) or not isinstance(b.get('name'),str) for b in bindings):raise Stop('ACTIVE_VERSION_CODE_PROOF_REQUIRED')
+ if len({b['name'] for b in bindings})!=len(bindings):raise Stop('ACTIVE_VERSION_CODE_PROOF_REQUIRED')
+ selected=[b for b in bindings if b['name']=='MYINVEST_EXPECTED_METADATA']
+ if len(selected)!=1 or selected[0].get('type')!='secret_text':raise Stop('METADATA_BINDING_REQUIRED')
+ resources['bindings']=sorted([b for b in bindings if b['name']!='MYINVEST_EXPECTED_METADATA'],key=lambda b:b['name'])
+ script.pop('last_deployed_from',None)
+ return {'resources':resources,'cache_options':details.get('cache_options')}
+
 def prepare(api,account,old,probe):
  if not re.fullmatch('[a-fA-F0-9]{32}',account):raise Stop('ACCOUNT_ID_INVALID')
  base='/accounts/'+account+'/workers/scripts/'+worker.NAME
@@ -56,10 +78,9 @@ def prepare(api,account,old,probe):
  if api('GET','/accounts/'+account+'/workers/subdomain').get('subdomain')!='kocoro97':raise Stop('EXISTING_SUBDOMAIN_MISMATCH')
  if not any(b.get('name')=='MYINVEST_EXPECTED_METADATA' and b.get('type')=='secret_text' for b in bindings):raise Stop('METADATA_BINDING_REQUIRED')
  if worker.recent_versions(api,base)[0]['id']!=active['version']:raise Stop('LATEST_VERSION_NOT_ACTIVE')
- code=bundle_reader.parse(api('GET',base+'/versions/'+active['version']+'/content/v2'))
- code_manifest=bundle_reader.manifest(code)
+ proof=version_proof(api('GET',base+'/versions/'+active['version']),active['version'])
  metadata=probe();edge.verify_metadata(metadata,old)
- return {'base':base,'active':active,'settings':settings,'bindings':bindings,'code':code,'codeManifest':code_manifest,'metadata':metadata}
+ return {'base':base,'patchBase':'/accounts/'+account+'/workers/workers/'+worker.NAME,'active':active,'settings':settings,'bindings':bindings,'codeProof':proof,'metadata':metadata}
 
 def assert_current(api,checkpoint):
  base=checkpoint['base']
@@ -67,15 +88,12 @@ def assert_current(api,checkpoint):
  assert_code(api,checkpoint,checkpoint['active']['version'])
 
 def assert_code(api,checkpoint,version,code='CONCURRENT_WORKER_CODE_CHANGE'):
- if not bundle_reader.matches(api('GET',checkpoint['base']+'/versions/'+version+'/content/v2'),checkpoint['codeManifest']):raise Stop(code)
+ if version_proof(api('GET',checkpoint['base']+'/versions/'+version),version)!=checkpoint['codeProof']:raise Stop(code)
 
 def bind(api,checkpoint,plan,save=lambda:None):
  assert_current(api,checkpoint);base=checkpoint['base'];settings=checkpoint['settings']
- bindings=[{'name':b['name'],'type':'inherit','version_id':'latest'} if b['name']!='MYINVEST_EXPECTED_METADATA' else {'name':b['name'],'type':'secret_text','text':json.dumps(edge.expected(plan),separators=(',',':'))} for b in checkpoint['bindings']]
- metadata={'main_module':checkpoint['code']['entrypoint'],'compatibility_date':settings['compatibility_date'],'compatibility_flags':settings.get('compatibility_flags',[]),'bindings':bindings}
- if 'usage_model' in settings:metadata['usage_model']=settings['usage_model']
- body,mime=bundle_reader.multipart(metadata,checkpoint['code'])
- uploaded=api('POST',base+'/versions?bindings_inherit=strict',body,mime);candidate=uploaded.get('id','')
+ body={'env':{'MYINVEST_EXPECTED_METADATA':{'type':'secret_text','text':json.dumps(edge.expected(plan),separators=(',',':'))}}}
+ uploaded=api('PATCH',checkpoint['patchBase']+'/versions/latest',body,'application/merge-patch+json');candidate=uploaded.get('id','')
  if not worker.UUID.fullmatch(candidate):raise Stop('PENDING_CANDIDATE_STOP')
  checkpoint['candidate']=candidate;save()
  history=worker.recent_versions(api,base)
@@ -162,7 +180,7 @@ def apply(directory,old,account,token):
     time.sleep(2)
  def restore():
   restore_worker(api,checkpoint);restore_gas(directory,old);edge.verify_metadata(probe(),old)
- result={**transaction(upgrade,binding,verify,restore),'deploymentAttempted':attempted,'workerModuleCount':len(checkpoint['code']['modules'])}
+ result={**transaction(upgrade,binding,verify,restore),'deploymentAttempted':attempted,'workerCodeVerification':'PROVIDER_SCRIPT_ETAG_AND_RUNTIME'}
  if result['status']=='PASS':result['workerCodePreserved']=True
  return result
 
