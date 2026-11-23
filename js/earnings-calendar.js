@@ -9,11 +9,15 @@ const SOURCE='/data/earnings-events.json';
 const VALID=/^(?:[0-9]{6}|[A-Z][A-Z0-9.=-]{0,14})$/;
 let store={status:'unavailable',events:[],retrievedAt:null,reason:'NOT_LOADED'},lastFetch=0,inflight=null,epoch=0;
 function dateOK(v){if(typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;const d=new Date(v+'T00:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===v}
-function sourceOK(u,market){
+function sourceOK(u,market,dateStatus='confirmed'){
  try{
   if(typeof u!=='string'||u.length>600||/[%\s]/.test(u))return false;
   const url=new URL(u);if(url.protocol!=='https:'||url.username||url.password||url.port||url.hash)return false;
   const host=url.hostname.toLowerCase();
+  // Vendor-projected dates must never borrow SEC/DART official provenance.
+  // Licensed redistribution remains a separate publisher-side release gate.
+  if(dateStatus==='estimated')return market==='US'&&(host==='earningscalendar.net'||host==='api.earningscalendar.net');
+  if(dateStatus!=='confirmed')return false;
   if(market==='KR')return host==='dart.fss.or.kr'||host==='opendart.fss.or.kr'||host==='kind.krx.co.kr';
   if(market==='US')return host==='www.sec.gov'||host==='sec.gov';
   return false;
@@ -34,7 +38,7 @@ function normalize(payload,now=Date.now()){
      (raw.market==='KR'&&!/^\d{6}$/.test(raw.symbol))||(raw.market==='US'&&/^\d{6}$/.test(raw.symbol))||
      !dateOK(raw.date)||!['confirmed','estimated'].includes(raw.dateStatus)||
      typeof raw.name!=='string'||!raw.name.trim()||raw.name.length>100||
-     typeof raw.sourceUrl!=='string'||!sourceOK(raw.sourceUrl,raw.market)||
+     typeof raw.sourceUrl!=='string'||!sourceOK(raw.sourceUrl,raw.market,raw.dateStatus)||
      typeof raw.period!=='string'||!/^[A-Za-z0-9 -]{1,32}$/.test(raw.period)||
      typeof raw.eventId!=='string'||!/^[A-Za-z0-9_.:-]{1,100}$/.test(raw.eventId)||
      !['earnings','earnings_call','ir'].includes(raw.eventType))continue;
