@@ -26,9 +26,10 @@ function build(input,{now=new Date()}={}){
  const rows=input.events.map(e=>{
   if(!e||typeof e.verifiedAt!=='string'||!Number.isFinite(Date.parse(e.verifiedAt))||
      Date.parse(e.verifiedAt)>day+300000||day-Date.parse(e.verifiedAt)>48*3600000)throw Error('EARNINGS_EVIDENCE_STALE');
+  if(e.dateStatus==='estimated'&&e.licenseApproved!==true)throw Error('EARNINGS_VENDOR_LICENSE_NOT_APPROVED');
   if(ids.has(e.eventId))throw Error('EARNINGS_DUPLICATE_ID');
   ids.add(e.eventId);
-  const {verifiedAt, ...publicFields}=e;
+  const {verifiedAt,licenseApproved, ...publicFields}=e;
   return publicFields;
  });
  const out={schemaVersion:1,source:'VERIFIED_EARNINGS',retrievedAt:at,events:rows};
