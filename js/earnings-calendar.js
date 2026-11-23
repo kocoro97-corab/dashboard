@@ -1,7 +1,7 @@
 (function(root){'use strict';
 /* PUBLIC earnings announcements, NEVER holdings, account data or API credentials.
- * The publisher is trusted to verify primary-source evidence. UI rejects unsigned
- * provenance/invalid dates; user-facing 'confirmed' is NOT an SEC filing estimate.
+ * A trusted reviewed publisher verifies primary-source evidence. UI checks
+ * provenance/invalid dates; 'confirmed' is NOT inferred from SEC filing history.
  * All source-derived records are immutable in application memory.
  */
 const TTL=48*3600000,FETCH_TTL=15*60000,MAX_EVENTS=500;
@@ -51,7 +51,7 @@ function normalize(payload,now=Date.now()){
   const candidate=Object.freeze({id:'earnings:'+raw.eventId,date:raw.date,title:raw.name+' · '+(raw.eventType==='earnings'?'실적 발표':raw.eventType==='earnings_call'?'실적 설명회':'기업설명회'),
    category:'earnings',market:raw.market,symbol:raw.symbol,name:raw.name,period:raw.period,eventType:raw.eventType,
    dateStatus:raw.dateStatus,evidence:raw.evidence,sourceUrl:raw.sourceUrl,source:'공식 공시·IR 확인',verified:raw.dateStatus==='confirmed',
-   localTimeBasis:raw.timeZone||null,startsAt:time||null,priority:'high'});
+   localTimeBasis:time?'Asia/Seoul':raw.market==='US'?'America/New_York':'Asia/Seoul',startsAt:time||null,priority:'high'});
   const prior=seen.get(key);
   if(!prior||prior.dateStatus==='estimated'&&candidate.dateStatus==='confirmed'||
     prior.dateStatus===candidate.dateStatus&&candidate.date>=prior.date)seen.set(key,candidate);
