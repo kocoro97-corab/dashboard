@@ -5,7 +5,7 @@ const now=Date.parse('2026-11-23T06:00:00.000Z');
 const a={eventId:'fixture-US-1',market:'US',symbol:'SERV',name:'Example US Issuer',period:'2026 Q4',eventType:'earnings',date:'2026-11-25',
  dateStatus:'confirmed',evidence:'issuer_announcement',sourceUrl:'https://www.sec.gov/Archives/edgar/data/123/fixture.htm'};
 const b={eventId:'fixture-KR-1',market:'KR',symbol:'005930',name:'Example Korea Issuer',period:'2026 Q4',eventType:'ir',date:'2026-11-27',
- dateStatus:'confirmed',evidence:'issuer_announcement',sourceUrl:'https://dart.fss.or.kr/dsaf001/main.do?rcpNo=12345'};
+ dateStatus:'confirmed',evidence:'issuer_announcement',earningsRelated:true,sourceUrl:'https://dart.fss.or.kr/dsaf001/main.do?rcpNo=12345'};
 const payload={schemaVersion:1,source:'VERIFIED_EARNINGS',retrievedAt:new Date(now).toISOString(),events:[a,b]};
 assert.equal(svc.normalize(payload,now).events.length,2);
 assert.equal(svc.normalize({...payload,events:[{...a,date:'2026-11-32'}]},now).events.length,0);
