@@ -16,7 +16,9 @@ function sourceOK(u,market,dateStatus='confirmed'){
   const host=url.hostname.toLowerCase();
   // Vendor-projected dates must never borrow SEC/DART official provenance.
   // Licensed redistribution remains a separate publisher-side release gate.
-  if(dateStatus==='estimated')return market==='US'&&(host==='earningscalendar.net'||host==='api.earningscalendar.net');
+  // No vendor has been licensed/verified for this project. Fail closed
+  // until a real approved host and redistribution entitlement are reviewed.
+  if(dateStatus==='estimated')return false;
   if(dateStatus!=='confirmed')return false;
   if(market==='KR')return host==='dart.fss.or.kr'||host==='opendart.fss.or.kr'||host==='kind.krx.co.kr';
   if(market==='US')return host==='www.sec.gov'||host==='sec.gov';
