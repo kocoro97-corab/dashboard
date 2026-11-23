@@ -1,0 +1,28 @@
+name: Opportunity review queue tests
+on:
+  push:
+    branches: [feat/nh-integration-v2]
+    paths:
+      - 'js/opportunity-review-queue.js'
+      - 'tests/opportunity-review-*.cjs'
+      - '.github/workflows/opportunity-review.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review-queue:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax
+        run: |
+          node --check js/opportunity-review-queue.js
+          node --check tests/opportunity-review-queue.test.cjs
+          node --check tests/opportunity-review-contract.test.cjs
+      - name: Candidate and holdings evidence-review regression
+        run: |
+          node tests/opportunity-review-queue.test.cjs
+          node tests/opportunity-review-contract.test.cjs
