@@ -21,7 +21,7 @@ const iso=ms=>isNumber(ms)?new Date(ms).toISOString():null;
 function numberTime(value){
  if(value==null||value==='')return null;
  const t=typeof value==='number'?(value>0&&value<1e11?value*1000:value):Date.parse(value);
- return isNumber(t)&&t>0?t:null;
+ return isNumber(t)&&t>0&&t<=8.64e15?t:null;
 }
 function dayOf(ms,zone){
  const parts={};for(const p of new Intl.DateTimeFormat('en-US',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(ms)))if(p.type!=='literal')parts[p.type]=p.value;
@@ -41,11 +41,11 @@ function adaptQuotes(quotes={},sources={},received={},now=Date.now()){
  }
  return out;
 }
-function validateQuote(raw,symbol,now,zone){
+function validateQuote(raw,symbol,now,zone,{requirePrevious=true}={}){
  if(!raw||typeof raw!=='object')return {symbol,usable:false,reason:'자료 없음'};
  const value=raw.value,previous=raw.previous;
  if(!finitePositive(value))return {symbol,usable:false,reason:'지수값 미확인'};
- if(!finitePositive(previous))return {symbol,usable:false,reason:'전일 종가 미확인'};
+ if(requirePrevious&&!finitePositive(previous))return {symbol,usable:false,reason:'전일 종가 미확인'};
  const delta=pct(value,previous);
  const receivedAt=numberTime(raw.receivedAt),observedAt=numberTime(raw.observedAt);
  if(raw.failed===true)return {symbol,usable:false,reason:'최근 조회 실패'};
@@ -111,7 +111,7 @@ function riskAssessment({region,observations,now,eventRisk,core}){
  const reasons=[],evidence=[];
  let band='unknown';
  const validCore=core.every(x=>x.usable)&&core[0].referenceDay===core[1].referenceDay;
- const vix=validateQuote(observations['^VIX'],'^VIX',now,'America/New_York');
+ const vix=validateQuote(observations['^VIX'],'^VIX',now,'America/New_York',{requirePrevious:false});
  // Absolute VIX thresholds are editorial descriptive buckets, not calibrated forecasts.
  if(vix.usable){
   band=vix.value>=30?'high':vix.value>=20?'elevated':'reference-low';
@@ -137,7 +137,7 @@ function riskAssessment({region,observations,now,eventRisk,core}){
   coverage:{vix:vix.usable,fx:fx.usable,events:eventRisk?.incomplete===false}};
 }
 function assess({region,observations={},histories={},now=Date.now(),eventRisk=null}={}){
- if(!MARKET[region]||!isNumber(now)||now<0)throw Error('REGIME_INPUT_INVALID');
+ if(!MARKET[region]||!isNumber(now)||now<0||now>8.64e15)throw Error('REGIME_INPUT_INVALID');
  const config=MARKET[region],core=config.core.map(s=>validateQuote(observations[s],s,now,config.zone));
  const decision=marketDecision(core),history=config.core.map(s=>historyMetrics(histories[s],now,config.zone));
  // Never mix future/mismatched daily history with an earlier validated quote.
