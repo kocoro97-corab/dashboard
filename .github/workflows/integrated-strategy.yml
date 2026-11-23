@@ -1,0 +1,30 @@
+name: Integrated investment strategy unit tests
+on:
+  push:
+    branches: [feat/nh-integration-v2]
+    paths:
+      - 'js/integrated-strategy-engine.js'
+      - 'js/integrated-event-adapter.js'
+      - 'tests/integrated-*.test.cjs'
+      - '.github/workflows/integrated-strategy.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verified-strategy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax
+        run: |
+          node --check js/integrated-strategy-engine.js
+          node --check js/integrated-event-adapter.js
+          node --check tests/integrated-strategy-engine.test.cjs
+          node --check tests/integrated-event-adapter.test.cjs
+      - name: Read-only integrated decision support tests
+        run: |
+          node tests/integrated-strategy-engine.test.cjs
+          node tests/integrated-event-adapter.test.cjs
