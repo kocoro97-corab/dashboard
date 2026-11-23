@@ -41,7 +41,7 @@ function normalize(payload,now=Date.now()){
      typeof raw.sourceUrl!=='string'||!sourceOK(raw.sourceUrl,raw.market,raw.dateStatus)||
      typeof raw.period!=='string'||!/^[A-Za-z0-9 -]{1,32}$/.test(raw.period)||
      typeof raw.eventId!=='string'||!/^[A-Za-z0-9_.:-]{1,100}$/.test(raw.eventId)||
-     !['earnings','earnings_call','ir'].includes(raw.eventType))continue;
+     !['earnings','earnings_call','ir'].includes(raw.eventType)||(raw.eventType==='ir'&&raw.earningsRelated!==true))continue;
   // Market data calendars / filing occurrence MUST NOT be promoted to a
   // future issuer-confirmed earnings announcement.
   if(raw.dateStatus==='confirmed'&&raw.evidence!=='issuer_announcement')continue;
