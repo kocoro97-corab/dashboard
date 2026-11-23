@@ -40,9 +40,9 @@
   async function refreshPage(force=true){if(!started||!current)return;const epoch=revision;status.textContent='현재 페이지 갱신 중';try{await instances.get(current.page).refresh(ctx,force);if(epoch===revision)status.textContent='갱신 요청 완료 · 각 영역의 수신 상태 확인'}catch{if(epoch===revision)error()}}
   function start(){
     prepare();if(!LS('invest_session_token')||$('appContainer').style.display!=='block')return;
-    if(started)return;started=true;clock();startTimers();manualRefresh=()=>refreshPage(true);router.start();
+    if(started)return;started=true;root.MYInvestGoogleCalendarTransport?.initialize();clock();startTimers();manualRefresh=()=>refreshPage(true);router.start();
   }
-  function stop(){started=false;revision++;root.DashboardTransport?.cancelReads?.();root.MYInvestCalendar?.close();root.MYInvestIcsCalendar?.clear();root.MYInvestGoogleCalendarSync?.disconnect();root.MYInvestCalendarPending=false;root.InvestWorkflow?.clear();root.ReadStatus?.clear();router?.stop();unmount(current?.page);instances.clear();scrolls.clear();current=null;ctx.clear();viewport?.replaceChildren();
+  function stop(){started=false;revision++;root.DashboardTransport?.cancelReads?.();root.MYInvestCalendar?.close();root.MYInvestIcsCalendar?.clear();root.MYInvestGoogleCalendarSync?.disconnect();root.MYInvestGoogleCalendarAuth?.disconnect();root.MYInvestGoogleCalendarTransport?.clear();root.MYInvestCalendarPending=false;root.InvestWorkflow?.clear();root.ReadStatus?.clear();router?.stop();unmount(current?.page);instances.clear();scrolls.clear();current=null;ctx.clear();viewport?.replaceChildren();
     // Detached page views are discarded on logout; original account clear logic
     // remains the authority for holdings, OCR, drafts and server session cleanup.
     for(const id of ['nhAccountSection','externalAssetSection'])if($(id))$(id).hidden=false;
