@@ -134,4 +134,13 @@ function setup(region='KR'){
  const bad=dates.map(x=>({...x}));bad[0].date='2026-99-99';
  assert.equal(engine.validHistory(bad,now,'America/New_York').ok,false);
 }
-console.log('Market regime engine: 18 scenario groups PASS');
+{
+ const a=setup();a.observations['^VIX']=q(31,null);
+ const r=engine.assess(a);
+ assert.equal(r.risk.level,'high','VIX absolute level needs no prior close if observed time is verified');
+ assert.equal(r.risk.evidence[0].delta,null);
+}
+{
+ assert.throws(()=>engine.assess({region:'KR',now:1e300}),/REGIME_INPUT_INVALID/);
+}
+console.log('Market regime engine: 20 scenario groups PASS');
