@@ -15,6 +15,10 @@ test('missing server capability is NOT_RUN and cannot claim bars or success',()=
  const r=evidence({phase:'CAPABILITY',status:'NOT_RUN',code:'RELAY_CAPABILITY_REQUIRED',http:200,now});assert.equal(r.status,'NOT_RUN');assert.equal(r.serverCapabilityObserved,false);assert.equal(r.bars,undefined);
  for(const status of ['PASS','PARTIAL'])assert.equal(evidence({phase:'VALIDATION',status,code:'REFERENCE_VALIDATED',result:result(),now}).status,'FAIL');
 });
+test('an attempted check blocked by missing relay capability is distinct from an unstarted check',()=>{
+ const r=evidence({phase:'CAPABILITY',status:'BLOCKED',code:'RELAY_CAPABILITY_REQUIRED',http:200,now});
+ assert.equal(r.status,'BLOCKED');assert.equal(r.code,'RELAY_CAPABILITY_REQUIRED');assert.equal(r.bars,undefined);assert.equal(r.serverCapabilityObserved,false);
+});
 test('invalid or missing parsed data cannot become successful evidence',()=>{
  for(const mutate of [r=>delete r.data.candles,r=>r.data.instrument.currency='KRW',r=>r.data.receivedAt=now+1,r=>r.data.candles[1].t=NaN]){
   const data=result();mutate(data);assert.equal(evidence({phase:'VALIDATION',status:'PASS',code:'REFERENCE_VALIDATED',result:data,capability:true,now}).status,'FAIL');

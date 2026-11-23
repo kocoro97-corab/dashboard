@@ -55,3 +55,30 @@ verification. No NH, order, operating GAS or account-store calls are required.
 The existing development-only sliding one-hour session transformation remains
 unchanged. No Worker, GAS, authentication source, operating storage or order
 code is changed by this consolidation.
+
+## Explicit execution states
+
+| State | Display | Meaning |
+| --- | --- | --- |
+| `NOT_RUN` | 실행 전 | The connected manual check has not started in this session. It is not queued for automatic execution. |
+| `RUNNING` | 실행 중 | Capability verification or the data request is in progress. |
+| `PASS` | 성공 · 브라우저 관측 | Parsed browser evidence meets the existing reference contract; real-time and signal verification remain false. |
+| `PARTIAL` | 일부 성공 | A response was parsed with incomplete coverage or other reference warnings. |
+| `BLOCKED` | 실행 불가 | The user attempted a check but the required relay capability was unavailable. |
+| `FAIL` | 실행 오류 | A request or data validation failed, or purported positive evidence was invalid. |
+| `CANCELLED` | 취소됨 | Closing or route/session cancellation interrupted an in-flight check. |
+| `NOT_CONNECTED` | 결과 수집 미연결 | This overview does not yet collect a dedicated result for the check. This is not a verdict on the underlying feature. |
+
+Only the AAPL check currently supplies a dedicated lifecycle result. The other
+four rows must not imply they ran, are automatically waiting, or failed merely
+because they have no connected collector. General runtime/read errors from their
+pages are still collected separately. Retrying replaces old bar evidence with
+the running state. Closing a completed reference clears the chart but preserves
+its completed diagnostic result until the session ends or the page reloads.
+
+The user supplied a browser report from source `b217c806b683`: HTTP 200,
+`REFERENCE_VALIDATED`, 78 AAPL/USD five-minute bars, full provider-window coverage,
+and zero scoped NH/account/order calls. This is **user-reported browser-observed
+PASS**, not independently verified owner identity, transport provenance, current
+market freshness, or a trading signal. It is not preloaded as a PASS in later
+login sessions.

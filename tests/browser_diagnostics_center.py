@@ -33,7 +33,9 @@ async def main():
      text=await page.locator('.dv-center').inner_text()
      assert all(c in text for c in ['READ_NETWORK','AUTH_REQUIRED','SCRIPT_ERROR','ASYNC_ERROR','STORE_CONFLICT','DATE_MISMATCH'])
      assert 'PRIVATE_VALUE' not in text
-     snap=await page.evaluate('DevelopmentDiagnostics.snapshot()');assert any(r['status']=='NOT_VISITED' for r in snap['pages']);assert all(r['status']=='NOT_RUN' for r in snap['checks'])
+     await expect(page.locator('[data-check-id=aapl5m]')).to_contain_text('실행 전')
+     await expect(page.locator('[data-check-id=accountLive]')).to_contain_text('결과 수집 미연결')
+     snap=await page.evaluate('DevelopmentDiagnostics.snapshot()');assert any(r['status']=='NOT_VISITED' for r in snap['pages']);assert all(r['status']==('NOT_RUN' if r['collectorConnected'] else 'NOT_CONNECTED') for r in snap['checks'])
      assert 'PRIVATE_VALUE' not in json.dumps(snap) and 'a'*64 not in json.dumps(snap)
      await page.evaluate('''()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async()=>{throw Error('BLOCKED')}}})''')
      await page.get_by_role('button',name='전체 결과 복사',exact=True).click();await expect(page.get_by_label('통합 검증 결과',exact=True)).to_be_visible()
@@ -57,7 +59,7 @@ async def main():
      s=await page.evaluate('DevelopmentDiagnostics.snapshot()');assert not s['authenticated'] and not s['issues'] and not s['checks']
      await page.locator('#authId').fill('synthetic');await page.locator('#authPw').fill('SYNTHETIC_PRIVATE_PASSWORD');await page.locator('#authSubmitBtn').click();await page.wait_for_selector('.dv-center')
      assert not await page.evaluate('DevelopmentDiagnostics.snapshot().issues.some(r=>r.code==="STORE_CONFLICT")')
-     assert all(r['status']=='NOT_RUN' for r in (await page.evaluate('DevelopmentDiagnostics.snapshot()'))['checks'])
+     assert all(r['status']==('NOT_RUN' if r['collectorConnected'] else 'NOT_CONNECTED') for r in (await page.evaluate('DevelopmentDiagnostics.snapshot()'))['checks'])
      assert len(h.errors)==expected_errors,h.errors
      assert not any(r['action'] in ['nhAccounts','nhQuotes','nhExternalQuotes','saveExternalHoldings','restoreExternalHoldings','saveExternalAccounts','order'] for r in h.requests)
      print(json.dumps({'width':width,'status':'PASS','auth':'SYNTHETIC','publishedAssets':args.published,'centralErrorCapture':True,'noAutomaticReads':True,'privacyAndLogout':True,'actualNhCalls':0}),flush=True)

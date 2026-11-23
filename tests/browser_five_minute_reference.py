@@ -23,9 +23,13 @@ async def main():
      await expect(panel.get_by_role('button',name='연결 결과 복사',exact=True,include_hidden=True)).to_be_disabled()
      reads=lambda:sum(r.get('url')==URL for r in h.requests)
      assert reads()==0
+     check=page.locator('[data-check-id=aapl5m]');await expect(check).to_have_attribute('data-check-state','NOT_RUN')
+     h.overrides[URL]={'text':json.dumps(payload),'delayMs':1000}
      await panel.locator('summary').click();assert reads()==0
      await panel.get_by_role('button',name='AAPL 5분봉 조회',exact=True).click()
+     await expect(check).to_have_attribute('data-check-state','RUNNING');await expect(check).to_contain_text('실행 중')
      await expect(panel.locator('[data-five-minute-result=ready]')).to_be_visible()
+     h.overrides.pop(URL,None);await expect(check).to_have_attribute('data-check-state','PASS');await expect(check).to_contain_text('수신·검증 완료')
      assert reads()==1;await expect(panel).to_contain_text('Yahoo Finance');await expect(panel).to_contain_text('원천 수집시각 미확인');await expect(panel).to_contain_text('단타 신호 및 계산기 입력값으로 사용하지 않습니다')
      assert await panel.locator('svg polyline').get_attribute('points')
      await page.evaluate("()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{window.__copiedReference=text}}})")
@@ -46,6 +50,7 @@ async def main():
      await page.screenshot(path=str(args.output/(str(width)+'-reference.png')))
      await panel.get_by_role('button',name='닫기',exact=True).click();await expect(panel.locator('svg')).to_have_count(0)
      await expect(panel.get_by_role('button',name='연결 결과 복사',exact=True,include_hidden=True)).to_be_disabled()
+     await expect(check).to_have_attribute('data-check-state','PASS')
      assert await panel.get_by_label('공유용 연결 결과').input_value()==''
      if not args.actual:
       await panel.locator('summary').click()
@@ -54,6 +59,15 @@ async def main():
       await panel.get_by_role('button',name='연결 결과 복사',exact=True).click()
       await expect(panel.get_by_label('공유용 연결 결과')).to_be_visible()
       invalid=json.loads(await panel.get_by_label('공유용 연결 결과').input_value());assert invalid['phase']=='VALIDATION' and invalid['code']=='IDENTITY_CURRENCY_TIMEFRAME_MISMATCH'
+      await expect(check).to_have_attribute('data-check-state','FAIL');await expect(check).to_contain_text('실행 오류')
+      await expect(page.locator('#dashboardNav a[href="#/diagnostics"]')).to_have_class('has-diagnostic-errors')
+      partial=fixture();series=partial['chart']['result'][0];series['timestamp'].pop(0)
+      for values in series['indicators']['quote'][0].values():values.pop(0)
+      h.overrides[URL]={'text':json.dumps(partial)}
+      await panel.get_by_role('button',name='AAPL 5분봉 조회',exact=True).click()
+      await expect(check).to_have_attribute('data-check-state','PARTIAL');await expect(check).to_contain_text('일부 성공')
+      await expect(page.locator('#dashboardNav a[href="#/diagnostics"]')).not_to_have_class('has-diagnostic-errors')
+      await expect(panel).to_contain_text('제공 구간 일부 미수신')
       # A missing server capability cannot cause a public read.
       await page.evaluate('''()=>{window.__fiveTransport=DashboardTransport;window.__fiveMetaMode='missing';window.DashboardTransport=Object.freeze({...DashboardTransport,post:async body=>body.action==='appVersion'?new Response(__fiveMetaMode==='missing'?JSON.stringify({success:true,freshTestEnvironment:true,testEnvironment:'nh-staging',developmentPublicMarket:true}):__fiveMetaMode==='refused'?JSON.stringify({success:false,code:'PRIVATE_SERVER_TEXT',message:'PRIVATE_VALUE'}):'PRIVATE_NON_JSON_BODY',{status:__fiveMetaMode==='missing'?200:__fiveMetaMode==='refused'?403:502}):__fiveTransport.post(body)})}''')
       # Panel captures its transport at mount; remount to exercise the old server contract.
@@ -62,7 +76,8 @@ async def main():
       n=reads();await panel.get_by_role('button',name='AAPL 5분봉 조회',exact=True).click()
       await expect(panel).to_contain_text('개발 중계의 AAPL 5분봉 연결이 아직 활성화되지 않았습니다.');assert reads()==n
       await panel.get_by_role('button',name='연결 결과 복사',exact=True).click();await expect(panel.get_by_label('공유용 연결 결과')).to_be_visible()
-      missing=json.loads(await panel.get_by_label('공유용 연결 결과').input_value());assert missing['status']=='NOT_RUN' and missing['code']=='RELAY_CAPABILITY_REQUIRED'
+      missing=json.loads(await panel.get_by_label('공유용 연결 결과').input_value());assert missing['status']=='BLOCKED' and missing['code']=='RELAY_CAPABILITY_REQUIRED'
+      await expect(check).to_have_attribute('data-check-state','BLOCKED');await expect(check).to_contain_text('실행 불가')
       for mode,http in [('refused',403),('nonjson',502)]:
        await page.evaluate('(value)=>window.__fiveMetaMode=value',mode)
        await panel.get_by_role('button',name='AAPL 5분봉 조회',exact=True).click()
@@ -75,6 +90,7 @@ async def main():
       h.overrides[URL]={'text':json.dumps(fixture()),'delayMs':700};n=reads();await panel.get_by_role('button',name='AAPL 5분봉 조회',exact=True).click();await expect(panel).to_contain_text('AAPL 5분봉 수신 중')
       await h.go('news');await expect(page.locator('[data-module=five-minute-reference-v1]')).to_have_count(0)
       await h.go('diagnostics');panel=page.locator('[data-module=five-minute-reference-v1]');await panel.locator('summary').click();await expect(panel.locator('svg')).to_have_count(0)
+      await expect(check).to_have_attribute('data-check-state','CANCELLED');await expect(check).to_contain_text('취소됨')
       await page.wait_for_timeout(800) # Allow the deliberately late old response to settle.
       await expect(panel.locator('svg')).to_have_count(0)
       await panel.get_by_role('button',name='AAPL 5분봉 조회',exact=True).click();await expect(panel).to_contain_text('AAPL 5분봉 수신 중')

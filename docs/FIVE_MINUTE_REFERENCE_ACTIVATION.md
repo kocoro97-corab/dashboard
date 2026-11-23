@@ -1,6 +1,13 @@
 # Approved AAPL five-minute reference integration — 2026-11-22 KST
 
-Status: code integration and local tests PASS; actual Worker activation / owner-authenticated live data NOT_RUN. This supersedes the disabled-candidate status in `FIVE_MINUTE_CANDIDATE_REVIEW.md`; its raw-source findings remain valid.
+Initial status before the subsequent owner activation: code integration and local tests PASS; actual Worker activation / owner-authenticated live data NOT_RUN. This supersedes the disabled-candidate status in `FIVE_MINUTE_CANDIDATE_REVIEW.md`; its raw-source findings remain valid.
+
+Follow-up, November 23: the owner has since reported code-only Worker activation
+and a browser-observed AAPL reference PASS (HTTP 200, 78 bars, source
+`b217c806b683`). The current manual panel is in `#/diagnostics`, moved out of
+Strategy. The original activation procedure and initial test findings below are
+retained as historical evidence, not a request to activate the Worker again.
+See [current browser evidence](AAPL_BROWSER_CONNECTION_EVIDENCE.md).
 
 ## Authorization and scope
 
@@ -14,7 +21,7 @@ Other symbols, Korean intraday requests, intervals, ranges, query variants, redi
 
 ## Development UI
 
-`#/strategy` → **AAPL 5분봉 참고 차트 · 최근 1일** → **AAPL 5분봉 조회**.
+`#/diagnostics` → **AAPL 5분봉 참고 차트 · 최근 1일** → **AAPL 5분봉 조회**.
 
 - Collapsed and idle initially; opening alone does not request data. No polling, retries or fallback.
 - Each explicit read first checks existing `appVersion` for isolated staging metadata, public-market capability and `developmentFiveMinuteReferenceVersion: 1`. An old Worker displays an inactive connection message and makes zero intraday requests.

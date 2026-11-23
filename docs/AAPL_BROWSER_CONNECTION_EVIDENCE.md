@@ -1,10 +1,10 @@
 # AAPL reference connection evidence — 2026-11-22 KST
 
-Status: development diagnostic integration implemented; actual owner-authenticated relay reception remains NOT_RUN until observed. Existing AAPL/5m/1d approval persists. This task does not change relay permissions, Worker code/configuration, authentication, GAS, accounts, orders or the one-hour development inactivity rule.
+Status update, November 23: the user supplied a browser-observed **PASS** report from source `b217c806b683`, HTTP 200, 78 validated AAPL/USD five-minute bars and full provider-window coverage. Independent transport verification, real-time verification and signal readiness remain false. Scoped NH/account/order calls are zero. This confirms the reported reference reception, not every market feed or a current live-market price. The earlier environment/activation observations below are historical. Existing AAPL/5m/1d approval persists; no relay permission, Worker, authentication, GAS, account, order or session-rule change is required.
 
 ## User flow
 
-1. Log into `https://kocoro97-corab.github.io/dashboard-v2-dev/index.html#/strategy`.
+1. Log into `https://kocoro97-corab.github.io/dashboard-v2-dev/index.html#/diagnostics`.
 2. Expand **AAPL 5분봉 참고 차트 · 최근 1일**.
 3. Click **AAPL 5분봉 조회**.
 4. Click **연결 결과 복사** and share that JSON for follow-up. If clipboard access is blocked, the page exposes a read-only, selectable **공유용 연결 결과** field. No DevTools, snippet or credential sharing is needed.
@@ -36,4 +36,4 @@ Existing source and development remote HEADs were checked before editing. Prior 
 - Captured real public-data replay and actual published assets are identified separately from synthetic auth and live relay checks.
 - Full CI and publication status / SHAs are reported in the task result. No new PR or branch and no operating deployment/merge.
 
-Next owner: **Codex** — inspect the user's copied browser result / owner activation result, then verify actual authenticated AAPL reception. This diagnostic is supporting integration work, not completion of the live connection.
+Next owner: **Codex** — retain the user-reported reference PASS separately from independent verification, and verify explicit execution states in the dedicated diagnostics menu. Other dedicated check collectors remain unconnected unless actually instrumented; do not turn them into automatic PASS or automatically issue account/storage calls.

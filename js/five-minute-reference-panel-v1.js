@@ -3,7 +3,7 @@
 'use strict';
 const codes=new Set('RELAY_CAPABILITY_REQUIRED ISOLATION_METADATA_MISMATCH CAPABILITY_REQUEST_FAILED REFERENCE_VALIDATED LOCAL_EVIDENCE_INVALID INVALID_CLOCK INVALID_CHART IDENTITY_CURRENCY_TIMEFRAME_MISMATCH INVALID_PROVIDER_WINDOW INVALID_OHLCV_ARRAYS INVALID_BAR_TIME TIME_GRID_MISMATCH INVALID_OHLCV TERMINAL_VOLUME_UNVERIFIED INSUFFICIENT_CLOSED_BARS_OR_VOLUME INTRADAY_READ_FAILED'.split(' '));
 function evidence({phase,status,code,http,result,capability,build,now=Date.now()}={}){
- const out={schemaVersion:1,mode:'BROWSER_OBSERVED_AAPL_5M_REFERENCE',status:['PASS','PARTIAL','FAIL','NOT_RUN'].includes(status)?status:'NOT_RUN',phase:['CAPABILITY','PUBLIC_READ','VALIDATION'].includes(phase)?phase:'CAPABILITY',
+ const out={schemaVersion:1,mode:'BROWSER_OBSERVED_AAPL_5M_REFERENCE',status:['PASS','PARTIAL','FAIL','NOT_RUN','BLOCKED'].includes(status)?status:'NOT_RUN',phase:['CAPABILITY','PUBLIC_READ','VALIDATION'].includes(phase)?phase:'CAPABILITY',
   symbol:'AAPL',currency:'USD',interval:'5m',range:'1d',source:'Yahoo Finance',code:codes.has(code)?code:'LOCAL_EVIDENCE_INVALID',
   serverCapabilityObserved:capability===true,independentTransportVerification:false,realTimeVerified:false,signalReady:false,credentialsIncluded:false,scope:'THIS_REFERENCE_CHECK_ONLY',nhCalls:0,accountCalls:0,orderCalls:0};
  if(Number.isInteger(http)&&http>=100&&http<=599)out.http=http;
@@ -34,8 +34,9 @@ function mount(host){
   try{const response=await transport.publicRead(url);if(alive&&run===version)lastHttp=response.status;return JSON.parse(await response.text())}
   catch(error){if(alive&&run===version&&Number.isInteger(error?.http))lastHttp=error.http;throw error}
  }});
- function clear(){version++;approved=false;pending=false;lastReport=null;lastHttp=null;copy.disabled=true;copyStatus.textContent='';fallback.hidden=true;fallback.value='';reader.invalidate();read.disabled=false;output.replaceChildren();output.dataset.fiveMinuteResult='empty'}
- function report(state){lastReport=evidence({...state,build,http:lastHttp});root.DevelopmentDiagnostics?.verification('aapl5m',lastReport);copy.disabled=false}
+ function progress(status,phase='CAPABILITY'){root.DevelopmentDiagnostics?.verification('aapl5m',{status,phase,code:status==='CANCELLED'?'READ_CANCELLED':phase==='PUBLIC_READ'?'REFERENCE_REQUESTED':'CAPABILITY_REQUESTED'})}
+ function clear(){if(pending)progress('CANCELLED');version++;approved=false;pending=false;lastReport=null;lastHttp=null;copy.disabled=true;copyStatus.textContent='';fallback.hidden=true;fallback.value='';reader.invalidate();read.disabled=false;output.replaceChildren();output.dataset.fiveMinuteResult='empty'}
+ function report(state){lastReport=evidence({...state,build,http:lastHttp});pending=false;root.DevelopmentDiagnostics?.verification('aapl5m',lastReport);copy.disabled=false}
  async function copyReport(){
   if(!alive||!lastReport)return;const text=JSON.stringify(lastReport),current=version;
   try{await root.navigator.clipboard.writeText(text);if(alive&&version===current)copyStatus.textContent='인증정보를 제외한 연결 결과를 복사했습니다.'}
@@ -60,15 +61,15 @@ function mount(host){
   if(!alive||pending||!details.open)return;
   clear();const current=version,session=token(),route=root.location.hash;pending=true;read.disabled=true;
   const valid=()=>alive&&current===version&&details.open&&session&&session===token()&&route===root.location.hash;
-  let phase='CAPABILITY';status.textContent='중계의 승인 범위 확인 중…';
+  let phase='CAPABILITY';progress('RUNNING',phase);status.textContent='중계의 승인 범위 확인 중…';
   try{
    if(!session||!transport.isRelay())throw Error('AUTH_REQUIRED');
    const response=await transport.post({action:'appVersion'});if(!valid())return;lastHttp=response.status;const meta=await response.json();
    if(!valid())return;
    if(!response.ok||meta.success!==true){status.textContent='중계 연결 응답을 확인할 수 없습니다.';report({phase,status:'FAIL',code:'CAPABILITY_REQUEST_FAILED'});return}
    if(meta.freshTestEnvironment!==true||meta.testEnvironment!=='nh-staging'){status.textContent='승인된 개발 중계 환경을 확인할 수 없습니다.';report({phase,status:'FAIL',code:'ISOLATION_METADATA_MISMATCH'});return}
-   if(meta.developmentPublicMarket!==true||meta.developmentFiveMinuteReferenceVersion!==1){status.textContent='개발 중계의 AAPL 5분봉 연결이 아직 활성화되지 않았습니다.';report({phase,status:'NOT_RUN',code:'RELAY_CAPABILITY_REQUIRED'});return}
-   approved=true;phase='PUBLIC_READ';lastHttp=null;status.textContent='AAPL 5분봉 수신 중…';
+   if(meta.developmentPublicMarket!==true||meta.developmentFiveMinuteReferenceVersion!==1){status.textContent='개발 중계의 AAPL 5분봉 연결이 아직 활성화되지 않았습니다.';report({phase,status:'BLOCKED',code:'RELAY_CAPABILITY_REQUIRED'});return}
+   approved=true;phase='PUBLIC_READ';lastHttp=null;progress('RUNNING',phase);status.textContent='AAPL 5분봉 수신 중…';
    const result=await reader.read('AAPL');
    if(!valid())return;
    if(!result.ok){status.textContent='5분봉 자료를 확인할 수 없습니다. 연결·종목·통화·시각·OHLCV 검증이 필요합니다.';output.dataset.fiveMinuteResult='error';report({phase:result.code==='INTRADAY_READ_FAILED'?'PUBLIC_READ':'VALIDATION',status:'FAIL',code:result.code,capability:true});return}
