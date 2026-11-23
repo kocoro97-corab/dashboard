@@ -1,0 +1,30 @@
+name: Analysis change tracking unit tests
+on:
+  push:
+    branches: [feat/nh-integration-v2]
+    paths:
+      - 'js/analysis-change-tracker.js'
+      - 'js/analysis-change-snapshot.js'
+      - 'tests/analysis-change-*.test.cjs'
+      - '.github/workflows/analysis-change-tracker.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  change-tracking:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Static syntax tests
+        run: |
+          node --check js/analysis-change-tracker.js
+          node --check js/analysis-change-snapshot.js
+          node --check tests/analysis-change-tracker.test.cjs
+          node --check tests/analysis-change-snapshot.test.cjs
+      - name: Deterministic change tracking tests
+        run: |
+          node tests/analysis-change-tracker.test.cjs
+          node tests/analysis-change-snapshot.test.cjs
