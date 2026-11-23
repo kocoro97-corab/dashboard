@@ -11,6 +11,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 
 WORKER = 'myinvest-v2-dev-relay'
 ORIGIN = 'https://kocoro97-corab.github.io'
@@ -18,11 +19,14 @@ ENDPOINT = 'https://myinvest-v2-dev-relay.kocoro97.workers.dev/api'
 ROLE = 'myinvest-isolated-relay-v1'
 PRODUCTION_SCRIPT_ID = '1WwqTZuH36L3sYdwmz8POXLmW-1Xw4oC4AGkFPSeueaEVBMB31ua_CkYL'
 UUID = re.compile(r'^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$')
+USER_AGENT = 'MYInvest-Calendar-Owner-Preflight/1.0'
+STAGES = {'ACCOUNT_SUBDOMAIN_READ', 'WORKER_SETTINGS_READ', 'DEPLOYMENTS_READ', 'VERSIONS_READ', 'PUBLIC_RELAY', 'UNCLASSIFIED_READ'}
+RELAY_CODES = {'AUTH_REQUIRED', 'DEV_PAGE_REQUIRED', 'RELAY_ORIGIN_DENIED', 'RELAY_ACCESS_CLOSED', 'RELAY_PATH_DENIED', 'RELAY_CONFIG_INVALID', 'RELAY_SCOPE_BLOCKED', 'RELAY_ISOLATION_REQUIRED', 'RELAY_TARGET_MISMATCH', 'RELAY_RATE_LIMIT', 'RELAY_BUSY'}
 
 
 class Stop(Exception):
-    def __init__(self, code, http=None):
-        self.code, self.http = code, http
+    def __init__(self, code, http=None, diagnostic=None):
+        self.code, self.http, self.diagnostic = code, http, diagnostic
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -30,8 +34,37 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def read_json(url, *, token=None, data=None, headers=None):
-    h = {'Accept': 'application/json', **(headers or {})}
+def error_diagnostic(raw, content_type, *, host, stage):
+    """Only fixed labels/numeric codes, never provider text or reflected values."""
+    kind = 'JSON' if 'json' in content_type.lower() else 'HTML' if 'html' in content_type.lower() else 'OTHER'
+    result = {'failedHost': host, 'stage': stage, 'contentType': kind}
+    codes = []
+    try:
+        doc = json.loads(raw)
+        if isinstance(doc, dict):
+            errors = doc.get('errors')
+            if isinstance(errors, list):
+                codes.extend(e['code'] for e in errors[:10] if isinstance(e, dict) and type(e.get('code')) is int)
+            if doc.get('code') in RELAY_CODES:
+                result['relayCode'] = doc['code']
+    except (ValueError, TypeError):
+        pass
+    codes.extend(int(v) for v in re.findall(r'(?i)\berror\s+code:\s*(\d{4,5})\b', raw.decode('utf8', 'replace')))
+    result['providerCodes'] = list(dict.fromkeys(codes))[:10]
+    return result
+
+
+def read_json(url, *, token=None, data=None, headers=None, stage='UNCLASSIFIED_READ'):
+    host = urlsplit(url).hostname
+    if host not in {'api.cloudflare.com', 'myinvest-v2-dev-relay.kocoro97.workers.dev'}:
+        raise Stop('READ_ONLY_HOST_DENIED')
+    if host == 'api.cloudflare.com' and data is not None:
+        raise Stop('READ_ONLY_METHOD_DENIED')
+    if host != 'api.cloudflare.com' and (token is not None or data != b'{"action":"appVersion"}'):
+        raise Stop('READ_ONLY_PUBLIC_ACTION_DENIED')
+    stage = stage if stage in STAGES else 'UNCLASSIFIED_READ'
+    diagnostic = {'failedHost': host, 'stage': stage}
+    h = {'Accept': 'application/json', 'User-Agent': USER_AGENT, **(headers or {})}
     if token:
         h['Authorization'] = 'Bearer ' + token
     req = urllib.request.Request(url, data=data, headers=h, method='GET' if data is None else 'POST')
@@ -42,9 +75,13 @@ def read_json(url, *, token=None, data=None, headers=None):
                 raise Stop('PREFLIGHT_RESPONSE_TOO_LARGE')
             value = json.loads(raw)
     except urllib.error.HTTPError as error:
-        raise Stop('PREFLIGHT_HTTP_REJECTED', error.code) from None
+        try:
+            detail = error_diagnostic(error.read(65536), error.headers.get('Content-Type', ''), host=host, stage=stage)
+        except Exception:
+            detail = diagnostic
+        raise Stop('PREFLIGHT_HTTP_REJECTED', error.code, detail) from None
     except (urllib.error.URLError, TimeoutError, ValueError):
-        raise Stop('PREFLIGHT_NETWORK_OR_RESPONSE') from None
+        raise Stop('PREFLIGHT_NETWORK_OR_RESPONSE', diagnostic=diagnostic) from None
     if not isinstance(value, dict):
         raise Stop('PREFLIGHT_RESPONSE_INVALID')
     return value
@@ -62,15 +99,18 @@ def api_client(account, token):
         allowed.update(base + suffix for suffix in ['/settings', '/deployments', '/versions'])
         if path not in allowed:
             raise Stop('READ_ONLY_ROUTE_DENIED')
-        result = read_json('https://api.cloudflare.com/client/v4' + path, token=token)
+        stages = {'/subdomain': 'ACCOUNT_SUBDOMAIN_READ', '/settings': 'WORKER_SETTINGS_READ', '/deployments': 'DEPLOYMENTS_READ', '/versions': 'VERSIONS_READ'}
+        stage = next(value for suffix, value in stages.items() if path.endswith(suffix))
+        result = read_json('https://api.cloudflare.com/client/v4' + path, token=token, stage=stage)
         if result.get('success') is not True:
-            raise Stop('CLOUDFLARE_READ_REJECTED')
+            detail = error_diagnostic(json.dumps(result).encode(), 'application/json', host='api.cloudflare.com', stage=stage)
+            raise Stop('CLOUDFLARE_READ_REJECTED', diagnostic=detail)
         return result.get('result')
     return get
 
 
 def public_probe():
-    return read_json(ENDPOINT, data=b'{"action":"appVersion"}', headers={'Origin': ORIGIN, 'X-MyInvest-Dev-Client': 'dashboard-v2-dev', 'Content-Type': 'application/json'})
+    return read_json(ENDPOINT, data=b'{"action":"appVersion"}', headers={'Origin': ORIGIN, 'X-MyInvest-Dev-Client': 'dashboard-v2-dev', 'Content-Type': 'application/json'}, stage='PUBLIC_RELAY')
 
 
 def inspect(api_get, account, *, probe=public_probe, owner_dir=None):
@@ -142,10 +182,13 @@ def inspect(api_get, account, *, probe=public_probe, owner_dir=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--owner-dir', default='/home/kocoro97/myinvest-v2-fresh-private-r2')
+    parser.add_argument('--prompt', action='store_true', help='Use hidden prompts instead of potentially stale environment credentials')
     args = parser.parse_args()
+    sources = {}
     try:
-        account = os.environ.get('CLOUDFLARE_ACCOUNT_ID')
-        token = os.environ.get('CLOUDFLARE_API_TOKEN')
+        account = None if args.prompt else os.environ.get('CLOUDFLARE_ACCOUNT_ID')
+        token = None if args.prompt else os.environ.get('CLOUDFLARE_API_TOKEN')
+        sources = {'accountId': 'ENVIRONMENT' if account else 'HIDDEN_PROMPT', 'token': 'ENVIRONMENT' if token else 'HIDDEN_PROMPT'}
         if (not account or not token) and not sys.stdin.isatty():
             raise Stop('HIDDEN_TERMINAL_INPUT_REQUIRED')
         account = account or getpass.getpass('Cloudflare Account ID (hidden): ')
@@ -155,8 +198,11 @@ def main():
         report = {'status': 'NOT_RUN', 'code': error.code, 'credentialsIncluded': False, 'deploymentAttempted': False, 'settingsWriteCalls': 0, 'secretWriteCalls': 0, 'nhCalls': 0, 'accountCalls': 0, 'orderCalls': 0, 'storeWrites': False}
         if error.http:
             report['http'] = error.http
+        if error.diagnostic:
+            report['diagnostic'] = error.diagnostic
     except Exception:
         report = {'status': 'NOT_RUN', 'code': 'OWNER_PREFLIGHT_FAILED', 'credentialsIncluded': False, 'deploymentAttempted': False}
+    report['credentialSources'] = sources
     print(json.dumps(report))
     return 0 if report['status'] == 'PASS' else 1
 
