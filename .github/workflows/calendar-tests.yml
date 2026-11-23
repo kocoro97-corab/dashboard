@@ -1,0 +1,39 @@
+name: Calendar security tests
+on:
+  push:
+    branches:
+      - feat/nh-integration-v2
+    paths:
+      - 'server/google-calendar-*.cjs'
+      - 'js/calendar-google-*.js'
+      - 'js/calendar-ics-import.js'
+      - 'tests/calendar-*.js'
+      - 'tests/calendar-*.cjs'
+      - '.github/workflows/calendar-tests.yml'
+  workflow_dispatch:
+jobs:
+  calendar-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Node syntax checks
+        run: |
+          node --check server/google-calendar-oauth-service.cjs
+          node --check server/google-calendar-google-api.cjs
+          node --check js/calendar-google-auth.js
+          node --check js/calendar-google-transport.js
+          node --check js/calendar-google-sync.js
+          node --check js/calendar-ics-import.js
+      - name: Calendar unit tests
+        run: |
+          node tests/calendar-korean-holidays.test.js
+          node tests/calendar-ics-import.test.js
+          node tests/calendar-google-sync.test.js
+          node tests/calendar-google-auth.test.js
+          node tests/calendar-oauth-backend.test.cjs
+          node tests/calendar-google-api.test.cjs
