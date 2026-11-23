@@ -71,7 +71,7 @@ function validHistory(raw,now,zone){
   // A provider's YYYY-MM-DD daily bar is an exchange SESSION DATE,
   // not midnight UTC (which can map to the prior US calendar day).
   const declared=typeof item.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(item.date)?item.date:null;
-  if(declared&&new Date(declared+'T00:00:00Z').toISOString().slice(0,10)!==declared)return {ok:false,reason:'일봉 기준일 오류'};
+  if(declared){const t=Date.parse(declared+'T00:00:00Z');if(!isNumber(t)||new Date(t).toISOString().slice(0,10)!==declared)return {ok:false,reason:'일봉 기준일 오류'}}
   const date=declared||dayOf(timestamp,zone);
   if(dates.has(date))return {ok:false,reason:'일봉 기준일 중복'};
   if(bars.length&&timestamp<=bars[bars.length-1].at)return {ok:false,reason:'일봉 순서 불일치'};
