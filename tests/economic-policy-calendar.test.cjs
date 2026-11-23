@@ -1,0 +1,14 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');
+const {parse,collect}=require('../scripts/collect-policy-calendar.cjs');
+const reader=require('../js/economic-policy-calendar.js');
+const months=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const original=require('../js/economic-fomc-schedule.js'),bok=require('../js/economic-bok-policy.js');
+const html=[2026,2027].map(y=>'<div class="panel-heading"><h4>'+y+' FOMC Meetings</h4></div>'+original.list(y).map(e=>{const m=Number(e.date.slice(5,7)),d=Number(e.date.slice(8));return '<div class="fomc-meeting__month"><strong>'+months[m-1]+'</strong></div><div class="fomc-meeting__date">'+(d-1)+'-'+d+'</div>'}).join('')).join('');
+const korean='syear=2026 통화정책방향 '+bok.list(2026).map(e=>'<th>'+Number(e.date.slice(5,7))+'월 '+Number(e.date.slice(8))+'일(목)</th>').join('');
+const revision='except the October 26-27 meeting. dedicated to discussion of broad monetary policy strategy issues';
+const now=new Date('2026-11-23T07:15:00Z');
+test('official HTML yields 16 Fed and 8 Korean date-only meetings',()=>{const d=parse(html,korean,revision,{now});assert.equal(d.events.length,24);assert.ok(d.events.every(e=>e.startsAt==null&&e.timeStatus==='unconfirmed'));assert.equal(d.events.find(e=>e.date==='2027-10-27').type,'FOMC_STRATEGY');assert.equal(d.events.filter(e=>e.publisher==='FED').length,16)});
+test('missing meetings, unsupported strategy classification and bad clock fail closed',()=>{assert.throws(()=>parse(html.replace('28-29','MISSING'),korean,revision,{now}));assert.throws(()=>parse(html,korean,'not verified',{now}),/CLASSIFICATION/);const d=parse(html,korean,revision,{now});assert.throws(()=>reader.normalize({...d,events:[{...d.events[0],startsAt:now.toISOString()}]},now.getTime()),/CLOCK/);assert.throws(()=>reader.normalize(d,now.getTime()+73*3600000),/STALE/)});
+test('one cached snapshot is shared by both meeting consumers and forced refresh fetches again',async()=>{let calls=0;const d=parse(html,korean,revision,{now:new Date()});const fetcher=async()=>{calls++;return {ok:true,text:async()=>JSON.stringify(d)}};await reader.refresh(true,fetcher);assert.equal(reader.list(2026,'FED').length,8);assert.equal(reader.list(2026,'BOK').length,8);await reader.refresh(false,fetcher);assert.equal(calls,1);await reader.refresh(true,fetcher);assert.equal(calls,2);reader.reset();assert.equal(reader.current().status,'unavailable')});
+test('trusted collector requests three fixed official sources only',async()=>{const urls=[];const d=await collect({now,fetchImpl:async url=>{urls.push(url);return {ok:true,text:async()=>url===reader.FED?html:url===reader.BOK?korean:revision}}});assert.equal(d.events.length,24);assert.deepEqual(new Set(urls),new Set([reader.FED,reader.BOK,reader.REVISION]))});

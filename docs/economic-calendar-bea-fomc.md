@@ -35,3 +35,7 @@ node tests/economic-fomc.test.js
 ```
 
 Impact priority is editorial risk ranking (critical/high), **not** historical impact modeling, nor investment advice based on actual reported numbers.
+
+## Verified policy snapshot integration
+
+`collect-policy-calendar.cjs` reads the official Fed meeting HTML, the 2027 strategy-only amendment and BOK 2026 MPC page. It requires complete supported years and writes 24 date-only events to `policy-events.json` after validation. The browser `economic-policy-calendar.js` shares the 72-hour snapshot across existing Fed/BOK consumers, reuses a 15-minute cache and shows no fabricated clock. The original static modules remain reference code but their browser list functions use the fresh snapshot. No BOK 2027 meeting is guessed.

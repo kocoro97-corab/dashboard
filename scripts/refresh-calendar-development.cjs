@@ -2,7 +2,7 @@
 // Development public data only; no scheduler activation or credentials.
 const fs=require('node:fs'),path=require('node:path');
 const {validate}=require('./validate-calendar-snapshots.cjs');
-const SOURCES=[['BLS','economic-events.json','collect-economic-calendar.cjs'],['BEA','bea-events.json','collect-bea-calendar.cjs'],['BOK','bok-stats-events.json','collect-bok-calendar.cjs'],['EARNINGS','earnings-events.json','collect-earnings-official.cjs']];
+const SOURCES=[['BLS','economic-events.json','collect-economic-calendar.cjs'],['BEA','bea-events.json','collect-bea-calendar.cjs'],['BOK','bok-stats-events.json','collect-bok-calendar.cjs'],['EARNINGS','earnings-events.json','collect-earnings-official.cjs'],['POLICY','policy-events.json','collect-policy-calendar.cjs']];
 async function refresh({directory=path.resolve(__dirname,'../data'),collectors={},now=new Date()}={}){
  fs.mkdirSync(directory,{recursive:true});
  return Promise.all(SOURCES.map(async([source,file,module])=>{

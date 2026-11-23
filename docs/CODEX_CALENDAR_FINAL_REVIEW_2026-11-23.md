@@ -8,9 +8,9 @@ Existing published frontend runtime: `aa39df95c9024f70bff71e2ba06ab3a10f294a14` 
 - Reused BLS/BEA/BOK/FOMC/earnings/calendar modules and calendar UI supplied on the feature branch.
 - Corrected actual BLS `TZID=US-Eastern` compatibility; source fetch yielded 102 recognized events through 2026-12-15. BEA yielded 127 through 2027-12-22, BOK statistics 69 through 2026-12-29.
 - Current public snapshots carry their actual retrieval timestamps. Historical entries are not future predictions. Missing times stay date-only.
-- Fed and BOK meeting pages were fetched independently for comparison against the existing curated 2026–27 Fed / 2026 BOK dates. These curated calendars are not an automatically parsed live policy feed; BOK 2027 coverage remains unavailable.
+- Fed and BOK meeting pages plus the Fed strategy-meeting amendment are parsed by `collect-policy-calendar.cjs`: 16 Fed meetings for 2026–27 and 8 BOK meetings for 2026, date-only. A fresh `policy-events.json` snapshot replaces the static list in browser consumers through `economic-policy-calendar.js`. Missing/stale data stays unavailable; BOK 2027 coverage remains unavailable.
 - Reviewed fixed official NVIDIA/Samsung releases: two **historical** issuer-confirmed earnings announcements. No future earnings date is inferred. Source links are bound to NVDA and 005930 respectively; vendor estimates remain disabled.
-- Snapshot export validates provenance, freshness and an explicit public-field allowlist before copying four exact filenames into Pages. It never copies `server/`, OAuth secrets, private manifests or holdings into calendar data.
+- Snapshot export validates provenance, freshness and an explicit public-field allowlist before copying five exact filenames into Pages. It never copies `server/`, OAuth secrets, private manifests or holdings into calendar data.
 - Cache expiry is enforced even when reading an existing in-memory snapshot without refreshing. Concurrent source fetches are joined; explicit force refresh remains available.
 - Calendar closes clear Google display state. An ICS file read completing after close/logout cannot reinsert private events. Private Google/ICS events do not enter `invest-event-context`.
 - Preserved existing published news, strategy comparator, diagnostics and one-hour development session by reusing the prior frontend modules and resolving only shared HTML/news/shell/strategy/sector integration. No GAS or relay change was imported.
@@ -24,8 +24,8 @@ The cited CI run 45118286473, and baseline HEAD run 45120592580, stopped at `bro
 ## Executed validation
 
 - All `tests/*.test.cjs` and `tests/*.test.js` via Node; Python `unittest discover` (332 tests).
-- `node scripts/calendar-release-audit.cjs --strict`: all four public snapshots present/fresh; implementation audit is not Google authentication proof.
-- `tests/browser_calendar_final.py`: 1440/690/344, official public capture replay + synthetic auth. Popup layout, links, keyboard navigation, cache reuse, three-request force refresh, private ICS exclusion, route cleanup, logout and zero console errors.
+- `node scripts/calendar-release-audit.cjs --strict`: all five public snapshots present/fresh; implementation audit is not Google authentication proof.
+- `tests/browser_calendar_final.py`: 1440/690/344, official public capture replay + synthetic auth. Popup layout, links, keyboard navigation, cache reuse, four-request force refresh, private ICS exclusion, route cleanup, logout and zero console errors.
 - `tests/browser_futures_display.py`: three widths passed after fixture-clock correction.
 - Full GitHub CI, development publication and public live readback are reported by commit/run SHA in the final task result. Physical Fold6 and real user Google OAuth remain NOT_RUN.
 

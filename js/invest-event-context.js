@@ -9,7 +9,8 @@ const SOURCES=Object.freeze([
  ['BLS','MYInvestEconomicCalendar'],
  ['BEA','MYInvestBeaCalendar'],
  ['BOK_STAT','MYInvestBokStatsCalendar'],
- ['EARNINGS','MYInvestEarningsCalendar']
+ ['EARNINGS','MYInvestEarningsCalendar'],
+ ['POLICY','MYInvestOfficialPolicyCalendar']
 ]);
 const toParts=(date,zone)=>Object.fromEntries(new Intl.DateTimeFormat('en-US',{
  timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'
@@ -21,7 +22,7 @@ let refreshJob=null;
 let collectionRows=[],collectionAt=0;
 async function refreshCollection(force=false){
  if(!force&&collectionAt&&Date.now()-collectionAt<900000)return;
- try{const r=await root.fetch('calendar-data-status.json',{credentials:'omit',cache:'no-store',redirect:'error'});if(!r.ok)throw Error('STATUS_UNAVAILABLE');const text=await r.text();if(text.length>16384)throw Error('STATUS_OVERSIZED');const rows=JSON.parse(text);if(!Array.isArray(rows)||rows.length>4)throw Error('STATUS_INVALID');collectionRows=rows.filter(x=>['economic-events.json','bea-events.json','bok-stats-events.json','earnings-events.json'].includes(x?.file)&&['VERIFIED','FAILED','MISSING','UNAVAILABLE'].includes(x.status)).map(x=>Object.freeze({file:x.file,status:x.status,source:['BLS','BEA','BOK','VERIFIED_EARNINGS'].includes(x.source)?x.source:null,retrievedAt:Number.isFinite(Date.parse(x.retrievedAt))?x.retrievedAt:null}));}catch{collectionRows=[]}collectionAt=Date.now();
+ try{const r=await root.fetch('calendar-data-status.json',{credentials:'omit',cache:'no-store',redirect:'error'});if(!r.ok)throw Error('STATUS_UNAVAILABLE');const text=await r.text();if(text.length>16384)throw Error('STATUS_OVERSIZED');const rows=JSON.parse(text);if(!Array.isArray(rows)||rows.length>5)throw Error('STATUS_INVALID');collectionRows=rows.filter(x=>['economic-events.json','bea-events.json','bok-stats-events.json','earnings-events.json','policy-events.json'].includes(x?.file)&&['VERIFIED','FAILED','MISSING','UNAVAILABLE'].includes(x.status)).map(x=>Object.freeze({file:x.file,status:x.status,source:['BLS','BEA','BOK','VERIFIED_EARNINGS','OFFICIAL_POLICY'].includes(x.source)?x.source:null,retrievedAt:Number.isFinite(Date.parse(x.retrievedAt))?x.retrievedAt:null}));}catch{collectionRows=[]}collectionAt=Date.now();
 }
 function coverage(){
  return Object.freeze({
@@ -29,15 +30,16 @@ function coverage(){
   BEA:root.MYInvestBeaCalendar?.current()?.status==='ready',
   BOK_STAT:root.MYInvestBokStatsCalendar?.current()?.status==='ready',
   EARNINGS:root.MYInvestEarningsCalendar?.current()?.status==='ready',
-  FED:!!root.MYInvestFomcSchedule?.list,
-  BOK_MPC:!!root.MYInvestBokPolicySchedule?.list
+  POLICY:root.MYInvestOfficialPolicyCalendar?.current()?.status==='ready',
+  FED:root.MYInvestFomcSchedule?.current?root.MYInvestFomcSchedule.current().status==='ready':!!root.MYInvestFomcSchedule?.list,
+  BOK_MPC:root.MYInvestBokPolicySchedule?.current?root.MYInvestBokPolicySchedule.current().status==='ready':!!root.MYInvestBokPolicySchedule?.list
  });
 }
 function collect({from=null,to=null,now=Date.now(),includeEarnings=true}={}){
  const current=Number.isFinite(now)?new Date(now):new Date();
  const start=from||day(current,'Asia/Seoul'),end=to||offsetDay(start,21);
  if(!validateDate(start)||!validateDate(end)||end<start)return {events:[],coverage:coverage(),incomplete:true};
- const available=coverage(),out=new Map();
+ const available={...coverage()},out=new Map();
  const add=item=>{
   if(!item||!validateDate(item.date)||item.date<start||item.date>end||!item.verified||typeof item.sourceUrl!=='string'||!/^https:\/\//.test(item.sourceUrl))return;
   if(item.category==='googlePersonal'||item.source==='google-calendar')return;
@@ -65,7 +67,7 @@ function collect({from=null,to=null,now=Date.now(),includeEarnings=true}={}){
   for(const event of root.MYInvestBokPolicySchedule?.list(y)||[])add(event);
  }
  const events=[...out.values()].sort((a,b)=>a.date.localeCompare(b.date)||String(a.startsAt||'').localeCompare(String(b.startsAt||'')));
- const needed=['BLS','BEA','BOK_STAT'];
+ const needed=['BLS','BEA','BOK_STAT'];if(root.MYInvestOfficialPolicyCalendar){needed.push('POLICY','FED','BOK_MPC');available.FED=[...years].every(y=>(root.MYInvestFomcSchedule?.list(y)||[]).length>0);available.BOK_MPC=[...years].every(y=>(root.MYInvestBokPolicySchedule?.list(y)||[]).length>0);}
  return {events,coverage:available,incomplete:needed.some(n=>!available[n]),from:start,to:end};
 }
 function assessment({mode='swing',now=Date.now(),symbols=[]}={}){

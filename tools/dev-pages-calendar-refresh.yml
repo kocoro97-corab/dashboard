@@ -29,7 +29,7 @@ jobs:
       - name: Collect sources independently
         run: |
           node source/scripts/refresh-calendar-development.cjs > /tmp/calendar-result.json || true
-          node -e 'const r=require("/tmp/calendar-result.json");if(!Array.isArray(r.rows)||r.rows.length!==4)process.exit(1)'
+          node -e 'const r=require("/tmp/calendar-result.json");if(!Array.isArray(r.rows)||r.rows.length!==5)process.exit(1)'
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: dev-pages
@@ -39,7 +39,7 @@ jobs:
           python3 - <<'PY'
           import hashlib,json,os,pathlib,shutil,subprocess,datetime
           pages=pathlib.Path('pages');source=pathlib.Path('source');report=json.load(open('/tmp/calendar-result.json'))
-          names={'BLS':'economic-events.json','BEA':'bea-events.json','BOK':'bok-stats-events.json','EARNINGS':'earnings-events.json','VERIFIED_EARNINGS':'earnings-events.json'}
+          names={'BLS':'economic-events.json','BEA':'bea-events.json','BOK':'bok-stats-events.json','EARNINGS':'earnings-events.json','VERIFIED_EARNINGS':'earnings-events.json','OFFICIAL_POLICY':'policy-events.json','POLICY':'policy-events.json'}
           manifest=json.loads((pages/'asset-manifest.json').read_text());rows=[]
           for row in report['rows']:
               name=names[row['source']];dest=pages/'data'/name;status='FAILED'
@@ -56,7 +56,7 @@ jobs:
           PY
           git -C pages config user.name 'github-actions[bot]'
           git -C pages config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git -C pages add -- data/economic-events.json data/bea-events.json data/bok-stats-events.json data/earnings-events.json calendar-data-status.json asset-manifest.json
+          git -C pages add -- data/economic-events.json data/bea-events.json data/bok-stats-events.json data/earnings-events.json data/policy-events.json calendar-data-status.json asset-manifest.json
           if ! git -C pages diff --cached --quiet; then
             git -C pages commit -m 'data(calendar): refresh verified development public schedules'
             git -C pages push origin HEAD:dev-pages

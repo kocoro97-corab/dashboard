@@ -9,7 +9,8 @@ const reports=[
  ['BLS','data/economic-events.json','BLS',48*3600000],
  ['BEA','data/bea-events.json','BEA',72*3600000],
  ['BOK','data/bok-stats-events.json','BOK',72*3600000],
- ['EARNINGS','data/earnings-events.json','VERIFIED_EARNINGS',48*3600000]
+ ['EARNINGS','data/earnings-events.json','VERIFIED_EARNINGS',48*3600000],
+ ['POLICY','data/policy-events.json','OFFICIAL_POLICY',72*3600000]
 ];
 function audit({now=Date.now()}={}){
  const out=[];

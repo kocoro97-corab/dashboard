@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+from datetime import datetime
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGE = 'https://kocoro97-corab.github.io/dashboard-v2-dev/'
@@ -22,7 +23,7 @@ def fixed_relay(value):
     return value
 
 
-def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
+def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True, public_data=None):
     public_config=root/'config/development-relay.json'
     if use_public_config and relay_endpoint is None and public_config.is_file():
         doc=json.loads(public_config.read_text())
@@ -107,16 +108,38 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True):
     shutil.copyfile(root / 'data/account-test-holdings.json', output / 'data/account-test-holdings.json')
     # Explicit calendar files only; server/OAuth/private files are never exported.
     calendar_validation=[]
-    for name in ['economic-events.json','bea-events.json','bok-stats-events.json','earnings-events.json']:
-        source=root/'data'/name
-        if not source.exists():
-            calendar_validation.append({'file':name,'status':'MISSING'});continue
-        if source.is_symlink():raise ValueError('DEV_CALENDAR_ASSET_SYMLINK')
-        check=subprocess.run(['node',str(root/'scripts/validate-calendar-snapshots.cjs'),str(source)],cwd=root,capture_output=True,text=True)
-        if check.returncode:
+    prior_status=[]
+    if public_data is not None:
+        public_data=Path(public_data)
+        status=public_data.parent/'calendar-data-status.json'
+        if status.is_symlink():raise ValueError('DEV_CALENDAR_ASSET_SYMLINK')
+        if status.is_file() and status.stat().st_size<=16384:
+            try:
+                parsed=json.loads(status.read_text())
+                if isinstance(parsed,list) and len(parsed)<=5:prior_status=parsed
+            except (ValueError,OSError):pass
+    def checked_calendar(file):
+        if file.is_symlink():raise ValueError('DEV_CALENDAR_ASSET_SYMLINK')
+        if not file.is_file():return None
+        raw=file.read_bytes()
+        if len(raw)>1500000:return None
+        program="const fs=require('fs');const {validate}=require(process.argv[1]);console.log(JSON.stringify(validate(JSON.parse(fs.readFileSync(0,'utf8')))))"
+        check=subprocess.run(['node','-e',program,str(root/'scripts/validate-calendar-snapshots.cjs')],input=raw,cwd=root,capture_output=True)
+        if check.returncode:return None
+        return raw,json.loads(check.stdout)
+    def calendar_time(value):return datetime.fromisoformat(value.replace('Z','+00:00')).timestamp()
+    for name in ['economic-events.json','bea-events.json','bok-stats-events.json','earnings-events.json','policy-events.json']:
+        selected=checked_calendar(root/'data'/name)
+        if public_data is not None:
+            candidate=checked_calendar(public_data/name)
+            if candidate and (not selected or calendar_time(candidate[1]['retrievedAt'])>=calendar_time(selected[1]['retrievedAt'])):selected=candidate
+        if not selected:
             calendar_validation.append({'file':name,'status':'UNAVAILABLE'});continue
-        shutil.copyfile(source,output/'data'/name)
-        calendar_validation.append({'file':name,'status':'VERIFIED',**json.loads(check.stdout)})
+        raw,metadata=selected
+        (output/'data'/name).write_bytes(raw)
+        row={'file':name,'status':'VERIFIED',**metadata}
+        if any(isinstance(old,dict) and old.get('file')==name and old.get('status')=='FAILED' and old.get('retrievedAt')==metadata['retrievedAt'] for old in prior_status):row['status']='FAILED'
+        calendar_validation.append(row)
     (output/'calendar-data-status.json').write_text(json.dumps(calendar_validation))
     ocr = root / 'vendor/ocr'
     pinned = json.loads((ocr / 'manifest.json').read_text())
@@ -141,6 +164,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--relay-endpoint',help='Verified fixed development Worker URL; never a GAS URL or credential')
+    parser.add_argument('--preserve-public-data',type=Path,help='Existing development Pages data directory; carry forward only fresher validated public schedules')
     args = parser.parse_args()
-    build(args.output,relay_endpoint=args.relay_endpoint)
+    build(args.output,relay_endpoint=args.relay_endpoint,public_data=args.preserve_public_data)
     print(json.dumps({'status': 'PASS', 'artifact': 'DEV_FRONTEND_ONLY', 'secretsIncluded': False}))

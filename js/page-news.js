@@ -63,13 +63,14 @@ if(enabled){
 panel.append(syncBox);
 const economy=root.MYInvestEconomicCalendar,bea=root.MYInvestBeaCalendar,fomc=root.MYInvestFomcSchedule,bok=root.MYInvestBokStatsCalendar,bokPolicy=root.MYInvestBokPolicySchedule,eco=economy?.current(),beaStatus=bea?.current(),bokStatus=bok?.current(),ecoBox=el('section',undefined,'nev5-muted');
 for(const row of root.MYInvestEventContext?.collectionStatus?.()||[])if(row.status==='FAILED')ecoBox.append(el('p',(row.source||row.file)+' 최근 수집 실패 · 이전 자료 수집 '+(row.retrievedAt||'미확인')+' · 공식 원문 확인 필요'));
-ecoBox.append(el('strong','공식 경제일정 · BLS '+(eco?.status==='ready'?eco.events.length+'건':'미연결')+' / BEA '+(beaStatus?.status==='ready'?beaStatus.events.length+'건':'미연결')+' / 한국은행 통계 '+(bokStatus?.status==='ready'?bokStatus.events.length+'건':'미연결')+' / FOMC·금통위 회의일'))
+ecoBox.append(el('strong','공식 경제일정 · BLS '+(eco?.status==='ready'?eco.events.length+'건':'미연결')+' / BEA '+(beaStatus?.status==='ready'?beaStatus.events.length+'건':'미연결')+' / 한국은행 통계 '+(bokStatus?.status==='ready'?bokStatus.events.length+'건':'미연결')+' / FOMC·금통위 '+(root.MYInvestOfficialPolicyCalendar?.current()?.status==='ready'?root.MYInvestOfficialPolicyCalendar.current().events.length+'건':'미연결')))
 ecoBox.append(el('p',eco?.status==='ready'?'BLS 발표 일정 · 마지막 수집 '+eco.retrievedAt+' · 발표시각은 한국시간 날짜로 표시됩니다.':'BLS 공식 일정 스냅샷이 아직 없거나 48시간 이상 경과했습니다. 임의의 발표 날짜를 표시하지 않습니다.'));
 ecoBox.append(btn('공식 일정 확인',async()=>{
- const current=++economicRequest;await Promise.allSettled([economy?.refresh(true),bea?.refresh(true),bok?.refresh(true)]);
+ const current=++economicRequest;await Promise.allSettled([economy?.refresh(true),bea?.refresh(true),bok?.refresh(true),root.MYInvestOfficialPolicyCalendar?.refresh(true)]);
  if(current===economicRequest&&calendarDialog?.isConnected)draw();
 }));
 const sourceLink=el('a','BLS 공식 일정 ↗');sourceLink.href='https://www.bls.gov/schedule/news_release/bls.ics';sourceLink.target='_blank';sourceLink.rel='noopener noreferrer';const beaLink=el('a','BEA 공식 일정 ↗');beaLink.href='https://www.bea.gov/news/schedule/icalendar';beaLink.target='_blank';beaLink.rel='noopener noreferrer';beaLink.style.marginLeft='12px';const fedLink=el('a','FOMC 공식 일정 ↗');fedLink.href='https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm';fedLink.target='_blank';fedLink.rel='noopener noreferrer';fedLink.style.marginLeft='12px';const bokLink=el('a','한국은행 공표일정 ↗');bokLink.href='https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026';bokLink.target='_blank';bokLink.rel='noopener noreferrer';bokLink.style.marginLeft='12px';ecoBox.append(sourceLink,beaLink,fedLink,bokLink);panel.append(ecoBox);
+panel.append(el('p','FOMC·금통위 수집 '+(root.MYInvestOfficialPolicyCalendar?.current()?.retrievedAt||'미확인')+' · 회의일만 확인, 발표시각 미확인','nev5-muted'));
 panel.append(el('p','BEA 수집 '+(beaStatus?.retrievedAt||'미확인')+' · 한국은행 통계 수집 '+(bokStatus?.retrievedAt||'미확인'),'nev5-muted'));
 const earningSvc=root.MYInvestEarningsCalendar,earningState=earningSvc?.current(),earningBox=el('section',undefined,'nev5-muted');
 earningBox.append(el('strong','기업 실적 발표 · '+(earningState?.status==='ready'?'출처 검증 일정 '+earningState.events.length+'건':'공식 일정 데이터 미연결')));

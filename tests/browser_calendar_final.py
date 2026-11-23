@@ -11,7 +11,7 @@ parser=argparse.ArgumentParser();parser.add_argument('--published',action='store
 async def main():
  with tempfile.TemporaryDirectory() as tmp:
   artifact=Path(tmp)/'public';build(artifact,relay_endpoint=ENDPOINT)
-  snapshots=[json.loads((ROOT/'data'/f).read_text()) for f in ['economic-events.json','bea-events.json','bok-stats-events.json','earnings-events.json']]
+  snapshots=[json.loads((ROOT/'data'/f).read_text()) for f in ['economic-events.json','bea-events.json','bok-stats-events.json','earnings-events.json','policy-events.json']]
   checktime=max(datetime.datetime.fromisoformat(d['retrievedAt'].replace('Z','+00:00')) for d in snapshots)+datetime.timedelta(minutes=1)
   async with async_playwright() as p:
    browser=await p.chromium.launch()
@@ -23,7 +23,7 @@ async def main():
      assert not any(any(n in r for n in ['economic-events','bea-events','bok-stats-events','earnings-events']) for r in reads)
      await page.get_by_role('button',name='투자 캘린더',exact=True).click()
      dialog=page.get_by_role('dialog',name='투자 일정 캘린더');await dialog.wait_for()
-     await page.wait_for_function("()=>MYInvestEconomicCalendar.current().status==='ready'&&MYInvestBeaCalendar.current().status==='ready'&&MYInvestBokStatsCalendar.current().status==='ready'&&MYInvestEarningsCalendar.current().status==='ready'")
+     await page.wait_for_function("()=>MYInvestEconomicCalendar.current().status==='ready'&&MYInvestBeaCalendar.current().status==='ready'&&MYInvestBokStatsCalendar.current().status==='ready'&&MYInvestEarningsCalendar.current().status==='ready'&&MYInvestOfficialPolicyCalendar.current().status==='ready'")
      await expect(dialog).to_contain_text('BLS '+str(len(snapshots[0]['events']))+'건')
      assert await dialog.locator('a[href="https://www.bls.gov/schedule/news_release/bls.ics"]').count()>=1
      assert await dialog.locator('.nev5-day').count()>=28
@@ -31,7 +31,7 @@ async def main():
      await dialog.get_by_role('button',name='닫기',exact=True).focus();await page.keyboard.press('Shift+Tab');assert await dialog.evaluate('e=>e.contains(document.activeElement)')
      before=len(reads);await page.keyboard.press('Escape');assert await dialog.count()==0
      await page.get_by_role('button',name='투자 캘린더',exact=True).click();await dialog.wait_for();await page.wait_for_timeout(80);assert len(reads)==before
-     await dialog.get_by_role('button',name='공식 일정 확인',exact=True).click();await page.wait_for_timeout(200);assert len(reads)==before+3
+     await dialog.get_by_role('button',name='공식 일정 확인',exact=True).click();await page.wait_for_timeout(200);assert len(reads)==before+4
      await dialog.get_by_label('Google 캘린더 ICS 파일 선택').set_input_files({'name':'synthetic-private.ics','mimeType':'text/calendar','buffer':b'BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:private-canary\nDTSTART;VALUE=DATE:20261123\nSUMMARY:PRIVATE_CALENDAR_CANARY\nEND:VEVENT\nEND:VCALENDAR'})
      await page.wait_for_function('()=>MYInvestIcsCalendar.list().length===1')
      assert not await page.evaluate("MYInvestEventContext.collect().events.some(e=>e.title.includes('PRIVATE_CALENDAR_CANARY'))")
@@ -43,7 +43,7 @@ async def main():
      assert await page.evaluate('MYInvestIcsCalendar.list().length===0&&!MYInvestGoogleCalendarSync.status().connected&&!MYInvestGoogleCalendarAuth.state().available')
      assert not h.errors,h.errors
      assert not any(r['action'] in ['nhAccounts','nhQuotes','saveExternalHoldings','restoreExternalHoldings','order'] or str(r['action']).startswith('googleCalendar') for r in h.requests)
-     print(json.dumps({'width':width,'status':'PASS','authentication':'SYNTHETIC','scheduleData':'OFFICIAL_PUBLIC_CAPTURE_REPLAY','publishedAssets':args.published,'cacheReuse':True,'forceRefreshRequests':3,'privateCalendarExcluded':True,'logoutCleanup':True,'consoleErrors':0,'actualNhCalls':0,'googleAccountCalls':0}),flush=True)
+     print(json.dumps({'width':width,'status':'PASS','authentication':'SYNTHETIC','scheduleData':'OFFICIAL_PUBLIC_CAPTURE_REPLAY','publishedAssets':args.published,'cacheReuse':True,'forceRefreshRequests':4,'privateCalendarExcluded':True,'logoutCleanup':True,'consoleErrors':0,'actualNhCalls':0,'googleAccountCalls':0}),flush=True)
     finally:await h.close()
    await browser.close()
 asyncio.run(main())
