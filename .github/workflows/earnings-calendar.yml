@@ -1,0 +1,44 @@
+name: Earnings calendar security tests
+on:
+  push:
+    branches:
+      - feat/nh-integration-v2
+    paths:
+      - 'js/earnings-calendar.js'
+      - 'js/page-news.js'
+      - 'js/page-strategy.js'
+      - 'scripts/build-earnings-snapshot.cjs'
+      - 'tests/earnings-*.js'
+      - 'tests/earnings-*.cjs'
+      - '.github/workflows/earnings-calendar.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Source syntax validation
+        run: |
+          node --check js/earnings-calendar.js
+          node --check js/page-news.js
+          node --check js/page-strategy.js
+          node --check scripts/build-earnings-snapshot.cjs
+      - name: Private-data and public-source isolation
+        run: |
+          node tests/earnings-calendar.test.js
+          node tests/earnings-publisher.test.cjs
+      - name: Ensure no synthetic earnings dates are committed
+        run: |
+          if [ -f data/earnings-events.json ]; then
+            node - <<'NODE'
+          const fs=require('node:fs');
+          const snap=JSON.parse(fs.readFileSync('data/earnings-events.json','utf8'));
+          if(snap.source!=='VERIFIED_EARNINGS'||!Array.isArray(snap.events)||!snap.events.length)process.exit(1);
+          console.log('Earnings snapshot requires publisher verification');
+          NODE
+          fi
