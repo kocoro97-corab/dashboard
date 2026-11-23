@@ -57,7 +57,7 @@ function matchSector(sector,stock,sectorLink){
   isProxy:sector.type==='sector_etf_proxy',source:sector.source,asOf:sector.asOf};
 }
 function checkEvent(event,stock,mode,referenceDay){
- if(!event||event.status!=='ready'||event.coverageVerified!==true)return {status:'unknown',reason:'실적·거시 일정 수집 범위 미확인'};
+ if(!event||!['ready','partial'].includes(event.status)||!Array.isArray(event.events))return {status:'unknown',nearby:false,reason:'실적·거시 일정 수집 범위 미확인'};
  // Ingest only PUBLIC aggregate event status for the selected symbol; never
  // accept private Google Calendar events as investment evidence.
  const rows=Array.isArray(event.events)?event.events:[];
@@ -68,7 +68,7 @@ function checkEvent(event,stock,mode,referenceDay){
   const distance=dayDiff(e.date,referenceDay);
   if(distance>=0&&distance<=limit)found.push({kind:e.kind,date:e.date,type:typeof e.type==='string'?e.type.slice(0,50):'미상',symbol:e.kind==='earnings'?stock.symbol:null});
  }
- return {status:'verified',nearby:found.length>0,count:found.length,
+ return {status:event.coverageVerified===true&&event.status==='ready'?'verified':'partial',nearby:found.length>0,count:found.length,
   warnings:found.slice(0,10),scope:'확인된 공개 일정만 반영 · 미수집 일정은 위험 없음으로 해석 금지'};
 }
 function holdingEvidence(holding,stock){
@@ -111,7 +111,7 @@ function assess({mode='swing',intent='candidate',stock,regime=null,sector=null,s
   if(group.relative5dPp>0&&group.relative20dPp>0)conditions.push('시장 대비 산업 강세 관측');
   else reasons.push('산업 상대강도 지속 우위 미확인');
  }
- if(calendar.status==='unknown'){blocking.push('events-unverified');reasons.push(calendar.reason)}
+ if(calendar.status!=='verified'){blocking.push('events-unverified');reasons.push(calendar.reason||'일부 실적·거시 일정 미연결')}
  if(calendar.nearby){blocking.push('event-near');reasons.push('주요 경제·기업 발표 일정 임박')}
  const trend=stock.setup.trend;
  if(trend==='down')reasons.push('종목의 확정 일봉 하락 추세');
