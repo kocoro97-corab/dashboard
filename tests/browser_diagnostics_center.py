@@ -49,6 +49,7 @@ async def main():
       await page.evaluate('(scale)=>document.documentElement.style.zoom=String(scale)',scale)
       await page.evaluate('()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))')
       assert await page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+      assert await page.locator('.dv-center td,.dv-center th').evaluate_all('(cells)=>cells.every(c=>c.scrollWidth<=c.clientWidth+1)'), 'diagnostic cell text must wrap without clipping'
       await page.screenshot(path=str(args.output/(str(width)+'-css-zoom-'+str(scale)+'.png')))
      await page.evaluate('document.documentElement.style.zoom="1"')
      await h.go('strategy');assert await page.locator('[data-module=five-minute-reference-v1]').count()==0
