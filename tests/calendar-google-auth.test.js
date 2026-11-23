@@ -10,6 +10,7 @@ async function main(){
  assert.equal(auth.allowedUrl(good)!==null,true);
  assert.equal(auth.allowedUrl('https://evil.example/steal?'+good.split('?')[1]),null);
  assert.equal(auth.allowedUrl(good.replace('calendar.readonly','calendar.events')),null);
+ assert.equal(auth.allowedUrl(good.replace(encodeURIComponent(SCOPE),encodeURIComponent(SCOPE+' https://www.googleapis.com/auth/calendar.events'))),null);
  assert.equal(auth.allowedUrl(good.replace('state=secure-nonce','state=')),null);
  assert.equal(transport.configured(),false);
  assert.equal(transport.initialize(),false);
