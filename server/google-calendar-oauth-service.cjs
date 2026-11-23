@@ -19,7 +19,7 @@ const SCOPE='https://www.googleapis.com/auth/calendar.readonly';
 const MAX_EVENTS=300,MAX_CALENDARS=30,STATE_TTL=600;
 const fail=(code)=>{const error=new Error(code);error.code=code;return error};
 const hexHash=s=>crypto.createHash('sha256').update(s).digest('hex');
-const safeDate=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&new Date(s+'T00:00:00Z').toISOString().slice(0,10)===s;
+const safeDate=s=>{if(typeof s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s))return false;const d=new Date(s+'T00:00:00Z');return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===s};
 const identityHash=s=>hexHash('MYINVEST_GCAL_IDENTITY|'+s);
 const allowedId=s=>typeof s==='string'&&s.length>0&&s.length<=200&&/^[\w.@-]+$/.test(s);
 function service({verifySession,store,google,clientId,redirectUri,secretKey,now=()=>Date.now()}){
