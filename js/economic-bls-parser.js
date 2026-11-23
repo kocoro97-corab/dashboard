@@ -59,7 +59,7 @@ function parse(ics,{retrievedAt=new Date().toISOString()}={}){
   if(head==='SUMMARY')row.summary=value;
   else if(head==='UID')row.uid=value;
   else if(head==='STATUS'&&value.toUpperCase()==='CANCELLED')row.cancelled=true;
-  else if(head==='DTSTART;TZID=AMERICA/NEW_YORK'||head==='DTSTART;TZID=US/EASTERN')row.start=value;
+  else if(head==='DTSTART;TZID=AMERICA/NEW_YORK'||head==='DTSTART;TZID=US/EASTERN'||head==='DTSTART')row.start=value; // BLS official schedule uses US Eastern wall clock for floating times.
   // Unknown TZ or all-day date intentionally unsupported; no fabricated hour.
  }
  const events=[...result.values()].sort((a,b)=>a.startsAt.localeCompare(b.startsAt)).slice(0,MAX_EVENTS);
