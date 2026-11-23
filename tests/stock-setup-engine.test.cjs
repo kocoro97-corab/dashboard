@@ -5,7 +5,7 @@ const days=Array.from({length:90},(_,i)=>new Date(Date.UTC(2026,7,1+i)).toISOStr
 function fixtures({slope=1.0,volume=1000}={}){
  return days.map((date,i)=>{
   const c=100+slope*i;
-  return {date,o:c-0.8,h:c+1.2,l:c-2,c,v:volume,closed:true};
+  return {date,o:c-0.8,h:c+0.5,l:c-2,c,v:volume,closed:true};
  });
 }
 function input(mode='swing',bars=fixtures()){
