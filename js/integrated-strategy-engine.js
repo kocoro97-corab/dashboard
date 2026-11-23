@@ -40,11 +40,18 @@ function matchRegime(regime,stock,mode){
   momentum:regime.momentum?.state||'unknown',execution:regime.execution[mode],
   referenceDay:benchmarkDay,sources:regime.evidence.slice(0,5).map(x=>({symbol:x.symbol,source:x.source,asOf:x.asOf}))};
 }
-function matchSector(sector,stock){
+function matchSector(sector,stock,sectorLink){
  if(!sector||sector.status!=='descriptive'||sector.market!==stock.market||sector.asOf!==stock.asOf||
   sector.rotation?.status!=='descriptive'||!['industry','theme','sector_etf_proxy'].includes(sector.type)||
   typeof sector.source!=='string'||!sector.source.trim()||!safeNumber(sector.rotation.relative5dPp)||!safeNumber(sector.rotation.relative20dPp))
   return {status:'unknown',reason:'동일 거래일 산업·테마 상대강도 근거 미확인'};
+ // Sector strength is relevant to this stock ONLY with independently
+ // verified, same-session industry/theme membership. Never assign a hot
+ // sector's strength to an unrelated stock because both exist in cache.
+ if(!sectorLink||sectorLink.verified!==true||sectorLink.symbol!==stock.symbol||
+  sectorLink.market!==stock.market||sectorLink.sectorId!==sector.id||
+  sectorLink.asOf!==stock.asOf||typeof sectorLink.source!=='string'||!sectorLink.source.trim())
+  return {status:'unknown',reason:'종목·산업 소속 관계 검증 자료 없음'};
  return {status:'verified',sectorId:sector.id||null,sectorName:sector.name||'산업명 미확인',
   relative5dPp:round(sector.rotation.relative5dPp),relative20dPp:round(sector.rotation.relative20dPp),
   isProxy:sector.type==='sector_etf_proxy',source:sector.source,asOf:sector.asOf};
@@ -78,7 +85,7 @@ function holdingEvidence(holding,stock){
  return {status:'verified',costRelation:state,costReturnPct:pnl,
   scope:'단일 검증된 보유 기록 기준 · 계좌별 원금과 수량은 별도 비공개 화면 유지'};
 }
-function assess({mode='swing',intent='candidate',stock,regime=null,sector=null,event=null,holding=null,
+function assess({mode='swing',intent='candidate',stock,regime=null,sector=null,sectorLink=null,event=null,holding=null,
  nowDay=null}={}){
  if(!['day','swing'].includes(mode)||!['candidate','holding'].includes(intent))throw Error('STRATEGY_INPUT_INVALID');
  const verified=validateStock(stock,mode);
@@ -87,7 +94,7 @@ function assess({mode='swing',intent='candidate',stock,regime=null,sector=null,e
  if(!verified.ok)return {...base,status:'insufficient',label:'근거 부족 · 판단 보류',reasons:[verified.reason],evidence:[],conditions:[],blocking:['stock-unverified'],action:'no-action'};
  if(nowDay!==null&&(!validDay(nowDay)||nowDay<stock.asOf||dayDiff(nowDay,stock.asOf)>10))
   return {...base,status:'insufficient',label:'일봉 기준일 오래됨 · 판단 보류',reasons:['기준일 검증 실패'],evidence:[],conditions:[],blocking:['stale-stock'],action:'no-action'};
- const context=matchRegime(regime,stock,mode),group=matchSector(sector,stock),calendar=checkEvent(event,stock,mode);
+ const context=matchRegime(regime,stock,mode),group=matchSector(sector,stock,sectorLink),calendar=checkEvent(event,stock,mode);
  const owned=intent==='holding'?holdingEvidence(holding,stock):{status:'not-applicable'};
  const reasons=[],blocking=[],conditions=[],evidence=[{kind:'stock',symbol:stock.symbol,asOf:stock.asOf,source:stock.evidence.source}];
  if(context.status!=='verified'){blocking.push('market-unverified');reasons.push(context.reason)}
