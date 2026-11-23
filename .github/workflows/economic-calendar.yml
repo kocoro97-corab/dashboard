@@ -6,6 +6,7 @@ on:
       - 'js/economic-*.js'
       - 'scripts/collect-economic-calendar.cjs'
       - 'tests/economic-*.js'
+      - 'tests/economic-*.cjs'
       - '.github/workflows/economic-calendar.yml'
   workflow_dispatch:
 permissions:
@@ -30,6 +31,7 @@ jobs:
           node --check scripts/collect-economic-calendar.cjs
           node tests/economic-bls-parser.test.js
           node tests/economic-calendar.test.js
+          node tests/economic-collector.test.cjs
       - name: Fetch official BLS schedule and validate it
         run: node scripts/collect-economic-calendar.cjs
       - name: Publish verified snapshot on development branch only
