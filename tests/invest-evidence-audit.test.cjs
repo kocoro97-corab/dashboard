@@ -33,6 +33,12 @@ const base={market:'US',mode:'swing',nowDay,now,marketData:market,sectorData:sec
  assert.equal(r.refreshPlan[0].allowAutoFetch,false);
 }
 {
+ const receivedNow='2026-11-23T10:56:00.000Z';
+ const r=A.audit({...base,marketData:{...market,evidence:market.evidence.map(x=>({...x,asOf:'2026-11-18T10:53:00.000Z',receivedAt:receivedNow}))}});
+ assert.equal(r.evidence[0].status,'stale','recent receipt of old source data is still stale');
+ assert.equal(r.evidence[0].reasons.includes('원천 지수 관측시각 오래됨 · 재수신과 별개'),true);
+}
+{
  const r=A.audit({...base,marketData:{...market,evidence:market.evidence.map((x,i)=>({...x,referenceDay:i?'2026-11-20':nowDay}))}});
  assert.equal(r.status,'invalid');
  assert.equal(r.evidence[0].status,'invalid');
