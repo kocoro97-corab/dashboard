@@ -17,7 +17,7 @@ assert.throws(()=>svc.normalize({...payload,events:new Array(501).fill(a)},now),
 assert.equal(svc.normalize({...payload,events:[a,a]},now).events.length,1,'duplicate symbol quarter collapsed');
 assert.equal(svc.normalize({...payload,events:[{...a,dateStatus:'estimated',evidence:'vendor_estimate',date:'2026-11-24'},a]},now).events.length,1);
 async function main(){
- let read=0;const fetcher=async()=>{read++;return {ok:true,text:async()=>JSON.stringify(payload)}};
+ let read=0;const livePayload={...payload,retrievedAt:new Date().toISOString()};const fetcher=async()=>{read++;return {ok:true,text:async()=>JSON.stringify(livePayload)}};
  await svc.refresh(true,fetcher);
  assert.equal(svc.current().status,'ready');
  assert.equal(svc.month(2026,11).length,2);
