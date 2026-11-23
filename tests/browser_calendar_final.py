@@ -15,6 +15,14 @@ async def main():
   checktime=max(datetime.datetime.fromisoformat(d['retrievedAt'].replace('Z','+00:00')) for d in snapshots)+datetime.timedelta(minutes=1)
   async with async_playwright() as p:
    browser=await p.chromium.launch()
+   direct=await Harness(browser,artifact,synthetic_feeds(),1440,published=args.published).start_browser(tmp)
+   try:
+    await direct.page.clock.install(time=checktime);await direct.login('strategy')
+    await direct.page.wait_for_function("()=>MYInvestOfficialPolicyCalendar.current().status==='ready'")
+    assert await direct.page.evaluate('MYInvestBokPolicySchedule.list(2026).length===8&&MYInvestFomcSchedule.list(2027).length===8')
+    assert not direct.errors
+    print(json.dumps({'width':1440,'status':'PASS','case':'DIRECT_STRATEGY_POLICY_FIRST_LOAD','authentication':'SYNTHETIC','publishedAssets':args.published,'actualNhCalls':0}),flush=True)
+   finally:await direct.close()
    for width in [1440,690,344]:
     h=await Harness(browser,artifact,synthetic_feeds(),width,published=args.published).start_browser(tmp);page=h.page;reads=[]
     page.on('request',lambda r:reads.append(r.url.split('?')[0]) if '/data/' in r.url else None)
