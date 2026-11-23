@@ -18,7 +18,7 @@ const benchmark={market:'US',symbol:'SPY',verified:true,source:'Yahoo verified d
 const members=[{symbol:'MSFT',name:'MSFT',changePct:2,turnover:1000,sourceVerified:true,source:'verified'},
  {symbol:'NVDA',name:'NVDA',changePct:3,turnover:2000,sourceVerified:true,source:'verified'},
  {symbol:'AAPL',name:'AAPL',changePct:-1,turnover:3000,sourceVerified:true,source:'verified'}];
-const sample=sector('XLK',1.2,{members,universeCount:3,turnoverCurrency:'USD'});
+const sample=sector('XLK',1.2,{members,universeCount:3,turnoverCurrency:'USD',membersAsOf:benchmark.bars.at(-1).date});
 const first=E.assess({market:'US',benchmark,candidates:[sample,sector('XLF',0.1)]});
 assert.equal(first.status,'descriptive');
 assert.equal(first.coverage.analysed,2);
@@ -56,6 +56,8 @@ assert.equal(uncertain.candidates[0].turnover.status,'partial');
 assert.equal(uncertain.candidates[0].turnover.value,6000);
 const unknownUnit=E.assess({market:'US',benchmark,candidates:[{...sample,turnoverCurrency:'KRW'}]});
 assert.equal(unknownUnit.candidates[0].turnover.status,'unavailable');
+assert.equal(E.assess({market:'US',benchmark,candidates:[{...sample,membersAsOf:'2026-01-01'}]}).candidates[0].breadth.status,'unavailable');
+assert.equal(E.assess({market:'US',benchmark,candidates:[{...sample,membersAsOf:'2026-01-01'}]}).candidates[0].memberRank.status,'unavailable');
 assert.equal(E.memberRank([{...members[0]},{...members[1]}]).status,'insufficient');
 const badSeries=E.series([{date:'2026-01-01',close:100},{date:'2026-01-01',close:101}]);
 assert.equal(badSeries.status,'unavailable');
