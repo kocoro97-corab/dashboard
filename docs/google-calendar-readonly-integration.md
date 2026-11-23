@@ -39,3 +39,29 @@ When no trusted adapter is connected, the calendar clearly says "미연결", per
 - Cache isolation across logout, calendar switches and concurrent sessions
 - PC / Fold6 visual smoke test and regression suite
 - No changes to production GAS, Sheets or release branch without separate approval
+
+## Frontend relay bridge (implemented, disabled by default)
+
+Added:
+- `js/calendar-google-auth.js` validates the trusted consent URL (Google accounts HTTPS, code flow, state, client_id and readonly scope), checks server-issued capability, attaches the provider only after verification and purges cache on revoke/logout.
+- `js/calendar-google-transport.js` routes actions through the existing authenticated `DashboardTransport.post` **only** when a trusted relay config includes `googleCalendarReadOnly: true` and `mode: "relay"`.
+- Calendar UI shows connect / confirm / disconnect controls only after an authenticated relay capability has been configured. Without that capability it remains disconnected; .ics import still works.
+
+**Five exact relay actions required before activating the feature:**
+
+| action | trusted backend response fields | rule |
+|---|---|---|
+| `googleCalendarStatus` | `{success:true,connected:boolean,readOnly:boolean,scopes:string[]}` | verify account bound to MY INVEST user and readonly consent |
+| `googleCalendarBegin` | `{success:true,authorizationUrl:"https://accounts.google.com/o/oauth2/v2/auth?..."}` | backend generates CSRF state + PKCE challenge and stores authorization pending for same validated MY INVEST principal |
+| `googleCalendarList` | `{success:true,calendars:[{id,name,primary}]}` | limit 30, no raw profile |
+| `googleCalendarEvents` | `{success:true,events:[{id,date,title,calendarId}]}` | validate month and ownership of each requested calendar ID, max 300 |
+| `googleCalendarRevoke` | `{success:true}` | unlink/revoke Google consent and destroy server secrets |
+
+These actions must be implemented and explicitly allowlisted in the relay, not only on GAS. The relay must accept the site's authenticated session forwarded by DashboardTransport, but **not trust token format as proof of identity**. It must validate token against the authoritative MY INVEST session service before linking it to a Google principal. The callback must validate state and PKCE, exchange the code on the server only, and store tokens server-side using authenticated encryption under per-user keys. Use no token/PII in query strings or logs.
+
+OAuth client ID, redirect URI, relay deployment and key-management configuration are **not provided**. Consequently no real OAuth token exchange or production Google Calendar fetch has been performed. Keep flag disabled until deployment/security gates pass.
+
+Google provider API references:
+- https://developers.google.com/identity/protocols/oauth2/web-server
+- https://developers.google.com/workspace/calendar/api/v3/reference/calendarList/list
+- https://developers.google.com/workspace/calendar/api/v3/reference/events/list
