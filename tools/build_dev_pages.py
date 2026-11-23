@@ -134,6 +134,9 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True, pub
             candidate=checked_calendar(public_data/name)
             if candidate and (not selected or calendar_time(candidate[1]['retrievedAt'])>=calendar_time(selected[1]['retrievedAt'])):selected=candidate
         if not selected:
+            # Explicit unavailable resource, never an empty successful schedule.
+            expected={'economic-events.json':'BLS','bea-events.json':'BEA','bok-stats-events.json':'BOK','earnings-events.json':'VERIFIED_EARNINGS','policy-events.json':'OFFICIAL_POLICY'}[name]
+            (output/'data'/name).write_text(json.dumps({'schemaVersion':1,'source':expected,'status':'unavailable','reason':'NO_FRESH_VERIFIED_SNAPSHOT','retrievedAt':None,'events':[]}))
             calendar_validation.append({'file':name,'status':'UNAVAILABLE'});continue
         raw,metadata=selected
         (output/'data'/name).write_bytes(raw)

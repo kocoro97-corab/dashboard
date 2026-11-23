@@ -18,3 +18,16 @@ class CalendarPublication(unittest.TestCase):
    row=json.loads((ROOT/'data/earnings-events.json').read_text());row['retrievedAt']=datetime.datetime.now(datetime.timezone.utc).isoformat();row['events'][0]['accountNumber']='SYNTHETIC_PRIVATE_CANARY';(data/'earnings-events.json').write_text(json.dumps(row));build(folder/'public',public_data=data)
    self.assertNotIn('SYNTHETIC_PRIVATE_CANARY',(folder/'public/data/earnings-events.json').read_text())
 if __name__=='__main__':unittest.main()
+
+class CalendarUnavailablePublication(unittest.TestCase):
+ def test_failed_validation_exports_unavailable_status_not_unverified_rows(self):
+  import subprocess
+  from unittest.mock import patch
+  original=subprocess.run
+  def refused(args,*positional,**kwargs):
+   if isinstance(args,list) and args[0]=='node':return subprocess.CompletedProcess(args,2,stdout=b'',stderr=b'SYNTHETIC_VALIDATION_REFUSAL')
+   return original(args,*positional,**kwargs)
+  with tempfile.TemporaryDirectory() as temp,patch('build_dev_pages.subprocess.run',side_effect=refused):
+   root=Path(temp)/'public';build(root)
+   for name in ['economic-events.json','bea-events.json','bok-stats-events.json','earnings-events.json','policy-events.json']:
+    row=json.loads((root/'data'/name).read_text());self.assertEqual(row['status'],'unavailable');self.assertIsNone(row['retrievedAt']);self.assertEqual(row['events'],[])

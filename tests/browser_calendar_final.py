@@ -1,7 +1,7 @@
 """Calendar/public snapshot replay through real local Worker, synthetic authentication.
 No live user login, Google credentials, NH calls, account storage or orders.
 """
-import argparse,asyncio,datetime,json,sys,tempfile
+import argparse,asyncio,datetime,hashlib,json,sys,tempfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path[:0]=[str(ROOT/'tools'),str(ROOT/'tests')]
 from playwright.async_api import async_playwright,expect
@@ -13,6 +13,15 @@ async def main():
   artifact=Path(tmp)/'public';build(artifact,relay_endpoint=ENDPOINT)
   snapshots=[json.loads((ROOT/'data'/f).read_text()) for f in ['economic-events.json','bea-events.json','bok-stats-events.json','earnings-events.json','policy-events.json']]
   checktime=max(datetime.datetime.fromisoformat(d['retrievedAt'].replace('Z','+00:00')) for d in snapshots)+datetime.timedelta(minutes=1)
+  if args.published:checktime=datetime.datetime.now(datetime.timezone.utc)
+  else:
+   # Replay original captured bytes at capture time, even after their live TTL expires.
+   # This temporary synthetic fixture is never published or re-dated.
+   manifest=json.loads((artifact/'asset-manifest.json').read_text())
+   for name in ['economic-events.json','bea-events.json','bok-stats-events.json','earnings-events.json','policy-events.json']:
+    raw=(ROOT/'data'/name).read_bytes();(artifact/'data'/name).write_bytes(raw);manifest['data/'+name]=hashlib.sha256(raw).hexdigest()
+   (artifact/'asset-manifest.json').write_text(json.dumps(manifest))
+
   async with async_playwright() as p:
    browser=await p.chromium.launch()
    direct=await Harness(browser,artifact,synthetic_feeds(),1440,published=args.published).start_browser(tmp)
@@ -32,7 +41,7 @@ async def main():
      await page.get_by_role('button',name='투자 캘린더',exact=True).click()
      dialog=page.get_by_role('dialog',name='투자 일정 캘린더');await dialog.wait_for()
      await page.wait_for_function("()=>MYInvestEconomicCalendar.current().status==='ready'&&MYInvestBeaCalendar.current().status==='ready'&&MYInvestBokStatsCalendar.current().status==='ready'&&MYInvestEarningsCalendar.current().status==='ready'&&MYInvestOfficialPolicyCalendar.current().status==='ready'")
-     await expect(dialog).to_contain_text('BLS '+str(len(snapshots[0]['events']))+'건')
+     count=await page.evaluate('MYInvestEconomicCalendar.current().events.length');await expect(dialog).to_contain_text('BLS '+str(count)+'건')
      assert await dialog.locator('a[href="https://www.bls.gov/schedule/news_release/bls.ics"]').count()>=1
      assert await dialog.locator('.nev5-day').count()>=28
      assert await dialog.evaluate('e=>e.querySelector(".nev5-modal").scrollWidth<=e.querySelector(".nev5-modal").clientWidth+1')
