@@ -39,7 +39,7 @@ jobs:
           python3 - <<'PY'
           import hashlib,json,os,pathlib,shutil,subprocess,datetime
           pages=pathlib.Path('pages');source=pathlib.Path('source');report=json.load(open('/tmp/calendar-result.json'))
-          names={'BLS':'economic-events.json','BEA':'bea-events.json','BOK':'bok-stats-events.json','EARNINGS':'earnings-events.json'}
+          names={'BLS':'economic-events.json','BEA':'bea-events.json','BOK':'bok-stats-events.json','EARNINGS':'earnings-events.json','VERIFIED_EARNINGS':'earnings-events.json'}
           manifest=json.loads((pages/'asset-manifest.json').read_text());rows=[]
           for row in report['rows']:
               name=names[row['source']];dest=pages/'data'/name;status='FAILED'
