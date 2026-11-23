@@ -44,3 +44,9 @@ The existing source collectors are retained as read-only CI artifact jobs, avoid
 The development Pages repository's default branch is already **dev-pages**, independently of protected source **main**. A scheduled public-data refresh can therefore reside there without changing source main, production Pages, GAS or account stores. Its exact tested revision and actual run result are tracked in the final task result; no source-main schedule or operating scheduler is activated.
 
 Operating deployment is not approved by this review. Future earnings coverage, backend Google setup, live user/device authentication and unattended refresh verification must remain distinct from synthetic PASS results. Actual NH/account/order calls and operating/account-store writes in this work: zero.
+
+## Legacy manual-note ownership gate
+
+An offline two-context reproduction confirms that `myinvest_events_manual_v1` is a browser-wide legacy key, independent of the authenticated session. Google/ICS session cleanup does not make these existing manual notes account-private. The UI now explicitly labels their shared-browser scope. No existing notes were read from a real browser, moved, assigned to a guessed owner, deleted or overwritten.
+
+Account-private persistent manual notes are NOT complete: this requires the authoritative stable principal and a reviewed ownership/migration policy for unscoped existing records. Do not claim the overall multi-user calendar isolation gate passed based only on Google mocks. Real-account/backend configuration and legacy ownership decisions remain required before an operating release.

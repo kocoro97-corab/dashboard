@@ -46,7 +46,7 @@ async def main():
      await page.screenshot(path=str(args.output/(str(width)+'-calendar.png')))
      await page.keyboard.press('Escape');await h.go('sectors');await h.go('strategy');await expect(page.get_by_label('공식 경제지표 발표 일정 위험 점검')).to_be_visible()
      assert await page.locator('[data-module="strategy-scenario-compare-v1"]').count()==1
-     await h.go('news');await expect(page.locator('[data-news-block="briefing"]')).to_be_visible()
+     await h.go('news');await expect(page.locator('[data-news-block="briefing"]')).to_be_visible();await expect(page.locator('.nev5')).to_contain_text('공용 메모')
      await page.evaluate('logout()');await page.wait_for_function('()=>DashboardShell.getStatus().page===null');assert await page.get_by_role('dialog').count()==0
      assert await page.evaluate('MYInvestIcsCalendar.list().length===0&&!MYInvestGoogleCalendarSync.status().connected&&!MYInvestGoogleCalendarAuth.state().available')
      assert not h.errors,h.errors
