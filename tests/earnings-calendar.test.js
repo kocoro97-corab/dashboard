@@ -11,7 +11,7 @@ assert.equal(svc.normalize(payload,now).events.length,2);
 assert.equal(svc.normalize({...payload,events:[{...a,date:'2026-11-32'}]},now).events.length,0);
 assert.equal(svc.normalize({...payload,events:[{...a,sourceUrl:'https://untrusted.example/announcement'}]},now).events.length,0);
 assert.equal(svc.normalize({...payload,events:[{...a,dateStatus:'confirmed',evidence:'vendor_estimate'}]},now).events.length,0);
-assert.equal(svc.normalize({...payload,events:[{...a,startsAt:'2026-11-25T01:00:00.000Z'}]},now).events.length,0,'incorrect KST day rejected only if mismatch');
+assert.equal(svc.normalize({...payload,events:[{...a,startsAt:'2026-11-24T14:00:00.000Z'}]},now).events.length,0,'incorrect KST day rejected only if mismatch');
 assert.throws(()=>svc.normalize({...payload,retrievedAt:'2026-11-20T00:00:00.000Z'},now),/EARNINGS_SNAPSHOT_STALE/);
 assert.throws(()=>svc.normalize({...payload,events:new Array(501).fill(a)},now),/EARNINGS_SCHEMA_INVALID/);
 assert.equal(svc.normalize({...payload,events:[a,a]},now).events.length,1,'duplicate symbol quarter collapsed');
