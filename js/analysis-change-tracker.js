@@ -40,6 +40,20 @@ function auditBrief(a){
   canPresentAsVerified:a.canPresentAsVerified===true&&parts.every(k=>map[k]==='usable'),
   sources:map};
 }
+function publicSignals(input,scopeDay){
+ if(input==null)return {status:'missing'};
+ if(typeof input!=='object'||input.asOf!==scopeDay||input.verified!==true)
+  return {status:'unavailable'};
+ const market=input.market,sector=input.sector;
+ if(!market||!sector||!['up','down','mixed'].includes(market.direction)||
+   !['high','elevated','reference-low','unknown'].includes(market.risk)||
+   typeof sector.id!=='string'||!/^[A-Za-z0-9^._=-]{1,35}$/.test(sector.id)||
+   !finiteNumber(sector.relative5dPp)||!finiteNumber(sector.relative20dPp))
+  return {status:'unavailable'};
+ return {status:'ready',market:{direction:market.direction,risk:market.risk},
+   sector:{id:sector.id,relative5dPp:sector.relative5dPp,relative20dPp:sector.relative20dPp}};
+}
+function finiteNumber(v){return typeof v==='number'&&Number.isFinite(v)}
 function verify(s,day){
  if(!s||s.schemaVersion!==1||!validDate(s.day)||s.day>day||
   !['US','KR'].includes(s.market)||!['day','swing'].includes(s.mode)||
@@ -56,7 +70,7 @@ function verify(s,day){
    ids.add(key);all.push(item);
   }
  }
- return {ok:true,audit,items:all};
+ return {ok:true,audit,items:all,signals:publicSignals(s.signals,s.day)};
 }
 function compare({previous,current,today}={}){
  if(!validDate(today))throw Error('CHANGE_DATE_REQUIRED');
@@ -67,6 +81,36 @@ function compare({previous,current,today}={}){
   age(today,current.day)>10||age(today,previous.day)>30)
   return {status:'unavailable',reason:'시장·투자기간·기준일 불일치 또는 과거 기록 만료',changes:[],recheck:[]};
  const changes=[],recheck=[],before=new Map(prev.items.map(x=>[x.intent+'|'+x.symbol,x]));
+ const signalsComparable=prev.signals.status==='ready'&&cur.signals.status==='ready'&&
+   prev.audit.canPresentAsVerified&&cur.audit.canPresentAsVerified;
+ if(signalsComparable){
+  const pm=prev.signals.market,cm=cur.signals.market;
+  if(pm.direction!==cm.direction){
+   changes.push({kind:'market-direction-changed',symbol:null,intent:null,status:'observed',
+    from:pm.direction,to:cm.direction,label:'시장 일일 방향 관측 변화 · 추세 예측 아님'});
+   recheck.push({symbol:null,intent:null,reason:'시장 국면 재점검'});
+  }
+  if(pm.risk!==cm.risk){
+   const increased=(cm.risk==='high'&&pm.risk!=='high')||
+     (cm.risk==='elevated'&&pm.risk==='reference-low');
+   changes.push({kind:'market-risk-changed',symbol:null,intent:null,
+    status:increased?'warning':'requires-context',from:pm.risk,to:cm.risk,
+    label:increased?'시장 위험 지표 구간 상승':'시장 위험 지표 구간 변화 · 재확인'});
+   recheck.push({symbol:null,intent:null,reason:'시장 위험 근거 재평가'});
+  }
+  const ps=prev.signals.sector,cs=cur.signals.sector;
+  if(ps.id===cs.id){
+   const relativeChange=cs.relative5dPp-ps.relative5dPp;
+   if(Math.abs(relativeChange)>=0.5){
+    changes.push({kind:'sector-relative-strength-changed',symbol:null,intent:null,
+     status:'observed',sectorId:cs.id,delta5dPp:Math.round(relativeChange*10000)/10000,
+     label:relativeChange<0?'산업 5일 상대강도 약화 관측':'산업 5일 상대강도 개선 관측'});
+    recheck.push({symbol:null,intent:null,reason:'산업 상대강도 변화 점검'});
+   }
+  }else recheck.push({symbol:null,intent:null,reason:'비교 산업 식별자 변경 · 강도 직접 비교 불가'});
+ }else if(prev.signals.status!=='missing'||cur.signals.status!=='missing'){
+  recheck.push({symbol:null,intent:null,reason:'시장·산업 변화 비교를 위한 검증된 동일 기준일 근거 부족'});
+ }
  const after=new Map(cur.items.map(x=>[x.intent+'|'+x.symbol,x]));
  // Coverage must be compared BEFORE interpreting new/absent items.
  const sourceChanges=[];
@@ -89,11 +133,13 @@ function compare({previous,current,today}={}){
    changes.push({kind:'risk-escalated',symbol:item.symbol,intent:item.intent,
     status:'warning',label:'새로운 위험 경고 발생',newBlocking:newlyBlocked});
    recheck.push({symbol:item.symbol,intent:item.intent,reason:'새로운 위험 경고 우선 점검'});
-  }else if(old.blocked&&!item.blocked){
+  }else if(old.blocked&&!item.blocked&&cur.audit.canPresentAsVerified){
    changes.push({kind:'risk-appears-resolved',symbol:item.symbol,intent:item.intent,
     status:'requires-context',label:'이전 위험 경고 해제 여부 재확인'});
    recheck.push({symbol:item.symbol,intent:item.intent,reason:'위험 해소 근거 확인 필요'});
   }
+  if(old.blocked&&!item.blocked&&!cur.audit.canPresentAsVerified)
+   recheck.push({symbol:item.symbol,intent:item.intent,reason:'일부 근거 미연결 · 이전 위험 해소 미확정'});
   if(old.lane!==item.lane){
    changes.push({kind:'review-lane-changed',symbol:item.symbol,intent:item.intent,
     status:'observed',from:old.lane,to:item.lane,label:'검토 분류 변화 · 기대수익률 변화 아님'});
@@ -125,7 +171,7 @@ function compare({previous,current,today}={}){
  // Priority is an examination sequence; never a trading/return score.
  const order={warning:0,'requires-context':1,observed:2,unknown:3};
  changes.sort((a,b)=>(order[a.status]??4)-(order[b.status]??4)||
-  a.intent.localeCompare(b.intent)||a.symbol.localeCompare(b.symbol)||a.kind.localeCompare(b.kind));
+  String(a.intent||'').localeCompare(String(b.intent||''))||String(a.symbol||'').localeCompare(String(b.symbol||''))||a.kind.localeCompare(b.kind));
  const unique=new Map(recheck.map(r=>[(r.intent||'all')+'|'+(r.symbol||'all')+'|'+r.reason,r]));
  return {schemaVersion:1,status:snapshotTrusted?'comparable':'partial',
   market:cur.audit.market,mode:cur.audit.mode,
