@@ -44,17 +44,19 @@ function googleApi({clientId,clientSecret,fetchImpl=globalThis.fetch,timeoutMs=1
    if(!response.ok)throw failure('GOOGLE_REVOKE_FAILED');
   },
   calendars:async(accessToken)=>{
-   const results=[],seen=new Set();let pageToken='';
+   const results=[],seen=new Set(),tokens=new Set();let pageToken='';
    for(let page=0;page<4;page++){
     const u=new URL(CALENDAR+'/users/me/calendarList');u.searchParams.set('maxResults','100');
     if(pageToken)u.searchParams.set('pageToken',pageToken);
     const d=await read(u.href,{headers:headers(accessToken)});
     if(!Array.isArray(d.items))throw failure('GOOGLE_RESPONSE_INVALID');
-    for(const it of d.items){if(results.length>=30)break;if(typeof it?.id!=='string'||seen.has(it.id))continue;seen.add(it.id);results.push({id:it.id,name:typeof it.summary==='string'?it.summary:'내 캘린더',primary:it.primary===true})}
-    if(results.length>=30||typeof d.nextPageToken!=='string'||!d.nextPageToken)break;
+    for(const it of d.items){if(typeof it?.id!=='string'||seen.has(it.id))continue;if(results.length>=30)throw failure('GOOGLE_CALENDAR_LIMIT');seen.add(it.id);results.push({id:it.id,name:typeof it.summary==='string'?it.summary:'내 캘린더',primary:it.primary===true})}
+    if(d.nextPageToken!=null&&typeof d.nextPageToken!=='string')throw failure('GOOGLE_RESPONSE_INVALID');
+    if(!d.nextPageToken)return results;
+    if(tokens.has(d.nextPageToken)||page===3)throw failure('GOOGLE_PAGINATION_INCOMPLETE');
+    tokens.add(d.nextPageToken);
     pageToken=d.nextPageToken;
    }
-   return results;
   },
   events:async(accessToken,{calendarId,year,month,maxResults=300})=>{
    if(typeof calendarId!=='string'||!calendarId||!Number.isInteger(year)||!Number.isInteger(month)||month<1||month>12)throw failure('GOOGLE_RANGE_INVALID');
@@ -64,12 +66,22 @@ function googleApi({clientId,clientSecret,fetchImpl=globalThis.fetch,timeoutMs=1
    u.searchParams.set('timeMin',beginning);u.searchParams.set('timeMax',end);
    u.searchParams.set('timeZone','Asia/Seoul');u.searchParams.set('singleEvents','true');
    u.searchParams.set('orderBy','startTime');u.searchParams.set('maxResults',String(Math.min(300,Math.max(1,maxResults))));
-   const d=await read(u.href,{headers:headers(accessToken)});
-   if(!Array.isArray(d.items))throw failure('GOOGLE_RESPONSE_INVALID');
-   return d.items.filter(item=>item?.status!=='cancelled').map(item=>{
-    const start=item?.start?.date||kstDate(item?.start?.dateTime);
-    return {id:item?.id,date:start,title:item?.summary||'일정',calendarId};
-   }).filter(x=>typeof x.id==='string'&&typeof x.date==='string'&&x.date.slice(0,7)===ym);
+   const results=[],seen=new Set(),tokens=new Set(),limit=Math.min(300,Math.max(1,maxResults));
+   for(let page=0;page<4;page++){
+    const d=await read(u.href,{headers:headers(accessToken)});
+    if(!Array.isArray(d.items))throw failure('GOOGLE_RESPONSE_INVALID');
+    for(const item of d.items){
+     if(item?.status==='cancelled')continue;
+     const start=item?.start?.date||kstDate(item?.start?.dateTime);
+     if(typeof item?.id!=='string'||typeof start!=='string'||start.slice(0,7)!==ym||seen.has(item.id))continue;
+     if(results.length>=limit)throw failure('GOOGLE_EVENT_LIMIT');
+     seen.add(item.id);results.push({id:item.id,date:start,title:item.summary||'일정',calendarId});
+    }
+    if(d.nextPageToken!=null&&typeof d.nextPageToken!=='string')throw failure('GOOGLE_RESPONSE_INVALID');
+    if(!d.nextPageToken)return results;
+    if(tokens.has(d.nextPageToken)||page===3)throw failure('GOOGLE_PAGINATION_INCOMPLETE');
+    tokens.add(d.nextPageToken);u.searchParams.set('pageToken',d.nextPageToken);
+   }
   }
  });
 }

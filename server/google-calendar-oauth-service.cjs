@@ -95,7 +95,7 @@ function service({verifySession,store,google,clientId,redirectUri,secretKey,now=
   const raw=await google.calendars(accessToken);
   if(!Array.isArray(raw))throw fail('GOOGLE_RESPONSE_INVALID');
   const seen=new Set(),result=[];
-  for(const r of raw){if(result.length>=MAX_CALENDARS)break;if(!r||!allowedId(r.id)||seen.has(r.id))continue;seen.add(r.id);result.push({id:r.id,name:typeof r.name==='string'?r.name.slice(0,70):'내 캘린더',primary:r.primary===true})}
+  for(const r of raw){if(!r||!allowedId(r.id)||seen.has(r.id))continue;if(result.length>=MAX_CALENDARS)throw fail('GOOGLE_CALENDAR_LIMIT');seen.add(r.id);result.push({id:r.id,name:typeof r.name==='string'?r.name.slice(0,70):'내 캘린더',primary:r.primary===true})}
   return {success:true,calendars:result};
  }
  async function events(token,{year,month,calendarIds}={}){
@@ -109,12 +109,10 @@ function service({verifySession,store,google,clientId,redirectUri,secretKey,now=
   for(const calendarId of new Set(calendarIds)){
    const data=await google.events(accessToken,{calendarId,year,month,maxResults:MAX_EVENTS});
    if(!Array.isArray(data))throw fail('GOOGLE_RESPONSE_INVALID');
-   for(const e of data.slice(0,MAX_EVENTS)){
+   for(const e of data){
     if(!e||!allowedId(e.id)||!safeDate(e.date)||e.date.slice(0,7)!==months||typeof e.title!=='string'||!e.title.trim())continue;
-    const key=calendarId+'|'+e.id;if(!unique.has(key))unique.set(key,{id:e.id,date:e.date,title:e.title.trim().slice(0,100),calendarId});
-    if(unique.size>=MAX_EVENTS)break;
+    const key=calendarId+'|'+e.id;if(!unique.has(key)){if(unique.size>=MAX_EVENTS)throw fail('GOOGLE_EVENT_LIMIT');unique.set(key,{id:e.id,date:e.date,title:e.title.trim().slice(0,100),calendarId})}
    }
-   if(unique.size>=MAX_EVENTS)break;
   }
   return {success:true,events:[...unique.values()].sort((a,b)=>a.date.localeCompare(b.date))};
  }

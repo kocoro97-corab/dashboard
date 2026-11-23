@@ -1,7 +1,7 @@
 'use strict';
 // Private runtime adapter; deployment and real OAuth configuration remain disabled.
 const ACTIONS=new Set(['googleCalendarStatus','googleCalendarBegin','googleCalendarList','googleCalendarEvents','googleCalendarRevoke']);
-const CODES=new Set(['AUTH_REQUIRED','CALENDAR_ACCESS_DENIED','CALENDAR_RANGE_INVALID','GOOGLE_NOT_CONNECTED','GOOGLE_CONNECTION_CHANGED','OAUTH_ACCOUNT_MISMATCH','OAUTH_STATE_REPLAY_OR_EXPIRED','OAUTH_STATE_EXPIRED']);
+const CODES=new Set(['AUTH_REQUIRED','CALENDAR_ACCESS_DENIED','CALENDAR_RANGE_INVALID','GOOGLE_NOT_CONNECTED','GOOGLE_CONNECTION_CHANGED','GOOGLE_CALENDAR_LIMIT','GOOGLE_EVENT_LIMIT','GOOGLE_PAGINATION_INCOMPLETE','OAUTH_ACCOUNT_MISMATCH','OAUTH_STATE_REPLAY_OR_EXPIRED','OAUTH_STATE_EXPIRED']);
 function calendarHttp({backend,origin,callbackPath='/oauth/google/callback',callbackSession}={}){
  if(!backend?.handle||!backend?.callback||new URL(origin).protocol!=='https:')throw Error('CALENDAR_HTTP_CONFIGURATION_REQUIRED');
  const headers={'Access-Control-Allow-Origin':origin,'Vary':'Origin','Cache-Control':'no-store','Referrer-Policy':'no-referrer','Content-Type':'application/json','X-Content-Type-Options':'nosniff'};
