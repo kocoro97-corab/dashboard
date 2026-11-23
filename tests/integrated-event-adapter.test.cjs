@@ -27,4 +27,14 @@ assert.equal(A.eventsFromPublicContext(null,input).status,'unavailable');
 assert.equal(A.eventsFromPublicContext({coverage,events},{...input,asOf:'2026-99-99'}).status,'unavailable');
 const poison=A.eventsFromPublicContext({coverage,events:[{...events[0],sourceUrl:'http://invalid.example'}]},input);
 assert.equal(poison.events.length,0);
+// Actual MYInvestEventContext.collect() DTO intentionally has no verified
+// or market key. This adapter must still preserve vetted PUBLIC evidence.
+const sharedDTO={coverage,events:[
+ {publisher:'BLS',category:'macro',date:'2026-11-25',sourceUrl:'https://www.bls.gov/',type:'CPI'},
+ {publisher:'',category:'earnings',date:'2026-11-26',sourceUrl:'https://www.sec.gov/',type:'earnings',symbol:'SERV',dateStatus:'confirmed'}
+]};
+const fromShared=A.eventsFromPublicContext(sharedDTO,input);
+assert.equal(fromShared.status,'ready');
+assert.equal(fromShared.events.length,2);
+assert.equal(fromShared.events.filter(e=>e.kind==='earnings').length,1);
 console.log('Integrated public event adapter PASS');
