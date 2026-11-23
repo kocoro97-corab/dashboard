@@ -53,7 +53,7 @@ const base={market:'US',mode:'swing',nowDay,now,marketData:market,sectorData:sec
  assert.equal(r.symbol,null);
 }
 {
- const r=A.audit({...base,stockData:{...stock,asOf:'2026-11-01'}});
+ const r=A.audit({...base,stockData:{...stock,asOf:'2026-11-01',evidence:{...stock.evidence,asOf:'2026-11-01'}}});
  assert.equal(r.evidence[2].status,'stale');
  assert.equal(r.canPresentAsVerified,false);
 }
