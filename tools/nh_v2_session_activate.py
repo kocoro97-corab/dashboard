@@ -7,12 +7,13 @@ from pathlib import Path
 import nh_v2_upgrade as gas
 import nh_v2_persistent as edge
 import worker_code_only as worker
+import worker_active_bundle as bundle_reader
 from nh_v2_fresh import private_path, target, logical, pull
 from nh_staging_test import WebApp
 from build_nh_staging import ROOT, build, source_digest
 
 class Stop(Exception): pass
-SAFE=set('OWNER_PRIVATE_ENVIRONMENT_UNAVAILABLE OWNER_SESSION_PREFLIGHT_FAILED OLD_SOURCE_PROOF_FAILED AUTH_MANIFEST_CHANGED_STOP UNRELATED_GAS_CHANGE_STOP CLEAN_REVIEWED_SOURCE_REQUIRED ACCOUNT_ID_INVALID EXISTING_SUBDOMAIN_MISMATCH LATEST_VERSION_NOT_ACTIVE ACTIVE_WORKER_CODE_MISMATCH METADATA_BINDING_REQUIRED CONCURRENT_WORKER_CHANGE PENDING_CANDIDATE_STOP SESSION_POLICY_READBACK_FAILED UPGRADE_FAILED ROLLBACK_PROOF_FAILED CONCURRENT_GAS_CHANGE_STOP ROLLBACK_READBACK_FAILED SOURCE_ALREADY_CURRENT CHECKPOINT_EXISTS CLOUDFLARE_REQUEST_REJECTED CLOUDFLARE_RESULT_UNCONFIRMED OWNER_GOOGLE_LOGIN_REQUIRED OWNER_GOOGLE_SCOPE_REQUIRED OWNER_APPS_SCRIPT_API_REQUIRED OWNER_CLASP_AUTH_OR_COMMAND_FAILED'.split())
+SAFE=set('OWNER_PRIVATE_ENVIRONMENT_UNAVAILABLE OWNER_SESSION_PREFLIGHT_FAILED OLD_SOURCE_PROOF_FAILED AUTH_MANIFEST_CHANGED_STOP UNRELATED_GAS_CHANGE_STOP CLEAN_REVIEWED_SOURCE_REQUIRED ACCOUNT_ID_INVALID EXISTING_SUBDOMAIN_MISMATCH LATEST_VERSION_NOT_ACTIVE ACTIVE_WORKER_CODE_MISMATCH WORKER_BUNDLE_INVALID CANDIDATE_WORKER_CODE_MISMATCH CONCURRENT_WORKER_CODE_CHANGE METADATA_BINDING_REQUIRED CONCURRENT_WORKER_CHANGE PENDING_CANDIDATE_STOP SESSION_POLICY_READBACK_FAILED UPGRADE_FAILED ROLLBACK_PROOF_FAILED CONCURRENT_GAS_CHANGE_STOP ROLLBACK_READBACK_FAILED SOURCE_ALREADY_CURRENT CHECKPOINT_EXISTS CLOUDFLARE_REQUEST_REJECTED CLOUDFLARE_RESULT_UNCONFIRMED OWNER_GOOGLE_LOGIN_REQUIRED OWNER_GOOGLE_SCOPE_REQUIRED OWNER_APPS_SCRIPT_API_REQUIRED OWNER_CLASP_AUTH_OR_COMMAND_FAILED'.split())
 def safe_error(error):
  code=getattr(error,'code',str(error));out={'code':code if code in SAFE else 'OWNER_SESSION_PREFLIGHT_FAILED'}
  http=getattr(error,'http',None)
@@ -55,26 +56,31 @@ def prepare(api,account,old,probe):
  if api('GET','/accounts/'+account+'/workers/subdomain').get('subdomain')!='kocoro97':raise Stop('EXISTING_SUBDOMAIN_MISMATCH')
  if not any(b.get('name')=='MYINVEST_EXPECTED_METADATA' and b.get('type')=='secret_text' for b in bindings):raise Stop('METADATA_BINDING_REQUIRED')
  if worker.recent_versions(api,base)[0]['id']!=active['version']:raise Stop('LATEST_VERSION_NOT_ACTIVE')
- code=worker.bundle()
- if not worker.candidate_source_matches(api('GET',base+'/versions/'+active['version']+'/content/v2'),code):raise Stop('ACTIVE_WORKER_CODE_MISMATCH')
+ code=bundle_reader.parse(api('GET',base+'/versions/'+active['version']+'/content/v2'))
+ code_manifest=bundle_reader.manifest(code)
  metadata=probe();edge.verify_metadata(metadata,old)
- return {'base':base,'active':active,'settings':settings,'bindings':bindings,'code':code,'metadata':metadata}
+ return {'base':base,'active':active,'settings':settings,'bindings':bindings,'code':code,'codeManifest':code_manifest,'metadata':metadata}
 
 def assert_current(api,checkpoint):
  base=checkpoint['base']
  if worker.active(api,base)!=checkpoint['active'] or not worker.settings_equivalent(checkpoint['settings'],api('GET',base+'/settings')) or worker.recent_versions(api,base)[0]['id']!=checkpoint['active']['version']:raise Stop('CONCURRENT_WORKER_CHANGE')
+ assert_code(api,checkpoint,checkpoint['active']['version'])
+
+def assert_code(api,checkpoint,version,code='CONCURRENT_WORKER_CODE_CHANGE'):
+ if not bundle_reader.matches(api('GET',checkpoint['base']+'/versions/'+version+'/content/v2'),checkpoint['codeManifest']):raise Stop(code)
 
 def bind(api,checkpoint,plan,save=lambda:None):
  assert_current(api,checkpoint);base=checkpoint['base'];settings=checkpoint['settings']
  bindings=[{'name':b['name'],'type':'inherit','version_id':'latest'} if b['name']!='MYINVEST_EXPECTED_METADATA' else {'name':b['name'],'type':'secret_text','text':json.dumps(edge.expected(plan),separators=(',',':'))} for b in checkpoint['bindings']]
- metadata={'main_module':'worker.mjs','compatibility_date':settings['compatibility_date'],'compatibility_flags':settings.get('compatibility_flags',[]),'bindings':bindings}
+ metadata={'main_module':checkpoint['code']['entrypoint'],'compatibility_date':settings['compatibility_date'],'compatibility_flags':settings.get('compatibility_flags',[]),'bindings':bindings}
  if 'usage_model' in settings:metadata['usage_model']=settings['usage_model']
- body,mime=worker.multipart(metadata,checkpoint['code'])
+ body,mime=bundle_reader.multipart(metadata,checkpoint['code'])
  uploaded=api('POST',base+'/versions?bindings_inherit=strict',body,mime);candidate=uploaded.get('id','')
  if not worker.UUID.fullmatch(candidate):raise Stop('PENDING_CANDIDATE_STOP')
  checkpoint['candidate']=candidate;save()
  history=worker.recent_versions(api,base)
  if len(history)<2 or [x['id'] for x in history[:2]]!=[candidate,checkpoint['active']['version']] or worker.active(api,base)!=checkpoint['active'] or not worker.settings_equivalent(settings,api('GET',base+'/settings')):raise Stop('CONCURRENT_WORKER_CHANGE')
+ assert_code(api,checkpoint,candidate,'CANDIDATE_WORKER_CODE_MISMATCH')
  api('POST',base+'/deployments',{'strategy':'percentage','versions':[{'version_id':candidate,'percentage':100}]})
  checkpoint['activated']=worker.active(api,base);save()
  if checkpoint['activated']['version']!=candidate or not compatible_settings(settings,api('GET',base+'/settings')):raise Stop('CONCURRENT_WORKER_CHANGE')
@@ -86,6 +92,7 @@ def restore_worker(api,checkpoint):
   api('POST',base+'/deployments',{'strategy':'percentage','versions':[{'version_id':checkpoint['active']['version'],'percentage':100}]})
  elif current!=checkpoint['active']:raise Stop('CONCURRENT_WORKER_CHANGE')
  if worker.active(api,base)['version']!=checkpoint['active']['version'] or not worker.settings_equivalent(checkpoint['settings'],api('GET',base+'/settings')):raise Stop('ROLLBACK_READBACK_FAILED')
+ assert_code(api,checkpoint,checkpoint['active']['version'])
 
 def restore_gas(directory,old):
  current=json.loads((directory/'fresh-plan.json').read_text());bundle=directory/'bundle';original=directory/('upgrade-'+gas.revision()[:12])/'original'
@@ -144,6 +151,7 @@ def apply(directory,old,account,token):
   for attempt in range(6):
    try:
     if worker.active(api,checkpoint['base'])!=checkpoint['activated']:raise Stop('CONCURRENT_WORKER_CHANGE')
+    assert_code(api,checkpoint,checkpoint['candidate'],'CANDIDATE_WORKER_CODE_MISMATCH')
     data=probe();policy_verified(data,current)
     for name in worker.CAPABILITIES:
      if name!='sourceDigest' and data.get(name)!=checkpoint['metadata'].get(name):raise Stop('SESSION_POLICY_READBACK_FAILED')
@@ -154,7 +162,9 @@ def apply(directory,old,account,token):
     time.sleep(2)
  def restore():
   restore_worker(api,checkpoint);restore_gas(directory,old);edge.verify_metadata(probe(),old)
- return {**transaction(upgrade,binding,verify,restore),'deploymentAttempted':attempted}
+ result={**transaction(upgrade,binding,verify,restore),'deploymentAttempted':attempted,'workerModuleCount':len(checkpoint['code']['modules'])}
+ if result['status']=='PASS':result['workerCodePreserved']=True
+ return result
 
 def main():
  p=argparse.ArgumentParser(description=__doc__);p.add_argument('--environment',type=Path,required=True);mode=p.add_mutually_exclusive_group();mode.add_argument('--apply',action='store_true');mode.add_argument('--inspect',action='store_true',help='Read only existing GAS/relay policy metadata; no login or Cloudflare credential');p.add_argument('--account-id');args=p.parse_args()

@@ -8,8 +8,14 @@ from test_worker_code_only import Cloud,OLD,NEW,OTHER
 from test_nh_v2_upgrade import Client,SCRIPT
 REV='b'*40
 
+class PreservedCloud(Cloud):
+ def __call__(self,method,path,body=None,mime=None):
+  out=super().__call__(method,path,body,mime)
+  if path.endswith('/versions/'+NEW+'/content/v2') and self.fault=='candidate-code':out={**out,'body':b'// unexpected candidate change'}
+  return out
+
 def cloud():
- c=Cloud();c.settings['bindings'].append({'name':'MYINVEST_EXPECTED_METADATA','type':'secret_text'});return c
+ c=PreservedCloud();c.settings['bindings'].append({'name':'MYINVEST_EXPECTED_METADATA','type':'secret_text'});return c
 
 def metadata(plan):
  return {**s.edge.expected(plan),'success':True,'relayProfile':'persistent','revision':plan['revision'],'storeVersion':2,'foreignIdentityVersion':1,'developmentPublicMarket':True,'developmentAccountReads':True,'developmentExternalStore':True,'developmentPublicFutures':True,'developmentIndustryMarket':True,'developmentFuturesReadVersion':2,'developmentReadResilienceVersion':1,'developmentFiveMinuteReferenceVersion':1}
@@ -20,10 +26,24 @@ class BindingTests(unittest.TestCase):
  def prepare(self):return s.prepare(self.c,'a'*32,self.old,lambda:metadata(self.old))
  def test_preflight_is_read_only(self):
   self.prepare();self.assertTrue(all(c[0]=='GET' for c in self.c.calls))
- def test_active_code_mismatch_stops_before_any_upload(self):
-  self.c.content['body']=b'// other actor code'
-  with self.assertRaisesRegex(s.Stop,'ACTIVE_WORKER_CODE_MISMATCH'):self.prepare()
+ def test_existing_compiled_code_and_entrypoint_are_preserved_instead_of_replaced_by_local_code(self):
+  self.c.content.update(body=b'// existing compiled code\r\n',entrypoint='index.js')
+  with patch.object(s.worker,'bundle',side_effect=AssertionError('must not upload local worker code')):
+   cp=self.prepare();s.bind(self.c,cp,self.old)
+  parts=list(self.c.multipart.iter_parts());self.assertEqual(json.loads(parts[0].get_payload(decode=True))['main_module'],'index.js');self.assertEqual(parts[1].get_filename(),'index.js');self.assertEqual(parts[1].get_payload(decode=True),b'// existing compiled code\r\n')
+ def test_unreadable_active_bundle_stops_before_any_upload(self):
+  self.c.content['body']='not bytes'
+  with self.assertRaisesRegex(s.bundle_reader.Stop,'WORKER_BUNDLE_INVALID'):self.prepare()
   self.assertTrue(all(c[0]=='GET' for c in self.c.calls))
+ def test_multi_module_deployment_is_copied_without_losing_json_or_binary_data(self):
+  value={'entrypoint':'index.js','modules':[{'name':'index.js','type':'application/javascript+module','body':b'import "./helper.js";export default {}'},{'name':'helper.js','type':'application/javascript+module','body':b'export const value=1;'},{'name':'policy.json','type':'application/json','body':b'{"unchanged": true}\n'},{'name':'data.bin','type':'application/octet-stream','body':b'\x00\xff\x01'}]}
+  body,kind=s.bundle_reader.multipart({'main_module':'index.js'},value);self.c.content={'body':body,'contentType':kind,'entrypoint':'index.js'}
+  cp=self.prepare();s.bind(self.c,cp,self.old);parts=list(self.c.multipart.iter_parts());copied={p.get_filename():p.get_payload(decode=True) for p in parts[1:]};self.assertEqual(copied,{m['name']:m['body'] for m in value['modules']});self.assertEqual(len(cp['codeManifest']['modules']),4)
+ def test_candidate_code_change_is_detected_before_activation(self):
+  cp=self.prepare();self.c.fault='candidate-code'
+  with self.assertRaisesRegex(s.Stop,'CANDIDATE_WORKER_CODE_MISMATCH'):s.bind(self.c,cp,self.old)
+  self.assertEqual(self.c.version,OLD)
+  self.assertFalse(any(method=='POST' and path.endswith('/deployments') for method,path,body in self.c.calls))
  def test_pending_candidate_is_not_activated(self):
   self.c.uploads.append({'id':OTHER,'number':2})
   with self.assertRaisesRegex(s.Stop,'LATEST_VERSION_NOT_ACTIVE'):self.prepare()
@@ -73,6 +93,8 @@ class RolloutTests(unittest.TestCase):
   self.bad=True;result=s.apply(self.env,self.old,'a'*32,'SYNTHETIC_ONLY');self.assertEqual(result['status'],'FAIL');self.assertEqual(result['recovery'],'PASS_PREVIOUS_CONNECTION_RESTORED');self.assertEqual(self.client.version,1);self.assertEqual(self.c.version,OLD);self.assertEqual(json.loads((self.env/'fresh-plan.json').read_text()),self.old);self.assertEqual(s.logical(self.env/'bundle'),self.before)
  def test_concurrent_deployment_is_not_overwritten_by_rollback(self):
   self.concurrent=True;result=s.apply(self.env,self.old,'a'*32,'SYNTHETIC_ONLY');self.assertEqual(result['recovery'],'OWNER_REVIEW_REQUIRED');self.assertEqual(self.c.version,OTHER);self.assertEqual(self.client.version,2)
+ def test_candidate_code_mismatch_restores_gas_without_activating_changed_code(self):
+  self.c.fault='candidate-code';result=s.apply(self.env,self.old,'a'*32,'SYNTHETIC_ONLY');self.assertEqual(result['status'],'FAIL');self.assertEqual(result['recovery'],'PASS_PREVIOUS_CONNECTION_RESTORED');self.assertEqual(self.c.version,OLD);self.assertEqual(self.client.version,1);self.assertNotIn('workerCodePreserved',result)
  def test_gas_failure_never_updates_worker(self):
   calls=[];r=s.transaction(lambda:{'status':'FAIL','recovery':'PASS_PREVIOUS_CONNECTION_RESTORED'},lambda:calls.append('bind'),lambda:None,lambda:calls.append('restore'));self.assertEqual(r['status'],'FAIL');self.assertEqual(calls,[])
 

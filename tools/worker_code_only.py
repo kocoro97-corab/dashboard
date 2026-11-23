@@ -97,7 +97,7 @@ def api_client(token):
                 if len(raw) > 2 * 1024 * 1024:
                     raise Stop('CLOUDFLARE_RESPONSE_TOO_LARGE')
                 if path.endswith('/content/v2'):
-                    return {'body': raw, 'contentType': r.headers.get('Content-Type', ''), 'entrypoint': r.headers.get('cf-entrypoint')}
+                    return {'body': raw, 'contentType': r.headers.get('Content-Type', ''), 'entrypoint': r.headers.get('cf-entrypoint'), 'contentDisposition': r.headers.get('Content-Disposition')}
                 doc = json.loads(raw)
         except urllib.error.HTTPError as e:
             status = e.code

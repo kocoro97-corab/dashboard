@@ -52,8 +52,9 @@ The tool:
 1. Proves the private baseline source, identity and immutable deployment.
 2. Refuses any changed GAS module beyond `Security` and `StagingBridge`, or any
    OAuth manifest change. Refuses an unactivated latest Worker candidate.
-3. Confirms the active Worker code equals the pinned existing code and settings
-   belong to the existing development Worker. No Worker code update is needed.
+3. Confirms settings belong to the existing development Worker, then captures
+   its exact active entrypoint and module bytes. It does not require a local
+   build to match the provider's existing compiled representation.
 4. Uses the existing isolated GAS upgrader and private source/version backups.
 5. Creates a candidate with identical Worker code, strictly inherits every
    binding except `MYINVEST_EXPECTED_METADATA`, and replaces only that target
@@ -63,6 +64,22 @@ The tool:
    idle 3,600,000 ms and absolute 28,800,000 ms. Parallel actor changes are never
    overwritten. A failed readback restores the owned Worker/GAS connection, or
    explicitly returns `OWNER_REVIEW_REQUIRED` if concurrency prevents recovery.
+
+The original `ACTIVE_WORKER_CODE_MISMATCH` preflight incorrectly assumed a
+single locally generated `worker.mjs` must byte-match the active deployment.
+That assumption is unnecessary for a metadata-only update and blocked the
+owner before any mutation. The corrected tool clones the **active** bundle:
+observed entrypoint, all supported ESM/CommonJS/JSON/text/binary/Wasm/source-map module names and
+exact decoded payload bytes. No minification or whitespace equivalence is used.
+It verifies the module SHA-256/size/type manifest before the GAS change, after
+candidate upload **before activation**, during final verification and on rollback.
+Malformed, ambiguous, oversized or unsupported bundles still stop; unreadable
+code is never replaced with a local fallback. Multipart ESM and CommonJS types
+are distinct and preserved. A raw main-module HTTP response's JavaScript MIME
+alias is interpreted only with provider entrypoint evidence; it does not change
+a multipart CommonJS helper into ESM. Local files and code hashes are
+not uploaded as substitutes. Checkpoint files contain code manifests rather
+than raw module bodies, and source bodies never enter result JSON.
 
 Phase checkpoints are separate private files. Failed inactive candidate versions
 are retained as evidence, not automatically activated or deleted. Do not repeat
