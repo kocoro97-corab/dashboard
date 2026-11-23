@@ -1,0 +1,30 @@
+name: Sector rotation engine validation
+on:
+  push:
+    branches: [feat/nh-integration-v2]
+    paths:
+      - 'js/sector-rotation-engine.js'
+      - 'js/sector-rotation-adapter.js'
+      - 'tests/sector-rotation-*.cjs'
+      - '.github/workflows/sector-rotation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sector-rotation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax checks
+        run: |
+          node --check js/sector-rotation-engine.js
+          node --check js/sector-rotation-adapter.js
+          node --check tests/sector-rotation-engine.test.cjs
+          node --check tests/sector-rotation-adapter.test.cjs
+      - name: Deterministic sector strength and session tests
+        run: |
+          node tests/sector-rotation-engine.test.cjs
+          node tests/sector-rotation-adapter.test.cjs
