@@ -37,6 +37,7 @@ assert.equal(Queue.summarize({...candidateRisk,blocking:['event-near']},date).bl
 const incomplete={...base,symbol:'SMR',evidence:[{kind:'stock',symbol:'SMR',source:'verified',asOf:date}],
  status:'review-required',blocking:['events-unverified'],conditions:['확정 일봉 스윙 관찰조건 충족']};
 assert.equal(Queue.summarize(incomplete,date).reviewLane,'needs-evidence');
+assert.equal(Queue.summarize({...incomplete,blocking:['future-new-risk-gate']},date).reviewLane,'needs-evidence','unknown future blocker must fail closed');
 const weak={...base,symbol:'JOBY',evidence:[{kind:'stock',symbol:'JOBY',source:'verified',asOf:date}],
  conditions:['종목 5일 상대강도 우위']};
 assert.equal(Queue.summarize(weak,date).reviewLane,'needs-evidence','missing observed setup is not strong opportunity');
