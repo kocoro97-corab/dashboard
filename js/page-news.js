@@ -46,7 +46,7 @@ if(!enabled){
  syncBox.append(btn('Google 연결 해제',async()=>{try{await googleAuth.revoke();googleRows=[];googleMonth='';googleError='Google 캘린더 연결을 해제했습니다.'}catch{googleError='연결 해제 요청 실패. 서버 상태를 확인하세요.'}draw()}));
 }
 if(googleError)syncBox.append(el('p',googleError));
-else{
+if(enabled){
  const syncButton=btn('이번 달 일정 동기화',async()=>{
   const request=++googleRequest,month=currentMonth;googleLoading=true;googleError='';draw();
   try{const rows=await sync.events(calendarMonth.getFullYear(),calendarMonth.getMonth()+1,true);
