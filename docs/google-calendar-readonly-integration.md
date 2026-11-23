@@ -159,3 +159,16 @@ Open https://console.cloud.google.com/apis/credentials and choose the existing p
 New unit tests execute the GAS handler against the server verifier, including Korean user identifiers, renewal stability, different users, disabled/unapproved sessions, proof/signature/tenant tampering, replay/expiry and key rotation. The assembled runtime completes synthetic consent with encrypted storage and clears its cookie. Logout-before-callback is rejected without invoking the Google adapter.
 
 `browser_calendar_oauth_bootstrap.py` runs an **offline** browser at 1440/690/344. It checks the real exported CSP, actual form POST, same-site callback-cookie round trip, cookie cleanup and no session token in URLs. Synthetic HTML navigations replace mock HTTP redirects because browser interception does not reliably intercept every redirect-chain hop. Actual HTTP 303 contracts are separately tested in Node. Neither is real Google account consent or proof of the owner's mobile/browser policy.
+
+## Named private settings contract — client created
+
+`google-calendar-settings.cjs` and `calendarRuntimeFromSettings` now define the exact private setting names. They do not write any remote settings. The user has confirmed creation of the dedicated Google Cloud project and web OAuth client; creation is not proof that its secret is registered in the Worker or that the callback is live.
+
+First owner-side registration step, in **the existing `myinvest-v2-dev-relay` Worker → Settings → Variables and Secrets**:
+
+- `GOOGLE_CALENDAR_CLIENT_ID`: Google-issued web client ID, stored as Secret.
+- `GOOGLE_CALENDAR_CLIENT_SECRET`: Google-issued client secret, stored as Secret.
+
+Do not paste either value/JSON into chat, a public repository or a Pages asset. If either setting already exists, do not blindly replace it. These two registrations alone cannot enable Google. Keep `GOOGLE_CALENDAR_ENABLED` absent/false while wiring/configuration/consent checks remain pending.
+
+The approved private host must additionally supply the existing isolated metadata via `MYINVEST_EXPECTED_METADATA`, the matched private `CALENDAR_IDENTITY_BRIDGE_KEY` and persistent `GOOGLE_CALENDAR_ENCRYPTION_KEY` (each 32 bytes represented as 64 lowercase hex characters in secret settings), and injected authoritative gateway/private storage. No random key is generated or rotated implicitly. The settings reader returns null when the feature is off and emits only the fixed `CALENDAR_SETTINGS_INCOMPLETE` error when enabled settings are invalid. It never prints submitted values or enables a feature merely because secrets were registered. This wrapper does not by itself install the runtime into the active Worker/DO.

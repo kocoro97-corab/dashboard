@@ -31,4 +31,9 @@ function calendarRuntime({gateway,storage,bridgeKey,encryptionKey,scriptHash,she
   return handler(request);
  };
 }
-module.exports={calendarRuntime};
+function calendarRuntimeFromSettings({env,gateway,storage,fetchImpl,now}={}){
+ const settings=require('./google-calendar-settings.cjs').calendarSettings(env);
+ if(!settings)return null;
+ return calendarRuntime({...settings,gateway,storage,fetchImpl,now});
+}
+module.exports={calendarRuntime,calendarRuntimeFromSettings};
