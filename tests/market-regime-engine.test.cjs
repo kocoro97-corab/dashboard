@@ -118,4 +118,20 @@ function setup(region='KR'){
  const bad=bars();bad[3]={...bad[3],date:bad[2].date};
  assert.equal(engine.validHistory(bad,now,'Asia/Seoul').ok,false);
 }
-console.log('Market regime engine: 16 scenario groups PASS');
+{
+ const a=setup();
+ a.observations['^KS11']=q(100,99,'2026-11-20T15:20:00+09:00');
+ a.observations['^KQ11']=q(100,99,'2026-11-20T15:20:00+09:00');
+ const r=engine.assess(a);
+ assert.match(r.direction.label,/최근 확인 종가 기준/);
+ assert.equal(r.momentum.state,'unknown','future daily history cannot be paired with prior-day quotes');
+}
+{
+ const dates=bars().map(row=>({...row,date:row.date.slice(0,10)}));
+ const result=engine.validHistory(dates,now,'America/New_York');
+ assert.equal(result.ok,true);
+ assert.equal(result.bars.at(-1).date,'2026-11-23','US date-only session must not shift to prior day');
+ const bad=dates.map(x=>({...x}));bad[0].date='2026-99-99';
+ assert.equal(engine.validHistory(bad,now,'America/New_York').ok,false);
+}
+console.log('Market regime engine: 18 scenario groups PASS');
