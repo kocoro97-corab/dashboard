@@ -69,7 +69,7 @@ const base={market:'US',mode:'swing',nowDay,now,marketData:market,sectorData:sec
 }
 {
  const r=A.audit({...base,marketData:{...market,evidence:market.evidence.map(x=>({...x,source:' '}))}});
- assert.equal(r.evidence[0].status,'missing');
+ assert.equal(r.evidence[0].status,'invalid');
 }
 {
  const r=A.audit({...base,marketData:{...market,evidence:market.evidence.map(x=>({...x,asOf:'2026-11-24T10:53:00Z'}))}});
