@@ -80,7 +80,6 @@ function assessment({mode='swing',now=Date.now(),symbols=[]}={}){
 }
 async function refreshAll(force=false){
  if(refreshJob)return refreshJob;
- const tasks=SOURCES.map(([_,key])=>root[key]?.refresh).filter(fn=>typeof fn==='function'); // no unbound methods
  const job=Promise.allSettled(SOURCES.map(([_,key])=>typeof root[key]?.refresh==='function'?root[key].refresh(force):Promise.resolve(null))).then(()=>coverage());
  refreshJob=job;try{return await job}finally{if(refreshJob===job)refreshJob=null}
 }
