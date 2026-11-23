@@ -65,4 +65,33 @@ assert.throws(()=>Tracker.compare({previous:past,current:present,today:'not-a-da
 const cleaned=Tracker.cleanQueueItem(item('SERV',currentDay),today);
 assert.equal(cleaned.quantity,undefined);
 assert.equal(cleaned.accountNumber,undefined);
+const prevSignals={verified:true,asOf:previousDay,market:{direction:'up',risk:'reference-low'},
+ sector:{id:'US_TECH',relative5dPp:3.2,relative20dPp:4.6},credential:'PRIVATE_SECRET'};
+const newSignals={verified:true,asOf:currentDay,market:{direction:'down',risk:'high'},
+ sector:{id:'US_TECH',relative5dPp:1.8,relative20dPp:3.6},account:'PRIVATE_ACCOUNT'};
+r=Tracker.compare({previous:{...past,signals:prevSignals},
+ current:{...present,signals:newSignals},today});
+assert.equal(r.status,'comparable');
+assert.equal(r.changes.some(x=>x.kind==='market-direction-changed'),true);
+assert.equal(r.changes.some(x=>x.kind==='market-risk-changed'&&x.status==='warning'),true);
+assert.equal(r.changes.some(x=>x.kind==='sector-relative-strength-changed'&&x.delta5dPp<0),true);
+assert.equal(JSON.stringify(r).includes('PRIVATE_SECRET'),false);
+assert.equal(JSON.stringify(r).includes('PRIVATE_ACCOUNT'),false);
+r=Tracker.compare({previous:{...past,signals:prevSignals},
+ current:{...present,signals:{...newSignals,verified:false}},today});
+assert.equal(r.changes.some(x=>x.kind==='market-direction-changed'),false,'unverified market signal must not be compared');
+r=Tracker.compare({previous:{...past,signals:prevSignals},
+ current:{...present,signals:{...newSignals,asOf:previousDay}},today});
+assert.equal(r.changes.some(x=>x.kind==='sector-relative-strength-changed'),false,'mismatched market session must not create change');
+r=Tracker.compare({previous:{...past,signals:prevSignals},
+ current:{...present,signals:{...newSignals,sector:{...newSignals.sector,id:'US_BANK'}}},today});
+assert.equal(r.changes.some(x=>x.kind==='sector-relative-strength-changed'),false,'different sectors not comparable');
+const oldRisk={...past,candidates:[item('SERV',previousDay,{reviewLane:'risk-review',
+  blocked:true,blocking:['event-near']})]};
+const unverifiedRecovery={...present,audit:audit(currentDay,'partial'),
+ candidates:[item('SERV',currentDay)]};
+r=Tracker.compare({previous:oldRisk,current:unverifiedRecovery,today});
+assert.equal(r.status,'partial');
+assert.equal(r.changes.some(x=>x.kind==='risk-appears-resolved'),false,'missing coverage cannot confirm resolved danger');
+assert.equal(r.recheck.some(x=>x.reason.includes('위험 해소 미확정')),true);
 console.log('Analysis change tracker: risk escalation, membership, freshness, coverage and privacy PASS');
