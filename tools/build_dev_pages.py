@@ -45,6 +45,9 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True, pub
     if relay_endpoint:
         from urllib.parse import urlsplit
         text=text.replace("https://*.trycloudflare.com;","https://*.trycloudflare.com "+urlsplit(relay_endpoint).scheme+'://'+urlsplit(relay_endpoint).netloc+';')
+    if relay_endpoint == 'https://myinvest-v2-dev-relay.kocoro97.workers.dev/api':
+        # Exact development consent routes only; no wildcard form destinations.
+        text=text.replace("form-action 'none'", "form-action https://myinvest-v2-dev-relay.kocoro97.workers.dev/oauth/google/start https://accounts.google.com/o/oauth2/v2/auth")
     debug_anchor = '<script src="js/debug.js?v=3-safe"></script>'
     if text.count(debug_anchor) != 1:raise ValueError('DEV_DIAGNOSTIC_ANCHOR_CHANGED')
     text = text.replace(debug_anchor, '<script>window.MYINVEST_DEV_DIAGNOSTICS=true;</script>\n<script src="js/development-diagnostics.js?v=1"></script>\n'+debug_anchor)

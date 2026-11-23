@@ -51,6 +51,14 @@ async function begin(){
   return url;
  }finally{if(version===revision)busy=false}
 }
+async function openAuthorization(tab){
+ if(!backend)throw Error('BACKEND_NOT_CONFIGURED');
+ if(!tab||tab.closed)throw Error('AUTH_WINDOW_REQUIRED');
+ if(busy)throw Error('AUTH_IN_PROGRESS');
+ if(typeof backend.launchAuthorization!=='function'){tab.location.replace(await begin());return}
+ busy=true;const version=revision;
+ try{await backend.launchAuthorization(tab)}finally{if(version===revision)busy=false}
+}
 async function revoke(){
  if(!backend)throw Error('BACKEND_NOT_CONFIGURED');
  const version=revision,client=backend;
@@ -58,6 +66,6 @@ async function revoke(){
  if(version!==revision||backend!==client)return;
  bound=false;root.MYInvestGoogleCalendarSync?.disconnect();
 }
-const api=Object.freeze({configure,disconnect,state,verify,begin,revoke,allowedUrl,scope:REQUIRED_SCOPE});
+const api=Object.freeze({configure,disconnect,state,verify,begin,openAuthorization,revoke,allowedUrl,scope:REQUIRED_SCOPE});
 if(typeof module==='object'&&module.exports)module.exports=api;else root.MYInvestGoogleCalendarAuth=api;
 })(globalThis);

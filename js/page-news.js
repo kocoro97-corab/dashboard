@@ -36,7 +36,7 @@ if(!enabled){
   authActions.append(btn('Google 읽기 전용 연결',async()=>{
    // Open a blank tab synchronously to preserve a user gesture; no token enters URL.
    const tab=root.open('about:blank','_blank');if(!tab){googleError='브라우저에서 새 탭 열기를 허용하세요.';draw();return}
-   try{const url=await googleAuth.begin();tab.location.replace(url);googleError='Google 인증을 마친 후 여기에서 연결 확인을 누르세요.'}
+   try{await googleAuth.openAuthorization(tab);googleError='Google 인증을 마친 후 여기에서 연결 확인을 누르세요.'}
    catch{tab.close();googleError='인증 준비 실패 · 서버 연결 또는 권한 구성을 확인하세요.'}
    draw();
   }),btn('연결 확인',async()=>{const result=await googleAuth.verify();googleError=result.connected?'읽기 전용 연결이 확인되었습니다.':'연결 확인 실패 또는 아직 승인되지 않았습니다.';draw()}));

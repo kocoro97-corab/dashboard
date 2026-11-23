@@ -5,6 +5,8 @@ on:
       - feat/nh-integration-v2
     paths:
       - 'server/google-calendar-*.cjs'
+      - 'tests/staging/CalendarIdentityBridge.gs'
+      - 'tools/prepare_calendar_identity_overlay.py'
       - 'js/calendar-google-*.js'
       - 'js/calendar-ics-import.js'
       - 'tests/calendar-*.js'
@@ -25,6 +27,9 @@ jobs:
         run: |
           node --check server/google-calendar-oauth-service.cjs
           node --check server/google-calendar-google-api.cjs
+          node --check server/google-calendar-session-authority.cjs
+          node --check server/google-calendar-runtime.cjs
+          node --check server/google-calendar-callback-session.cjs
           node --check js/calendar-google-auth.js
           node --check js/calendar-google-transport.js
           node --check js/calendar-google-sync.js
@@ -37,3 +42,6 @@ jobs:
           node tests/calendar-google-auth.test.js
           node tests/calendar-oauth-backend.test.cjs
           node tests/calendar-google-api.test.cjs
+          node tests/calendar-completion.test.cjs
+          node tests/calendar-google-pagination.test.cjs
+          node tests/calendar-session-authority.test.cjs

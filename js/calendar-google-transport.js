@@ -24,6 +24,18 @@ async function call(action,extra){
 }
 function adapter(){
  return Object.freeze({
+  launchAuthorization:tab=>{
+   if(!configured())throw err('GOOGLE_CALENDAR_NOT_CONFIGURED');
+   const token=typeof root.LS==='function'?root.LS('invest_session_token'):null;
+   if(!token||!tab||tab.closed||!root.document?.body)throw err('AUTH_REQUIRED');
+   // Top-level POST establishes a backend HttpOnly callback cookie, even when
+   // the browser blocks third-party cookies. Session token never enters a URL.
+   const name='myinvest-calendar-'+root.crypto.randomUUID();tab.name=name;
+   const form=root.document.createElement('form'),input=root.document.createElement('input');
+   form.method='POST';form.action='https://myinvest-v2-dev-relay.kocoro97.workers.dev/oauth/google/start';form.target=name;form.hidden=true;
+   input.type='hidden';input.name='token';input.value=token;form.append(input);root.document.body.append(form);
+   try{form.submit()}finally{input.value='';form.remove()}
+  },
   getStatus:async()=>{
    const d=await call(ACTIONS.status);
    return {connected:d.connected===true,readOnly:d.readOnly===true,scopes:Array.isArray(d.scopes)?d.scopes.filter(s=>typeof s==='string'):[]};

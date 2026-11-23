@@ -54,6 +54,7 @@ jobs:
           .venv-browser/bin/python tests/browser_commit_review.py --extended
           .venv-browser/bin/python tests/browser_external_catalog.py
           .venv-browser/bin/python tests/browser_calendar_final.py
+          .venv-browser/bin/python tests/browser_calendar_oauth_bootstrap.py
           .venv-browser/bin/python tests/browser_accounts_profile.py
   nh-staging-live:
     # Security/preflight preparation branches never consume live credentials in CI.

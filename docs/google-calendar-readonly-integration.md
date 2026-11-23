@@ -120,3 +120,42 @@ The private Google adapter now follows event response pages, deduplicates event 
 5. **Activation gates:** same-user OAuth callback, cross-user denial, no credential leakage, token refresh/revoke, multi-page/limit handling and logout cleanup, then explicit real-account consent. Publish development only after these checks; operating main/Pages/GAS/Sheets/Properties remain excluded.
 
 The user explicitly reserves real-account credential setup and development-plan changes for separate approval. Approving this scope would authorize the isolated identity/runtime configuration work only; it would not authorize operating deployment, migration of existing notes, calendar writes, new paid services or NH calls. If the private owner environment is unavailable, report that limitation rather than exposing secrets through chat or adding them to this repository.
+
+## Approved isolated identity/OAuth preparation — 2026-11-23
+
+The user approved the isolated identity and Google read-only OAuth configuration scope after the follow-up review. Do not ask for that same approval again. Credentials and the owner Cloud Shell are not available in the current execution environment, so that approval is not a claim that a live deployment or user consent occurred.
+
+### Implemented connection path (feature flag remains OFF)
+
+- `tests/staging/CalendarIdentityBridge.gs`: opt-in private identity handler for the existing isolated GAS. It checks the existing project/Sheet binding, signed server request, request age, current session, password-reset state, approved user record and its existing Users.createdAt marker. A recreated login gets a different subject; a missing legacy creation marker is rejected for owner review rather than assigned a guessed identity. It returns only a domain-separated HMAC user subject and a short-lived signed assertion; no username, Google token or holdings. A separate stable subject key keeps user identity stable when the transport bridge key rotates. It changes no session policy, Users data, holdings or calendar.
+- `server/google-calendar-session-authority.cjs`: consumes the existing verified GAS gateway (`verify` + `post`), validates isolated metadata, signs a fresh challenge and verifies its exact signed response. Public `sessionInfo` booleans/browser assertions are not identity. Signed replies cannot be replayed as another request/user or used after expiry. The private identity action is not added to the public relay allowlist.
+- `server/google-calendar-runtime.cjs`: assembles the existing Google API, encrypted storage, session authority and HTTP adapters. It requires the existing private storage handle and keys as injected dependencies; it does not create a namespace, runtime or deployment. Actual existing Worker/DO host wiring, metadata update and supported Node crypto/runtime settings still need the owner-side configuration audit. Do not replace the active Worker with an old feature-branch Worker bundle.
+- `server/google-calendar-callback-session.cjs`: a ten-minute AES-GCM authenticated HttpOnly/Secure/host-only callback cookie holds only the encrypted MY INVEST session. The actual MY INVEST session is checked again at OAuth callback, so logout invalidates a pending callback. No Google token is stored in the cookie.
+- Consent begins with a user-initiated top-level POST to `https://myinvest-v2-dev-relay.kocoro97.workers.dev/oauth/google/start`, then HTTP 303 to Google. This establishes the backend cookie without relying on third-party fetch cookies. Callback is `https://myinvest-v2-dev-relay.kocoro97.workers.dev/oauth/google/callback`; after a verified callback the cookie is cleared and the user returns to the fixed development news page without a token/query payload.
+- Existing connection buttons call this POST bootstrap. Only the fixed development artifact permits the two exact form destinations in CSP (backend start and Google consent); unconfigured artifacts keep `form-action 'none'`. Google feature remains OFF until live server configuration and read-only consent/isolation checks succeed.
+
+### Owner-side preparation, not deployment
+
+`tools/prepare_calendar_identity_overlay.py --owner-dir <existing-private-checkout> --output <new-private-directory-outside-checkouts>` prepares only `StagingBridge.gs`, `CalendarIdentityBridge.gs` and a review plan. It rejects the known production ID, mismatched source markers, output reuse and automatic repatching. It preserves the original bridge byte-for-byte except for one private dispatch line and leaves Security/session/other modules untouched. Original owner files are never modified. The output is private source (directory 0700/files 0600), never a public Pages artifact. It must not be uploaded before the active owner revision and module hashes are compared and existing revision/source metadata is updated through the approved owner procedure.
+
+Private settings to configure only in the existing isolated environment:
+
+| Setting | Destination | Handling |
+| --- | --- | --- |
+| `CALENDAR_IDENTITY_BRIDGE_KEY` | isolated GAS + private runtime | 32 random bytes, GAS value encoded as 64 lowercase hex characters; never send through chat |
+| `CALENDAR_IDENTITY_USER_KEY` | isolated GAS only | separate stable 32-byte subject key; preserve across deployments; rotation requires explicit ownership migration planning |
+| `CALENDAR_IDENTITY_ENABLED` | isolated GAS only | default absent/false; enable only with verified backend binding |
+| Google web client ID/secret | private runtime secret/config manager | existing owner-selected Google Cloud project; only `calendar.readonly` |
+| encryption key + existing storage handle | private runtime only | 32-byte server key; preserve existing token encryption identity and private store |
+
+These setting names/values are **not registered** by writing this document or by exporting the frontend. The runtime's constructor accepts injected dependencies; mapping them into the existing Worker/DO and secret store must be audited against the actual owner deployment. Do not run the old full staging builder over the current one-hour-session deployment.
+
+### Finding an existing Google OAuth client
+
+Open https://console.cloud.google.com/apis/credentials and choose the existing project. Check **OAuth 2.0 Client IDs** (or Google Auth Platform → Clients) for type **Web application**. Do not create a new project/account or paste a client secret into chat. If there is no suitable client, use the approved read-only OAuth setup scope in that existing project, configure the exact callback above and owner test-user consent, then verify the private runtime before enabling the browser flag. An example or planned callback in a document is not proof that the endpoint is active.
+
+### Executed verification boundaries
+
+New unit tests execute the GAS handler against the server verifier, including Korean user identifiers, renewal stability, different users, disabled/unapproved sessions, proof/signature/tenant tampering, replay/expiry and key rotation. The assembled runtime completes synthetic consent with encrypted storage and clears its cookie. Logout-before-callback is rejected without invoking the Google adapter.
+
+`browser_calendar_oauth_bootstrap.py` runs an **offline** browser at 1440/690/344. It checks the real exported CSP, actual form POST, same-site callback-cookie round trip, cookie cleanup and no session token in URLs. Synthetic HTML navigations replace mock HTTP redirects because browser interception does not reliably intercept every redirect-chain hop. Actual HTTP 303 contracts are separately tested in Node. Neither is real Google account consent or proof of the owner's mobile/browser policy.
