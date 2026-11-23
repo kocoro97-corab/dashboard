@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "source": "BEA",
   "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
-  "retrievedAt": "2026-11-23T05:58:46.677Z",
+  "retrievedAt": "2026-11-23T06:14:31.536Z",
   "events": [
     {
       "id": "bea-TRADE-2025-01-07T13:30:00.000Z",
@@ -16,7 +16,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-01-07T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -31,7 +31,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-01-30T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -46,7 +46,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-01-31T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -61,7 +61,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-02-05T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -76,7 +76,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-02-27T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -91,7 +91,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-02-28T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -106,7 +106,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-03-06T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -121,7 +121,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-03-27T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -136,7 +136,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-03-27T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -151,7 +151,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-03-28T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -166,7 +166,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-04-03T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -181,7 +181,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-04-30T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -196,7 +196,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-04-30T14:00:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -211,7 +211,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-05-06T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -226,7 +226,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-05-29T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -241,7 +241,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-05-29T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -256,7 +256,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-05-30T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -271,7 +271,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-06-05T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -286,7 +286,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-06-26T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -301,7 +301,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-06-26T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -316,7 +316,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-06-27T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -331,7 +331,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-07-03T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -346,7 +346,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-07-30T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -361,7 +361,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-07-31T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -376,7 +376,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-08-05T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -391,7 +391,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-08-28T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -406,7 +406,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-08-28T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -421,7 +421,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-08-29T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -436,7 +436,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-09-04T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -451,7 +451,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-09-25T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -466,7 +466,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-09-25T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -481,7 +481,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-09-26T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -496,7 +496,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-11-19T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -511,7 +511,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-12-05T15:00:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -526,7 +526,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-12-11T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -541,7 +541,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-12-23T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -556,7 +556,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2025-12-23T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -571,7 +571,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-01-08T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -586,7 +586,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-01-22T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -601,7 +601,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-01-22T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -616,7 +616,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-01-22T15:00:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -631,7 +631,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-01-29T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -646,7 +646,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-02-19T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -661,7 +661,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-02-20T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -676,7 +676,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-02-20T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -691,7 +691,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-03-12T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -706,7 +706,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-03-13T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -721,7 +721,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-03-13T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -736,7 +736,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-04-02T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -751,7 +751,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-04-09T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -766,7 +766,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-04-09T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -781,7 +781,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-04-09T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -796,7 +796,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-04-30T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -811,7 +811,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-04-30T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -826,7 +826,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-05-05T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -841,7 +841,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-05-28T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -856,7 +856,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-05-28T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -871,7 +871,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-05-28T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -886,7 +886,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-06-09T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -901,7 +901,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-06-25T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -916,7 +916,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-06-25T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -931,7 +931,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-06-25T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -946,7 +946,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-07-07T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -961,7 +961,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-07-30T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -976,7 +976,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-07-30T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -991,7 +991,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-08-04T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1006,7 +1006,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-08-26T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1021,7 +1021,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-08-26T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1036,7 +1036,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-08-26T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1051,7 +1051,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-09-03T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1066,7 +1066,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-09-30T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1081,7 +1081,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-09-30T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1096,7 +1096,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-09-30T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1111,7 +1111,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-10-06T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1126,7 +1126,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-10-29T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1141,7 +1141,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-10-29T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1156,7 +1156,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-11-04T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1171,7 +1171,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-11-25T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1186,7 +1186,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-11-25T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1201,7 +1201,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-11-25T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1216,7 +1216,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-12-08T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1231,7 +1231,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-12-23T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1246,7 +1246,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-12-23T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1261,7 +1261,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2026-12-23T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1276,7 +1276,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-01-07T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1291,7 +1291,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-01-28T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1306,7 +1306,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-01-28T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1321,7 +1321,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-02-04T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1336,7 +1336,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-02-25T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1351,7 +1351,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-02-25T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1366,7 +1366,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-03-09T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1381,7 +1381,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-03-31T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1396,7 +1396,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-03-31T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1411,7 +1411,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-03-31T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1426,7 +1426,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-04-06T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1441,7 +1441,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-04-29T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1456,7 +1456,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-04-29T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1471,7 +1471,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-05-05T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1486,7 +1486,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-05-27T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1501,7 +1501,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-05-27T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1516,7 +1516,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-05-27T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1531,7 +1531,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-06-09T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1546,7 +1546,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-06-25T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1561,7 +1561,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-06-25T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1576,7 +1576,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-06-25T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1591,7 +1591,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-07-07T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1606,7 +1606,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-07-29T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1621,7 +1621,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-07-29T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1636,7 +1636,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-08-05T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1651,7 +1651,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-08-25T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1666,7 +1666,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-08-25T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1681,7 +1681,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-08-25T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1696,7 +1696,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-09-08T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1711,7 +1711,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-09-30T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1726,7 +1726,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-09-30T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1741,7 +1741,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-09-30T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1756,7 +1756,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-10-06T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1771,7 +1771,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-10-28T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1786,7 +1786,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-10-28T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1801,7 +1801,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-11-04T12:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1816,7 +1816,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-11-24T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1831,7 +1831,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-11-24T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1846,7 +1846,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-11-24T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1861,7 +1861,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-12-07T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1876,7 +1876,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-12-22T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1891,7 +1891,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-12-22T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     },
     {
@@ -1906,7 +1906,7 @@
       "source": "BEA",
       "sourceUrl": "https://apps.bea.gov/API/signup/release_dates.json",
       "startsAt": "2027-12-22T13:30:00.000Z",
-      "observedAt": "2026-11-23T05:58:46.677Z",
+      "observedAt": "2026-11-23T06:14:31.536Z",
       "releaseStatus": "scheduled"
     }
   ]
