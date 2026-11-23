@@ -77,6 +77,7 @@
       config.accountReads=data.developmentAccountReads===true;
       config.externalTestStore=config.accountReads&&data.developmentExternalTestStore===true;
       config.externalStore=config.accountReads&&data.developmentExternalStore===true;
+      config.googleCalendarReadOnly=fixed&&data.developmentGoogleCalendarReadOnly===true;
       config.externalAccountCatalogVersion=data.externalAccountCatalogVersion===1?1:0;
       stage='storage';
       sessionStorage.setItem(KEY,JSON.stringify(fixed?{endpoint,kind:'persistent'}:{endpoint,code}));

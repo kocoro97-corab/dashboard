@@ -31,6 +31,9 @@ async function main(){
  assert.ok(requests.every(x=>!x.url.includes('server-secret')));
  assert.ok(requests.filter(x=>x.url.includes('/calendars/')).every(x=>x.opts.headers.Authorization==='Bearer AT'));
  await api.revoke('AT');
+ const revocation=requests.find(x=>x.url.includes('/revoke'));
+ assert.ok(revocation.opts.signal,'revocation must have a bounded timeout');
+ assert.equal(revocation.opts.cache,'no-store');
  console.log('Google HTTPS OAuth/Calendar adapter tests PASS');
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

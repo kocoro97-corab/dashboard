@@ -40,7 +40,7 @@ function googleApi({clientId,clientSecret,fetchImpl=globalThis.fetch,timeoutMs=1
   },
   revoke:async(accessToken)=>{
    if(typeof accessToken!=='string'||!accessToken)return;
-   const response=await fetchImpl('https://oauth2.googleapis.com/revoke',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({token:accessToken}).toString(),redirect:'error'});
+   const response=await fetchImpl('https://oauth2.googleapis.com/revoke',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({token:accessToken}).toString(),redirect:'error',cache:'no-store',signal:AbortSignal.timeout(timeoutMs)});
    if(!response.ok)throw failure('GOOGLE_REVOKE_FAILED');
   },
   calendars:async(accessToken)=>{

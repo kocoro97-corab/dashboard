@@ -172,3 +172,29 @@ First owner-side registration step, in **the existing `myinvest-v2-dev-relay` Wo
 Do not paste either value/JSON into chat, a public repository or a Pages asset. If either setting already exists, do not blindly replace it. These two registrations alone cannot enable Google. Keep `GOOGLE_CALENDAR_ENABLED` absent/false while wiring/configuration/consent checks remain pending.
 
 The approved private host must additionally supply the existing isolated metadata via `MYINVEST_EXPECTED_METADATA`, the matched private `CALENDAR_IDENTITY_BRIDGE_KEY` and persistent `GOOGLE_CALENDAR_ENCRYPTION_KEY` (each 32 bytes represented as 64 lowercase hex characters in secret settings), and injected authoritative gateway/private storage. No random key is generated or rotated implicitly. The settings reader returns null when the feature is off and emits only the fixed `CALENDAR_SETTINGS_INCOMPLETE` error when enabled settings are invalid. It never prints submitted values or enables a feature merely because secrets were registered. This wrapper does not by itself install the runtime into the active Worker/DO.
+
+## Owner confirms two Google secrets registered — relay bridge and read-only preflight
+
+The user reports `GOOGLE_CALENDAR_CLIENT_ID` and `GOOGLE_CALENDAR_CLIENT_SECRET` registered in the existing development Worker. They have not been read back by this environment; no secret value is requested in chat. Existing approval remains valid. The current environment still has no Cloudflare deployment credential or mounted owner checkout, so no remote deployment/configuration is claimed.
+
+`server/google-calendar-relay-overlay.cjs` is an installable factory around an owner-verified **current** Worker module exposing `default`, `RelayGate`, `configuration` and `createGateway`. The deployment entry must import that preserved module and export the factory's `worker` default and `RelayGate` class. It must not import an outdated feature-branch Worker as a replacement for the active service.
+
+The overlay:
+
+- delegates existing routes unchanged and delegates everything when Google is OFF;
+- enforces the fixed development origin/host, development-client header and bearer-only public API contract, then converts the verified-format bearer into the private runtime's body token internally;
+- uses the existing `GATE` namespace and existing quota object's acquire/release protocol; the separate deterministic private object stores only prefixed encrypted calendar records, preserving quota storage;
+- extends the existing `RelayGate` class for private requests and otherwise calls its existing fetch implementation, with no namespace creation or migration;
+- bounds OAuth form size and GAS verification deadline, releases leases on failure and never returns private exception text;
+- advertises `developmentGoogleCalendarReadOnly` only from an installed, enabled overlay with valid isolated settings. `dev_connect.js` accepts that capability only for the fixed persistent development endpoint; absence keeps Google OFF;
+- bounds the revocation request so an unreachable Google endpoint cannot leave connection removal waiting indefinitely.
+
+Factory/legacy integration and bearer conversion are tested with the actual DashboardTransport and the existing Worker handler plus synthetic authentication/network. This is not proof of the active Cloudflare module graph, real Node compatibility or actual owner consent. Bundling, current-code verification, Node compatibility, authoritative GAS extension, private key binding and provider-side concurrency checks remain owner-side activation gates.
+
+### Standalone owner preflight
+
+`tools/calendar_owner_preflight.py` uses only Python's standard library. It accepts the **existing Cloudflare** Account ID/API token via hidden terminal prompts (or existing environment), never the Google secret. It reads only the fixed existing account/subdomain and Worker's settings, deployments and version list. Its only public relay request is `appVersion`, which makes no NH/account/Google query. It repeats the deployment read to detect concurrent changes. It never writes settings, secrets, source, private stores or deployment versions.
+
+The JSON reports secret **names/presence only**, the active version, pending-version status, existing `GATE` class, Node compatibility, hour policy and whether the known owner checkout can be verified locally. It prints no account ID, token, credential, raw binding values or source. `readyForActivation` stays false even when the inspection succeeds; an inspection PASS is not Google connection PASS. A blocked read reports only a fixed code/HTTP status.
+
+The user can run a pinned public copy in the existing Cloud Shell without relying on the current directory being a Git repository. Return only the resulting JSON, never credential values. The script cannot activate the connection; use its blockers to prepare the exact existing-runtime configuration/bundle and GAS metadata update before activation.

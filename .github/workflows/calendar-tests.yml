@@ -7,6 +7,7 @@ on:
       - 'server/google-calendar-*.cjs'
       - 'tests/staging/CalendarIdentityBridge.gs'
       - 'tools/prepare_calendar_identity_overlay.py'
+      - 'tools/calendar_owner_preflight.py'
       - 'js/calendar-google-*.js'
       - 'js/calendar-ics-import.js'
       - 'tests/calendar-*.js'
@@ -31,6 +32,7 @@ jobs:
           node --check server/google-calendar-runtime.cjs
           node --check server/google-calendar-callback-session.cjs
           node --check server/google-calendar-settings.cjs
+          node --check server/google-calendar-relay-overlay.cjs
           node --check js/calendar-google-auth.js
           node --check js/calendar-google-transport.js
           node --check js/calendar-google-sync.js
@@ -47,3 +49,4 @@ jobs:
           node tests/calendar-google-pagination.test.cjs
           node tests/calendar-session-authority.test.cjs
           node tests/calendar-settings.test.cjs
+          node tests/calendar-relay-overlay.test.cjs
