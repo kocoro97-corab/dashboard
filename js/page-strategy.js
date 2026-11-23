@@ -43,10 +43,12 @@ function showEconomicRisk(){
  if(snapshot?.status!=='ready'&&beaStatus?.status!=='ready')eventPanel.append(make('p','BLS·BEA 공식 일정 수신이 불완전합니다. 발표 이벤트가 없다는 뜻이 아닙니다. 신규 진입 전 공식 일정 확인이 필요합니다.','str4-muted'));
  const now=Date.now(),upcoming=[...(source?.horizon(14,now)||[]),...(bea?.horizon(14,now)||[])];
  const fedDays=[...new Set([new Date(now).getUTCFullYear(),new Date(now+14*86400000).getUTCFullYear()])];
+ const eastern={};for(const p of new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(now)))if(p.type!=='literal')eastern[p.type]=p.value;
+ const currentUSDate=eastern.year+'-'+eastern.month+'-'+eastern.day;
+ const futureUSDate=new Date(Date.parse(currentUSDate+'T00:00:00Z')+14*86400000).toISOString().slice(0,10);
  for(const year of fedDays)for(const meeting of fed?.list(year)||[]){
-  // FOMC is date-only US Eastern; show date without assuming release hour.
-  const midnight=Date.parse(meeting.date+'T00:00:00Z');
-  if(midnight>=now-86400000&&midnight<=now+14*86400000)upcoming.push(meeting);
+  // FOMC has a US Eastern date only, not a confirmed statement hour.
+  if(meeting.date>=currentUSDate&&meeting.date<=futureUSDate)upcoming.push(meeting);
  }
  const rows=upcoming.sort((a,b)=>(a.startsAt||a.date).localeCompare(b.startsAt||b.date)).slice(0,8);
  if(!rows.length){eventPanel.append(make('p','연결된 공식 일정에서 향후 14일 이벤트가 확인되지 않았습니다. 한국은행 등 미연결 기관 일정은 포함되지 않습니다.','str4-muted'));return}
