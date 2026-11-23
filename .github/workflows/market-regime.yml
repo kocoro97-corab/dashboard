@@ -1,0 +1,24 @@
+name: Market regime standalone tests
+on:
+  push:
+    branches: [feat/nh-integration-v2]
+    paths:
+      - 'js/market-regime-engine.js'
+      - 'tests/market-regime-engine.test.cjs'
+      - '.github/workflows/market-regime.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  regime-unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and deterministic regime tests
+        run: |
+          node --check js/market-regime-engine.js
+          node --check tests/market-regime-engine.test.cjs
+          node tests/market-regime-engine.test.cjs
