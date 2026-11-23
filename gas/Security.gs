@@ -83,9 +83,23 @@ function securityRegister_(user,password) {
     return jsonResponse({success:true,message:'가입 신청이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.'});
   });
 }
+function securityIdleMs_() {
+  if(typeof securityEnvironmentSessionIdleMs_!=='function')return SECURITY_IDLE_MS;
+  const idle=securityEnvironmentSessionIdleMs_();
+  if(idle!==SECURITY_IDLE_MS&&idle!==3600000)throw new Error('SESSION_POLICY_INVALID');
+  return idle;
+}
+function securitySessionIdleMs_(session,policy) {
+  return session&&session.i===3600000&&(policy===undefined?securityIdleMs_():policy)===3600000?3600000:SECURITY_IDLE_MS;
+}
+function securitySessionRecord_(user,mustChange) {
+  const record={u:user,t:Date.now(),c:Date.now(),v:2,p:!!mustChange};
+  if(securityIdleMs_()===3600000)record.i=3600000;
+  return record;
+}
 function securityCreateSession_(user,mustChange) {
   const token=(Utilities.getUuid()+Utilities.getUuid()).replace(/-/g,'');
-  PropertiesService.getScriptProperties().setProperty('S_'+token,JSON.stringify({u:user,t:Date.now(),c:Date.now(),v:2,p:!!mustChange}));
+  PropertiesService.getScriptProperties().setProperty('S_'+token,JSON.stringify(securitySessionRecord_(user,mustChange)));
   purgeSessions_();return token;
 }
 function securitySession_(token) {
@@ -93,7 +107,7 @@ function securitySession_(token) {
   const props=PropertiesService.getScriptProperties(),raw=props.getProperty('S_'+token);let s;
   try{s=JSON.parse(raw||'null')}catch(e){return null}
   if(!s)return null;
-  if(s.v!==2||typeof s.u!=='string'||!Number.isFinite(s.t)||!Number.isFinite(s.c)||Date.now()-s.t>SECURITY_IDLE_MS||Date.now()-s.c>SECURITY_MAX_SESSION_MS||s.t>Date.now()+1000){props.deleteProperty('S_'+token);return null}
+  if(s.v!==2||typeof s.u!=='string'||!Number.isFinite(s.t)||!Number.isFinite(s.c)||Date.now()-s.t>securitySessionIdleMs_(s)||Date.now()-s.c>SECURITY_MAX_SESSION_MS||s.t>Date.now()+1000){props.deleteProperty('S_'+token);return null}
   const user=securityFindUser_(s.u);
   if(!user||String(user.row[2])!=='approved'){props.deleteProperty('S_'+token);return null}
   s.t=Date.now();props.setProperty('S_'+token,JSON.stringify(s));return s;
@@ -113,7 +127,7 @@ function securityChangePassword_(token,current,password) {
     Object.keys(all).filter(function(k){return k.startsWith('S_')}).forEach(function(k){try{if(JSON.parse(all[k]).u===session.u)props.deleteProperty(k)}catch(e){}});
     // Caller receives a fresh token; every old session is revoked.
     const next=(Utilities.getUuid()+Utilities.getUuid()).replace(/-/g,'');
-    props.setProperty('S_'+next,JSON.stringify({u:session.u,t:Date.now(),c:Date.now(),v:2,p:false}));
+    props.setProperty('S_'+next,JSON.stringify(securitySessionRecord_(session.u,false)));
     return jsonResponse({success:true,token:next,isAdmin:String(found.row[3])==='true'});
   });
 }
@@ -151,7 +165,7 @@ function doPost(e) {
     if(action==='changePassword')return securityChangePassword_(body.token,body.currentPass,body.newPass);
     const session=securitySession_(body.token);
     if(!session)return jsonResponse({success:false,message:'로그인이 필요합니다. 다시 로그인하세요.'});
-    if(action==='sessionInfo')return jsonResponse({success:true,isAdmin:verifyAdmin(body.token),mustChangePassword:!!session.p});
+    if(action==='sessionInfo')return jsonResponse(Object.assign({success:true,isAdmin:verifyAdmin(body.token),mustChangePassword:!!session.p},typeof securityEnvironmentSessionMetadata_==='function'?securityEnvironmentSessionMetadata_(session):{}));
     if(session.p)return jsonResponse({success:false,message:'12자 이상 비밀번호로 변경한 후 이용하세요.',mustChangePassword:true});
     if(['nhSnapshotRead','nhSnapshotCapture','nhSnapshotRestore'].includes(action))return handleNhSnapshotV2_(body.token,action,body);
     if(action==='nhStockQuotes')return handleNhStockQuotesV2(body.token,body.items);

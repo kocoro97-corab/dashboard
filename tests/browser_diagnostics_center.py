@@ -40,6 +40,7 @@ async def main():
      await page.evaluate('''()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async()=>{throw Error('BLOCKED')}}})''')
      await page.get_by_role('button',name='전체 결과 복사',exact=True).click();await expect(page.get_by_label('통합 검증 결과',exact=True)).to_be_visible()
      exported=json.loads(await page.get_by_label('통합 검증 결과',exact=True).input_value());assert exported['credentialsIncluded'] is False and exported['accountDataIncluded'] is False
+     assert exported['session']['clientInactivityMs']==3600000 and exported['session']['independentTransportVerification'] is False
      await page.evaluate('ReadStatus.clear("secret-url-PRIVATE_VALUE")')
      await page.wait_for_function('()=>DevelopmentDiagnostics.snapshot().issues.some(r=>r.source==="read"&&r.status==="RECOVERED")')
      await page.get_by_label('오류 상태 필터').select_option('resolved');await expect(page.locator('.dv-issues')).to_contain_text('READ_NETWORK')

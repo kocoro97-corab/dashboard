@@ -9,3 +9,17 @@ function fixture(dev){
 test('development uses only namespaced tab storage and cannot adopt an operating session',()=>{const f=fixture(true);assert.equal(vm.runInContext("LS('invest_session_token')",f.ctx),null);vm.runInContext("LS('invest_session_token','SYNTHETIC_DEV_SESSION');touchActive(true)",f.ctx);assert.equal(f.tab.get('myinvest_v2_dev:invest_session_token'),'"SYNTHETIC_DEV_SESSION"');assert.equal(f.original.get('invest_session_token'),'"SYNTHETIC_OPERATING_SESSION"');assert.equal(f.original.get('invest_last_active'),'123')});
 test('development logout preserves every existing operating storage value',()=>{const f=fixture(true),before=JSON.stringify([...f.original]);vm.runInContext("LS('invest_session_token','SYNTHETIC_DEV_SESSION');logout()",f.ctx);assert.equal(f.tab.has('myinvest_v2_dev:invest_session_token'),false);assert.equal(JSON.stringify([...f.original]),before)});
 test('unchanged direct build continues using its original storage keys',()=>{const f=fixture(false);assert.equal(vm.runInContext("LS('invest_session_token')",f.ctx),'SYNTHETIC_OPERATING_SESSION');vm.runInContext("LS('invest_is_admin',false)",f.ctx);assert.equal(f.original.get('invest_is_admin'),'false');assert.equal(f.tab.size,0)});
+test('a restored response received after browser inactivity expiry cannot reopen the dashboard',async()=>{
+ const f=fixture(true);let opened=0;f.ctx.enterDashboard=()=>opened++;
+ vm.runInContext("LS('invest_session_token','SYNTHETIC_DEV_SESSION');touchActive(true)",f.ctx);
+ f.ctx.window.DevelopmentSession={restore:async()=>{vm.runInContext("AUTH_STORAGE.setItem('invest_last_active',String(Date.now()-300001))",f.ctx);return {success:true}}};
+ await f.ctx.checkAuthentication();assert.equal(opened,0);assert.equal(vm.runInContext("LS('invest_session_token')",f.ctx),null);
+});
+test('an old restore failure cannot log out a new login attempt even before its token changes',async()=>{
+ const f=fixture(true);let finish;f.ctx.window.DevelopmentSession={restore:()=>new Promise(resolve=>finish=resolve)};
+ vm.runInContext("LS('invest_session_token','SYNTHETIC_DEV_SESSION');touchActive(true)",f.ctx);const pending=f.ctx.checkAuthentication();vm.runInContext('AUTH_LOGIN_RUN++',f.ctx);finish({success:false});await pending;assert.equal(vm.runInContext("LS('invest_session_token')",f.ctx),'SYNTHETIC_DEV_SESSION');
+});
+test('operating restore uses its existing transport and does not call development restoration',async()=>{
+ const f=fixture(false);let calls=0,opened=0;f.ctx.DashboardTransport.post=async()=>{calls++;return {json:async()=>({success:true,isAdmin:false})}};f.ctx.startSessionTimer=()=>{};f.ctx.enterDashboard=()=>opened++;
+ vm.runInContext('touchActive(true)',f.ctx);await f.ctx.checkAuthentication();assert.equal(calls,1);assert.equal(opened,1);
+});

@@ -58,3 +58,19 @@ test('foreground activity checks a delayed renewal promptly without duplicate he
 test('foreground wake cannot revive a server session after suspended timers cross its idle expiry',async()=>{
  const f=fixture();f.ctx.startSessionTimer(true);f.jump(360000);f.touch();f.wake();await new Promise(resolve=>setImmediate(resolve));assert.equal(f.logout,1);assert.equal(f.ctx.DevelopmentSession.getStatus().code,'SESSION_REJECTED');assert.equal(f.calls.length,1);
 });
+test('restore retries transient transport failure while withholding authenticated UI',async()=>{
+ const f=fixture();let n=0;f.transport(async()=>++n===1?{ok:false,status:503}:{ok:true,status:200,json:async()=>({success:true,developmentSessionPolicyVersion:1,sessionIdleMs:3600000})});
+ const pending=f.ctx.DevelopmentSession.restore(f.session);await new Promise(resolve=>setImmediate(resolve));assert.equal(f.ctx.DevelopmentSession.getStatus().state,'RETRYING');assert.equal(f.logout,0);await f.advance(15000);const data=await pending;assert.equal(data.success,true);assert.equal(f.ctx.DevelopmentSession.getStatus().serverIdleMs,3600000);f.ctx.startSessionTimer(false);assert.equal(f.ctx.DevelopmentSession.getStatus().serverIdleMs,3600000);
+});
+test('restore does not retry an explicit authorization rejection',async()=>{
+ const f=fixture();f.transport(async()=>({ok:false,status:401}));await assert.rejects(f.ctx.DevelopmentSession.restore(f.session),{code:'SESSION_RESTORE_REJECTED'});assert.equal(f.calls.length,1);f.ctx.DevelopmentSession.failRestore('SESSION_REJECTED');assert.equal(f.logout,1);assert.equal(f.ctx.DevelopmentSession.getStatus().code,'SESSION_REJECTED');
+});
+test('logout cancels restore delay and never resumes its old request',async()=>{
+ const f=fixture();f.transport(async()=>({ok:false,status:503}));const pending=f.ctx.DevelopmentSession.restore(f.session);const rejected=assert.rejects(pending,{code:'SESSION_RESTORE_CANCELLED'});await new Promise(resolve=>setImmediate(resolve));f.ctx.logout();await rejected;await f.advance(60000);assert.equal(f.calls.length,1);assert.equal(f.timers.size,0);
+});
+test('late restore failure cannot close or overwrite a subsequent login',async()=>{
+ const f=fixture();let finish;f.transport(()=>new Promise(resolve=>finish=resolve));const pending=f.ctx.DevelopmentSession.restore(f.session);const rejected=assert.rejects(pending,{code:'SESSION_RESTORE_CANCELLED'});await Promise.resolve();f.ctx.logout();f.login();finish({ok:false,status:401});await rejected;assert.equal(f.logout,1);assert.equal(f.session,'b'.repeat(64));assert.equal(f.ctx.DevelopmentSession.getStatus().scheduled,true);
+});
+test('the server-reported legacy token duration remains five minutes despite the hour policy',async()=>{
+ const f=fixture();f.ctx.MYINVEST_TRANSPORT_CONFIG.sessionIdleMs=3600000;f.transport(async()=>({ok:true,status:200,json:async()=>({success:true,developmentSessionPolicyVersion:1,sessionIdleMs:300000})}));await f.ctx.DevelopmentSession.restore(f.session);assert.equal(f.ctx.DevelopmentSession.getStatus().serverPolicyIdleMs,3600000);assert.equal(f.ctx.DevelopmentSession.getStatus().serverIdleMs,300000);
+});

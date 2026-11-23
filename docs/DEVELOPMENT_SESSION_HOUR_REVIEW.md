@@ -1,5 +1,7 @@
 # One-hour development session and AAPL follow-up — 2026-11-22 KST
 
+Later implementation and current activation restrictions: see [Development session completion](DEVELOPMENT_SESSION_COMPLETION.md). The initial five-minute-server notes below describe the earlier implementation.
+
 The user explicitly requested one-hour development sessions so page testing can continue, followed by the pending AAPL five-minute integration checks. This authorizes the bounded development-session change; no operating authentication change or new API scope is introduced.
 
 ## Implementation

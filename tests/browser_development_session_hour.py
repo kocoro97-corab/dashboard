@@ -12,7 +12,7 @@ async def main():
   async with async_playwright() as pw:
    browser=await pw.chromium.launch()
    for width in [1440,690,344]:
-    h=await Harness(browser,artifact,synthetic_feeds(),width,published=args.published).start_browser(tmp);page=h.page
+    h=await Harness(browser,artifact,synthetic_feeds(),width,published=args.published,session_hour=True).start_browser(tmp);page=h.page
     try:
      await page.clock.install(time=datetime.datetime(2026,11,22,tzinfo=datetime.timezone.utc));await h.login('strategy')
      assert await page.evaluate('sessionLeftMs()>3590000')
@@ -46,9 +46,19 @@ async def main():
      await page.wait_for_function('()=>DevelopmentSession.getStatus().state==="VERIFIED"')
      await expect(page.locator('#developmentSessionNotice')).to_be_hidden()
      await page.evaluate('()=>{window.DashboardTransport=__sessionTransport;delete window.__sessionTransport}')
+     await h.go('diagnostics')
+     await expect(page.locator('[data-session-policy-status]')).to_contain_text('서버 정책 60분')
+     await expect(page.locator('[data-session-policy-status]')).to_contain_text('현재 인증 세션 60분')
+     await h.go('strategy')
+     active_after_input=await page.evaluate('lastActive()')
      # No browser activity is manufactured by the successful background check.
      await page.screenshot(path=str(args.output/(str(width)+'-after-six-minutes.png')))
-     await page.reload(wait_until='domcontentloaded');await page.wait_for_function('()=>DashboardShell.getStatus().page==="strategy"')
+     await page.add_init_script('''(()=>{const original=window.fetch;let refused=false;window.fetch=async function(url,options){let body;try{body=JSON.parse(options?.body||'{}')}catch{}if(!refused&&body?.action==='sessionInfo'){refused=true;return new Response(JSON.stringify({success:false,code:'RELAY_BUSY'}),{status:503})}return original.apply(this,arguments)}})()''')
+     await page.reload(wait_until='domcontentloaded')
+     await page.wait_for_function('()=>DevelopmentSession.getStatus().state==="RETRYING"')
+     await expect(page.locator('#authGuard')).to_be_visible()
+     await page.clock.fast_forward(15000)
+     await page.wait_for_function('()=>DashboardShell.getStatus().page==="strategy"')
      assert await page.evaluate('lastActive()')==active_after_input
      # Test exact wall-clock expiry, including reload and background suspension.
      await page.evaluate('()=>{AUTH_STORAGE.setItem("invest_last_active",String(Date.now()-3600000));renderSession()}')
@@ -57,7 +67,7 @@ async def main():
      assert await page.locator('[data-module=five-minute-reference-v1]').count()==0
      assert not h.errors,h.errors
      assert not any(r['action'] in ['nhAccounts','nhQuotes','saveExternalHoldings','restoreExternalHoldings','order'] for r in h.requests)
-     print(json.dumps({'width':width,'status':'PASS','auth':'SYNTHETIC','publishedAssets':args.published,'inactivityMinutes':60,'sixMinuteSession':'PASS','transientBusyRecovery':'PASS','activityRestartsFullHour':'PASS','backgroundDoesNotExtend':'PASS','noInputReset':'PASS','reload':'PASS','expiryCleanup':'PASS','actualNhCalls':0}),flush=True)
+     print(json.dumps({'width':width,'status':'PASS','auth':'SYNTHETIC','publishedAssets':args.published,'inactivityMinutes':60,'sixMinuteSession':'PASS','transientBusyRecovery':'PASS','activityRestartsFullHour':'PASS','backgroundDoesNotExtend':'PASS','noInputReset':'PASS','reload':'PASS','reloadBusyRecovery':'PASS','serverHourLogic':'CHECKED_IN_GAS_WITH_SYNTHETIC_PROPERTIES','expiryCleanup':'PASS','actualNhCalls':0}),flush=True)
     finally:await h.close()
    await browser.close()
 asyncio.run(main())
