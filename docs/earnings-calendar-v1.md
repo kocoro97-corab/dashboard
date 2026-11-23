@@ -44,7 +44,7 @@ For explicit ISO UTC publication times, the browser validates the correct KST da
 }
 ```
 
-Do **not** publish the sample; the source and date are fictional. The private publisher input additionally requires `verifiedAt` for every row; the publisher removes it from the public JSON. For vendor estimates, publisher input also requires `licenseApproved:true` and an approved vendor-origin URL.
+Do **not** publish the sample; the source and date are fictional. The private publisher input additionally requires `verifiedAt` for every row; the publisher removes it from the public JSON. For vendor estimates, publisher input also requires `licenseApproved:true` and a real approved vendor-origin URL. Because no such provider is configured, all estimated events are currently rejected.
 
 ## Tests
 
@@ -66,7 +66,7 @@ GitHub workflow `.github/workflows/earnings-calendar.yml` runs Node 22 source ch
 ## Security and trading-risk hardening
 
 - The trusted publisher **selects only an explicit allowlist** of issuer fields. Arbitrary input fields such as `accountNumber`, `shares`, `apiToken`, `reviewerMemo` and verification credentials can never reach the public snapshot.
-- For US vendor estimates, only a separately authorized publisher with `licenseApproved:true` may pass the event through, and its source URL must use the explicitly reviewed vendor domain. Official SEC/DART hosts are NOT accepted as the provenance for mere vendor estimates.
+- Vendor estimates are currently **disabled**: no licensed/verified vendor provider or host is configured. The publisher enforces a license flag AND the browser rejects all estimated-source hosts until a real approved provider is implemented and reviewed. Official SEC/DART hosts are NOT accepted as the provenance for mere vendor estimates.
 - A generic corporate IR notice is excluded unless the reviewer confirms it is about actual earnings (`earningsRelated:true`). Official filing *receipt* dates do not become earnings announcement dates.
 - `MYInvestEarningsCalendar.assessRisk` is a display-only rule: 0–2 US/KR local days before a confirmed announcement for a day-trading check, or 0–14 days for a swing-trading check. Estimated dates remain unconfirmed regardless of proximity. The rule is not a probability, signal, or position-size recommendation.
 - The News page’s calendar button and shell button both use the same cached snapshot refresh path; no extra source call is made merely by rendering the same calendar data in other menus.
