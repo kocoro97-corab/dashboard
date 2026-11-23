@@ -14,7 +14,7 @@ function input(mode='swing',bars=fixtures()){
 }
 const US={region:'US',status:'descriptive',direction:{state:'up'},risk:{level:'reference-low'},momentum:{state:'strengthening'}};
 const rotation={market:'US',status:'descriptive',type:'sector_etf_proxy',rotation:{status:'descriptive',relative5dPp:3.2,relative20dPp:5.1}};
-const benchmark={market:'US',symbol:'SPY',verified:true,source:'Yahoo verified chart',bars:fixtures({slope:0.5})};
+const benchmark={market:'US',currency:'USD',symbol:'SPY',verified:true,source:'Yahoo verified chart',bars:fixtures({slope:0.5})};
 let x=E.assess({...input('swing'),benchmark,regime:US,sector:rotation});
 assert.equal(x.status,'descriptive');
 assert.equal(x.setup.trend,'up');
@@ -55,6 +55,7 @@ const partial=fixtures().slice(-10);
 x=E.assess(input('swing',partial));
 assert.equal(x.status,'insufficient');
 assert.equal(x.setup.ma20,null);
+assert.equal(x.references.atrPct,null,'ATR must remain unknown with fewer than 15 bars');
 assert.equal(x.setup.candidates.length,0);
 const invalid=fixtures();invalid.at(-1).closed=false;
 assert.equal(E.assess(input('day',invalid)).status,'unavailable');
@@ -76,4 +77,6 @@ assert.equal(E.assess({...input(),regime:{...US,region:'KR'}}).marketContext.sta
 assert.equal(E.assess({...input(),sector:{...rotation,market:'KR'}}).sectorContext.status,'unknown');
 const korea=fixtures().map(b=>({...b}));
 assert.equal(E.assess({...input('day',korea),symbol:'005930',market:'KR',currency:'KRW'}).status,'descriptive');
+assert.equal(E.assess({...input(),benchmark:{...benchmark,currency:'KRW'}}).relative.status,'unavailable');
+assert.equal(E.assess({...input(),benchmark:{...benchmark,symbol:'^KS11'}}).relative.status,'unavailable');
 console.log('Stock setup engine: validated day/swing setup, 20-day breakout, relative strength, risk and failure gates PASS');
