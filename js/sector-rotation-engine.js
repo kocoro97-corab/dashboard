@@ -142,9 +142,16 @@ function assess({market,benchmark,candidates=[],nowDay=null}={}){
      relativePp:v.returnPct-b.returnPct,asOf:v.asOf,startDate:v.startDate}:{
      status:'insufficient',reason:v.reason||b.reason||'기준자료 부족'};
   }
-  const groupBreadth=breadth(item.members,{declaredCount:item.universeCount??null});
-  const activity=turnover(item.members,item.currency,item.turnoverCurrency);
-  const ranks=item.turnoverCurrency===item.currency?memberRank(item.members):{status:'unavailable',leaders:[],laggards:[],reason:'주도주 표본의 거래대금 통화 미검증'};
+  // Member quote observations must be from the SAME verified exchange
+  // session as the sector/benchmark daily bar; receipt time is not enough.
+  const membersSameSession=item.membersAsOf===benchmarkDay;
+  const groupBreadth=membersSameSession?breadth(item.members,{declaredCount:item.universeCount??null}):
+    {status:'unavailable',reason:'구성종목 거래일 기준 미확인'};
+  const activity=membersSameSession?turnover(item.members,item.currency,item.turnoverCurrency):
+    {status:'unavailable',value:null,reason:'거래대금 거래일 기준 미확인'};
+  const ranks=!membersSameSession?{status:'unavailable',leaders:[],laggards:[],reason:'주도주 표본의 거래일 미확인'}:
+    item.turnoverCurrency===item.currency?memberRank(item.members):
+    {status:'unavailable',leaders:[],laggards:[],reason:'주도주 표본의 거래대금 통화 미검증'};
   const possible=period['5d'].status==='ready'&&period['20d'].status==='ready';
   const rotation=possible?{
    status:'descriptive',relative5dPp:period['5d'].relativePp,relative20dPp:period['20d'].relativePp,
