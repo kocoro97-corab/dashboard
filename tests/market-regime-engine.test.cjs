@@ -8,7 +8,7 @@ function q(value,previous,at='2026-11-23T08:55:00+09:00',rec='2026-11-23T08:57:0
 function bars(offset=0,step=0.65){
  const array=[];
  for(let i=0;i<25;i++){
-  const d=new Date(Date.UTC(2026,9,30+i,8,0)).toISOString();
+  const d=new Date(Date.UTC(2026,9,30+i,0,0)).toISOString();
   array.push({date:d,close:100+offset+i*step});
  }
  return array;
