@@ -58,7 +58,7 @@ function component(input,{name,nowDay,now,market,mode}){
    // The regime engine already validates full provenance. Still reject
    // untrusted timestamps when the context is reused in a new screen.
    const s=sourceEvidence(ev,now);
-   if(s.state!=='known'){status=s.state==='failed'?'failed':'missing';reasons.push(s.reason);break}
+   if(s.state!=='known'){status=s.state;reasons.push(s.reason);break}
    if(s.receivedAgeMinutes>REQUIREMENTS[mode].quoteMaxMinutes){status='stale';reasons.push('시장 지수 수신시각 오래됨')}
    basis.push({kind:'market-quote',symbol:clean(ev.symbol,32),source:s.source,observedAt:s.observedAt,
     receivedAt:s.receivedAt,referenceDay:ev.referenceDay});
