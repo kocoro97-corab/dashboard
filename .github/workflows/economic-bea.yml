@@ -7,6 +7,7 @@ on:
       - 'js/economic-fomc-schedule.js'
       - 'scripts/collect-bea-calendar.cjs'
       - 'tests/economic-bea-*.js'
+      - 'tests/economic-bea-*.cjs'
       - 'tests/economic-fomc.test.js'
       - '.github/workflows/economic-bea.yml'
   workflow_dispatch:
@@ -34,6 +35,7 @@ jobs:
           node tests/economic-bea-parser.test.js
           node tests/economic-bea-calendar.test.js
           node tests/economic-fomc.test.js
+          node tests/economic-bea-collector.test.cjs
       - name: Collect official BEA release schedule
         run: node scripts/collect-bea-calendar.cjs
       - name: Commit verified snapshot only to development branch
