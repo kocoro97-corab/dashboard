@@ -13,7 +13,10 @@ function normalize(payload,now=Date.now()){
  if(!Number.isFinite(timestamp)||timestamp>now+300000||now-timestamp>MAX_AGE)throw Error('ECON_STALE');
  const events=[],seen=new Set();
  for(const v of payload.events){
-  if(!v||v.publisher!=='BLS'||!allowedTypes.has(v.type)||v.verified!==true||v.sourceUrl!==root.MYInvestBlsSchedule?.SOURCE||!dateOK(v.date)||typeof v.startsAt!=='string'||!Number.isFinite(Date.parse(v.startsAt))||typeof v.title!=='string'||v.title.length>100||typeof v.id!=='string'||!/^bls-(CPI|NFP|PPI|JOLTS|ECI)-/.test(v.id))continue;
+  if(!v||v.publisher!=='BLS'||!allowedTypes.has(v.type)||v.verified!==true||v.sourceUrl!==root.MYInvestBlsSchedule?.SOURCE||!dateOK(v.date)||typeof v.startsAt!=='string'||!Number.isFinite(Date.parse(v.startsAt))||typeof v.title!=='string'||v.title.length>100||typeof v.id!=='string'||v.id!=='bls-'+v.type+'-'+v.startsAt)continue;
+  const kstParts=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(v.startsAt));
+  const dateParts={};for(const part of kstParts)if(part.type!=='literal')dateParts[part.type]=part.value;
+  if(v.date!==dateParts.year+'-'+dateParts.month+'-'+dateParts.day)continue;
   const key=v.publisher+'|'+v.type+'|'+v.startsAt;
   if(seen.has(key))continue;seen.add(key);
   events.push(Object.freeze({id:v.id,date:v.date,title:v.title,category:'macro',priority:v.priority==='critical'?'critical':'high',publisher:'BLS',type:v.type,sourceUrl:v.sourceUrl,startsAt:v.startsAt,verified:true,source:'BLS',retrievedAt:payload.retrievedAt}));
