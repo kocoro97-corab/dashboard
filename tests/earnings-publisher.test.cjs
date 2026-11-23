@@ -19,7 +19,7 @@ assert.throws(()=>build({events:[{...record,sourceUrl:'https://attacker.example/
 assert.throws(()=>build({events:[record,record]},{now}),/EARNINGS_DUPLICATE_ID/);
 const vendor={...record,eventId:'vendor-fixture-1',dateStatus:'estimated',evidence:'vendor_estimate',
  sourceUrl:'https://api.earningscalendar.net/calendar',licenseApproved:true};
-assert.equal(build({events:[vendor]},{now}).events[0].licenseApproved,undefined,'license details not published');
+assert.throws(()=>build({events:[vendor]},{now}),/EARNINGS_EVIDENCE_INVALID/,'unverified vendor origin is not an approved source');
 assert.throws(()=>build({events:[{...vendor,licenseApproved:false}]},{now}),/EARNINGS_VENDOR_LICENSE_NOT_APPROVED/);
 assert.throws(()=>build({events:[{...record,eventType:'ir'}]},{now}),/EARNINGS_EVIDENCE_INVALID/);
 
