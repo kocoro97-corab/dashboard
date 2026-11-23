@@ -1,0 +1,15 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fed=require('../js/economic-fomc-schedule.js');
+assert.equal(fed.list(2026).length,8);
+assert.equal(fed.list(2027).length,8);
+assert.equal(fed.list(2028).length,0);
+assert.ok(fed.list(2026).some(e=>e.date==='2026-12-09'&&e.type==='FOMC_DECISION'));
+const special=fed.list(2027).find(e=>e.date==='2027-10-27');
+assert.equal(special.type,'FOMC_STRATEGY');
+assert.equal(special.priority,'high');
+assert.match(special.title,/금리결정 없음/);
+assert.ok(fed.list(2027).filter(e=>e.type==='FOMC_DECISION').length===7);
+assert.ok(fed.list(2027).every(e=>e.timeStatus==='unconfirmed'&&!e.startsAt));
+assert.ok(fed.list(2027).every(e=>e.sourceUrl.startsWith('https://www.federalreserve.gov/')));
+console.log('FOMC 2026-27 dates and 2027 strategy exception PASS');
