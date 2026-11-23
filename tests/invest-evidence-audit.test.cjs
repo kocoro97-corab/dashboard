@@ -26,7 +26,7 @@ const base={market:'US',mode:'swing',nowDay,now,marketData:market,sectorData:sec
  assert.equal(JSON.stringify(r).includes('accountNumber'),false);
 }
 {
- const r=A.audit({...base,marketData:{...market,evidence:market.evidence.map(x=>({...x,receivedAt:'2026-11-23T09:00:00.000Z'}))}});
+ const r=A.audit({...base,marketData:{...market,evidence:market.evidence.map(x=>({...x,asOf:'2026-11-23T08:57:00.000Z',receivedAt:'2026-11-23T09:00:00.000Z'}))}});
  assert.equal(r.status,'incomplete');
  assert.equal(r.evidence[0].status,'stale');
  assert.equal(r.refreshPlan[0].component,'market');
