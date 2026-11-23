@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "source": "BOK",
   "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
-  "retrievedAt": "2026-11-23T05:58:47.602Z",
+  "retrievedAt": "2026-11-23T06:14:11.685Z",
   "events": [
     {
       "id": "bokstat-KR_BOP-2026-01-08T23:00:00.000Z",
@@ -17,7 +17,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-01-08T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2025년 11월 국제수지(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -34,7 +34,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-01-13T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2025년 12월 수출입물가지수 및 무역지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -51,7 +51,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-01-19T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2025년 12월 생산자물가지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -68,7 +68,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-01-21T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2025년 4/4분기 및 연간 실질 국내총생산(속보)",
       "releaseStatus": "scheduled"
     },
@@ -85,7 +85,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-01-22T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 1월 소비자동향조사 결과",
       "releaseStatus": "scheduled"
     },
@@ -102,7 +102,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-01-26T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 1월 기업경기조사 결과 및 경제심리지수(ESI)",
       "releaseStatus": "scheduled"
     },
@@ -119,7 +119,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-02-05T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2025년 12월 국제수지(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -136,7 +136,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-02-12T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 1월 수출입물가지수 및 무역지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -153,7 +153,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-02-23T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 1월 생산자물가지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -170,7 +170,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-02-23T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 2월 소비자동향조사 결과",
       "releaseStatus": "scheduled"
     },
@@ -187,7 +187,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-02-24T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 2월 기업경기조사 결과 및 경제심리지수(ESI)",
       "releaseStatus": "scheduled"
     },
@@ -204,7 +204,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-03-05T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 1월 국제수지(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -221,7 +221,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-03-09T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2025년 4/4분기 및 연간 국민소득(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -238,7 +238,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-03-16T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 2월 수출입물가지수 및 무역지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -255,7 +255,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-03-23T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 2월 생산자물가지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -272,7 +272,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-03-24T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 3월 소비자동향조사 결과",
       "releaseStatus": "scheduled"
     },
@@ -289,7 +289,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-03-26T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 3월 기업경기조사 결과 및 경제심리지수(ESI)",
       "releaseStatus": "scheduled"
     },
@@ -306,7 +306,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-04-07T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 2월 국제수지(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -323,7 +323,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-04-14T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 3월 수출입물가지수 및 무역지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -340,7 +340,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-04-21T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 3월 생산자물가지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -357,7 +357,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-04-22T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 4월 소비자동향조사 결과",
       "releaseStatus": "scheduled"
     },
@@ -374,7 +374,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-04-22T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 1/4분기 실질 국내총생산(속보)",
       "releaseStatus": "scheduled"
     },
@@ -391,7 +391,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-04-27T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 4월 기업경기조사 결과 및 경제심리지수(ESI)",
       "releaseStatus": "scheduled"
     },
@@ -408,7 +408,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-05-07T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 3월 국제수지(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -425,7 +425,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-05-14T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 4월 수출입물가지수 및 무역지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -442,7 +442,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-05-20T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 4월 생산자물가지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -459,7 +459,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-05-21T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 5월 소비자동향조사 결과",
       "releaseStatus": "scheduled"
     },
@@ -476,7 +476,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-05-26T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 5월 기업경기조사 결과 및 경제심리지수(ESI)",
       "releaseStatus": "scheduled"
     },
@@ -493,7 +493,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-06-04T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 4월 국제수지(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -510,7 +510,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-06-08T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 1/4분기 국민소득(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -527,7 +527,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-06-15T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 5월 수출입물가지수 및 무역지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -544,7 +544,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-06-18T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 5월 생산자물가지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -561,7 +561,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-06-19T03:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2025년 지역별 국제수지(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -578,7 +578,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-06-22T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 6월 소비자동향조사 결과",
       "releaseStatus": "scheduled"
     },
@@ -595,7 +595,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-06-24T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 6월 기업경기조사 결과 및 경제심리지수(ESI)",
       "releaseStatus": "scheduled"
     },
@@ -612,7 +612,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-07-07T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 5월 국제수지(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -629,7 +629,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-07-14T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 6월 수출입물가지수 및 무역지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -646,7 +646,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-07-21T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 6월 생산자물가지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -663,7 +663,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-07-22T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 2/4분기 실질 국내총생산(속보)",
       "releaseStatus": "scheduled"
     },
@@ -680,7 +680,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-07-27T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 7월 소비자동향조사 결과",
       "releaseStatus": "scheduled"
     },
@@ -697,7 +697,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-07-29T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 7월 기업경기조사 결과 및 경제심리지수(ESI)",
       "releaseStatus": "scheduled"
     },
@@ -714,7 +714,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-08-05T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 6월 국제수지(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -731,7 +731,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-08-13T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 7월 수출입물가지수 및 무역지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -748,7 +748,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-08-20T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 7월 생산자물가지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -765,7 +765,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-08-24T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 8월 소비자동향조사 결과",
       "releaseStatus": "scheduled"
     },
@@ -782,7 +782,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-08-25T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 8월 기업경기조사 결과 및 경제심리지수(ESI)",
       "releaseStatus": "scheduled"
     },
@@ -799,7 +799,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-09-03T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 7월 국제수지(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -816,7 +816,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-09-07T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 2/4분기 국민소득(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -833,7 +833,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-09-14T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 8월 수출입물가지수 및 무역지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -850,7 +850,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-09-17T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 8월 생산자물가지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -867,7 +867,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-09-22T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 9월 소비자동향조사 결과",
       "releaseStatus": "scheduled"
     },
@@ -884,7 +884,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-09-28T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 9월 기업경기조사 결과 및 경제심리지수(ESI)",
       "releaseStatus": "scheduled"
     },
@@ -901,7 +901,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-10-07T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 8월 국제수지(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -918,7 +918,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-10-15T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 9월 수출입물가지수 및 무역지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -935,7 +935,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-10-20T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 9월 생산자물가지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -952,7 +952,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-10-26T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 10월 소비자동향조사 결과",
       "releaseStatus": "scheduled"
     },
@@ -969,7 +969,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-10-26T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 3/4분기 실질 국내총생산(속보)",
       "releaseStatus": "scheduled"
     },
@@ -986,7 +986,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-10-28T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 10월 기업경기조사 결과 및 경제심리지수(ESI)",
       "releaseStatus": "scheduled"
     },
@@ -1003,7 +1003,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-11-04T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 9월 국제수지(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -1020,7 +1020,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-11-12T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 10월 수출입물가지수 및 무역지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -1037,7 +1037,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-11-19T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 10월 생산자물가지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -1054,7 +1054,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-11-23T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 11월 소비자동향조사 결과",
       "releaseStatus": "scheduled"
     },
@@ -1071,7 +1071,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-11-24T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 11월 기업경기조사 결과 및 경제심리지수(ESI)",
       "releaseStatus": "scheduled"
     },
@@ -1088,7 +1088,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-12-07T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 10월 국제수지(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -1105,7 +1105,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-12-08T23:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 3/4분기 국민소득(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -1122,7 +1122,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-12-14T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 11월 수출입물가지수 및 무역지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -1139,7 +1139,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-12-21T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 11월 생산자물가지수(잠정)",
       "releaseStatus": "scheduled"
     },
@@ -1156,7 +1156,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-12-23T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 12월 소비자동향조사 결과",
       "releaseStatus": "scheduled"
     },
@@ -1173,7 +1173,7 @@
       "sourceUrl": "https://www.bok.or.kr/portal/stats/statsPublictSchdul/listCldr.do?menuNo=200775&year=2026",
       "startsAt": "2026-12-28T21:00:00.000Z",
       "sourceTimeZone": "Asia/Seoul",
-      "observedAt": "2026-11-23T05:58:47.602Z",
+      "observedAt": "2026-11-23T06:14:11.685Z",
       "sourceTitle": "2026년 12월 기업경기조사 결과 및 경제심리지수(ESI)",
       "releaseStatus": "scheduled"
     }
