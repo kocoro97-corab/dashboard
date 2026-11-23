@@ -50,7 +50,7 @@ function normalize(payload,now=Date.now()){
   const key=raw.market+'|'+raw.symbol+'|'+raw.period+'|'+raw.eventType;
   const candidate=Object.freeze({id:'earnings:'+raw.eventId,date:raw.date,title:raw.name+' · '+(raw.eventType==='earnings'?'실적 발표':raw.eventType==='earnings_call'?'실적 설명회':'기업설명회'),
    category:'earnings',market:raw.market,symbol:raw.symbol,name:raw.name,period:raw.period,eventType:raw.eventType,
-   dateStatus:raw.dateStatus,evidence:raw.evidence,sourceUrl:raw.sourceUrl,source:'공식 공시·IR 확인',verified:raw.dateStatus==='confirmed',
+   dateStatus:raw.dateStatus,evidence:raw.evidence,sourceUrl:raw.sourceUrl,source:raw.dateStatus==='confirmed'?'공시·IR 확인':'외부 예상일(미확정)',verified:raw.dateStatus==='confirmed',
    localTimeBasis:time?'Asia/Seoul':raw.market==='US'?'America/New_York':'Asia/Seoul',startsAt:time||null,priority:'high'});
   const prior=seen.get(key);
   if(!prior||prior.dateStatus==='estimated'&&candidate.dateStatus==='confirmed'||
