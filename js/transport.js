@@ -15,7 +15,7 @@
   }
   function isRelay(){return config().mode==='relay'}
   // Shared physical read budget. Auth and reviewed writes are never replayed.
-  const reads=new Set(['publicFetch','nhQuotes','nhExternalQuotes','nhAccounts','externalHoldings','externalHistory','externalAccounts']);
+  const reads=new Set(['publicFetch','nhQuotes','nhExternalQuotes','nhAccounts','externalHoldings','externalHistory','externalAccounts','googleCalendarStatus','googleCalendarList','googleCalendarEvents']);
   const waiting=[],running=new Set(),publicPending=new Map();let epoch=0,completed=0,cancelled=0,pauseUntil=0,pauseTimer=null;
   const readClock=()=>root.performance?.now?.()??Date.now();
   const abortError=()=>Object.assign(new Error('READ_CANCELLED'),{name:'AbortError',code:'READ_CANCELLED'});
