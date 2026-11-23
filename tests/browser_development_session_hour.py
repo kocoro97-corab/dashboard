@@ -35,6 +35,17 @@ async def main():
      await page.wait_for_function('()=>!DevelopmentSession.getStatus().checking&&DevelopmentSession.getStatus().scheduled')
      assert await page.evaluate('lastActive()')==active_after_input
      await expect(page.locator('#sessionTimeTxt')).to_have_text('58:00')
+     # An overloaded relay is not proof that the authenticated session expired.
+     await page.evaluate('''()=>{window.__sessionTransport=DashboardTransport;let busy=true;window.DashboardTransport=Object.freeze({...DashboardTransport,post:async(body,options)=>{if(body.action==='sessionInfo'&&busy){busy=false;return new Response(JSON.stringify({success:false,code:'RELAY_BUSY'}),{status:503})}return __sessionTransport.post(body,options)}})}''')
+     await page.clock.fast_forward(120000)
+     await page.wait_for_function('()=>DevelopmentSession.getStatus().state==="RETRYING"')
+     await expect(page.locator('#appContainer')).to_be_visible()
+     await expect(page.locator('#developmentSessionNotice')).to_have_text('서버 연결 재확인 중')
+     assert await page.evaluate('lastActive()')==active_after_input
+     await page.clock.fast_forward(15000)
+     await page.wait_for_function('()=>DevelopmentSession.getStatus().state==="VERIFIED"')
+     await expect(page.locator('#developmentSessionNotice')).to_be_hidden()
+     await page.evaluate('()=>{window.DashboardTransport=__sessionTransport;delete window.__sessionTransport}')
      # No browser activity is manufactured by the successful background check.
      await page.screenshot(path=str(args.output/(str(width)+'-after-six-minutes.png')))
      await page.reload(wait_until='domcontentloaded');await page.wait_for_function('()=>DashboardShell.getStatus().page==="strategy"')
@@ -46,7 +57,7 @@ async def main():
      assert await page.locator('[data-module=five-minute-reference-v1]').count()==0
      assert not h.errors,h.errors
      assert not any(r['action'] in ['nhAccounts','nhQuotes','saveExternalHoldings','restoreExternalHoldings','order'] for r in h.requests)
-     print(json.dumps({'width':width,'status':'PASS','auth':'SYNTHETIC','publishedAssets':args.published,'inactivityMinutes':60,'sixMinuteSession':'PASS','activityRestartsFullHour':'PASS','backgroundDoesNotExtend':'PASS','noInputReset':'PASS','reload':'PASS','expiryCleanup':'PASS','actualNhCalls':0}),flush=True)
+     print(json.dumps({'width':width,'status':'PASS','auth':'SYNTHETIC','publishedAssets':args.published,'inactivityMinutes':60,'sixMinuteSession':'PASS','transientBusyRecovery':'PASS','activityRestartsFullHour':'PASS','backgroundDoesNotExtend':'PASS','noInputReset':'PASS','reload':'PASS','expiryCleanup':'PASS','actualNhCalls':0}),flush=True)
     finally:await h.close()
    await browser.close()
 asyncio.run(main())
