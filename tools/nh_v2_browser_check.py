@@ -167,12 +167,6 @@ def native_browser_check(target, username, password, binding=None):
                         if action=='logout' and data.get('success') is True:state['logout']=True
                     except Exception:pass
                 page.on('response',response)
-                # Type-only JS error evidence; no raw text from pages or private fields.
-                script_errors=[]
-                def script_error_type(error):
-                    kind=next((name for name in ('ReferenceError','TypeError','SyntaxError','SecurityError','RangeError') if name in str(error)),'OTHER')
-                    if len(script_errors)<10:script_errors.append(kind)
-                page.on('pageerror',script_error_type)
                 def console(message):
                     if message.type == 'error' and 'cors' in message.text.lower():
                         report['corsFailureObserved']=True
@@ -220,66 +214,8 @@ def native_browser_check(target, username, password, binding=None):
                 report.update(gasCommunication='PASS',displayMatchesResponse='PASS')
                 token=page.evaluate("()=>LS('invest_session_token')")
                 report['phase']='SESSION_RELOAD'
-                script_errors_before_reload=len(script_errors)
-                report['reloadPreflight']=page.evaluate("""() => ({
-                    tokenPresent:!!LS('invest_session_token'),
-                    sessionFresh:sessionLeftMs()>0,
-                    lastActiveRecorded:!!localStorage.getItem('invest_last_active'),
-                    savedEndpointPresent:!!localStorage.getItem('invest_myproxy')
-                })""")
                 page.reload(wait_until='domcontentloaded')
-                report['reloadAfterDocument']=page.evaluate("""() => ({
-                    tokenPresent:typeof LS==='function'&&!!LS('invest_session_token'),
-                    savedTokenPresent:!!localStorage.getItem('invest_session_token'),
-                    sessionFresh:typeof sessionLeftMs==='function'&&sessionLeftMs()>0,
-                    appVisible:document.getElementById('appContainer')?.style.display==='block',
-                    endpointStored:!!localStorage.getItem('invest_myproxy'),
-                    authSubmitBound:document.getElementById('authSubmitBtn')?.dataset.bound==='1',
-                    authInstrumented:window.__syntheticAuthInstrumented===true,
-                    authFunctionInstrumented:typeof checkAuthentication==='function'&&checkAuthentication.toString().includes('__syntheticAuthProbe'),
-                    bindReachedRestoreCall:window.__syntheticBindReachedRestoreCall===true,
-                    authRestoreEntered:window.__syntheticAuthProbe?.called===true,
-                    authTokenAtEntry:window.__syntheticAuthProbe?.tokenAtStart===true,
-                    authSessionFreshAtEntry:window.__syntheticAuthProbe?.freshAtStart===true,
-                    developmentRestoreAvailable:typeof window.DevelopmentSession?.restore==='function',
-                    usingSessionStorage:typeof AUTH_STORAGE!=='undefined'&&AUTH_STORAGE===sessionStorage,
-                    authRestoreAvailable:typeof checkAuthentication==='function',
-                    authBindAvailable:typeof bindAuth==='function',
-                    transportAvailable:typeof post==='function',
-                    initialScriptCount:document.querySelectorAll('script[src]').length
-                })""")
-                try:
-                    page.wait_for_function("()=>$('appContainer').style.display==='block'&&!NH_ACCOUNT_BUSY&&NH_ACCOUNT_SESSION===LS('invest_session_token')",timeout=120000)
-                except Exception:
-                    # Capture only boolean readiness indicators while the browser is still open.
-                    # No token values, account fields, remote URLs or raw console output.
-                    try:
-                        report['reloadScriptErrorTypes']=script_errors[script_errors_before_reload:]
-                        report['reloadDiagnostic']=page.evaluate("""() => ({
-                        documentReady:document.readyState==='complete',
-                        authenticated:typeof LS==='function'&&!!LS('invest_session_token'),
-                        appVisible:document.getElementById('appContainer')?.style.display==='block',
-                        loginVisible:document.getElementById('authGuard')?.style.display==='flex',
-                        nhPending:typeof NH_ACCOUNT_BUSY!=='undefined'&&NH_ACCOUNT_BUSY===true,
-                        nhSessionMatch:typeof NH_ACCOUNT_SESSION!=='undefined'&&typeof LS==='function'&&NH_ACCOUNT_SESSION===LS('invest_session_token'),
-                        sessionHasTime:typeof sessionLeftMs==='function'&&sessionLeftMs()>0,
-                        shellPresent:!!window.DashboardShell,
-                        authSubmitBound:document.getElementById('authSubmitBtn')?.dataset.bound==='1',
-                        authInstrumented:window.__syntheticAuthInstrumented===true,
-                        authFunctionInstrumented:typeof checkAuthentication==='function'&&checkAuthentication.toString().includes('__syntheticAuthProbe'),
-                        bindReachedRestoreCall:window.__syntheticBindReachedRestoreCall===true,
-                        authRestoreEntered:window.__syntheticAuthProbe?.called===true,
-                        authTokenAtEntry:window.__syntheticAuthProbe?.tokenAtStart===true,
-                        authSessionFreshAtEntry:window.__syntheticAuthProbe?.freshAtStart===true,
-                        developmentRestoreAvailable:typeof window.DevelopmentSession?.restore==='function',
-                        usingSessionStorage:typeof AUTH_STORAGE!=='undefined'&&AUTH_STORAGE===sessionStorage,
-                        authRestoreAvailable:typeof checkAuthentication==='function',
-                        authBindAvailable:typeof bindAuth==='function',
-                        transportAvailable:typeof post==='function'
-                    })""")
-                    except Exception as diagnostic_error:
-                        report['reloadDiagnostic']={'evaluationErrorType':type(diagnostic_error).__name__}
-                    raise
+                page.wait_for_function("()=>$('appContainer').style.display==='block'&&!NH_ACCOUNT_BUSY&&NH_ACCOUNT_SESSION===LS('invest_session_token')",timeout=120000)
                 if page.evaluate("()=>LS('invest_session_token')")!=token:raise RuntimeError('reload')
                 report['reloadSession']='PASS'
                 report['phase']='WAITING_NATURAL_INACTIVITY_LOGOUT'
@@ -307,23 +243,6 @@ def native_browser_check(target, username, password, binding=None):
     except Exception as error:
         report['code']='LIVE_BROWSER_AUTH_COMMUNICATION_OR_SESSION_FAILED'
         report['errorType']='TypeError' if 'TypeError:' in str(error) else 'SyntaxError' if 'SyntaxError:' in str(error) else 'TimeoutError' if type(error).__name__=='TimeoutError' else 'OTHER'
-        # Only non-sensitive boolean state, for identifying synthetic session-reload failures.
-        # Never log token values, account details, endpoints, network payloads or credentials.
-        if report.get('phase')=='SESSION_RELOAD' and page is not None:
-            try:
-                report['reloadDiagnostic']=page.evaluate("""() => ({
-                    documentReady:document.readyState==='complete',
-                    authenticated:typeof LS==='function'&&!!LS('invest_session_token'),
-                    appVisible:document.getElementById('appContainer')?.style.display==='block',
-                    loginVisible:document.getElementById('authGuard')?.style.display==='flex',
-                    nhPending:typeof NH_ACCOUNT_BUSY!=='undefined'&&NH_ACCOUNT_BUSY===true,
-                    nhSessionMatch:typeof NH_ACCOUNT_SESSION!=='undefined'&&typeof LS==='function'&&NH_ACCOUNT_SESSION===LS('invest_session_token'),
-                    sessionHasTime:typeof sessionLeftMs==='function'&&sessionLeftMs()>0,
-                    shellPresent:!!window.DashboardShell
-                })""")
-            except Exception as diagnostic_error:
-                if 'reloadDiagnostic' not in report:
-                    report['reloadDiagnostic']={'evaluationErrorType':type(diagnostic_error).__name__}
     finally:
         server.shutdown();server.server_close()
     if report['status']=='PASS':
