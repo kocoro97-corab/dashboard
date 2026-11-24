@@ -100,7 +100,10 @@ function applyExternalAutoRefresh(){if(EXT_AUTO_TIMER)clearInterval(EXT_AUTO_TIM
 async function ocrImage(file){
   // Load the heavy OCR engine only when the user explicitly requests image recognition.
   // Keep a shared promise so multiple image uploads cannot fetch the library twice.
-  if(!window.Tesseract){
+  if(!window.Tesseract&&window.DevelopmentOCR){
+    await window.DevelopmentOCR.ready();
+  }
+  if(!window.Tesseract&&!window.DevelopmentOCR){
     if(!window.__myInvestOcrLoader){
       window.__myInvestOcrLoader=new Promise((resolve,reject)=>{
         const script=document.createElement('script');
