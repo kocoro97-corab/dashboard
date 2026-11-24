@@ -54,7 +54,7 @@ function evaluate({selection,stockSetup,marketRegime=null,publicEvents=null,
     sector:scopedSector,sectorLink:scopedLink,event,holding:validated[0],nowDay})]:[];
   queue=queueEngine.collect({mode,nowDay,candidates:[candidate],holdings:queueHolding,maxResults:10});
  }catch{queue=null}
- return {status:candidate.status==='insufficient'?'insufficient':'review-required',
+ return {status:candidate.status,
   symbol,market,mode,asOf:stockSetup.asOf,
   candidate:{status:candidate.status,label:candidate.label,
    blocking:candidate.blocking.slice(0,18),reasons:candidate.reasons.slice(0,18),
