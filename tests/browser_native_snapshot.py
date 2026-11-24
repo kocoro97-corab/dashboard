@@ -47,7 +47,7 @@ def synthetic_expiry(page,expression,*args,**kwargs):
 
 with patch.object(Route,'continue_',synthetic_transport),patch.object(Page,'wait_for_function',synthetic_expiry):
     report=native_browser_check(TARGET,'synthetic','SYNTHETIC_PRIVATE_PASSWORD','f'*64)
-assert report['status']=='PASS', {k:v for k,v in report.items() if k in ('phase','code','status')}
+assert report['status']=='PASS', {k:v for k,v in report.items() if k in ('phase','code','status','errorType','reloadDiagnostic','login','gasCommunication','displayMatchesResponse','reloadSession','browserMetadata','unauthenticatedBlocked')}
 assert report['browserMetadata']=='PASS' and report['unauthenticatedBlocked']=='PASS' and report['reloadSession']=='PASS'
 assert report['displayMatchesResponse']=='PASS' and not report['storageWrites']
 assert not any(value in json.dumps(report) for value in ('SYNTHETIC_PRIVATE_PASSWORD','SYNTHETIC_PRIVATE_TOKEN','SYNTHETIC_PRIVATE_HOLDING',TARGET))
