@@ -97,6 +97,28 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
     assert page.evaluate("LS('invest_session_token')")==token
     assert page.locator('#pageViewport .page-content').count()==1
     if path=='/market':assert not page.locator('#marketSection').is_visible()
+   # Synthetic, anonymous performance evidence: never print accounts, tokens or request URLs.
+   # CI wall-clock timings vary between runs; record them without brittle thresholds.
+   perf=page.evaluate("""() => {
+     const observed=window.MYInvestWebPerformance?.snapshot?.();
+     const nav=performance.getEntriesByType('navigation')[0];
+     const resources=performance.getEntriesByType('resource');
+     const publicScripts=resources.filter(x=>x.name.includes('/js/'));
+     const ocrScripts=resources.filter(x=>x.name.includes('tesseract.min.js'));
+     const menuMedian={};
+     for(const [name,stats] of Object.entries(observed?.summary||{}))
+       menuMedian[name]={count:stats.count,medianMs:stats.medianMs,maxMs:stats.maxMs};
+     return {
+       initialDomContentLoadedMs:Math.round(nav?.domContentLoadedEventEnd??0),
+       firstPartyScriptRequests:publicScripts.length,
+       unexpectedEarlyOcrRequests:ocrScripts.length,
+       routeSamples:observed?.samples?.length??0,
+       menuMedianMs:menuMedian,
+       anonymous:observed?.containsPrivateFields===false&&observed?.memoryOnly===true
+     };
+   }""")
+   assert perf['anonymous'] and perf['unexpectedEarlyOcrRequests']==0,perf
+   print('PERF_SYNTHETIC '+json.dumps({'development':development,'width':width,**perf},sort_keys=True),flush=True)
    go('/accounts/ocr');assert page.evaluate('EXT_ASSETS.length')==count and page.locator('#externalAssetSection').is_visible()
    for sub in ['overview','nh','special','holdings','analysis']:
     go('/accounts/'+sub);assert page.evaluate('EXT_ASSETS.length')==count
