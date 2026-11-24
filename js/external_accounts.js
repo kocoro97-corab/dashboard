@@ -98,7 +98,21 @@ async function loadExternalAssets(){
 function saveExternalSettings(){LS('invest_external_drive_folder',$('externalDriveFolder').value.trim());const cfg={auto:$('externalAutoRefresh').checked,minutes:Number($('externalAutoMinutes').value)||10};LS('invest_external_settings',cfg);applyExternalAutoRefresh();$('externalStatus').textContent=cfg.auto?'자동갱신 사용 · '+cfg.minutes+'분 간격':'자동갱신 꺼짐 · 접속 및 수동 새로고침';}
 function applyExternalAutoRefresh(){if(EXT_AUTO_TIMER)clearInterval(EXT_AUTO_TIMER);EXT_AUTO_TIMER=null;const cfg=LS('invest_external_settings')||{};if(cfg.auto)EXT_AUTO_TIMER=setInterval(()=>refreshExternalPrices(true),Math.max(5,Number(cfg.minutes)||10)*60000)}
 async function ocrImage(file){
-  if(!window.Tesseract)throw new Error('OCR 엔진을 불러오지 못했습니다. 인터넷 연결을 확인하세요.');
+  // OCR is optional: its CDN script does not block dashboard boot.
+  // Wait for an in-flight asynchronous library request only on user upload.
+  if(!window.Tesseract){
+    const script=document.querySelector('script[src*="tesseract.js@5.1.1/dist/tesseract.min.js"]');
+    if(script)await new Promise(resolve=>{
+      let finished=false;
+      const done=()=>{if(finished)return;finished=true;clearTimeout(timer);
+        script.removeEventListener('load',done);script.removeEventListener('error',done);resolve()};
+      const timer=setTimeout(done,8000);
+      script.addEventListener('load',done,{once:true});
+      script.addEventListener('error',done,{once:true});
+      if(window.Tesseract)done();
+    });
+  }
+  if(!window.Tesseract)throw new Error('OCR 엔진을 불러오지 못했습니다. 인터넷 연결 또는 보안 정책을 확인하세요.');
   const localOptions=window.DevelopmentOCR?DevelopmentOCR.options:{};
   const result=await Tesseract.recognize(file,'kor+eng',{...localOptions,logger:m=>{if(m.status==='recognizing text')$('externalOcrProgress').textContent='이미지 인식 중 '+Math.round((m.progress||0)*100)+'%'}});
   let data=result.data||{text:''};
