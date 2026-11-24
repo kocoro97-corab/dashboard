@@ -1,0 +1,32 @@
+name: Strategy analysis panel integration checks
+on:
+  push:
+    branches: [feat/nh-integration-v2]
+    paths:
+      - 'js/analysis-integration-panel-v1.js'
+      - 'js/market-regime-engine.js'
+      - 'js/page-strategy.js'
+      - 'index.html'
+      - 'tests/analysis-integration-panel-v1.test.cjs'
+      - 'tests/analysis-integration-wiring.test.cjs'
+      - '.github/workflows/analysis-integration-panel.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  read-only-panel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and cache-only UI wiring checks
+        run: |
+          node --check js/analysis-integration-panel-v1.js
+          node --check js/market-regime-engine.js
+          node --check js/page-strategy.js
+          node --check tests/analysis-integration-panel-v1.test.cjs
+          node --check tests/analysis-integration-wiring.test.cjs
+          node tests/analysis-integration-panel-v1.test.cjs
+          node tests/analysis-integration-wiring.test.cjs
