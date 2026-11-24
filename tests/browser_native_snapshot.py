@@ -33,6 +33,9 @@ def synthetic_transport(route,*args,**kwargs):
         source=(Path(__file__).resolve().parents[1]/"js"/"auth.js").read_text()
         anchor="async function checkAuthentication(){"
         source="window.__syntheticAuthInstrumented=true;\n"+source
+        call_anchor="  checkAuthentication();\n}\nif(document.readyState"
+        assert source.count(call_anchor)==1
+        source=source.replace(call_anchor,"  window.__syntheticBindReachedRestoreCall=true;\n  checkAuthentication();\n}\nif(document.readyState")
         assert source.count(anchor)==1
         source=source.replace(anchor,anchor+"window.__syntheticAuthProbe={called:true,tokenAtStart:!!LS('invest_session_token'),freshAtStart:sessionLeftMs()>0};")
         route.fulfill(content_type="application/javascript",body=source);return
