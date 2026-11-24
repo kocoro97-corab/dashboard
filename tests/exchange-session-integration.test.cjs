@@ -6,7 +6,7 @@ const Setup=require('../js/stock-setup-engine.js');
 const Panel=require('../js/analysis-integration-panel-v1.js');
 const now=Date.now(),dayMS=86400000;
 const chartDays=[];
-const before=new Date(now-6*dayMS);
+const before=new Date(now);
 for(let i=100;i>=1;i--){
  const date=new Date(Date.UTC(before.getUTCFullYear(),before.getUTCMonth(),before.getUTCDate())-i*dayMS);
  if(date.getUTCDay()===0||date.getUTCDay()===6)continue;
