@@ -30,7 +30,7 @@ async function publicAnalysis(sym){
  const exchange=String(meta.exchangeName||'').toUpperCase();if(/^\d{6}$/.test(sym)&&exchange&&!(/\.KQ$/.test(provider)?/^(KOE|KOSDAQ)$/:/^(KSC|KOSPI|KRX|SEOUL)$/).test(exchange))throw Error('INVALID_CHART_EXCHANGE');
  const now=Date.now(),bars=[];let previous=0;for(let i=0;i<r.timestamp.length;i++){const epoch=r.timestamp[i],t=epoch*1000,o=q.open?.[i],h=q.high?.[i],l=q.low?.[i],c=q.close?.[i],v=q.volume?.[i];if(!Number.isSafeInteger(epoch)||epoch<=0||t>now+300000||t<=previous||![o,h,l,c].every(n=>Number.isFinite(n)&&n>0)||h<Math.max(o,c,l)||l>Math.min(o,c,h))continue;previous=t;bars.push({t,o,h,l,c,v})}
  if(bars.length<21)throw Error('INSUFFICIENT_BARS');
- const session=root.MYInvestExchangeSessionProof?.infer({market:/^\\d{6}$/.test(sym)?'KR':'US',
+ const session=root.MYInvestExchangeSessionProof?.infer({market:/^\d{6}$/.test(sym)?'KR':'US',
   meta,timestamps:bars.map(b=>Math.floor(b.t/1000)),now});
  const sessionProof=session?.status==='ready'?{
   status:'ready',dates:session.dates,closedDates:session.closedDates,
