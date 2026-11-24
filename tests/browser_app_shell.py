@@ -108,6 +108,15 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
     assert page.evaluate("LS('invest_session_token')")==token
     assert page.locator('#pageViewport .page-content').count()==1
     if path=='/market':assert not page.locator('#marketSection').is_visible()
+   if development:
+    go('/diagnostics')
+    panel=page.locator('#devBrowserPerformance')
+    assert panel.count()==1
+    panel.locator('summary').click()
+    assert page.locator('#devBrowserPerformanceResults').is_visible()
+    assert 'JavaScript 요청' in page.locator('#devBrowserPerformanceResults').inner_text()
+    assert page.evaluate("()=>MYInvestWebPerformance.browserSnapshot().containsPrivateFields===false")
+    go('/home')
    # Synthetic, anonymous performance evidence: never print accounts, tokens or request URLs.
    # CI wall-clock timings vary between runs; record them without brittle thresholds.
    perf=page.evaluate("""() => {
