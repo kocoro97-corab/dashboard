@@ -7,6 +7,8 @@ const strategy=fs.readFileSync(path.join(root,'js/page-strategy.js'),'utf8');
 const scripts=['js/exchange-session-proof.js','js/sector-rotation-adapter.js','js/sector-rotation-engine.js',
  'js/sector-cache-rotation-bridge.js','js/page-sectors.js','js/page-stocks.js',
  'js/market-regime-engine.js','js/stock-setup-adapter.js','js/stock-setup-engine.js',
+ 'js/integrated-strategy-engine.js','js/integrated-event-adapter.js',
+ 'js/opportunity-review-queue.js','js/cached-strategy-bridge.js',
  'js/analysis-integration-panel-v1.js','js/page-strategy.js'];
 const offsets=scripts.map(s=>html.indexOf('src="'+s+'?'));
 assert.equal(offsets.every((n,i)=>n>=0&&(i===0||n>offsets[i-1])),true,
@@ -16,6 +18,13 @@ assert.equal(strategy.includes('readinessPanel?.update()'),true,'panel must foll
 assert.equal(strategy.includes('readinessPanel?.destroy?.()'),true,'panel must destroy on route change');
 assert.equal(strategy.includes("received:typeof QT!=='undefined'?QT:null"),true,'use existing quote timestamp cache');
 assert.equal(strategy.includes("analysis:latestData"),true,'use existing workflow data, never repeat fetch');
+assert.equal(strategy.includes('MYInvestEventContext.collect'),true,'reuse only cached public official event context');
+assert.equal(strategy.includes('InvestWorkflow.holdings(ctx,s,latestData)'),true,'reuse already validated private holdings transiently');
+assert.equal(strategy.includes('MYInvestEventContext?.refreshAll'),false,'new strategy bridge must not initiate additional calendar requests');
+const bridge=fs.readFileSync(path.join(root,'js/cached-strategy-bridge.js'),'utf8');
+assert.equal(/fetch\\s*\\(|XMLHttpRequest|localStorage|sessionStorage/.test(bridge),false,
+ 'integrated bridge cannot fetch or store personal data');
+assert.equal(bridge.includes('sectorLink?.verified===true'),true,'sector membership requires independent proof');
 const start=strategy.indexOf('// Opt-in evidence panel reads existing quotes');
 const end=strategy.indexOf(' legacy.mount(container,ctx)',start);
 assert.ok(start>=0&&end>start,'safe integration block present');
