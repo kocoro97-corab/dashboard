@@ -18,6 +18,7 @@ function create(){
  const legacy=DashboardPages.legacy({ids:['strategySection'],intro:'기존 규칙 기반 시장 시나리오 · 실제 주문 없음',refresh(){generateScenario()}});
  let view,head,output,holdingPanel,conditional,selector=null,unsubscribe=null,requestVersion=0,latestData=null,lastSelectionKey='',inputs={},mode='swing',active=false,ctxRef=null,earningsRedraw=()=>{};
  let compareDisclosure=null,compareHost=null,compareInstance=null;
+ let readinessPanel=null;
 
  const css='.str4{margin-bottom:18px;color:inherit}.str4 button{cursor:pointer}.str4-nav,.str4-modes{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.str4-nav button,.str4-modes button{border:1px solid #465775;background:#172238;color:#e7eef9;border-radius:7px;padding:8px 12px}.str4-modes button[aria-pressed="true"]{background:#264365;border-color:#72b5ff}.str4-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.str4-field{display:flex;flex-direction:column;gap:5px;padding:10px;border:1px solid #344158;border-radius:9px;background:#172238;color:#e7eef9}.str4-field input{min-width:0;padding:9px;border-radius:6px;border:1px solid #52637c;background:#101a2a;color:#fff}.str4-output{padding:12px;border:1px solid #465775;border-radius:9px;margin-top:12px}.str4-muted{font-size:12px;color:#b6c5d9}.str4-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.str4-cards div{padding:10px;border-radius:8px;background:#172238;color:#e7eef9}.str4-cards strong{display:block;font-size:17px;margin-top:5px}@media(max-width:550px){.str4-grid,.str4-cards{grid-template-columns:1fr}}';
  const field=(label,key,initial,step)=>{const wrap=make('label',undefined,'str4-field');wrap.append(make('span',label));const input=make('input');input.type='number';input.min='0';input.step=step;input.inputMode='decimal';input.value=initial;input.addEventListener('input',calculate);inputs[key]=input;wrap.append(input);return wrap};
@@ -52,12 +53,12 @@ function create(){
   try{
    const data=await root.InvestWorkflow.ensure(selection,force);
    if(!active||version!==requestVersion||readSelection()?.symbol!==selection.symbol)return;
-   latestData=data;syncComparison();drawConditional(data,selection);
+   latestData=data;syncComparison();drawConditional(data,selection);readinessPanel?.update();
    const cases=root.InvestWorkflow.scenarios(data,selection);
    if(cases.length&&!inputs.entry.value){inputs.entry.value=cases[0].entry;inputs.stop.value=cases[0].stop;inputs.target.value=cases[0].target2;calculate()}
    renderHolding();
   }catch{
-   if(active&&version===requestVersion){latestData=null;syncComparison('error');conditional.replaceChildren(make('p','전략 판단 불가 · 실제 일봉 자료의 수신·식별자·통화를 확인하세요. 이전 종목 조건값은 사용하지 않습니다.'))}
+   if(active&&version===requestVersion){latestData=null;syncComparison('error');readinessPanel?.update();conditional.replaceChildren(make('p','전략 판단 불가 · 실제 일봉 자료의 수신·식별자·통화를 확인하세요. 이전 종목 조건값은 사용하지 않습니다.'))}
   }
  }
  function cleanupComparison(){
@@ -160,8 +161,22 @@ head=make('div',undefined,'str4-nav');view.append(head);renderHeader();selector=
  const comparisonStyle=make('style');
  comparisonStyle.textContent='#pageViewport .str4-compare-host .msc1 header{display:block}';
  view.append(comparisonStyle,compareDisclosure);
+ // Opt-in evidence panel reads existing quotes and the data already obtained
+ // by loadStrategy(); it does not trigger any market or account requests.
+ const integration=root.MYInvestAnalysisIntegrationPanelV1;
+ if(typeof integration?.mount==='function'){
+  const currentPublic=()=>({
+   selection:(()=>{const s=readSelection();return s?{symbol:s.symbol,market:s.market,mode}:null})(),
+   analysis:latestData,
+   quotes:typeof Q!=='undefined'?Q:null,
+   quoteSources:typeof SRC!=='undefined'?SRC:null,
+   received:typeof QT!=='undefined'?QT:null,
+   now:Date.now()
+  });
+  try{readinessPanel=integration.mount(view,currentPublic)}catch{readinessPanel=null}
+ }
  legacy.mount(container,ctx);container.prepend(view);calculate();unsubscribe=ctx.subscribe?.(()=>{if(active){renderHolding();if(latestData&&readSelection())drawConditional(latestData,readSelection())}});void loadStrategy()}
- return {mount,refresh:async(ctx,force)=>{await legacy.refresh(ctx,force);renderHeader();renderHolding();void loadStrategy(force)},unmount(){active=false;requestVersion++;latestData=null;compareDisclosure?.removeEventListener('toggle',toggleComparison);cleanupComparison();compareDisclosure=null;compareHost=null;selector?.destroy();selector=null;unsubscribe?.();unsubscribe=null;view?.remove();legacy.unmount()},getStatus:()=>({status:active?'ready':'unmounted',mode})};
+ return {mount,refresh:async(ctx,force)=>{await legacy.refresh(ctx,force);renderHeader();renderHolding();void loadStrategy(force)},unmount(){active=false;requestVersion++;latestData=null;readinessPanel?.destroy?.();readinessPanel=null;compareDisclosure?.removeEventListener('toggle',toggleComparison);cleanupComparison();compareDisclosure=null;compareHost=null;selector?.destroy();selector=null;unsubscribe?.();unsubscribe=null;view?.remove();legacy.unmount()},getStatus:()=>({status:active?'ready':'unmounted',mode})};
 }
 DashboardPages.register('strategy',create);
 root.MYInvestStrategyMath=Object.freeze({plan});
