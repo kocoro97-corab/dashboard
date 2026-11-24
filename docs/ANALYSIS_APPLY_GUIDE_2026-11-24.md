@@ -86,6 +86,14 @@ node tests/exchange-session-integration.test.cjs
 
 **실행 상태:** 원본 개발 브랜치에 연결 코드 반영 및 모의 종단 간 테스트 통과. `dashboard-v2-dev/dev-pages` 게시·실 NH/실 Yahoo 브라우저 테스트·전체 CI PASS·운영 배포는 아직 미완료. 사용자의 운영 배포 승인 전에는 운영 레포지토리 변경 불가.
 
+### 2026-11-24 전체 CI 실패 복구와 별도 개발 게시본 비교
+
+- 실패 이력: `PR regression tests` run `45329703744`의 1440/690/344px synthetic browser 검사에서, 기존 `.stv2-insights`와 신규 확정 일봉 ETF 펼쳐보기의 선택자 중복으로 Playwright strict locator 오류 발생.
+- 수정: 신규 펼쳐보기만 `.stv2-verified-rotation`으로 변경, 기존 산업 모멘텀 `.stv2-insights` 식별자는 그대로 보존. `tests/analysis-integration-wiring.test.cjs`에 선택자 유일성 회귀 항목 추가.
+- 개발 사이트 `dashboard-v2-dev/dev-pages`는 원본 브랜치보다 이전 버전이며 `index.html`의 CSP·릴레이·OAuth·스크립트 쿼리 `&dev=...`가 다르다. **원본 `index.html` 파일 전체 복사 금지**. 개발 게시본의 기존 인증설정 및 `&dev=` 캐시 무효화 규칙을 유지한다.
+- 현재 개발용 `js/page-strategy.js`, `js/page-sectors.js`, `js/page-stocks.js`는 분석 연결 이전 버전이므로 테스트 결과 확인 뒤 각 새 모듈과 화면 변경부만 선별 병합한다.
+- **배포 게이트:** 수정 후 전체 PR regression CI PASS, 기존 개발 게시본 HEAD 기록·백업, 사용자의 기존 계좌/캘린더/뉴스 기능 보존 검증. CI 실행 중 또는 실패 상태에서는 개발 게시본의 기존 동작을 바꾸지 않는다. 운영 `main`/`release/pages`는 승인 전 그대로 유지한다.
+
 ## 2. 원본 개발 브랜치 검증
 
 Codex 사용한도가 해제되지 않아도 GitHub Actions 또는 PC에서 다음 명령으로 검증할 수 있다.
