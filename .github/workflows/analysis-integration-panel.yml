@@ -9,6 +9,9 @@ on:
       - 'js/stock-setup-adapter.js'
       - 'js/stock-setup-engine.js'
       - 'js/sector-rotation-adapter.js'
+      - 'js/sector-rotation-engine.js'
+      - 'js/sector-cache-rotation-bridge.js'
+      - 'tests/sector-cache-rotation-bridge.test.cjs'
       - 'tests/exchange-session-*.test.cjs'
       - 'js/analysis-integration-panel-v1.js'
       - 'js/market-regime-engine.js'
@@ -36,6 +39,9 @@ jobs:
           node --check js/stock-setup-adapter.js
           node --check js/stock-setup-engine.js
           node --check js/sector-rotation-adapter.js
+          node --check js/sector-rotation-engine.js
+          node --check js/sector-cache-rotation-bridge.js
+          node --check tests/sector-cache-rotation-bridge.test.cjs
           node --check tests/exchange-session-proof.test.cjs
           node --check tests/exchange-session-integration.test.cjs
           node --check js/analysis-integration-panel-v1.js
@@ -49,3 +55,4 @@ jobs:
           node tests/exchange-session-integration.test.cjs
           node tests/stock-setup-adapter.test.cjs
           node tests/sector-rotation-adapter.test.cjs
+          node tests/sector-cache-rotation-bridge.test.cjs
