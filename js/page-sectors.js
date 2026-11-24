@@ -32,7 +32,7 @@ async function readSeries(ctx,symbol){
  const raw=await ctx.data.publicRead(url);if(!raw)throw Error('PUBLIC_DATA_UNAVAILABLE');
  const result=JSON.parse(raw)?.chart?.result?.[0],q=result?.indicators?.quote?.[0],times=result?.timestamp;
  if(!result||!q||!Array.isArray(times)||result.meta?.symbol!==symbol)throw Error('INVALID_CHART_IDENTITY');
- const domestic=symbol==='^KS11'||/\.(KS|KQ)$/.test(symbol),currency=result.meta?.currency,exchange=String(result.meta?.exchangeName||'');
+ const domestic=['^KS11','^KQ11'].includes(symbol)||/\.(KS|KQ)$/.test(symbol),currency=result.meta?.currency,exchange=String(result.meta?.exchangeName||'');
  if(currency!==(domestic?'KRW':'USD'))throw Error('CHART_CURRENCY_MISMATCH');
  if(domestic&&!(/\.KQ$/.test(symbol)?/^(KOE|KOSDAQ)$/i:/^(KSC|KOSPI|KRX|SEOUL)$/i).test(exchange))throw Error('CHART_EXCHANGE_MISMATCH');
  let previous=0;const now=Date.now()/1000;
@@ -51,7 +51,7 @@ async function readSeries(ctx,symbol){
  if(bars.length<2)throw Error('INSUFFICIENT_BARS');
  if(typeof window!=='undefined')window.InstrumentNames?.ingest(symbol,result.meta);
  const quoteTime=result.meta?.regularMarketTime,currentObservedAt=Number.isFinite(quoteTime)&&quoteTime>0&&quoteTime<=now+300?quoteTime*1000:null;
- const value={currentPrice:currentObservedAt&&Number.isFinite(result.meta?.regularMarketPrice)&&result.meta.regularMarketPrice>0?result.meta.regularMarketPrice:null,currentObservedAt,instrumentType:result.meta?.instrumentType,bars:bars.map(x=>x.c),times:bars.map(x=>x.t),last:bars.at(-1).t*1000,volume:bars.map(x=>x.v),currency,exchange,
+ const value={symbol,currentPrice:currentObservedAt&&Number.isFinite(result.meta?.regularMarketPrice)&&result.meta.regularMarketPrice>0?result.meta.regularMarketPrice:null,currentObservedAt,instrumentType:result.meta?.instrumentType,bars:bars.map(x=>x.c),times:bars.map(x=>x.t),last:bars.at(-1).t*1000,volume:bars.map(x=>x.v),currency,exchange,
   sessionDates:proven?bars.map(x=>x.sessionDay):null,
   sessionProof:proven?{status:'ready',zone:proof.zone,closedDates:bars.map(x=>x.sessionDay),excludedOpenBars:proof.openDates.length}:{status:'unavailable',reason:proof?.reason||'원천 거래일 확인 불가'}};
  SERIES_CACHE.set(symbol,{at:Date.now(),value});return value;
