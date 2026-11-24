@@ -39,6 +39,16 @@ function adapt(input,{symbol,market,source='Yahoo chart',instrumentType=null,dat
  return {status:'ready',symbol,market,currency,bars,source,exchange:input.exchange,instrumentType:input.instrumentType,verified:true,
   asOf:bars.at(-1).date,remark:'원천 거래소 기준 날짜가 검증된 경우에만 변환'};
 }
-const api=Object.freeze({adapt,validSymbol});
+function adaptCached(input,{symbol,market}={}){
+ const proof=input?.sessionProof,expectedZone=market==='KR'?'Asia/Seoul':market==='US'?'America/New_York':null;
+ if(!validSymbol(symbol)||!expectedZone||input?.symbol!==symbol||
+  proof?.status!=='ready'||proof.zone!==expectedZone||!Array.isArray(input.sessionDates)||
+  !Array.isArray(proof.closedDates)||input.sessionDates.length!==input.bars?.length||
+  input.sessionDates.some((day,i)=>day!==proof.closedDates[i]))
+  return {status:'unavailable',reason:'종목 ID·현지 거래일·마감봉 원천 검증 실패'};
+ return adapt(input,{symbol,market,source:'Yahoo 일봉 (기존 산업 캐시)',
+  instrumentType:input.instrumentType,dates:input.sessionDates});
+}
+const api=Object.freeze({adapt,adaptCached,validSymbol});
 if(typeof module==='object'&&module.exports)module.exports=api;else root.MYInvestSectorSeriesAdapter=api;
 })(globalThis);
