@@ -149,7 +149,10 @@ function create(){
    }
    if(!active||version!==analysisVersion||keyFor(market)!==key)return;
    if(category==='industry')root.InvestWorkflow?.registerThemes(rows.map((r,i)=>({kind:'industry',proxy:market==='US'?'ETF':null,market,name:r.name,rank:i+1,themeReturn:r.change,relativeStrength:r.relative,themeReceivedAt:Date.now(),observedAt:r.asof,benchmark:benchmarkSymbol,dataScope:market==='US'?'us_sector_etf':'kr_industry_sample',coveragePct:r.quality?.coverage==null?null:r.quality.coverage*100,stocks:r.v?[{symbol:r.symbol,name:r.name,market,stockReturn:r.change,stockRelativeStrength:r.relative}]:(r.sample||[]).map(x=>({symbol:x.symbol,name:x.name,market,stockReturn:x.change,stockRelativeStrength:x.relative}))})));else root.InvestWorkflow?.registerThemes(market==='US'?themes.sort((a,b)=>b.relative-a.relative).map((t,i)=>({name:t.name,market:'US',rank:i+1,strength:null,themeReturn:t.change,relativeStrength:t.relative,themeReceivedAt:Date.now(),observedAt:t.asof,benchmark:'SPY',dataScope:'us_theme_sample',coveragePct:t.quality?.coverage==null?null:t.quality.coverage*100,stocks:t.sample.map(r=>({symbol:r.symbol,name:r.name,market:'US',stockReturn:r.change,stockRelativeStrength:r.relative}))})):ranking().map((t,i)=>({name:t.name,market:'KR',rank:i+1,strength:t.sc,themeReturn:t.rate,themeReceivedAt:typeof THM_AT!=='undefined'?THM_AT:null,benchmark:'^KS11',dataScope:'kr_theme_daily',stocks:themeRows(t).map(r=>({symbol:r.code,name:r.name,market:'KR',stockReturn:safeNumber(r.rate)}))})));
-   analytics.set(key,{category,benchmarkSeries:benchmark,rows:rows.sort((a,b)=>b.relative-a.relative),benchmark:base,benchmarkSymbol,received:Date.now(),period,market,failures,themes:themes.sort((a,b)=>b.relative-a.relative),asof:benchmark.last});
+   const strictRotation=market==='US'&&root.MYInvestSectorCacheRotationBridge?.evaluate?
+    root.MYInvestSectorCacheRotationBridge.evaluate({market,benchmark,rows,
+     nowDay:root.MYInvestExchangeSessionProof?.localDay(Date.now(),'America/New_York')}):null;
+   analytics.set(key,{category,benchmarkSeries:benchmark,rows:rows.sort((a,b)=>b.relative-a.relative),benchmark:base,benchmarkSymbol,received:Date.now(),period,market,failures,themes:themes.sort((a,b)=>b.relative-a.relative),asof:benchmark.last,strictRotation});
   }catch(e){if(active&&version===analysisVersion&&keyFor()===key)analysisError='시계열 수신 또는 검증 실패 · 실제 데이터 연결 상태를 확인하세요.'}
   finally{if(active&&version===analysisVersion){analysisBusy=false;draw();if(keyFor()!==viewKey)void loadAnalytics()}}
  }
@@ -166,6 +169,26 @@ function create(){
   const table=make('table',undefined,'stv2-table'),head=make('tr');['섹터/테마','기간 수익률','기준 대비','데이터 범위','관측일'].forEach(x=>head.append(make('th',x)));table.append(head);
   for(const row of data.rows){const tr=make('tr');tr.append((()=>{const cell=make('td');if(market==='US'&&category==='industry')cell.append(button(row.name+' ('+row.symbol+') · ETF 대리지표',()=>root.MYInvestStockSelection?.open(row.symbol,{name:row.name,industry:row.name,source:'industry',mode,relativeStrength:row.relative,stockRelativeStrength:row.relative,stockReturn:row.change,themeReturn:row.change,themeReceivedAt:data.received,observedAt:row.asof,dataScope:'us_sector_etf',benchmark:'SPY',period})));else cell.textContent=row.name+' ('+row.symbol+')';return cell})(),make('td',pct(row.change)),make('td',pct(row.relative)),make('td',row.coverage),make('td',new Date(row.asof).toLocaleDateString('ko-KR')));table.append(tr)}
   target.append(tableScroll(table));if(category==='industry')renderInsights(data,target);
+  if(market==='US'){
+   const proof=make('details',undefined,'stv2-insights');
+   proof.append(make('summary','확정 일봉 기반 산업 1·5·20·60일 상대강도 근거'));
+   const strict=data.strictRotation;
+   if(strict?.status==='descriptive'){
+    const table=make('table',undefined,'stv2-table'),head=make('tr');
+    ['섹터 ETF','1일','5일','20일','60일','5일 상대강도','20일 상대강도','로테이션'].forEach(x=>head.append(make('th',x)));
+    table.append(head);
+    for(const row of strict.candidates.filter(x=>x.status==='descriptive')){
+     const tr=make('tr');tr.append(make('td',row.name+' ('+row.id+')'));
+     for(const n of [1,5,20,60])tr.append(make('td',pct(row.periods[n+'d']?.returnPct??null)));
+     tr.append(make('td',pct(row.periods['5d']?.relativePp??null)),
+      make('td',pct(row.periods['20d']?.relativePp??null)),
+      make('td',row.rotation?.label||'검증된 데이터 부족'));
+     table.append(tr);
+    }
+    proof.append(tableScroll(table),make('p','동일 미국 거래일의 SPY 대비 종가 가격수익률 차이입니다. ETF 대용지표이며 시장 전체 산업 순위·자금유입·매수 신호가 아닙니다.','stv2-muted'));
+   }else proof.append(make('p',strict?.reason||'거래소 현지 날짜·마감봉·종가 자료 검증 전까지 판단 보류','stv2-muted'));
+   target.append(proof);
+  }
   if(market==='US')target.append(make('p','검증 수신 '+data.rows.length+'/'+US_SECTORS.length+'개 ETF','stv2-muted'));
   if(root.DevelopmentDiagnostics){root.DevelopmentDiagnostics.quality('sectors',data.failures||[],data);if(data.failures?.length)list.append(make('p','일부 자료 제외 · 검증·진단에서 상세 확인','stv2-status'))}
   else if(data.failures?.length){const excluded=[...new Map(data.failures.map(x=>[x.symbol,x])).values()],box=make('details',undefined,'stv2-status');box.append(make('summary','일부 종목 '+excluded.length+'개 제외 · 상세 보기'),make('p',excluded.map(x=>x.symbol+' ('+x.reason+')').join(', '),'stv2-muted'));list.append(box)}
