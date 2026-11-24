@@ -70,4 +70,19 @@ Google Calendar API·NH·주문 호출은 0건이며, Google refresh/access toke
 - `node tests/calendar-worker-build.cjs /workspace/security-tools/node_modules/esbuild`: PASS.
 - `tests/browser_calendar_oauth_bootstrap.py`: 1440/690/344px 합성 인증 PASS.
 - `tests/browser_calendar_final.py`: 1440/690/344px 공식 캡처 재생·캐시·페이지 이동·비공개 일정 제외·로그아웃 PASS, 콘솔 오류 0.
-- 위 결과는 실제 owner 활성화/Google 서비스 계정 동의·실기기 결과가 아니다.
+- 위 결과는 실제 owner 활성화/Google 계정 동의·실기기 결과가 아니다.
+
+## owner 실행의 불명확한 준비 오류 보완
+
+사용자 실행은 `BUILDING_CURRENT_WORKER_OVERLAY` 뒤 `OWNER_CALENDAR_STEP_FAILED`로
+중단됐다. 기존 출력으로는 npm/Node 오류와 그 뒤 직접 GAS 조회·clasp 원본 검증
+오류를 구분할 수 없었다. 서버 업로드 이전 구간이므로 이 실행에서 배포는 수행되지 않았다.
+동일한 Python 설치→컴파일→import 경로는 공개 fixture로 실제 로컬 실행해 PASS했다.
+사용자 환경의 실패 원인은 아직 확정하지 않았다.
+
+도구는 npm의 fetch 대기/재시도를 제한하고 각 단계의 시간 초과·실행파일 누락·
+권한·DNS·디스크 오류를 고정 코드로 분류한다. 컴파일 후 직접 GAS metadata,
+owner clasp source, 대시보드 로그인도 별도 진행 단계로 표시한다.
+실패 JSON의 `requestStage`, 안전한 `code`, 확인 가능한 `http`만으로 다음 원인을
+식별하며, stderr/원문 응답/비공개 경로/인증정보를 출력하지 않는다.
+기존 PREPARED 자료와 키 파일은 삭제하지 않는다. 서버 배포·권한 정책은 변경하지 않았다.

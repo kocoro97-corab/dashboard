@@ -11,13 +11,19 @@ import worker_code_only as worker
 import calendar_owner_preflight as check
 import nh_v2_upgrade as gas
 from nh_v2_fresh import private_path, target, logical, pull, revision, OLD_DEPLOYMENT, PRODUCTION_DEPLOYMENT_ID, SAFE_OWNER_CODES
-from nh_staging_test import WebApp
+from nh_staging_test import WebApp, ApiFailure
 from build_nh_staging import ROOT, build, source_digest
 
 class Stop(Exception):
     pass
 
 OVERRIDES={'MYINVEST_EXPECTED_METADATA','CALENDAR_IDENTITY_BRIDGE_KEY','GOOGLE_CALENDAR_ENCRYPTION_KEY','GOOGLE_CALENDAR_ENABLED'}
+LAST_STAGE='INITIALIZATION'
+
+def progress(stage):
+    global LAST_STAGE
+    LAST_STAGE=stage
+    print('[calendar] '+stage,file=__import__('sys').stderr,flush=True)
 
 def digest(raw):return hashlib.sha256(raw).hexdigest()
 def private_json(path,value):
@@ -89,7 +95,7 @@ def coordinated(stage,activate_gas,configure,activate_worker,verify,restore_work
         phase='READBACK';verify()
         return {'status':'PASS','phase':'ISOLATED_CALENDAR_RUNTIME_READY','recovery':'NOT_NEEDED'}
     except Exception as error:
-        failed={'status':'FAIL','phase':phase,'code':safe_code(error),'calendarKeysRetainedPrivately':True}
+        failed={'status':'FAIL','phase':phase,'requestStage':LAST_STAGE,'code':safe_code(error),'calendarKeysRetainedPrivately':True}
         try:
             if worker_attempted:restore_worker()
             if gas_attempted:restore_gas()
@@ -99,7 +105,17 @@ def coordinated(stage,activate_gas,configure,activate_worker,verify,restore_work
 def safe_code(error):
     if isinstance(error,worker.Stop):return error.code
     if isinstance(error,Stop):return str(error)
+    if isinstance(error,ApiFailure):return error.code
+    if isinstance(error,check.Stop):return error.code
     if str(error) in SAFE_OWNER_CODES:return str(error)
+    if isinstance(error,gas.Stop) and str(error) in {'BASELINE_REVISION_REQUIRED','FETCH_DEPLOYED_REVISION_REQUIRED','BASELINE_GRAPH_REQUIRED','FRESH_DEPLOYMENT_REQUIRED','FRESH_BINDING_OR_SOURCE_FAILED','UPGRADE_COMMAND_REFUSED','TEST_DEPLOYMENT_UPDATE_FAILED'}:return str(error)
+    if isinstance(error,subprocess.TimeoutExpired):return 'OWNER_LOCAL_COMMAND_TIMEOUT'
+    if isinstance(error,FileNotFoundError):return 'OWNER_LOCAL_FILE_OR_COMMAND_MISSING'
+    if isinstance(error,PermissionError):return 'OWNER_LOCAL_PERMISSION_DENIED'
+    if isinstance(error,TimeoutError):return 'OWNER_NETWORK_TIMEOUT'
+    if isinstance(error,urllib.error.HTTPError):return 'OWNER_HTTP_REJECTED'
+    if isinstance(error,urllib.error.URLError):return 'OWNER_NETWORK_FAILED'
+    if isinstance(error,ValueError):return 'OWNER_RESPONSE_OR_LOCAL_PLAN_INVALID'
     return 'OWNER_CALENDAR_STEP_FAILED'
 
 def scoped_api(account,token):
@@ -131,17 +147,27 @@ def ensure_history(rev):
 def compile_worker(legacy,output,folder):
     tools=folder/'build-tools';tools.mkdir(mode=0o700)
     child_env={k:v for k,v in os.environ.items() if not re.search(r'TOKEN|PASSWORD|SECRET|API_KEY',k,re.I)}
-    run=subprocess.run(['npm','install','--prefix',str(tools),'--ignore-scripts','--no-audit','--no-fund','--no-package-lock','esbuild@0.25.12'],capture_output=True,text=True,timeout=180,env=child_env)
-    if run.returncode:raise Stop('LOCAL_BUNDLE_DEPENDENCY_FAILED')
-    r=subprocess.run(['node',str(ROOT/'tools/build_calendar_worker_overlay.cjs'),'--legacy-file',str(legacy),'--output',str(output),'--esbuild-module',str(tools/'node_modules/esbuild')],capture_output=True,text=True,timeout=60,env=child_env)
+    def step(args,stage,timeout):
+        progress(stage)
+        try:return subprocess.run(args,capture_output=True,text=True,encoding='utf-8',errors='replace',timeout=timeout,env=child_env)
+        except subprocess.TimeoutExpired:raise Stop(stage+'_TIMEOUT') from None
+        except FileNotFoundError:raise Stop(stage+'_COMMAND_MISSING') from None
+        except PermissionError:raise Stop(stage+'_EXECUTION_DENIED') from None
+        except OSError:raise Stop(stage+'_PROCESS_FAILED') from None
+    run=step(['npm','install','--prefix',str(tools),'--ignore-scripts','--no-audit','--no-fund','--no-package-lock','--fetch-retries=1','--fetch-timeout=30000','--fetch-retry-mintimeout=1000','--fetch-retry-maxtimeout=3000','esbuild@0.25.12'],'INSTALLING_LOCAL_BUNDLER',120)
+    if run.returncode:
+        # Fixed npm categories only: never expose stderr, private paths or npmrc.
+        failure=next((code for code in ('EAI_AGAIN','ENOTFOUND','ETIMEDOUT','ECONNRESET','ECONNREFUSED','EACCES','ENOSPC','EBADENGINE','CERT_HAS_EXPIRED','SELF_SIGNED_CERT_IN_CHAIN') if re.search(r'\b'+code+r'\b',(run.stderr or '')[-32768:])),None)
+        raise Stop('LOCAL_BUNDLE_DEPENDENCY_'+failure if failure else 'LOCAL_BUNDLE_DEPENDENCY_FAILED')
+    r=step(['node',str(ROOT/'tools/build_calendar_worker_overlay.cjs'),'--legacy-file',str(legacy),'--output',str(output),'--esbuild-module',str(tools/'node_modules/esbuild')],'COMPILING_CURRENT_WORKER',60)
     try:ok=r.returncode==0 and json.loads(r.stdout).get('status')=='PASS'
     except ValueError:ok=False
     if not ok:raise Stop('CURRENT_WORKER_BUNDLE_FAILED')
-    smoke=subprocess.run(['node','--input-type=module','-e','globalThis.fetch=()=>{throw Error("BUNDLE_SMOKE_NETWORK_DISABLED")};const m=await import(process.argv[1]);if(typeof m.default.fetch!=="function"||typeof m.RelayGate!=="function")process.exit(1)',output.as_uri()],capture_output=True,timeout=30,env=child_env)
+    smoke=step(['node','--input-type=module','-e','globalThis.fetch=()=>{throw Error("BUNDLE_SMOKE_NETWORK_DISABLED")};const m=await import(process.argv[1]);if(typeof m.default.fetch!=="function"||typeof m.RelayGate!=="function")process.exit(1)',output.as_uri()],'CHECKING_WORKER_EXPORTS',30)
     if smoke.returncode:raise Stop('CURRENT_WORKER_EXPORTS_FAILED')
 
 def apply(environment,account,token,username,password,*,plan_only=False):
-    print('[calendar] VERIFYING_EXISTING_TARGET',file=__import__('sys').stderr,flush=True)
+    progress('VERIFYING_EXISTING_TARGET')
     env=private_path(environment,False);old=json.loads((env/'fresh-plan.json').read_text());target(old['scriptId'])
     match=re.fullmatch(r'https://script\.google\.com/macros/s/([A-Za-z0-9_-]+)/exec',old.get('url',''))
     if not match or match[1] in (OLD_DEPLOYMENT,PRODUCTION_DEPLOYMENT_ID):raise Stop('EXISTING_ISOLATED_DEPLOYMENT_REQUIRED')
@@ -172,23 +198,26 @@ def apply(environment,account,token,username,password,*,plan_only=False):
     assert_worker(api,base,cp)
     legacy=root/'legacy-worker.mjs';legacy.write_bytes(current_code(api('GET',base+'/content/v2')));legacy.chmod(0o600)
     assert_worker(api,base,cp)
-    print('[calendar] BUILDING_CURRENT_WORKER_OVERLAY',file=__import__('sys').stderr,flush=True)
+    progress('BUILDING_CURRENT_WORKER_OVERLAY')
     candidate_file=root/'calendar-worker.mjs';compile_worker(legacy,candidate_file,root)
+    progress('VERIFYING_DIRECT_GAS_METADATA')
     web=WebApp(old['url']);old_meta=web.call('appVersion');gas.check_metadata(old_meta,old);web.binding=old['sheetHash']
     next_plan={**old,'revision':revision(),'sourceDigest':source_digest()}
     expected={k:v for k,v in old_meta.items() if isinstance(v,(str,int,float,bool)) or v is None}
     expected.update(sourceDigest=next_plan['sourceDigest'],revision=next_plan['revision'],calendarIdentityVersion=1,calendarIdentityConfigured=True)
     metadata=upload_metadata(settings,bindings,expected,cp['keys'])
+    progress('VERIFYING_OWNER_GAS_SOURCE')
     with tempfile.TemporaryDirectory() as tmp:
         tmp=Path(tmp)
         if pull(gas.upgrade_clasp,tmp/'head-before',old['scriptId'])!=original or gas.deployment(gas.upgrade_clasp,env/'bundle',old)['versionNumber']!=old['activeVersion']:raise Stop('CONCURRENT_GAS_CHANGE_STOP')
     if plan_only:return {'status':'PASS','phase':'PRIVATE_CALENDAR_CANDIDATE_PREPARED','deploymentAttempted':False,'authScopesChanged':False,'nodeCompatibilityChangeRequired':'nodejs_compat' not in settings.get('compatibility_flags',[])}
+    progress('VERIFYING_OWNER_DASHBOARD_LOGIN')
     login=web.call('login',**{'user':username,'pass':password})
     if login.get('isAdmin') is not True or login.get('mustChangePassword') is True or not re.fullmatch('[a-fA-F0-9]{64}',login.get('token','')):raise Stop('EXISTING_OWNER_LOGIN_REQUIRED')
     web.token=login['token']
     def save(phase):
         cp.update(phase=phase);private_json(record,cp)
-        print('[calendar] '+phase,file=__import__('sys').stderr,flush=True)
+        progress(phase)
     def upload():
         assert_worker(api,base,cp);save('CANDIDATE_UPLOAD_ATTEMPTED');body,mime=worker.multipart(metadata,candidate_file.read_bytes());result=api('POST',base+'/versions?bindings_inherit=strict',body,mime);candidate=result.get('id','')
         if not worker.UUID.fullmatch(candidate):raise Stop('CANDIDATE_UPLOAD_UNCONFIRMED')
@@ -273,7 +302,9 @@ def main():
         password=getpass.getpass('Existing MY INVEST dashboard password (hidden, not Google/NH): ') if a.apply else None
         report=apply(a.environment,account,token,user,password,plan_only=not a.apply)
     except Exception as e:
-        report={'status':'NOT_RUN','code':safe_code(e),'credentialsIncluded':False,'nhCalls':0,'accountCalls':0,'orderCalls':0,'accountStoreWrites':False}
+        report={'status':'NOT_RUN','code':safe_code(e),'requestStage':LAST_STAGE,'credentialsIncluded':False,'nhCalls':0,'accountCalls':0,'orderCalls':0,'accountStoreWrites':False}
+        if LAST_STAGE in {'INITIALIZATION','VERIFYING_EXISTING_TARGET','BUILDING_CURRENT_WORKER_OVERLAY','INSTALLING_LOCAL_BUNDLER','COMPILING_CURRENT_WORKER','CHECKING_WORKER_EXPORTS','VERIFYING_DIRECT_GAS_METADATA','VERIFYING_OWNER_GAS_SOURCE','VERIFYING_OWNER_DASHBOARD_LOGIN'}:report['deploymentAttempted']=False
         if isinstance(e,worker.Stop):report.update(http=e.http,requestStage=e.stage,providerCodes=e.provider_codes)
+        if isinstance(e,ApiFailure) and e.http is not None:report['http']=e.http
     print(json.dumps(report));return 0 if report.get('status')=='PASS' else 1
 if __name__=='__main__':raise SystemExit(main())
