@@ -153,7 +153,7 @@ function assess({region,observations={},histories={},now=Date.now(),eventRisk=nu
  if(historical&&coreValid)decision.label='최근 확인 종가 기준 · '+decision.label;
  const evidence=core.filter(x=>x.usable).map(x=>({symbol:x.symbol,delta:x.delta,asOf:x.asOf,receivedAt:x.received,source:x.source,referenceDay:x.referenceDay}));
  const missing=core.filter(x=>!x.usable).map(x=>({symbol:x.symbol,reason:x.reason}));
- if(coreValid&&decision.reason)missing.push({symbol:'CORE',reason:decision.reason});
+ if(!coreValid&&decision.reason)missing.push({symbol:'CORE',reason:decision.reason});
  const sox=validateQuote(observations['^SOX'],'^SOX',now,'America/New_York');
  const extras=[];
  if(sox.usable)extras.push({symbol:sox.symbol,delta:sox.delta,asOf:sox.asOf,source:sox.source});
