@@ -52,7 +52,7 @@ function adaptCached(analysis,{symbol,market}={}){
  // The parent stock reader already validated provider symbol, currency
  // and exchange against the requested issuer. Do not infer identity here.
  if(analysis?.provider!==(market==='KR'?symbol+'.'+
-   (analysis.exchange==='KOE'?'KQ':'KS'):symbol))
+   (/^(KOE|KOSDAQ)$/i.test(analysis.exchange)?'KQ':'KS'):symbol))
   return {status:'unavailable',reason:'원천 종목 provider 식별 불일치'};
  if(typeof analysis.source!=='string'||!analysis.source.startsWith('Yahoo Finance ('))
   return {status:'unavailable',reason:'확인된 Yahoo 차트 출처 없음'};
