@@ -33,7 +33,25 @@ function snapshot(){
  return {schemaVersion:1,scope:'UI route elapsed time only, not API breakdown',samples:items,summary,
   memoryOnly:true,networkCalls:0,containsPrivateFields:false};
 }
+// Navigation/Resource Timing provides local-browser evidence without exposing
+// resource URLs, query parameters, account state or any request payload.
+function browserSnapshot(){
+ const perf=root.performance;
+ const entries=type=>{try{const rows=perf?.getEntriesByType?.(type);return Array.isArray(rows)?rows:[]}catch{return []}};
+ const nav=entries('navigation')[0],paint=entries('paint').find(x=>x.name==='first-contentful-paint');
+ const resources=entries('resource');
+ const ms=value=>Number.isFinite(value)&&value>0?Math.round(value):null;
+ return {
+  schemaVersion:1,scope:'CURRENT_BROWSER_DOCUMENT_SYNTHETIC_OR_REAL_UNLABELLED',
+  navigation:{domContentLoadedMs:ms(nav?.domContentLoadedEventEnd),loadEventMs:ms(nav?.loadEventEnd),firstContentfulPaintMs:ms(paint?.startTime)},
+  resourceCounts:{total:resources.length,firstPartyScripts:resources.filter(x=>typeof x.name==='string'&&x.name.includes('/js/')).length,
+   ocrScripts:resources.filter(x=>typeof x.name==='string'&&x.name.includes('tesseract.min.js')).length,
+   usInstrumentCatalog:resources.filter(x=>typeof x.name==='string'&&x.name.includes('/data/us-instruments.json')).length},
+  resourceTimingAvailable:typeof perf?.getEntriesByType==='function',
+  memoryOnly:true,networkCalls:0,containsPrivateFields:false
+ };
+}
 function clear(){pending.clear();results=[]}
-const api=Object.freeze({begin,finish,snapshot,clear});
+const api=Object.freeze({begin,finish,snapshot,browserSnapshot,clear});
 if(typeof module==='object'&&module.exports)module.exports=api;else root.MYInvestWebPerformance=api;
 })(globalThis);
