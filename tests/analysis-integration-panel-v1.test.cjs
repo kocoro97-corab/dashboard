@@ -27,6 +27,15 @@ assert.equal(r.symbol,'005930');
 assert.equal(r.mode,'day');
 r=P.evaluate({...input(),selection:{symbol:'SERV',market:'KR'}});
 assert.equal(r.status,'unavailable');
+const engine=require('../js/market-regime-engine.js');
+const before=globalThis.MYInvestMarketRegime;
+globalThis.MYInvestMarketRegime=engine;
+try{
+ const verified=P.evaluate(input());
+ assert.equal(verified.checks.find(x=>x.key==='market').state,'usable');
+ assert.equal(verified.marketRegime.direction.state,'up');
+ assert.equal(verified.canUseStrictStockSetup,false,'market proof never fabricates stock daily session dates');
+}finally{globalThis.MYInvestMarketRegime=before}
 assert.equal(typeof P.fetch,'undefined');
 assert.equal(typeof P.placeOrder,'undefined');
 assert.throws(()=>P.evaluate({now:Infinity}),/ANALYSIS_BRIDGE_DATE_INVALID/);
