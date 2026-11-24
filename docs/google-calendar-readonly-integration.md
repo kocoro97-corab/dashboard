@@ -166,16 +166,16 @@ New unit tests execute the GAS handler against the server verifier, including Ko
 
 First owner-side registration step, in **the existing `myinvest-v2-dev-relay` Worker → Settings → Variables and Secrets**:
 
-- `GOOGLE_CALENDAR_CLIENT_ID`: Google-issued web client ID, stored as Secret.
+- `GOOGLE_CALENDAR_CLIENT_ID`: Google-issued web client ID; Text is valid, and Secret is also accepted. This identifier is not a client secret.
 - `GOOGLE_CALENDAR_CLIENT_SECRET`: Google-issued client secret, stored as Secret.
 
 Do not paste either value/JSON into chat, a public repository or a Pages asset. If either setting already exists, do not blindly replace it. These two registrations alone cannot enable Google. Keep `GOOGLE_CALENDAR_ENABLED` absent/false while wiring/configuration/consent checks remain pending.
 
 The approved private host must additionally supply the existing isolated metadata via `MYINVEST_EXPECTED_METADATA`, the matched private `CALENDAR_IDENTITY_BRIDGE_KEY` and persistent `GOOGLE_CALENDAR_ENCRYPTION_KEY` (each 32 bytes represented as 64 lowercase hex characters in secret settings), and injected authoritative gateway/private storage. No random key is generated or rotated implicitly. The settings reader returns null when the feature is off and emits only the fixed `CALENDAR_SETTINGS_INCOMPLETE` error when enabled settings are invalid. It never prints submitted values or enables a feature merely because secrets were registered. This wrapper does not by itself install the runtime into the active Worker/DO.
 
-## Owner confirms two Google secrets registered — relay bridge and read-only preflight
+## Owner confirms two Google settings registered — relay bridge and read-only preflight
 
-The user reports `GOOGLE_CALENDAR_CLIENT_ID` and `GOOGLE_CALENDAR_CLIENT_SECRET` registered in the existing development Worker. They have not been read back by this environment; no secret value is requested in chat. Existing approval remains valid. The current environment still has no Cloudflare deployment credential or mounted owner checkout, so no remote deployment/configuration is claimed.
+The user reports `GOOGLE_CALENDAR_CLIENT_ID` registered as Text and `GOOGLE_CALENDAR_CLIENT_SECRET` as Secret in the existing development Worker. This is a valid storage combination. They have not been read back by this environment; no secret value is requested in chat. Existing approval remains valid. The current environment still has no Cloudflare deployment credential or mounted owner checkout, so no remote deployment/configuration is claimed.
 
 `server/google-calendar-relay-overlay.cjs` is an installable factory around an owner-verified **current** Worker module exposing `default`, `RelayGate`, `configuration` and `createGateway`. The deployment entry must import that preserved module and export the factory's `worker` default and `RelayGate` class. It must not import an outdated feature-branch Worker as a replacement for the active service.
 
@@ -216,3 +216,9 @@ The preflight now also uses only **GET the fixed Worker's `/secrets` list**, doc
 The previous owner activation tooling uses `fresh-plan.json` plus a `bundle` directory. The initial calendar checker inspected only a flat `.clasp.json`/StagingBridge layout. The checker now inspects bounded FLAT/BUNDLE/CLASP_ROOTDIR layouts (not the whole home), ignores duplicate references to the same source root, rejects source roots outside the provided owner directory and checks the existing script ID against the live public script hash. It additionally reports whether the local source revision matches the public metadata. No credentials, raw IDs, source, token files, user rows or saved records are returned or modified. This is target/layout evidence only, not permission to deploy without full current module/hash verification.
 
 The internal bridge/encryption keys and Node compatibility have not yet been applied by this calendar task; those blockers are expected at this point. Do not ask the user to guess/generate the private internal values or to flip runtime flags before the reviewed owner procedure. Existing approval persists. First distinguish the two Google registrations using the sanitized state report and, if needed, the exact existing Worker Settings UI; never request values in chat or blindly re-register them.
+
+## Client ID Text is accepted; the client secret remains private
+
+The user confirmed **ID = Text, client secret = Secret**. Both values must remain as registered. The earlier instruction to require Secret for the public client ID, and the corresponding preflight type gate, were unnecessary. The runtime already accepts either representation as a string; no client credential or runtime change is required for this correction.
+
+`googleConfigurationBindings` is now the primary type/presence result. `CLIENT_ID_TEXT_CONFIRMED` is a valid state and creates no blocker. `googleSecretBindings` remains the literal secret-storage map for backward compatibility, so its client-ID false value is expected when Text is used and is not an error. Both maps contain metadata only; actual Google credentials and consent are unverified. Private client secrets and both internal keys still require secret storage; Text for these remains `WRONG_BINDING_TYPE`. A conflicting/unavailable secret-name view stays unverified rather than inferred from the user's confirmation. No settings writes, duplicate registration, key rotation or activation is part of this fix.

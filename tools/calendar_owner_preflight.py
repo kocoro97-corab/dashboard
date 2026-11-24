@@ -124,6 +124,9 @@ def secret_presence(by_name, rows, available):
             state, found = 'METADATA_CONFLICT', None
         elif (setting or secret or {}).get('type') == 'secret_text':
             state, found = 'SECRET_CONFIRMED', True
+        elif name == 'GOOGLE_CALENDAR_CLIENT_ID' and (setting or secret or {}).get('type') == 'plain_text':
+            # OAuth client ID is public configuration, unlike the client secret.
+            state, found = 'CLIENT_ID_TEXT_CONFIRMED', False
         elif setting or secret:
             state, found = 'WRONG_BINDING_TYPE', False
         elif any(key != name and key.strip().upper() == name for key in (*by_name, *listed)):
@@ -239,9 +242,11 @@ def inspect(api_get, account, *, probe=public_probe, owner_dir=None):
         raise Stop('CONCURRENT_CHANGE_NO_WRITE')
     flags = settings.get('compatibility_flags', [])
     secrets, secret_states = secret_presence(by_name, secret_rows, secret_available)
+    accepted_states = {'SECRET_CONFIRMED', 'CLIENT_ID_TEXT_CONFIRMED'}
+    configuration_bindings = {name: True if state in accepted_states else None if secrets[name] is None else False for name, state in secret_states.items()}
     owner_info = owner_checkout(owner_dir, metadata)
     owner_files = owner_info['verified']
-    blockers = [name + '_' + state for name, state in secret_states.items() if state != 'SECRET_CONFIRMED']
+    blockers = [name + '_' + state for name, state in secret_states.items() if state not in accepted_states]
     if not gate_ok:
         blockers.append('EXISTING_PRIVATE_STORAGE_BINDING_REQUIRED')
     if 'nodejs_compat' not in flags:
@@ -254,6 +259,7 @@ def inspect(api_get, account, *, probe=public_probe, owner_dir=None):
         blockers.append('OWNER_SOURCE_REVISION_REVIEW_REQUIRED')
     return {'status': 'PASS', 'phase': 'CALENDAR_OWNER_READ_ONLY_PREFLIGHT', 'activeVersion': version,
             'latestVersionIsActive': latest_active, 'googleSecretBindings': secrets,
+            'googleConfigurationBindings': configuration_bindings, 'googleBindingValidationScope': 'PRESENCE_AND_TYPES_ONLY',
             'googleBindingStates': secret_states, 'secretNamesInspection': secret_inspection,
             'existingGateBinding': gate_ok, 'nodeCompatibilityEnabled': 'nodejs_compat' in flags,
             'ownerCheckoutVerified': owner_files, 'ownerCheckoutInspection': owner_info, 'serverHourPolicyObserved': metadata.get('sessionIdleMs') == 3600000,

@@ -225,6 +225,31 @@ class CalendarOwnerLayoutTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(mod.owner_checkout(Path(tmp) / 'missing', {})['status'], 'BASE_NOT_FOUND')
 
+class CalendarClientIdStorageTest(unittest.TestCase):
+    def test_public_client_id_text_and_private_client_secret_are_both_valid_configuration(self):
+        api, settings, _, _ = fixture()
+        for row in settings['bindings']:
+            if row['name'] == 'GOOGLE_CALENDAR_CLIENT_ID':
+                row['type'] = 'plain_text'
+        result = mod.inspect(api, ACCOUNT, probe=lambda: {'success': True, 'freshTestEnvironment': True, 'testEnvironment': 'nh-staging'})
+        self.assertTrue(result['googleConfigurationBindings']['GOOGLE_CALENDAR_CLIENT_ID'])
+        self.assertTrue(result['googleConfigurationBindings']['GOOGLE_CALENDAR_CLIENT_SECRET'])
+        self.assertFalse(result['googleSecretBindings']['GOOGLE_CALENDAR_CLIENT_ID'])
+        self.assertEqual(result['googleBindingStates']['GOOGLE_CALENDAR_CLIENT_ID'], 'CLIENT_ID_TEXT_CONFIRMED')
+        self.assertFalse(any(v.startswith('GOOGLE_CALENDAR_CLIENT_ID_') for v in result['blockers']))
+        self.assertNotIn('CANARY', json.dumps(result))
+
+    def test_plaintext_client_secret_is_still_rejected_without_weakening_key_storage(self):
+        api, settings, _, _ = fixture()
+        for row in settings['bindings']:
+            if row['name'] in {'GOOGLE_CALENDAR_CLIENT_ID', 'GOOGLE_CALENDAR_CLIENT_SECRET'}:
+                row['type'] = 'plain_text'
+        result = mod.inspect(api, ACCOUNT, probe=lambda: {'success': True, 'freshTestEnvironment': True, 'testEnvironment': 'nh-staging'})
+        self.assertTrue(result['googleConfigurationBindings']['GOOGLE_CALENDAR_CLIENT_ID'])
+        self.assertFalse(result['googleConfigurationBindings']['GOOGLE_CALENDAR_CLIENT_SECRET'])
+        self.assertIn('GOOGLE_CALENDAR_CLIENT_SECRET_WRONG_BINDING_TYPE', result['blockers'])
+        self.assertEqual(result['googleBindingValidationScope'], 'PRESENCE_AND_TYPES_ONLY')
+
 
 if __name__ == '__main__':
     unittest.main()
