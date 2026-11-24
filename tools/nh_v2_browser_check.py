@@ -272,8 +272,9 @@ def native_browser_check(target, username, password, binding=None):
                     sessionHasTime:typeof sessionLeftMs==='function'&&sessionLeftMs()>0,
                     shellPresent:!!window.DashboardShell
                 })""")
-            except Exception:
-                report['reloadDiagnostic']={'stateUnavailable':True}
+            except Exception as diagnostic_error:
+                if 'reloadDiagnostic' not in report:
+                    report['reloadDiagnostic']={'evaluationErrorType':type(diagnostic_error).__name__}
     finally:
         server.shutdown();server.server_close()
     if report['status']=='PASS':
