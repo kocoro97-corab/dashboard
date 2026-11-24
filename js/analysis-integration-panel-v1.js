@@ -33,16 +33,24 @@ function evaluate({selection=null,analysis=null,quotes=null,quoteSources=null,re
   typeof analysis.source==='string'&&analysis.source.trim()&&typeof analysis.exchange==='string'&&analysis.exchange.trim();
  const bars=Array.isArray(analysis?.bars)?analysis.bars:[];
  const sourceTimes=identity&&Number.isFinite(analysis.observedAt)&&Number.isFinite(analysis.receivedAt)&&
-  analysis.observedAt<=analysis.receivedAt+300000&&analysis.observedAt<=now+300000&&
-  analysis.receivedAt<=now+300000&&now-analysis.receivedAt<=30*60000;
- const priceBars=identity&&bars.length>=21&&bars.every(b=>b&&[b.o,b.h,b.l,b.c].every(v=>Number.isFinite(v)&&v>0));
+  analysis.observedAt>0&&analysis.receivedAt>0&&analysis.observedAt<=analysis.receivedAt+300000&&
+  analysis.observedAt<=now+300000&&analysis.receivedAt<=now+300000&&
+  now-analysis.receivedAt<=30*60000&&now-analysis.observedAt<=4*86400000;
+ const priceBars=identity&&bars.length>=21&&bars.every(b=>b&&
+  [b.o,b.h,b.l,b.c].every(v=>Number.isFinite(v)&&v>0)&&
+  b.h>=Math.max(b.o,b.l,b.c)&&b.l<=Math.min(b.o,b.h,b.c));
  const checks=[
   {key:'market',label:'시장 지수 기준일·관측시각',state:marketRegime?.status==='descriptive'?'usable':'missing',
    detail:marketRegime?.status==='descriptive'?marketRegime.direction.label:'필요한 핵심 지수 자료가 없거나 시점이 불일치'},
   {key:'ohlcv',label:'기존 종목 일봉·원천',state:priceBars&&sourceTimes?'received':'missing',
-   detail:priceBars&&sourceTimes?bars.length+'개 공개 일봉 · '+analysis.source:'검증된 원천·OHLCV·수신시각 미확인'},
+   detail:priceBars&&sourceTimes?bars.length+'개 공개 일봉 · '+analysis.source:
+    '종목 식별·확정 가격·원천 관측시각(4일 이내)·수신시각(30분 이내) 중 미확인'},
   {key:'session',label:'거래소 기준 거래일·봉 마감 검증',state:'missing',
    detail:'원천 거래일과 완료봉을 별도 검증하기 전에는 신규 단타·스윙 엔진 판단 보류'},
+  {key:'marketRisk',label:'시장 위험 참고지표',state:marketRegime?.risk?.level&&marketRegime.risk.level!=='unknown'?'usable':'missing',
+   detail:marketRegime?.risk?.level&&marketRegime.risk.level!=='unknown'?
+    'VIX/환율 관측 위험 구간 '+marketRegime.risk.label+' · 투자 안전 판정 아님':
+    'VIX 기준 자료 없음 · 위험 낮음으로 해석 금지'},
   {key:'industry',label:'동일 거래일 산업 강도·종목 소속',state:'missing',
    detail:'현재 캐시만으로 신뢰 가능한 산업 소속·상대강도 연결을 확정할 수 없음'},
   {key:'events',label:'공식 발표·실적의 전체 수집 범위',state:'missing',
@@ -71,6 +79,16 @@ function mount(container,provider){
   if(!info.symbol){body.append(row('p',info.reason));return}
   body.append(row('p',info.symbol+' · '+(info.market==='KR'?'한국':'미국')+' · '+(info.mode==='day'?'단타':'스윙')));
   for(const c of info.checks)body.append(row('p',(c.state==='usable'?'● 확인':c.state==='received'?'◇ 수신':'△ 확인 필요')+' · '+c.label+' — '+c.detail));
+  const evidence=info.marketRegime?.evidence||[];
+  if(evidence.length){
+   const title=row('p','시장 방향 산출 근거 · 종목 지지선/목표가와 무관');body.append(title);
+   for(const item of evidence){
+    const d=Number.isFinite(item.delta)?(item.delta>=0?'+':'')+item.delta.toFixed(2)+'%':'등락 미확인';
+    body.append(row('p',item.symbol+' '+d+' · '+(item.source||'출처 미확인')+
+      ' · 거래일 '+(item.referenceDay||'미확인')+
+      ' · 관측 '+(item.asOf||'미확인')+' · 수신 '+(item.receivedAt||'미확인')));
+   }
+  }
   body.append(row('p','원천: '+(info.source||'미확인')+' · 수신시각: '+(info.receivedAt||'미확인')));
   body.append(row('p','엄격한 단타·스윙 판정은 거래소 날짜·완료봉·산업 소속 증거 확보 후에만 활성화됩니다.'));
  }
