@@ -22,10 +22,15 @@ DashboardPages.register('home',()=>{
   catch{return false}
  }
  function editButton(label,fn){const b=node('button',label);b.type='button';b.addEventListener('click',fn);return b}
+ let lastEditorKey=null;
  function renderEditor(view){
   const panel=view.querySelector('.homev4-editor');if(!panel)return;
-  panel.hidden=!editing;if(!editing||!draft)return;
-  const region=effective(),items=policy().display(region,draft),rows=view.querySelector('.homev4-editor-rows'),add=view.querySelector('.homev4-editor-add');
+  panel.hidden=!editing;
+  if(!editing||!draft){lastEditorKey=null;return}
+  const region=effective(),key=region+':'+JSON.stringify(draft[region]);
+  if(lastEditorKey===key)return;
+  lastEditorKey=key;
+  const items=policy().display(region,draft),rows=view.querySelector('.homev4-editor-rows'),add=view.querySelector('.homev4-editor-add');
   view.querySelector('.homev4-editor-title').textContent=(region==='KR'?'한국장':'미국장')+' 홈 지수 편집 · '+items.length+'개';
   rows.replaceChildren();add.replaceChildren();
   items.forEach(([id,name],index)=>{
@@ -60,15 +65,15 @@ DashboardPages.register('home',()=>{
   const title=view.querySelector('.homev4-title');title.textContent=(region==='KR'?'한국장':'미국장')+' 중심 · 핵심 지수';
   view.querySelector('.homev4-sub').textContent=scope==='AUTO'?'한국시간 07:00~20:59 한국 우선 / 21:00~06:59 미국 우선 · 자동 전환':'직접 선택 · 다른 시장은 보조 지표에서 확인';
   for(const b of view.querySelectorAll('.homev4-switch button'))if(b.dataset.region)b.setAttribute('aria-pressed',String(b.dataset.region===scope));
-  const main=view.querySelector('.homev4-main');main.replaceChildren();
-  for(const [id,name] of marketPolicy.display(region,preferences))main.append(card(id,name));
-  if(!main.children.length)main.append(node('p','표시할 지수가 없습니다. 지수 편집에서 추가하세요.','homev4-muted'));
-  const support=view.querySelector('.homev4-support');support.replaceChildren();
+  const main=view.querySelector('.homev4-main'),mainCards=marketPolicy.display(region,preferences).map(([id,name])=>card(id,name));
+  main.replaceChildren(...(mainCards.length?mainCards:[node('p','표시할 지수가 없습니다. 지수 편집에서 추가하세요.','homev4-muted')]));
+  const support=view.querySelector('.homev4-support'),supportCards=[];
   for(const [id,name] of marketPolicy.SECONDARY[region].filter(([id])=>!preferences[region].includes(id))){
    const m=marketPolicy.quote(id,Q,SRC,QT),box=node('div');
    const label=node('strong',name),small=node('small',m.valid?num(m.price,id==='KRW=X'?2:2)+unit(id)+' · '+pct(m.delta):'미수신');
-   small.classList.add(dir(m.delta??null));box.append(label,small);support.append(box);
+   small.classList.add(dir(m.delta??null));box.append(label,small);supportCards.push(box);
   }
+  support.replaceChildren(...supportCards);
   const judgement=marketPolicy.marketRegime(region,Q,SRC,QT),summary=view.querySelector('.homev4-summary');
   summary.replaceChildren(node('h3','시장국면 · 관측 기준'),node('p',judgement.title,'homev4-major'),node('p',judgement.basis));
   for(const note of judgement.notes)summary.append(node('p',note));
@@ -111,9 +116,9 @@ DashboardPages.register('home',()=>{
  });
  function tick(){if(!active)return;const delay=60000-Date.now()%60000+50;timer=setTimeout(()=>{if(active){const region=effective(),changed=scope==='AUTO'&&region!==lastRegion;lastRegion=region;if(scope==='AUTO')render(viewRef,ctxRef);if(changed)void legacy.refresh(ctxRef,true).catch(()=>{});tick()}},delay)}
  return {
-  mount(container,ctx){active=true;ctxRef=ctx;preferences=saved();editing=false;draft=null;lastRegion=effective();legacy.mount(container,ctx);tick()},
+  mount(container,ctx){active=true;ctxRef=ctx;preferences=saved();editing=false;draft=null;lastEditorKey=null;lastRegion=effective();legacy.mount(container,ctx);tick()},
   refresh:(ctx,force)=>legacy.refresh(ctx,force),
-  unmount(){active=false;if(timer!==null){clearTimeout(timer);timer=null}ctxRef=null;viewRef=null;editing=false;draft=null;preferences=null;legacy.unmount()},
+  unmount(){active=false;if(timer!==null){clearTimeout(timer);timer=null}ctxRef=null;viewRef=null;editing=false;draft=null;preferences=null;lastEditorKey=null;legacy.unmount()},
   getStatus:()=>({...legacy.getStatus(),market:effective(),scope})
  };
 });
