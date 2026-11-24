@@ -38,6 +38,8 @@ assert.equal(stockPage.includes('sessionProof=session?.status'),true,'stock read
 assert.equal(sectors.includes('sessionDates:proven?'),true,'sector cache must expose verified exchange trading days');
 assert.equal(sectors.includes('strictRotation:')||sectors.includes('asof:benchmark.last,strictRotation'),true,'verified sector rotation must be retained in existing page cache');
 assert.equal(sectors.includes('확정 일봉 기반 산업 1·5·20·60일 상대강도 근거'),true,'verified sector evidence disclosure must be visible');
+assert.equal((sectors.match(/'stv2-insights'/g)||[]).length,1,'legacy industry insights must keep a unique selector');
+assert.equal(sectors.includes("'stv2-verified-rotation'"),true,'strict rotation panel must have its own selector');
 const panel=fs.readFileSync(path.join(root,'js/analysis-integration-panel-v1.js'),'utf8');
 assert.equal(/fetch\s*\(|XMLHttpRequest|localStorage|sessionStorage/.test(panel),false,
  'panel never reads storage or performs network requests');
