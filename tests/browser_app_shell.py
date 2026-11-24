@@ -74,6 +74,14 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
     unexpected.append(u.hostname);r.abort()
    context.route('**/*',route);page=context.new_page();page.on('pageerror',lambda e:errors.append(type(e).__name__));page.on('dialog',lambda d:d.accept())
    page.goto(PAGE+'#/accounts/ocr',wait_until='domcontentloaded')
+   startup=page.evaluate("""() => {
+     const urls=performance.getEntriesByType('resource').map(x=>x.name);
+     return {
+       ocrBeforeLogin:urls.filter(x=>x.includes('tesseract.min.js')).length,
+       catalogBeforeLogin:urls.filter(x=>x.includes('/data/us-instruments.json')).length
+     };
+   }""")
+   assert startup['ocrBeforeLogin']==0 and startup['catalogBeforeLogin']==0,startup
    if development:
     page.locator('#devEndpoint').fill(ENDPOINT);page.locator('#devCode').fill(CODE);page.locator('#devConnectSubmit').click()
     page.wait_for_function("()=>!!document.getElementById('devBanner')||document.getElementById('devConnectStatus').textContent.includes('(')")
@@ -119,6 +127,7 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
      };
    }""")
    perf['ocrRequestsBeforeUpload']=ocr_before_upload
+   perf.update(startup)
    assert perf['anonymous'] and perf['ocrRequestsAfterUpload']>=ocr_before_upload,perf
    print('PERF_SYNTHETIC '+json.dumps({'development':development,'width':width,**perf},sort_keys=True),flush=True)
    go('/accounts/ocr');assert page.evaluate('EXT_ASSETS.length')==count and page.locator('#externalAssetSection').is_visible()
