@@ -90,12 +90,13 @@ function plan({comparison,delivered=[],today,allowNotifications=false,maxAlerts=
   !validDate(comparison.currentDay)||!validDate(comparison.previousDay)||
   comparison.previousDay>=comparison.currentDay||comparison.currentDay>today||
   age(today,comparison.currentDay)>10||!Array.isArray(comparison.changes)||
-  comparison.changes.length>700||!Array.isArray(comparison.sourceChanges)||
-  !comparison.coverage||typeof comparison.coverage.currentVerified!=='boolean')
+  comparison.changes.length>700||!Array.isArray(comparison.sourceChanges)||comparison.sourceChanges.length>40||
+  !comparison.coverage||typeof comparison.coverage.currentVerified!=='boolean'||typeof comparison.coverage.previousVerified!=='boolean')
   return {status:'unavailable',reason:'검증된 변화 추적 자료 없음',alerts:[],recheck:[]};
  const history=validHistory(delivered,today);
  if(!history)return {status:'unavailable',reason:'발송 이력 식별자·기간 오류',alerts:[],recheck:[]};
- const available=comparison.status==='comparable'&&comparison.coverage.currentVerified===true;
+ const degraded=comparison.sourceChanges.some(x=>x?.direction==='degraded');
+ const available=comparison.status==='comparable'&&comparison.coverage.currentVerified===true&&comparison.coverage.previousVerified===true&&!degraded;
  const pending=new Map(),suppressed=[];
  for(const raw of comparison.changes){
   const s=signal(raw);if(!s)continue;
