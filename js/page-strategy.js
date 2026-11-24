@@ -165,14 +165,35 @@ head=make('div',undefined,'str4-nav');view.append(head);renderHeader();selector=
  // by loadStrategy(); it does not trigger any market or account requests.
  const integration=root.MYInvestAnalysisIntegrationPanelV1;
  if(typeof integration?.mount==='function'){
-  const currentPublic=()=>({
-   selection:(()=>{const s=readSelection();return s?{symbol:s.symbol,market:s.market,mode}:null})(),
-   analysis:latestData,
-   quotes:typeof Q!=='undefined'?Q:null,
-   quoteSources:typeof SRC!=='undefined'?SRC:null,
-   received:typeof QT!=='undefined'?QT:null,
-   now:Date.now()
-  });
+  const currentPublic=()=>{
+   const s=readSelection(),selection=s?{symbol:s.symbol,market:s.market,mode}:null;
+   const now=Date.now();
+   const zone=selection?.market==='KR'?'Asia/Seoul':'America/New_York';
+   const nowDay=root.MYInvestExchangeSessionProof?.localDay(now,zone);
+   let publicEvents=null,holdingRows=[];
+   // collect() reads the already-loaded PUBLIC official calendar snapshots;
+   // it must not invoke refreshAll, Google personal calendar or network.
+   try{
+    if(nowDay&&selection&&root.MYInvestEventContext?.collect){
+     const end=new Date(Date.parse(nowDay+'T00:00:00Z')+21*86400000).toISOString().slice(0,10);
+     publicEvents=root.MYInvestEventContext.collect({from:nowDay,to:end,now});
+    }
+   }catch{publicEvents=null}
+   // Verified account rows remain transient in this one browser call and
+   // are reduced to issuer, amount and cost solely for the holding engine.
+   try{
+    if(selection&&latestData&&root.InvestWorkflow?.holdings){
+     holdingRows=root.InvestWorkflow.holdings(ctx,s,latestData).map(h=>({
+      verified:true,symbol:selection.symbol,market:selection.market,
+      currency:h.currency,quantity:h.quantity,avgPrice:h.avgPrice
+     }));
+    }
+   }catch{holdingRows=[]}
+   return {selection,analysis:latestData,publicEvents,holdingRows,
+    quotes:typeof Q!=='undefined'?Q:null,
+    quoteSources:typeof SRC!=='undefined'?SRC:null,
+    received:typeof QT!=='undefined'?QT:null,now};
+  };
   try{readinessPanel=integration.mount(view,currentPublic)}catch{readinessPanel=null}
  }
  legacy.mount(container,ctx);container.prepend(view);calculate();unsubscribe=ctx.subscribe?.(()=>{if(active){renderHolding();if(latestData&&readSelection())drawConditional(latestData,readSelection())}});void loadStrategy()}
