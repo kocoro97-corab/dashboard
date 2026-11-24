@@ -243,6 +243,22 @@ def native_browser_check(target, username, password, binding=None):
     except Exception as error:
         report['code']='LIVE_BROWSER_AUTH_COMMUNICATION_OR_SESSION_FAILED'
         report['errorType']='TypeError' if 'TypeError:' in str(error) else 'SyntaxError' if 'SyntaxError:' in str(error) else 'TimeoutError' if type(error).__name__=='TimeoutError' else 'OTHER'
+        # Only non-sensitive boolean state, for identifying synthetic session-reload failures.
+        # Never log token values, account details, endpoints, network payloads or credentials.
+        if report.get('phase')=='SESSION_RELOAD' and page is not None:
+            try:
+                report['reloadDiagnostic']=page.evaluate("""() => ({
+                    documentReady:document.readyState==='complete',
+                    authenticated:typeof LS==='function'&&!!LS('invest_session_token'),
+                    appVisible:document.getElementById('appContainer')?.style.display==='block',
+                    loginVisible:document.getElementById('authGuard')?.style.display==='flex',
+                    nhPending:typeof NH_ACCOUNT_BUSY!=='undefined'&&NH_ACCOUNT_BUSY===true,
+                    nhSessionMatch:typeof NH_ACCOUNT_SESSION!=='undefined'&&typeof LS==='function'&&NH_ACCOUNT_SESSION===LS('invest_session_token'),
+                    sessionHasTime:typeof sessionLeftMs==='function'&&sessionLeftMs()>0,
+                    shellPresent:!!window.DashboardShell
+                })""")
+            except Exception:
+                report['reloadDiagnostic']={'stateUnavailable':True}
     finally:
         server.shutdown();server.server_close()
     if report['status']=='PASS':
