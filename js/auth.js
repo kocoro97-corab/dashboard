@@ -31,7 +31,10 @@ function bindAuth(){
   if(pw&&!pw.dataset.bound){pw.dataset.bound='1';pw.addEventListener('keydown',e=>{if(e.key==='Enter')handleAuthSubmit()})}
   checkAuthentication();
 }
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bindAuth);else bindAuth();
+// Deferred scripts run while readyState can be "interactive": wait until all
+// declarations and dependent modules are initialized before session restore.
+if(document.readyState!=='complete')document.addEventListener('DOMContentLoaded',bindAuth,{once:true});
+else Promise.resolve().then(bindAuth);
 
 function toggleAuthMode(){
   isRegisterMode=!isRegisterMode;
