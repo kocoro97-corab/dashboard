@@ -57,7 +57,9 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True, pub
     if relay_endpoint:
         text=text.replace(marker, '<script>window.MYINVEST_PERSISTENT_RELAY=Object.freeze('+json.dumps({'profile':'isolated','endpoint':relay_endpoint},separators=(',',':'))+');</script>\n'+marker)
     text = text.replace(marker, '<script>window.MYINVEST_TRANSPORT_CONFIG={mode:"relay",endpoint:"",devSession:true};</script>\n<script defer src="js/dev_market.js?v=1"></script>\n<script defer src="js/dev_inspection.js?v=1"></script>\n<script defer src="js/dev_connect.js?v=1"></script>\n' + marker)
-    text = text.replace(marker, '<script async src="vendor/ocr/tesseract.min.js"></script>\n<script defer src="js/dev_ocr.js?v=1"></script>\n'+marker)
+    # Development OCR remains available from pinned local assets, but is requested
+    # by dev_ocr.js only after explicit user-granted development access.
+    text = text.replace(marker, '<script defer src="js/dev_ocr.js?v=2-lazy"></script>\n'+marker)
     # Only the isolated development artifact receives the optional manual strategy
     # comparator. Production index.html, NEWS/PR#8 and live endpoints stay untouched.
     strategy_anchor = '<script defer src="js/page-strategy.js?v=1"></script>'
