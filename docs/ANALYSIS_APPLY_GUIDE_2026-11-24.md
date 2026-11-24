@@ -23,6 +23,39 @@
 - 시장 위험 참고(VIX/환율) 검증 항목 및 사용한 시장 지수의 **출처·관측시각·수신시각·거래일** 표시를 추가.
 - 해당 독립 JS 검증: 시장 국면 **47개**, 통합 패널 **23개** 항목 PASS. 이는 **전체 브라우저·GitHub CI 완료를 의미하지 않음**.
 
+### 2026-11-24 거래소 현지 날짜·확정 일봉 실데이터 연결
+
+**이번 개발에서 독립 분석 엔진과 기존 실제 조회 데이터가 처음으로 연결되는 범위를 확대했다.** 새 네트워크 호출·NH 권한 변경은 없다.
+
+- `js/exchange-session-proof.js`: 이미 조회한 Yahoo 일봉 `timestamp`와 `meta.exchangeTimezoneName`을 통해 US(`America/New_York`)/KR(`Asia/Seoul`)의 거래소 현지 거래일을 분리한다. 장중 일봉은 제외하고, **현재 거래일 마감 여부는** 공급자의 `currentTradingPeriod.regular.end`와 `regularMarketTime` 증거가 맞는 경우만 확인한다. 시간대 누락·불일치면 강한 투자전략 판단 보류.
+- `js/page-stocks.js`: 기존 `publicAnalysis()`의 `InvestWorkflow` 캐시에 `sessionProof`를 부착 (추가 시세 조회 없음).
+- `js/stock-setup-adapter.js`: `adaptCached()`는 검증된 `sessionProof`가 있는 경우에만 현재 종목 차트를 `MYInvestStockSetup.assess()`에 연결한다.
+- `js/analysis-integration-panel-v1.js`: `#/strategy`에서 실제 확정봉이 충분한 종목의 **추세·20봉 고점·거래량 기술적 관찰조건**을 추가 표시. 시장/산업/기업 이벤트의 필수 근거가 없으면 전체 투자전략은 여전히 판단 보류.
+- `js/page-sectors.js`: 기존 `SERIES_CACHE`의 미국 섹터 ETF·SPY 일봉에 `sessionDates/sessionProof`를 기록하고 기존 계산에도 현지 거래일을 우선 사용.
+- `js/sector-rotation-adapter.js`, `js/sector-cache-rotation-bridge.js`, `js/sector-rotation-engine.js`: **이미 조회된 SPY와 미국 섹터 ETF**의 1/5/20/60거래일 수익률·상대강도를 재검증하며, 산업·테마 화면의 별도 펼쳐보기에서 확인 가능. 시장 전체 산업 수익률, 종목 상승비율, 자금유입은 임의로 생성하지 않는다.
+- `index.html`: 모듈을 원본 종목·산업·전략 페이지보다 앞서 로드.
+- `tests/exchange-session-proof.test.cjs`, `tests/exchange-session-integration.test.cjs`, `tests/sector-cache-rotation-bridge.test.cjs` 및 추가 기존 어댑터·엔진 회귀로 검증.
+
+로컬 또는 GitHub Actions 검사:
+
+```bash
+node --check js/exchange-session-proof.js
+node --check js/page-stocks.js
+node --check js/page-sectors.js
+node --check js/analysis-integration-panel-v1.js
+node tests/exchange-session-proof.test.cjs
+node tests/exchange-session-integration.test.cjs
+node tests/sector-cache-rotation-bridge.test.cjs
+node tests/stock-setup-adapter.test.cjs
+node tests/sector-rotation-adapter.test.cjs
+node tests/analysis-integration-panel-v1.test.cjs
+node tests/analysis-integration-wiring.test.cjs
+```
+
+**개발 Pages 적용 시 파일 병합 범위 갱신:** `js/exchange-session-proof.js`, `js/stock-setup-engine.js`, `js/stock-setup-adapter.js`, `js/sector-rotation-engine.js`, `js/sector-rotation-adapter.js`, `js/sector-cache-rotation-bridge.js`, `js/analysis-integration-panel-v1.js`을 새로 복사/갱신. 원본의 `js/page-stocks.js`, `js/page-sectors.js`, `js/page-strategy.js`에는 **현지 날짜·캐시·화면 연결 코드 차이만 병합**. `index.html`에는 이들의 script 태그 순서만 반영하고 **개발 환경 CSP·OAuth·릴레이/중계·기타 파일을 덮어쓰지 않는다**.
+
+**적용 후 검사:** `#/strategy`에서 실제 한국/미국 종목의 확정봉 기술 관찰 및 근거 보류; `#/sectors`에서 US ETF 수익률 펼쳐보기; 개발자 도구 네트워크에서 **추가 조회 0건**, 기존 계좌/뉴스/캘린더 기능 회귀. GitHub 전체 CI와 PC/Fold6 브라우저 테스트가 끝나기 전 또는 사용자의 운영 배포 승인이 있기 전에는 운영에 반영하지 않는다.
+
 ## 2. 원본 개발 브랜치 검증
 
 Codex 사용한도가 해제되지 않아도 GitHub Actions 또는 PC에서 다음 명령으로 검증할 수 있다.
