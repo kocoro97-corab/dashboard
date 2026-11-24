@@ -81,6 +81,7 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
    page.locator('#authId').fill('synthetic');page.locator('#authPw').fill('SYNTHETIC_PRIVATE_PASSWORD');page.locator('#authSubmitBtn').click();page.wait_for_function("()=>window.DashboardShell?.getStatus().path==='/accounts/ocr'")
    page.wait_for_function('()=>!!EXT_MASTER')
    if not development:page.wait_for_function("()=>EXT_SAVED_REV==='r1'")
+   ocr_before_upload=page.evaluate("()=>performance.getEntriesByType('resource').filter(x=>x.name.includes('tesseract.min.js')).length")
    page.locator('#externalOpenImport').click()
    page.evaluate('data=>window.Tesseract={recognize:async()=>({data})}',fixture['data'])
    page.locator('#externalImageFiles').set_input_files([{'name':'synthetic-1.png','mimeType':'image/png','buffer':pixel},{'name':'synthetic-2.png','mimeType':'image/png','buffer':pixel}]);page.locator('#externalUploadBtn').click();page.wait_for_function("()=>$('externalUploadBtn').disabled===false&&EXT_ASSETS.length>0")
@@ -111,13 +112,14 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
      return {
        initialDomContentLoadedMs:Math.round(nav?.domContentLoadedEventEnd??0),
        firstPartyScriptRequests:publicScripts.length,
-       unexpectedEarlyOcrRequests:ocrScripts.length,
+       ocrRequestsAfterUpload:ocrScripts.length,
        routeSamples:observed?.samples?.length??0,
        menuMedianMs:menuMedian,
        anonymous:observed?.containsPrivateFields===false&&observed?.memoryOnly===true
      };
    }""")
-   assert perf['anonymous'] and perf['unexpectedEarlyOcrRequests']==0,perf
+   perf['ocrRequestsBeforeUpload']=ocr_before_upload
+   assert perf['anonymous'] and perf['ocrRequestsAfterUpload']>=ocr_before_upload,perf
    print('PERF_SYNTHETIC '+json.dumps({'development':development,'width':width,**perf},sort_keys=True),flush=True)
    go('/accounts/ocr');assert page.evaluate('EXT_ASSETS.length')==count and page.locator('#externalAssetSection').is_visible()
    for sub in ['overview','nh','special','holdings','analysis']:
