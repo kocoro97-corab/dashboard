@@ -10,11 +10,18 @@ function input(){return {selection:{symbol,market:'US',mode:'swing'},analysis:da
 let r=P.evaluate(input());
 assert.equal(r.status,'partial');
 assert.equal(r.symbol,'SERV');
-assert.equal(r.checks.length,5);
+assert.equal(r.checks.length,6);
 assert.equal(r.checks.find(x=>x.key==='ohlcv').state,'received');
 assert.equal(r.checks.find(x=>x.key==='session').state,'missing');
 assert.equal(r.canUseStrictStockSetup,false);
 assert.equal(r.receivedAt,new Date(now-300000).toISOString());
+const staleSource=P.evaluate({...input(),analysis:{...data(),observedAt:now-5*86400000}});
+assert.equal(staleSource.checks.find(x=>x.key==='ohlcv').state,'missing',
+ 'fresh receipt of 5-day-old price cannot be reported as verified');
+const malformed=P.evaluate({...input(),analysis:{...data(),bars:times.map((b,i)=>i===0?{...b,h:5}:b)}});
+assert.equal(malformed.checks.find(x=>x.key==='ohlcv').state,'missing',
+ 'inconsistent OHLC bars cannot be accepted');
+
 assert.equal(JSON.stringify(r).includes('PRIVATE_ACCOUNT'),false);
 r=P.evaluate({...input(),selection:null});
 assert.equal(r.status,'unavailable');
@@ -34,6 +41,8 @@ try{
  const verified=P.evaluate(input());
  assert.equal(verified.checks.find(x=>x.key==='market').state,'usable');
  assert.equal(verified.marketRegime.direction.state,'up');
+ assert.equal(verified.checks.find(x=>x.key==='marketRisk').state,'missing',
+  'missing VIX cannot imply low risk');
  assert.equal(verified.canUseStrictStockSetup,false,'market proof never fabricates stock daily session dates');
 }finally{globalThis.MYInvestMarketRegime=before}
 assert.equal(typeof P.fetch,'undefined');
