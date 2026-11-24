@@ -114,6 +114,9 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
     assert panel.count()==1
     panel.locator('summary').click()
     page.wait_for_function("()=>document.querySelector('#devBrowserPerformanceResults')?.textContent.includes('JavaScript 요청')")
+    # Content is already populated; the details disclosure is explicitly opened
+    # before testing layout visibility to avoid relying on toggle-event timing.
+    panel.evaluate("e=>e.open=true")
     assert page.locator('#devBrowserPerformanceResults').is_visible()
     assert page.evaluate("()=>MYInvestWebPerformance.browserSnapshot().containsPrivateFields===false")
     go('/home')
