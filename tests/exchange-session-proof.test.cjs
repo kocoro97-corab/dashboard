@@ -13,7 +13,7 @@ assert.deepEqual(r.closedDates,['2026-11-20','2026-11-23']);
 assert.deepEqual(r.openDates,['2026-11-24']);
 assert.equal(r.currentSessionVerified,false);
 assert.equal(P.localDay(Date.parse('2026-11-24T01:00:00Z'),'America/New_York'),'2026-11-23');
-const tomorrow=Date.parse('2026-11-25T02:00:00Z'); // 21:00 New York, no today's bar
+const tomorrow=Date.parse('2026-11-25T06:00:00Z'); // 01:00 New York, next exchange-local date
 r=P.infer({market:'US',meta:usMeta,timestamps:dates.map(h),now:tomorrow});
 assert.equal(r.closedDates.length,3);
 const closeMeta={...usMeta,regularMarketTime:h('2026-11-24T20:58:00Z')};
