@@ -4,7 +4,8 @@ const path=require('node:path');
 const root=path.resolve(__dirname,'..');
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const strategy=fs.readFileSync(path.join(root,'js/page-strategy.js'),'utf8');
-const scripts=['js/exchange-session-proof.js','js/page-sectors.js','js/page-stocks.js',
+const scripts=['js/exchange-session-proof.js','js/sector-rotation-adapter.js','js/sector-rotation-engine.js',
+ 'js/sector-cache-rotation-bridge.js','js/page-sectors.js','js/page-stocks.js',
  'js/market-regime-engine.js','js/stock-setup-adapter.js','js/stock-setup-engine.js',
  'js/analysis-integration-panel-v1.js','js/page-strategy.js'];
 const offsets=scripts.map(s=>html.indexOf('src="'+s+'?'));
@@ -26,6 +27,8 @@ const stockPage=fs.readFileSync(path.join(root,'js/page-stocks.js'),'utf8');
 const sectors=fs.readFileSync(path.join(root,'js/page-sectors.js'),'utf8');
 assert.equal(stockPage.includes('sessionProof=session?.status'),true,'stock reader must keep exchange-session evidence');
 assert.equal(sectors.includes('sessionDates:proven?'),true,'sector cache must expose verified exchange trading days');
+assert.equal(sectors.includes('strictRotation:')||sectors.includes('asof:benchmark.last,strictRotation'),true,'verified sector rotation must be retained in existing page cache');
+assert.equal(sectors.includes('확정 일봉 기반 산업 1·5·20·60일 상대강도 근거'),true,'verified sector evidence disclosure must be visible');
 const panel=fs.readFileSync(path.join(root,'js/analysis-integration-panel-v1.js'),'utf8');
 assert.equal(/fetch\s*\(|XMLHttpRequest|localStorage|sessionStorage/.test(panel),false,
  'panel never reads storage or performs network requests');
