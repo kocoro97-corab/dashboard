@@ -101,7 +101,7 @@ async function ocrImage(file){
   // OCR is optional: its CDN script does not block dashboard boot.
   // Wait for an in-flight asynchronous library request only on user upload.
   if(!window.Tesseract){
-    const script=document.querySelector('script[src*="tesseract.js@5.1.1/dist/tesseract.min.js"]');
+    const script=document.querySelector('script[src*="tesseract.min.js"]');
     if(script)await new Promise(resolve=>{
       let finished=false;
       const done=()=>{if(finished)return;finished=true;clearTimeout(timer);
