@@ -12,9 +12,25 @@ function enhance(){frame=null;const viewport=document.getElementById('pageViewpo
 function queue(){if(frame===null)frame=requestAnimationFrame(enhance)}
 function start(){const app=document.getElementById('appContainer'),header=app?.querySelector('header'),session=document.getElementById('sessionTimerBox');if(header&&session){const brand=header.firstElementChild,controls=header.querySelector('.hr');for(const button of session.querySelectorAll('button'))controls.append(button);brand.append(session);const tools=document.createElement('details'),summary=document.createElement('summary'),panel=document.createElement('div');tools.className='dense-header-tools';summary.textContent='메뉴';panel.className='dense-header-panel';tools.append(summary,panel);panel.append(controls);const status=document.getElementById('status');if(status)panel.append(status);header.append(tools);headerTools=tools;lastCompact=innerWidth<600;tools.open=!lastCompact}// The instrument directory is not required for the initial dashboard paint.
  // Schedule it as background read-only enrichment; pages that need it can still call load() immediately.
- const loadNames=()=>{if(document.getElementById('appContainer'))void root.InstrumentNames?.load()};
- if(typeof root.requestIdleCallback==='function')root.requestIdleCallback(loadNames,{timeout:4000});
- else root.setTimeout(loadNames,1200);
+ // The 1.4 MB directory is unnecessary on the signed-out screen.
+ // Queue once per signed-in state, after the UI is ready; search can load immediately on demand.
+ let namesScheduled=false;
+ const loadNames=()=>{
+   if(app?.style.display==='block')void root.InstrumentNames?.load();
+   else namesScheduled=false;
+ };
+ const scheduleNames=()=>{
+   if(app?.style.display!=='block'||namesScheduled)return;
+   namesScheduled=true;
+   if(typeof root.requestIdleCallback==='function')root.requestIdleCallback(loadNames,{timeout:4000});
+   else root.setTimeout(loadNames,1200);
+ };
+ const authViewObserver=new MutationObserver(()=>{
+   if(app.style.display==='block')scheduleNames();
+   else namesScheduled=false;
+ });
+ authViewObserver.observe(app,{attributes:true,attributeFilter:['style']});
+ scheduleNames();
  const viewport=document.getElementById('pageViewport');if(!viewport)return;const observer=new MutationObserver(records=>{if(records.some(r=>r.type==='childList'))queue()});observer.observe(viewport,{childList:true,subtree:true});const resize=new ResizeObserver(queue);for(const el of [header,...app.querySelectorAll('.dashboard-nav,.shell-heading,.shell-meta')])if(el)resize.observe(el);root.addEventListener('resize',queue);root.addEventListener('myinvest:read-status',queue);root.visualViewport?.addEventListener('resize',queue);queue()}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })(window);
