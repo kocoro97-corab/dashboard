@@ -32,6 +32,7 @@ def synthetic_transport(route,*args,**kwargs):
         from pathlib import Path
         source=(Path(__file__).resolve().parents[1]/"js"/"auth.js").read_text()
         anchor="async function checkAuthentication(){"
+        source="window.__syntheticAuthInstrumented=true;\n"+source
         assert source.count(anchor)==1
         source=source.replace(anchor,anchor+"window.__syntheticAuthProbe={called:true,tokenAtStart:!!LS('invest_session_token'),freshAtStart:sessionLeftMs()>0};")
         route.fulfill(content_type="application/javascript",body=source);return
