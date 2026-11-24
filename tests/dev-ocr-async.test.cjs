@@ -1,33 +1,52 @@
 'use strict';
+const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const fs=require('node:fs');
-const vm=require('node:vm');
+const fs=require('node:fs'),vm=require('node:vm');
 const source=fs.readFileSync('js/dev_ocr.js','utf8');
 function create(){
- let listener,enabled=0;
- const files=Object.fromEntries(['externalImageFiles','externalUploadBtn'].map(x=>[x,{disabled:true,title:''}]));
- const progress={textContent:''};
- const script={addEventListener:(event,fn)=>{assert.equal(event,'load');listener=fn}};
- const root={URL,document:{
-  baseURI:'https://example.test/dashboard-v2-dev/',
-  querySelector:()=>script,getElementById:id=>id==='externalOcrProgress'?progress:files[id]
- },window:{}};
- vm.runInNewContext(source,root);
- return {root,files,progress,fire:()=>listener()};
+  const scripts=[];
+  const files=Object.fromEntries(['externalImageFiles','externalUploadBtn'].map(x=>[x,{disabled:true,title:''}]));
+  const progress={textContent:''};
+  const document={
+    baseURI:'https://example.test/dashboard-v2-dev/',
+    head:{appendChild:script=>scripts.push(script)},
+    createElement:tag=>{assert.equal(tag,'script');return {async:false,src:'',onload:null,onerror:null}},
+    getElementById:id=>id==='externalOcrProgress'?progress:files[id]
+  };
+  const window={};
+  vm.runInNewContext(source,{document,window,URL});
+  return {window,scripts,files,progress};
 }
-let x=create();
-x.root.window.DevelopmentOCR.enable();
-assert.equal(x.files.externalImageFiles.disabled,true,'must wait for actual OCR script load');
-assert.equal(x.files.externalUploadBtn.disabled,true);
-x.root.window.Tesseract={recognize:()=>{}};
-x.fire();
-assert.equal(x.files.externalImageFiles.disabled,false);
-assert.equal(x.files.externalUploadBtn.disabled,false);
-assert.match(x.progress.textContent,/기기 안에서 처리/);
-x=create();
-x.root.window.Tesseract={recognize:()=>{}};
-x.fire();
-assert.equal(x.files.externalUploadBtn.disabled,true,'library load before consent does not enable buttons');
-x.root.window.DevelopmentOCR.enable();
-assert.equal(x.files.externalUploadBtn.disabled,false);
-console.log('Async local OCR readiness and user-gated enablement PASS');
+test('user consent injects one same-origin OCR script and waits for load',async()=>{
+  const x=create();
+  assert.equal(x.scripts.length,0,'no network request on signed-out startup');
+  x.window.DevelopmentOCR.enable();
+  x.window.DevelopmentOCR.enable();
+  assert.equal(x.scripts.length,1,'concurrent requests must deduplicate');
+  assert.equal(x.scripts[0].src,'https://example.test/dashboard-v2-dev/vendor/ocr/tesseract.min.js');
+  assert.equal(x.files.externalImageFiles.disabled,true);
+  x.window.Tesseract={recognize:()=>{}};
+  x.scripts[0].onload();
+  await new Promise(setImmediate);
+  assert.equal(x.files.externalImageFiles.disabled,false);
+  assert.equal(x.files.externalUploadBtn.disabled,false);
+  assert.match(x.progress.textContent,/기기 안에서 처리/);
+});
+test('pre-existing engine remains disabled until explicit consent',()=>{
+  const x=create();
+  x.window.Tesseract={recognize:()=>{}};
+  assert.equal(x.files.externalUploadBtn.disabled,true);
+  x.window.DevelopmentOCR.enable();
+  assert.equal(x.files.externalUploadBtn.disabled,false);
+  assert.equal(x.scripts.length,0);
+});
+test('a failed local OCR import remains disabled and can retry',async()=>{
+  const x=create();
+  x.window.DevelopmentOCR.enable();
+  x.scripts[0].onerror();
+  await new Promise(setImmediate);
+  assert.equal(x.files.externalUploadBtn.disabled,true);
+  assert.match(x.progress.textContent,/불러오지 못했습니다/);
+  x.window.DevelopmentOCR.enable();
+  assert.equal(x.scripts.length,2);
+});
