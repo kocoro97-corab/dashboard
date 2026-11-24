@@ -98,19 +98,23 @@ async function loadExternalAssets(){
 function saveExternalSettings(){LS('invest_external_drive_folder',$('externalDriveFolder').value.trim());const cfg={auto:$('externalAutoRefresh').checked,minutes:Number($('externalAutoMinutes').value)||10};LS('invest_external_settings',cfg);applyExternalAutoRefresh();$('externalStatus').textContent=cfg.auto?'자동갱신 사용 · '+cfg.minutes+'분 간격':'자동갱신 꺼짐 · 접속 및 수동 새로고침';}
 function applyExternalAutoRefresh(){if(EXT_AUTO_TIMER)clearInterval(EXT_AUTO_TIMER);EXT_AUTO_TIMER=null;const cfg=LS('invest_external_settings')||{};if(cfg.auto)EXT_AUTO_TIMER=setInterval(()=>refreshExternalPrices(true),Math.max(5,Number(cfg.minutes)||10)*60000)}
 async function ocrImage(file){
-  // OCR is optional: its CDN script does not block dashboard boot.
-  // Wait for an in-flight asynchronous library request only on user upload.
+  // Load the heavy OCR engine only when the user explicitly requests image recognition.
+  // Keep a shared promise so multiple image uploads cannot fetch the library twice.
   if(!window.Tesseract){
-    const script=document.querySelector('script[src*="tesseract.min.js"]');
-    if(script)await new Promise(resolve=>{
-      let finished=false;
-      const done=()=>{if(finished)return;finished=true;clearTimeout(timer);
-        script.removeEventListener('load',done);script.removeEventListener('error',done);resolve()};
-      const timer=setTimeout(done,8000);
-      script.addEventListener('load',done,{once:true});
-      script.addEventListener('error',done,{once:true});
-      if(window.Tesseract)done();
-    });
+    if(!window.__myInvestOcrLoader){
+      window.__myInvestOcrLoader=new Promise((resolve,reject)=>{
+        const script=document.createElement('script');
+        script.src='https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+        script.async=true;
+        const timer=setTimeout(()=>finish(new Error('OCR_LOAD_TIMEOUT')),15000);
+        function finish(error){clearTimeout(timer);script.onload=null;script.onerror=null;
+          if(error){script.remove();reject(error)}else resolve();}
+        script.onload=()=>finish(window.Tesseract?null:new Error('OCR_ENGINE_UNAVAILABLE'));
+        script.onerror=()=>finish(new Error('OCR_LOAD_FAILED'));
+        document.head.appendChild(script);
+      }).catch(error=>{window.__myInvestOcrLoader=null;throw error});
+    }
+    try{await window.__myInvestOcrLoader}catch{}
   }
   if(!window.Tesseract)throw new Error('OCR 엔진을 불러오지 못했습니다. 인터넷 연결 또는 보안 정책을 확인하세요.');
   const localOptions=window.DevelopmentOCR?DevelopmentOCR.options:{};
