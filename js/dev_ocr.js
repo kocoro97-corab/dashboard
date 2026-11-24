@@ -37,6 +37,9 @@
   }
   window.DevelopmentOCR=Object.freeze({
     options,
-    enable(){requested=true;void loadOnce()}
+    enable(){requested=true;void loadOnce()},
+    // An upload may be started before the local script finishes loading.
+    // Never authorize the import before the explicit development consent.
+    ready(){return requested?loadOnce():Promise.resolve(false)}
   });
 })();
