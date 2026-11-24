@@ -17,7 +17,7 @@ function eventsFromPublicContext(report,{symbol,market,asOf,mode='swing'}={}){
  for(const item of report.events){
   if(!item||!validDay(item.date)||!item.sourceUrl||typeof item.sourceUrl!=='string'||
    !/^https:\/\//.test(item.sourceUrl)||!['macro','policy','earnings'].includes(item.category)||
-   !['BLS','BEA','BOK','FED','EARNINGS',item.category==='earnings'?'':'INVALID'].includes(item.publisher))continue;
+   !(item.category==='earnings'?['EARNINGS',''].includes(item.publisher):['BLS','BEA','BOK','FED'].includes(item.publisher)))continue;
   if(item.dateStatus==='estimated'||item.category==='earnings'&&item.dateStatus!=='confirmed')continue;
   if(item.category==='earnings'&&(item.symbol!==symbol||(/^[0-9]{6}$/.test(item.symbol)?'KR':'US')!==market||item.market&&item.market!==market))continue;
   const kind=item.category==='earnings'?'earnings':'economic';
@@ -28,7 +28,7 @@ function eventsFromPublicContext(report,{symbol,market,asOf,mode='swing'}={}){
   if(seen.has(key))continue;
   seen.add(key);events.push({kind,date:item.date,type:String(item.type||'').slice(0,50),
    verified:true,dateStatus:'confirmed',
-   symbol:kind==='earnings'?item.symbol:null,market:kind==='earnings'?item.market:null});
+   symbol:kind==='earnings'?item.symbol:null,market:kind==='earnings'?market:null});
  }
  return {status:missing.length?'partial':'ready',coverageVerified:missing.length===0,
   missingSources:missing,events:events.slice(0,100),
