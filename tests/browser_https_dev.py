@@ -42,6 +42,8 @@ def inspect_screen_controls(page):
     assert '미조회' in page.locator('#nhAccountRows').inner_text()
     assert '미조회' in page.locator('#externalAssetRows').inner_text()
     assert page.locator('#nhAccountBtn').is_disabled()
+    # The local OCR engine now loads after explicit development approval.
+    page.wait_for_function("()=>!!window.Tesseract&&document.getElementById('externalUploadBtn')?.disabled===false",timeout=15000)
     assert page.locator('#externalUploadBtn').is_enabled()
     assert page.locator('#externalDriveFolder').is_disabled()
     assert page.locator('#authToggleTxt').is_hidden()
