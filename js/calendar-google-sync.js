@@ -7,9 +7,9 @@
 const TTL=5*60*1000,MAX_EVENTS=300,MAX_CALENDARS=30;
 let provider=null,epoch=0,cache=new Map(),inflight=new Map(),hidden=new Set();
 function dateOK(v){return typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v+'T00:00:00Z'))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v}
-function normalizeCalendar(row){if(!row||typeof row.id!=='string'||row.id.length>200||!/^[\w.@-]{1,200}$/.test(row.id))return null;return {id:row.id,name:typeof row.name==='string'?row.name.slice(0,70):'내 캘린더',primary:row.primary===true}}
+function normalizeCalendar(row){if(!row||typeof row.id!=='string'||row.id.length>200||!/^[\w.@+#-]{1,200}$/.test(row.id))return null;return {id:row.id,name:typeof row.name==='string'?row.name.slice(0,70):'내 캘린더',primary:row.primary===true}}
 function normalizeEvent(row){
- if(!row||!dateOK(row.date)||typeof row.title!=='string'||!row.title.trim()||typeof row.calendarId!=='string'||!/^[\w.@-]{1,200}$/.test(row.calendarId)||typeof row.id!=='string'||row.id.length>250)return null;
+ if(!row||!dateOK(row.date)||typeof row.title!=='string'||!row.title.trim()||typeof row.calendarId!=='string'||!/^[\w.@+#-]{1,200}$/.test(row.calendarId)||typeof row.id!=='string'||row.id.length>250)return null;
  return {id:'google:'+row.calendarId+':'+row.id,date:row.date,title:row.title.trim().slice(0,100),category:'googlePersonal',calendarId:row.calendarId,source:'google-calendar',verified:false};
 }
 function connect(adapter){

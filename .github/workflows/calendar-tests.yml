@@ -8,6 +8,14 @@ on:
       - 'tests/staging/CalendarIdentityBridge.gs'
       - 'tools/prepare_calendar_identity_overlay.py'
       - 'tools/calendar_owner_preflight.py'
+      - 'tools/calendar_connection_activate.py'
+      - 'tools/build_calendar_worker_overlay.cjs'
+      - 'tools/calendar-worker-node-globals.mjs'
+      - 'tools/build_nh_staging.py'
+      - 'tests/test_calendar*.py'
+      - 'tests/staging/StagingBridge.gs'
+      - 'gas/Security.gs'
+      - 'tests/server-session-policy.test.cjs'
       - 'js/calendar-google-*.js'
       - 'js/calendar-ics-import.js'
       - 'tests/calendar-*.js'
@@ -50,3 +58,14 @@ jobs:
           node tests/calendar-session-authority.test.cjs
           node tests/calendar-settings.test.cjs
           node tests/calendar-relay-overlay.test.cjs
+          node tests/calendar-owner-config.test.cjs
+          node tests/server-session-policy.test.cjs
+      - name: Compile current Worker overlay (offline fixture, no deployment)
+        run: |
+          npm install --prefix /tmp/myinvest-calendar-build-tools --ignore-scripts --no-audit --no-fund --no-package-lock esbuild@0.25.12
+          node tests/calendar-worker-build.cjs /tmp/myinvest-calendar-build-tools/node_modules/esbuild
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Owner activation transaction and rollback tests (synthetic)
+        run: python -m unittest discover -s tests -p 'test_calendar*.py'

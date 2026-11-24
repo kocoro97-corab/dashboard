@@ -32,7 +32,7 @@ def historical_bundle(rev,script):
             for name in node.targets:
                 if isinstance(name,ast.Name) and name.id in ('SOURCES','MANIFEST'):values[name.id]=ast.literal_eval(node.value)
     sources=values.get('SOURCES');manifest=values.get('MANIFEST')
-    if not isinstance(sources,list) or not isinstance(manifest,dict) or not sources or any(not re.fullmatch(r'(?:gas/[A-Za-z0-9]+\.gs|tests/staging/StagingBridge\.gs)',p) for p in sources):raise Stop('BASELINE_GRAPH_REQUIRED')
+    if not isinstance(sources,list) or not isinstance(manifest,dict) or not sources or any(not re.fullmatch(r'(?:gas/[A-Za-z0-9]+\.gs|tests/staging/(?:StagingBridge|CalendarIdentityBridge)\.gs)',p) for p in sources):raise Stop('BASELINE_GRAPH_REQUIRED')
     if len(set(sources))!=len(sources):raise Stop('BASELINE_GRAPH_REQUIRED')
     contents={p:blob(p) for p in sources};digest=hashlib.sha256()
     for p,data in contents.items():digest.update(p.encode()+b'\0'+str(len(data)).encode()+b'\0'+data)

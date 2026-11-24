@@ -29,7 +29,8 @@ CAPABILITIES = ('freshTestEnvironment', 'testEnvironment', 'scriptHash', 'sheetH
                 'sourceDigest', 'gatewayVersion', 'storeEngine', 'relayProfile',
                 'developmentPublicMarket', 'developmentIndustryMarket',
                 'developmentPublicFutures', 'developmentAccountReads',
-                'developmentExternalStore', 'developmentFuturesReadVersion')
+                'developmentExternalStore', 'developmentFuturesReadVersion',
+                'developmentGoogleCalendarOverlayVersion', 'developmentGoogleCalendarReadOnly')
 
 
 class Stop(Exception):
@@ -90,7 +91,8 @@ def api_client(token):
         data = json.dumps(body).encode() if isinstance(body, dict) else body
         req = urllib.request.Request('https://api.cloudflare.com/client/v4' + path,
             data=data, method=method, headers={'Authorization': 'Bearer ' + token,
-            'Accept': '*/*' if path.endswith('/content/v2') else 'application/json', 'Content-Type': content_type})
+            'Accept': '*/*' if path.endswith('/content/v2') else 'application/json', 'Content-Type': content_type,
+            'User-Agent': 'MYInvest-Isolated-Worker-Owner/1.0'})
         try:
             with urllib.request.build_opener(NoRedirect()).open(req, timeout=60) as r:
                 raw = r.read(2 * 1024 * 1024 + 1)
@@ -311,6 +313,8 @@ def resume_pending(api, account, checkpoint_dir, public_probe=probe, code=None):
     if not candidate_source_matches(content, expected):
         raise Stop('PENDING_CANDIDATE_CODE_MISMATCH')
     old, _ = public_probe()
+    if old.get('developmentGoogleCalendarOverlayVersion') == 1:
+        raise Stop('CALENDAR_AWARE_UPDATE_REQUIRED')
     if old.get('freshTestEnvironment') is not True or old.get('testEnvironment') != 'nh-staging':
         raise Stop('ISOLATED_GAS_METADATA_REQUIRED')
     history = recent_versions(api, base)
@@ -381,6 +385,8 @@ def deploy(api, account, save, public_probe=probe, code=None, diagnose=False):
     if diagnose:
         return {'status': 'PASS', 'phase': 'WORKER_CODE_ONLY_PREFLIGHT_READ_ONLY',
                 'deploymentAttempted': False}
+    if old.get('developmentGoogleCalendarOverlayVersion') == 1:
+        raise Stop('CALENDAR_AWARE_UPDATE_REQUIRED')
     code = bundle() if code is None else code
     # At this point latest is the active version. Strict inheritance prevents
     # unresolved bindings being silently dropped; lineage is checked afterward.

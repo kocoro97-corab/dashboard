@@ -16,7 +16,8 @@ class CalendarIdentityOverlayTest(unittest.TestCase):
         owner.mkdir()
         (owner / '.clasp.json').write_text(json.dumps({'scriptId': script_id}))
         bridge = (ROOT / 'tests/staging/StagingBridge.gs').read_text().replace('__SCRIPT_ID__', script_id)
-        bridge += '\nfunction securityEnvironmentSessionIdleMs_(){return 3600000}\n'
+        bridge = '\n'.join(line for line in bridge.splitlines() if 'return handleCalendarIdentityV1_(body)' not in line and 'return configureCalendarIdentityV1_(body)' not in line)
+        bridge = bridge.replace(",typeof calendarIdentityMetadata_==='function'?calendarIdentityMetadata_():{}", '')
         (owner / 'StagingBridge.gs').write_text(bridge)
         (owner / 'Security.gs').write_text('SYNTHETIC_EXISTING_AUTH_POLICY_UNCHANGED')
         return owner, bridge
@@ -32,7 +33,7 @@ class CalendarIdentityOverlayTest(unittest.TestCase):
             self.assertEqual((owner / 'Security.gs').read_text(), 'SYNTHETIC_EXISTING_AUTH_POLICY_UNCHANGED')
             candidate = (base / 'private-output/StagingBridge.gs').read_text()
             self.assertEqual(candidate.replace(mod.HOOK, '', 1), original)
-            self.assertIn('return 3600000', candidate)
+            self.assertIn('?3600000:300000', candidate)
             self.assertEqual((base / 'private-output').stat().st_mode & 0o777, 0o700)
             self.assertNotIn('synthetic-isolated-project', json.dumps(plan))
 

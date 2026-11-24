@@ -21,7 +21,7 @@ const fail=(code)=>{const error=new Error(code);error.code=code;return error};
 const hexHash=s=>crypto.createHash('sha256').update(s).digest('hex');
 const safeDate=s=>{if(typeof s!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(s))return false;const d=new Date(s+'T00:00:00Z');return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===s};
 const identityHash=s=>hexHash('MYINVEST_GCAL_IDENTITY|'+s);
-const allowedId=s=>typeof s==='string'&&s.length>0&&s.length<=200&&/^[\w.@-]+$/.test(s);
+const allowedId=s=>typeof s==='string'&&s.length>0&&s.length<=200&&/^[\w.@+#-]+$/.test(s);
 function service({verifySession,store,google,clientId,redirectUri,secretKey,now=()=>Date.now()}){
  if(typeof verifySession!=='function'||!store||!google||typeof clientId!=='string'||!clientId.trim())throw fail('CONFIG_INVALID');
  if(!/^https:\/\//.test(redirectUri||''))throw fail('REDIRECT_INVALID');
@@ -40,6 +40,8 @@ function service({verifySession,store,google,clientId,redirectUri,secretKey,now=
   decipher.setAuthTag(raw.subarray(12,28));
   return JSON.parse(Buffer.concat([decipher.update(raw.subarray(28)),decipher.final()]).toString('utf8'));
  };
+ // Validate native AEAD support on the real private runtime without API/store calls.
+ if(decrypt(encrypt({privateRuntimeCheck:true})).privateRuntimeCheck!==true)throw fail('CONFIG_INVALID');
  const principal=async(token)=>{
   if(typeof token!=='string'||!token)throw fail('AUTH_REQUIRED');
   const id=await verifySession(token);
@@ -49,6 +51,7 @@ function service({verifySession,store,google,clientId,redirectUri,secretKey,now=
  const checkedToken=async(user)=>{
   const stored=await store.getAccount(user);if(!stored)throw fail('GOOGLE_NOT_CONNECTED');
   const record=decrypt(stored);
+  if(record.user!==user)throw fail('GOOGLE_ACCOUNT_BINDING_INVALID');
   if(record.scope!==SCOPE||typeof record.accessToken!=='string'||typeof record.refreshToken!=='string')throw fail('GOOGLE_SCOPE_INVALID');
   if(record.expiresAt>now()+60000)return record.accessToken;
   const updated=await google.refresh(record.refreshToken);
@@ -80,13 +83,14 @@ function service({verifySession,store,google,clientId,redirectUri,secretKey,now=
   if(pending.expiresAt<=now()||typeof pending.user!=='string'||typeof pending.verifier!=='string')throw fail('OAUTH_STATE_EXPIRED');
   const data=await google.exchange({code,codeVerifier:pending.verifier,redirectUri});
   if(!data||data.scope!==SCOPE||typeof data.accessToken!=='string'||typeof data.refreshToken!=='string'||!Number.isFinite(data.expiresIn)||data.expiresIn<=60)throw fail('OAUTH_SCOPE_OR_TOKEN_INVALID');
-  await store.putAccount(pending.user,encrypt({scope:SCOPE,accessToken:data.accessToken,refreshToken:data.refreshToken,expiresAt:now()+data.expiresIn*1000}));
+  await store.putAccount(pending.user,encrypt({user:pending.user,scope:SCOPE,accessToken:data.accessToken,refreshToken:data.refreshToken,expiresAt:now()+data.expiresIn*1000}));
   return {success:true}; // callback UI MUST NOT expose credentials
  }
  async function status(token){
   const user=await principal(token),stored=await store.getAccount(user);
   if(!stored)return {success:true,connected:false,readOnly:true,scopes:[]};
   const record=decrypt(stored);
+  if(record.user!==user)throw fail('GOOGLE_ACCOUNT_BINDING_INVALID');
   const ok=record.scope===SCOPE;
   return {success:true,connected:ok,readOnly:ok,scopes:ok?[SCOPE]:[]};
  }
@@ -120,7 +124,7 @@ function service({verifySession,store,google,clientId,redirectUri,secretKey,now=
   const user=await principal(token),stored=await store.getAccount(user);
   // Delete local linkage even if Google revocation endpoint is unreachable.
   await store.deleteAccount(user);
-  if(stored){try{const record=decrypt(stored);await google.revoke(record.accessToken)}catch{}}
+  if(stored){try{const record=decrypt(stored);if(record.user===user)await google.revoke(record.accessToken)}catch{}}
   return {success:true};
  }
  async function handle(action,token,payload={}){

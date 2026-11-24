@@ -90,6 +90,17 @@ class Cloud:
 
 
 class CodeOnlyTests(unittest.TestCase):
+    def test_installed_calendar_overlay_cannot_be_removed_by_old_code_updater(self):
+        c = Cloud()
+        def probe():
+            doc, exposed = c.probe()
+            doc['developmentGoogleCalendarOverlayVersion'] = 1
+            return doc, exposed
+        with self.assertRaises(m.Stop) as result:
+            m.deploy(c, 'a' * 32, lambda _: self.fail('MUST_NOT_CHECKPOINT'), public_probe=probe, code=b'old module')
+        self.assertEqual(result.exception.code, 'CALENDAR_AWARE_UPDATE_REQUIRED')
+        self.assertTrue(all(method == 'GET' for method, _, _ in c.calls))
+
     def make_pending(self, c, folder):
         m.private_checkpoint(folder / 'before.json', {'worker': m.NAME,
             'deployment': {'id': 'deployment-' + OLD, 'version': OLD},

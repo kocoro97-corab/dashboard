@@ -28,17 +28,17 @@ function createCalendarRelayOverlay({legacy,runtimeFactory=calendarRuntimeFromSe
   }
  }
  const worker={async fetch(request,env,ctx){
-  if(env.GOOGLE_CALENDAR_ENABLED!=='true')return legacy.default.fetch(request,env,ctx);
+  const enabled=env.GOOGLE_CALENDAR_ENABLED==='true';
   const url=new URL(request.url);let body=null;
   if(url.pathname==='/api'&&request.method==='POST'){
    try{body=JSON.parse(await bodyText(request.clone(),16384))}catch{}
   }
-  const privateRequest=oauthPaths.has(url.pathname)||body&&ACTIONS.has(body.action);
+  const privateRequest=enabled&&(oauthPaths.has(url.pathname)||body&&ACTIONS.has(body.action));
   if(!privateRequest){
    const response=await legacy.default.fetch(request,env,ctx);
    // Capability is advertised only by this installed overlay with valid settings.
    if(url.origin===HOST&&body?.action==='appVersion'&&response.ok){
-    try{const data=await response.clone().json();if(data.success===true&&calendarSettings(env)){const headers=new Headers(response.headers);headers.delete('Content-Length');headers.delete('ETag');return new Response(JSON.stringify({...data,developmentGoogleCalendarReadOnly:true}),{status:response.status,headers})}}catch{}
+    try{const data=await response.clone().json();if(data.success===true){let ready=false;try{ready=enabled&&!!calendarSettings(env)&&data.calendarIdentityVersion===1&&data.calendarIdentityConfigured===true}catch{}const headers=new Headers(response.headers);headers.delete('Content-Length');headers.delete('ETag');return new Response(JSON.stringify({...data,developmentGoogleCalendarOverlayVersion:1,developmentGoogleCalendarReadOnly:ready}),{status:response.status,headers})}}catch{}
    }
    return response;
   }
