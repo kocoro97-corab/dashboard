@@ -75,7 +75,7 @@ function alignedWindow(value,benchmark,n){
  const positions=new Map(value.times.map((_,i)=>[seriesDay(value,i),i]));
  const indices=days.map(d=>positions.get(d));if(indices.some(i=>i===undefined))return null;
  const closes=indices.map(i=>value.bars[i]),change=ret(closes,n),base=ret(benchmark.bars,n);if(change===null||base===null)return null;
- return {change,relative:change-base,asof:days.at(-1)*1000,close:closes.at(-1),volume:value.volume?.[indices.at(-1)]};
+ return {change,relative:change-base,asof:benchmark.times.at(-1)*1000,close:closes.at(-1),volume:value.volume?.[indices.at(-1)]};
 }
 let US_UNIVERSE=null,US_UNIVERSE_PENDING=null;
 async function usUniverse(){
