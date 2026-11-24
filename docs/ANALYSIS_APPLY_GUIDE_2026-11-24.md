@@ -56,6 +56,36 @@ node tests/analysis-integration-wiring.test.cjs
 
 **적용 후 검사:** `#/strategy`에서 실제 한국/미국 종목의 확정봉 기술 관찰 및 근거 보류; `#/sectors`에서 US ETF 수익률 펼쳐보기; 개발자 도구 네트워크에서 **추가 조회 0건**, 기존 계좌/뉴스/캘린더 기능 회귀. GitHub 전체 CI와 PC/Fold6 브라우저 테스트가 끝나기 전 또는 사용자의 운영 배포 승인이 있기 전에는 운영에 반영하지 않는다.
 
+### 2026-11-24 통합 후보·보유전략 화면 연결 (개발 브랜치)
+
+- `js/integrated-strategy-engine.js`, `js/integrated-event-adapter.js`, `js/opportunity-review-queue.js`, `js/cached-strategy-bridge.js`를 전략 화면보다 먼저 로드.
+- `js/page-strategy.js`: 기존 `InvestWorkflow.ensure()` 결과와 검증된 **현재 브라우저 보유 행**, `MYInvestEventContext.collect()`의 **이미 수집된 공식 공개 일정**을 선택 종목에 한하여 읽기 전용으로 연결. 추가 시세/계좌/공식 일정 API 조회 없음. Google 개인 캘린더 접근 없음.
+- `js/analysis-integration-panel-v1.js`: **신규 후보**와 **기존 보유종목**의 검토상태를 구별하고, 데이터 미확인 `blocking` 및 공식 실적·거시 이벤트 위험을 표시한다.
+- 동일 종목을 복수 계좌에서 보유한 경우 하나의 계좌 판단을 모든 계좌로 일반화하지 않는다. 각 기록을 별도 검토하며 종목 단위 단일 계좌 우선순위는 생성하지 않는다.
+- **개인정보 비노출:** 계좌번호, 증권사명, 평단, 수량, 토큰을 새 분석의 공개 출력에 포함하지 않는다. 기존 사용자의 보호된 보유 계좌 화면은 변경하지 않았다.
+- **미완료 연결:** 특정 종목의 주도 산업 소속/5·20일 동일 거래일 상대강도는 독립적으로 입증되지 않으면 `sector-unverified`/`relative-unverified`. 확정된 매수 추천·자동 주문·푸시 알림 기능이 아니다.
+
+자동 테스트/구문 검사:
+
+```bash
+node --check js/cached-strategy-bridge.js
+node --check js/integrated-strategy-engine.js
+node --check js/integrated-event-adapter.js
+node --check js/opportunity-review-queue.js
+node --check js/page-strategy.js
+node --check js/analysis-integration-panel-v1.js
+node tests/cached-strategy-bridge.test.cjs
+node tests/integrated-strategy-engine.test.cjs
+node tests/integrated-event-adapter.test.cjs
+node tests/analysis-integration-panel-v1.test.cjs
+node tests/analysis-integration-wiring.test.cjs
+node tests/exchange-session-integration.test.cjs
+```
+
+**개발 사이트 복사/병합 추가 범위:** 이번에는 새 JS 4개(`integrated-strategy-engine`, `integrated-event-adapter`, `opportunity-review-queue`, `cached-strategy-bridge`)를 복사하고, 기존 개발 게시본의 `js/page-strategy.js` 및 `js/analysis-integration-panel-v1.js`에서 공개 일정/보유행 메모리 전달·구분 표시 변경만 병합. 기존 CSP·OAuth·로그인·중계 설정·GAS 전체는 유지. 신규 스크립트는 `analysis-integration-panel-v1.js`보다 먼저 포함한다.
+
+**실행 상태:** 원본 개발 브랜치에 연결 코드 반영 및 모의 종단 간 테스트 통과. `dashboard-v2-dev/dev-pages` 게시·실 NH/실 Yahoo 브라우저 테스트·전체 CI PASS·운영 배포는 아직 미완료. 사용자의 운영 배포 승인 전에는 운영 레포지토리 변경 불가.
+
 ## 2. 원본 개발 브랜치 검증
 
 Codex 사용한도가 해제되지 않아도 GitHub Actions 또는 PC에서 다음 명령으로 검증할 수 있다.
