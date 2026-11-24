@@ -34,7 +34,7 @@ async function readSeries(ctx,symbol){
  if(!result||!q||!Array.isArray(times)||result.meta?.symbol!==symbol)throw Error('INVALID_CHART_IDENTITY');
  const domestic=['^KS11','^KQ11'].includes(symbol)||/\.(KS|KQ)$/.test(symbol),currency=result.meta?.currency,exchange=String(result.meta?.exchangeName||'');
  if(currency!==(domestic?'KRW':'USD'))throw Error('CHART_CURRENCY_MISMATCH');
- if(domestic&&!(/\.KQ$/.test(symbol)?/^(KOE|KOSDAQ)$/i:/^(KSC|KOSPI|KRX|SEOUL)$/i).test(exchange))throw Error('CHART_EXCHANGE_MISMATCH');
+ if(domestic&&!((/\.KQ$/.test(symbol)||symbol==='^KQ11')?/^(KOE|KOSDAQ)$/i:/^(KSC|KOSPI|KRX|SEOUL)$/i).test(exchange))throw Error('CHART_EXCHANGE_MISMATCH');
  let previous=0;const now=Date.now()/1000;
  for(const t of times){if(!Number.isSafeInteger(t)||t<=previous||t>now+300)throw Error('INVALID_CHART_TIME');previous=t}
  const proof=root.MYInvestExchangeSessionProof?.infer({
