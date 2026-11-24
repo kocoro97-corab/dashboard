@@ -20,13 +20,17 @@ function create(){
 test('user consent injects one same-origin OCR script and waits for load',async()=>{
   const x=create();
   assert.equal(x.scripts.length,0,'no network request on signed-out startup');
+  assert.equal(await x.window.DevelopmentOCR.ready(),false,'no local OCR without consent');
+  assert.equal(x.scripts.length,0);
   x.window.DevelopmentOCR.enable();
   x.window.DevelopmentOCR.enable();
+  const ready=x.window.DevelopmentOCR.ready();
   assert.equal(x.scripts.length,1,'concurrent requests must deduplicate');
   assert.equal(x.scripts[0].src,'https://example.test/dashboard-v2-dev/vendor/ocr/tesseract.min.js');
   assert.equal(x.files.externalImageFiles.disabled,true);
   x.window.Tesseract={recognize:()=>{}};
   x.scripts[0].onload();
+  assert.equal(await ready,true);
   await new Promise(setImmediate);
   assert.equal(x.files.externalImageFiles.disabled,false);
   assert.equal(x.files.externalUploadBtn.disabled,false);
