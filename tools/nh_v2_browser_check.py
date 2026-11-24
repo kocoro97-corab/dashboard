@@ -167,6 +167,12 @@ def native_browser_check(target, username, password, binding=None):
                         if action=='logout' and data.get('success') is True:state['logout']=True
                     except Exception:pass
                 page.on('response',response)
+                # Type-only JS error evidence; no raw text from pages or private fields.
+                script_errors=[]
+                def script_error_type(error):
+                    kind=next((name for name in ('ReferenceError','TypeError','SyntaxError','SecurityError','RangeError') if name in str(error)),'OTHER')
+                    if len(script_errors)<10:script_errors.append(kind)
+                page.on('pageerror',script_error_type)
                 def console(message):
                     if message.type == 'error' and 'cors' in message.text.lower():
                         report['corsFailureObserved']=True
@@ -214,6 +220,7 @@ def native_browser_check(target, username, password, binding=None):
                 report.update(gasCommunication='PASS',displayMatchesResponse='PASS')
                 token=page.evaluate("()=>LS('invest_session_token')")
                 report['phase']='SESSION_RELOAD'
+                script_errors_before_reload=len(script_errors)
                 report['reloadPreflight']=page.evaluate("""() => ({
                     tokenPresent:!!LS('invest_session_token'),
                     sessionFresh:sessionLeftMs()>0,
@@ -228,6 +235,7 @@ def native_browser_check(target, username, password, binding=None):
                     appVisible:document.getElementById('appContainer')?.style.display==='block',
                     endpointStored:!!localStorage.getItem('invest_myproxy'),
                     authSubmitBound:document.getElementById('authSubmitBtn')?.dataset.bound==='1',
+                    authInstrumented:window.__syntheticAuthInstrumented===true,
                     authRestoreEntered:window.__syntheticAuthProbe?.called===true,
                     authTokenAtEntry:window.__syntheticAuthProbe?.tokenAtStart===true,
                     authSessionFreshAtEntry:window.__syntheticAuthProbe?.freshAtStart===true,
@@ -244,6 +252,7 @@ def native_browser_check(target, username, password, binding=None):
                     # Capture only boolean readiness indicators while the browser is still open.
                     # No token values, account fields, remote URLs or raw console output.
                     try:
+                        report['reloadScriptErrorTypes']=script_errors[script_errors_before_reload:]
                         report['reloadDiagnostic']=page.evaluate("""() => ({
                         documentReady:document.readyState==='complete',
                         authenticated:typeof LS==='function'&&!!LS('invest_session_token'),
@@ -254,6 +263,7 @@ def native_browser_check(target, username, password, binding=None):
                         sessionHasTime:typeof sessionLeftMs==='function'&&sessionLeftMs()>0,
                         shellPresent:!!window.DashboardShell,
                         authSubmitBound:document.getElementById('authSubmitBtn')?.dataset.bound==='1',
+                        authInstrumented:window.__syntheticAuthInstrumented===true,
                         authRestoreEntered:window.__syntheticAuthProbe?.called===true,
                         authTokenAtEntry:window.__syntheticAuthProbe?.tokenAtStart===true,
                         authSessionFreshAtEntry:window.__syntheticAuthProbe?.freshAtStart===true,
