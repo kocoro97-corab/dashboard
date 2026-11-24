@@ -1,0 +1,26 @@
+'use strict';
+const assert=require('node:assert/strict');
+const P=require('../js/web-performance-metrics.js');
+let a=P.begin('home','navigation');
+assert.equal(typeof a,'number');
+assert.equal(P.finish(a,'ready'),true);
+let v=P.snapshot();
+assert.equal(v.samples.length,1);
+assert.equal(v.samples[0].page,'home');
+assert.equal(v.samples[0].phase,'navigation');
+assert.equal(v.samples[0].result,'ready');
+assert.equal(v.memoryOnly,true);
+assert.equal(v.networkCalls,0);
+assert.equal(v.containsPrivateFields,false);
+assert.equal(P.begin('SECRET-ACCOUNT','navigation'),null);
+assert.equal(P.begin('accounts','PRIVATE-PAYLOAD'),null);
+assert.equal(P.finish(999999,'ready'),false);
+for(let i=0;i<80;i++){const t=P.begin('stocks',i%2===0?'navigation':'refresh');assert.equal(P.finish(t,'ready'),true)}
+assert.equal(P.snapshot().samples.length,50);
+assert.equal(P.snapshot().summary.stocks.count,50);
+P.clear();
+assert.equal(P.snapshot().samples.length,0);
+assert.equal(P.snapshot().summary.stocks,undefined);
+assert.equal(typeof P.send,'undefined');
+assert.equal(typeof P.fetch,'undefined');
+console.log('Memory-only web performance metrics, 50-sample cap, logout purge and privacy PASS');
