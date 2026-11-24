@@ -44,6 +44,21 @@ function adapt(analysis,{symbol,market,dates,closedDates=null,verifiedSource=fal
   exchange:analysis.exchange,observedAt:analysis.observedAt,receivedAt:analysis.receivedAt,
   verified:true,asOf:bars.at(-1).date,excludedOpenBars:raw.length-bars.length};
 }
-const api=Object.freeze({adapt});
+function adaptCached(analysis,{symbol,market}={}){
+ const proof=analysis?.sessionProof;
+ if(!proof||proof.status!=='ready'||!Array.isArray(proof.dates)||
+   !Array.isArray(proof.closedDates)||proof.zone!==(market==='KR'?'Asia/Seoul':'America/New_York'))
+  return {status:'unavailable',reason:'기존 시세 캐시의 거래소 기준일/마감봉 증거 없음'};
+ // The parent stock reader already validated provider symbol, currency
+ // and exchange against the requested issuer. Do not infer identity here.
+ if(analysis?.provider!==(market==='KR'?symbol+'.'+
+   (analysis.exchange==='KOE'?'KQ':'KS'):symbol))
+  return {status:'unavailable',reason:'원천 종목 provider 식별 불일치'};
+ if(typeof analysis.source!=='string'||!analysis.source.startsWith('Yahoo Finance ('))
+  return {status:'unavailable',reason:'확인된 Yahoo 차트 출처 없음'};
+ return adapt(analysis,{symbol,market,verifiedSource:true,
+  dates:proof.dates,closedDates:proof.closedDates});
+}
+const api=Object.freeze({adapt,adaptCached});
 if(typeof module==='object'&&module.exports)module.exports=api;else root.MYInvestStockSetupAdapter=api;
 })(globalThis);
