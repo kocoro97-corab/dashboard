@@ -4,7 +4,9 @@ const path=require('node:path');
 const root=path.resolve(__dirname,'..');
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 const strategy=fs.readFileSync(path.join(root,'js/page-strategy.js'),'utf8');
-const scripts=['js/market-regime-engine.js','js/analysis-integration-panel-v1.js','js/page-strategy.js'];
+const scripts=['js/exchange-session-proof.js','js/page-sectors.js','js/page-stocks.js',
+ 'js/market-regime-engine.js','js/stock-setup-adapter.js','js/stock-setup-engine.js',
+ 'js/analysis-integration-panel-v1.js','js/page-strategy.js'];
 const offsets=scripts.map(s=>html.indexOf('src="'+s+'?'));
 assert.equal(offsets.every((n,i)=>n>=0&&(i===0||n>offsets[i-1])),true,
  'Market engine and cached analysis panel must load before strategy page');
@@ -20,6 +22,10 @@ const block=strategy.slice(start,end);
 assert.equal(/fetch\s*\(|\.ensure\s*\(/.test(block),false,'evidence integration cannot create network requests');
 assert.equal(/submitOrder|placeOrder|accountNumber|refreshMarket\s*\(/.test(block),false,
  'integration cannot trigger orders or expose private account data');
+const stockPage=fs.readFileSync(path.join(root,'js/page-stocks.js'),'utf8');
+const sectors=fs.readFileSync(path.join(root,'js/page-sectors.js'),'utf8');
+assert.equal(stockPage.includes('sessionProof=session?.status'),true,'stock reader must keep exchange-session evidence');
+assert.equal(sectors.includes('sessionDates:proven?'),true,'sector cache must expose verified exchange trading days');
 const panel=fs.readFileSync(path.join(root,'js/analysis-integration-panel-v1.js'),'utf8');
 assert.equal(/fetch\s*\(|XMLHttpRequest|localStorage|sessionStorage/.test(panel),false,
  'panel never reads storage or performs network requests');
