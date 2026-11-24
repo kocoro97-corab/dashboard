@@ -113,8 +113,8 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
     panel=page.locator('#devBrowserPerformance')
     assert panel.count()==1
     panel.locator('summary').click()
+    page.wait_for_function("()=>document.querySelector('#devBrowserPerformanceResults')?.textContent.includes('JavaScript 요청')")
     assert page.locator('#devBrowserPerformanceResults').is_visible()
-    assert 'JavaScript 요청' in page.locator('#devBrowserPerformanceResults').inner_text()
     assert page.evaluate("()=>MYInvestWebPerformance.browserSnapshot().containsPrivateFields===false")
     go('/home')
    # Synthetic, anonymous performance evidence: never print accounts, tokens or request URLs.
