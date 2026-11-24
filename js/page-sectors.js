@@ -37,13 +37,23 @@ async function readSeries(ctx,symbol){
  if(domestic&&!(/\.KQ$/.test(symbol)?/^(KOE|KOSDAQ)$/i:/^(KSC|KOSPI|KRX|SEOUL)$/i).test(exchange))throw Error('CHART_EXCHANGE_MISMATCH');
  let previous=0;const now=Date.now()/1000;
  for(const t of times){if(!Number.isSafeInteger(t)||t<=previous||t>now+300)throw Error('INVALID_CHART_TIME');previous=t}
+ const proof=root.MYInvestExchangeSessionProof?.infer({
+  market:domestic?'KR':'US',meta:result.meta,timestamps:times,now:Date.now()});
+ const proven=proof?.status==='ready',closed=proven?new Set(proof.closedDates):null;
+ // Preserve legacy source behavior when Yahoo omits verifiable session
+ // metadata, but strict rotation adapters will reject such observations.
  const regular=result.meta?.currentTradingPeriod?.regular;
- const activeDay=Number.isFinite(regular?.start)&&Number.isFinite(regular?.end)&&now<regular.end?new Date(regular.start*1000).toISOString().slice(0,10):null;
- const bars=times.map((t,i)=>({t,c:q.close?.[i],v:q.volume?.[i]})).filter(x=>Number.isFinite(x.c)&&x.c>0&&(!activeDay||new Date(x.t*1000).toISOString().slice(0,10)!==activeDay));
+ const activeDay=Number.isFinite(regular?.start)&&Number.isFinite(regular?.end)&&now<regular.end?
+  new Date(regular.start*1000).toISOString().slice(0,10):null;
+ const bars=times.map((t,i)=>({t,c:q.close?.[i],v:q.volume?.[i],
+  sessionDay:proven?proof.dates[i]:null})).filter(x=>Number.isFinite(x.c)&&x.c>0&&
+  (proven?closed.has(x.sessionDay):(!activeDay||new Date(x.t*1000).toISOString().slice(0,10)!==activeDay)));
  if(bars.length<2)throw Error('INSUFFICIENT_BARS');
  if(typeof window!=='undefined')window.InstrumentNames?.ingest(symbol,result.meta);
  const quoteTime=result.meta?.regularMarketTime,currentObservedAt=Number.isFinite(quoteTime)&&quoteTime>0&&quoteTime<=now+300?quoteTime*1000:null;
- const value={currentPrice:currentObservedAt&&Number.isFinite(result.meta?.regularMarketPrice)&&result.meta.regularMarketPrice>0?result.meta.regularMarketPrice:null,currentObservedAt,instrumentType:result.meta?.instrumentType,bars:bars.map(x=>x.c),times:bars.map(x=>x.t),last:bars.at(-1).t*1000,volume:bars.map(x=>x.v),currency,exchange};
+ const value={currentPrice:currentObservedAt&&Number.isFinite(result.meta?.regularMarketPrice)&&result.meta.regularMarketPrice>0?result.meta.regularMarketPrice:null,currentObservedAt,instrumentType:result.meta?.instrumentType,bars:bars.map(x=>x.c),times:bars.map(x=>x.t),last:bars.at(-1).t*1000,volume:bars.map(x=>x.v),currency,exchange,
+  sessionDates:proven?bars.map(x=>x.sessionDay):null,
+  sessionProof:proven?{status:'ready',zone:proof.zone,closedDates:bars.map(x=>x.sessionDay),excludedOpenBars:proof.openDates.length}:{status:'unavailable',reason:proof?.reason||'원천 거래일 확인 불가'}};
  SERIES_CACHE.set(symbol,{at:Date.now(),value});return value;
 }
 function comparableWindow(value,benchmark,n){return value.times.length>n&&[value.times.length-1,value.times.length-1-n].every((i,k)=>new Date(value.times[i]*1000).toISOString().slice(0,10)===new Date(benchmark.times[benchmark.times.length-1-k*n]*1000).toISOString().slice(0,10))}
