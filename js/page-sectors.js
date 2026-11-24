@@ -170,7 +170,7 @@ function create(){
   for(const row of data.rows){const tr=make('tr');tr.append((()=>{const cell=make('td');if(market==='US'&&category==='industry')cell.append(button(row.name+' ('+row.symbol+') · ETF 대리지표',()=>root.MYInvestStockSelection?.open(row.symbol,{name:row.name,industry:row.name,source:'industry',mode,relativeStrength:row.relative,stockRelativeStrength:row.relative,stockReturn:row.change,themeReturn:row.change,themeReceivedAt:data.received,observedAt:row.asof,dataScope:'us_sector_etf',benchmark:'SPY',period})));else cell.textContent=row.name+' ('+row.symbol+')';return cell})(),make('td',pct(row.change)),make('td',pct(row.relative)),make('td',row.coverage),make('td',new Date(row.asof).toLocaleDateString('ko-KR')));table.append(tr)}
   target.append(tableScroll(table));if(category==='industry')renderInsights(data,target);
   if(market==='US'){
-   const proof=make('details',undefined,'stv2-insights');
+   const proof=make('details',undefined,'stv2-verified-rotation');
    proof.append(make('summary','확정 일봉 기반 산업 1·5·20·60일 상대강도 근거'));
    const strict=data.strictRotation;
    if(strict?.status==='descriptive'){
