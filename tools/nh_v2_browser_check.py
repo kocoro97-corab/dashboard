@@ -226,7 +226,12 @@ def native_browser_check(target, username, password, binding=None):
                     savedTokenPresent:!!localStorage.getItem('invest_session_token'),
                     sessionFresh:typeof sessionLeftMs==='function'&&sessionLeftMs()>0,
                     appVisible:document.getElementById('appContainer')?.style.display==='block',
-                    endpointStored:!!localStorage.getItem('invest_myproxy')
+                    endpointStored:!!localStorage.getItem('invest_myproxy'),
+                    authSubmitBound:document.getElementById('authSubmitBtn')?.dataset.bound==='1',
+                    authRestoreAvailable:typeof checkAuthentication==='function',
+                    authBindAvailable:typeof bindAuth==='function',
+                    transportAvailable:typeof post==='function',
+                    initialScriptCount:document.querySelectorAll('script[src]').length
                 })""")
                 try:
                     page.wait_for_function("()=>$('appContainer').style.display==='block'&&!NH_ACCOUNT_BUSY&&NH_ACCOUNT_SESSION===LS('invest_session_token')",timeout=120000)
@@ -242,7 +247,11 @@ def native_browser_check(target, username, password, binding=None):
                         nhPending:typeof NH_ACCOUNT_BUSY!=='undefined'&&NH_ACCOUNT_BUSY===true,
                         nhSessionMatch:typeof NH_ACCOUNT_SESSION!=='undefined'&&typeof LS==='function'&&NH_ACCOUNT_SESSION===LS('invest_session_token'),
                         sessionHasTime:typeof sessionLeftMs==='function'&&sessionLeftMs()>0,
-                        shellPresent:!!window.DashboardShell
+                        shellPresent:!!window.DashboardShell,
+                        authSubmitBound:document.getElementById('authSubmitBtn')?.dataset.bound==='1',
+                        authRestoreAvailable:typeof checkAuthentication==='function',
+                        authBindAvailable:typeof bindAuth==='function',
+                        transportAvailable:typeof post==='function'
                     })""")
                     except Exception as diagnostic_error:
                         report['reloadDiagnostic']={'evaluationErrorType':type(diagnostic_error).__name__}
