@@ -8,7 +8,7 @@ function create(){
  const files=Object.fromEntries(['externalImageFiles','externalUploadBtn'].map(x=>[x,{disabled:true,title:''}]));
  const progress={textContent:''};
  const script={addEventListener:(event,fn)=>{assert.equal(event,'load');listener=fn}};
- const root={document:{
+ const root={URL,document:{
   baseURI:'https://example.test/dashboard-v2-dev/',
   querySelector:()=>script,getElementById:id=>id==='externalOcrProgress'?progress:files[id]
  },window:{}};
