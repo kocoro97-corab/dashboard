@@ -21,6 +21,14 @@ assert.equal(P.snapshot().summary.stocks.count,50);
 P.clear();
 assert.equal(P.snapshot().samples.length,0);
 assert.equal(P.snapshot().summary.stocks,undefined);
+const oldSessionToken=P.begin('accounts','navigation');
+P.clear();
+const newSessionToken=P.begin('home','navigation');
+assert.equal(P.finish(oldSessionToken,'ready'),false,
+ 'old-session response must not complete a new session measurement');
+assert.equal(P.finish(newSessionToken,'ready'),true);
+assert.equal(P.snapshot().samples[0].page,'home');
+P.clear();
 assert.equal(typeof P.send,'undefined');
 assert.equal(typeof P.fetch,'undefined');
 console.log('Memory-only web performance metrics, 50-sample cap, logout purge and privacy PASS');
