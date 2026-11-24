@@ -32,3 +32,41 @@ P.clear();
 assert.equal(typeof P.send,'undefined');
 assert.equal(typeof P.fetch,'undefined');
 console.log('Memory-only web performance metrics, 50-sample cap, logout purge and privacy PASS');
+
+const fs=require('node:fs'),vm=require('node:vm');
+const source=fs.readFileSync(require('node:path').resolve(__dirname,'../js/web-performance-metrics.js'),'utf8');
+const sandbox={
+ module:{exports:{}},
+ performance:{
+  now:()=>5000,
+  getEntriesByType:type=>type==='navigation'?[{domContentLoadedEventEnd:135.2,loadEventEnd:182.7}]:
+   type==='paint'?[{name:'first-contentful-paint',startTime:152.4}]:
+   type==='resource'?[
+    {name:'https://example.test/dashboard-v2-dev/js/app-shell.js?token=SYNTHETIC_SECRET_CANARY'},
+    {name:'https://example.test/dashboard-v2-dev/data/us-instruments.json'},
+    {name:'https://example.test/dashboard-v2-dev/vendor/ocr/tesseract.min.js'},
+    {name:'https://example.test/private?account=SYNTHETIC_ACCOUNT_1234'}
+   ]:[]
+ }
+};
+vm.runInNewContext(source,sandbox,{filename:'web-performance-metrics.js'});
+const current=sandbox.module.exports.browserSnapshot();
+assert.equal(current.navigation.domContentLoadedMs,135);
+assert.equal(current.navigation.loadEventMs,183);
+assert.equal(current.navigation.firstContentfulPaintMs,152);
+assert.equal(current.resourceCounts.total,4);
+assert.equal(current.resourceCounts.firstPartyScripts,1);
+assert.equal(current.resourceCounts.ocrScripts,1);
+assert.equal(current.resourceCounts.usInstrumentCatalog,1);
+assert.equal(current.networkCalls,0);
+assert.equal(current.memoryOnly,true);
+assert.equal(current.containsPrivateFields,false);
+assert.doesNotMatch(JSON.stringify(current),/SYNTHETIC_SECRET_CANARY|SYNTHETIC_ACCOUNT_1234|example\.test|token=/);
+assert.equal(typeof current.urls,'undefined');
+assert.equal(typeof current.resources,'undefined');
+const noPerformance={module:{exports:{}}};
+vm.runInNewContext(source,noPerformance);
+const empty=noPerformance.module.exports.browserSnapshot();
+assert.equal(empty.navigation.domContentLoadedMs,null);
+assert.equal(empty.resourceTimingAvailable,false);
+console.log('Anonymous resource-count and browser-load diagnostics PASS');
