@@ -4,6 +4,7 @@ const Session=require('../js/exchange-session-proof.js');
 const Adapter=require('../js/stock-setup-adapter.js');
 const Setup=require('../js/stock-setup-engine.js');
 const Panel=require('../js/analysis-integration-panel-v1.js');
+const SectorAdapter=require('../js/sector-rotation-adapter.js');
 const now=Date.now(),dayMS=86400000;
 const chartDays=[];
 const before=new Date(Session.localDay(now,'America/New_York')+'T00:00:00Z');
@@ -58,4 +59,14 @@ try{
  globalThis.MYInvestStockSetupAdapter=old.adapter;
  globalThis.MYInvestStockSetup=old.setup;
 }
+const sectorCache={symbol:'XLK',currency:'USD',exchange:'NMS',instrumentType:'ETF',
+ bars:bars.map(x=>x.c),times:stamps.map(t=>Math.floor(t/1000)),volume:bars.map(x=>x.v),
+ sessionDates:proof.dates,
+ sessionProof:{status:'ready',zone:proof.zone,closedDates:proof.closedDates}};
+const sector=SectorAdapter.adaptCached(sectorCache,{symbol:'XLK',market:'US'});
+assert.equal(sector.status,'ready');
+assert.equal(sector.bars.length,bars.length);
+assert.equal(sector.bars.at(-1).date,proof.dates.at(-1));
+assert.equal(SectorAdapter.adaptCached({...sectorCache,symbol:'XLF'},{symbol:'XLK',market:'US'}).status,'unavailable');
+assert.equal(SectorAdapter.adaptCached({...sectorCache,sessionProof:{status:'unavailable'}},{symbol:'XLK',market:'US'}).status,'unavailable');
 console.log('Existing Yahoo OHLCV cache -> exchange session proof -> strict stock engine -> strategy panel PASS');
