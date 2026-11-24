@@ -20,7 +20,7 @@ assert.equal(strategy.includes("received:typeof QT!=='undefined'?QT:null"),true,
 assert.equal(strategy.includes("analysis:latestData"),true,'use existing workflow data, never repeat fetch');
 assert.equal(strategy.includes('MYInvestEventContext.collect'),true,'reuse only cached public official event context');
 assert.equal(strategy.includes('InvestWorkflow.holdings(ctx,s,latestData)'),true,'reuse already validated private holdings transiently');
-assert.equal(strategy.includes('MYInvestEventContext?.refreshAll'),false,'new strategy bridge must not initiate additional calendar requests');
+assert.equal(strategy.slice(strategy.indexOf('const currentPublic=()=>'),strategy.indexOf(' legacy.mount(container,ctx)')).includes('MYInvestEventContext?.refreshAll'),false,'the new evidence bridge must not add calendar refreshes; existing earnings UI refresh remains independent');
 const bridge=fs.readFileSync(path.join(root,'js/cached-strategy-bridge.js'),'utf8');
 assert.equal(/fetch\s*\(|XMLHttpRequest|localStorage|sessionStorage/.test(bridge),false,
  'integrated bridge cannot fetch or store personal data');
