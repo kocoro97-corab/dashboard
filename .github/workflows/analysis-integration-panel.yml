@@ -3,6 +3,13 @@ on:
   push:
     branches: [feat/nh-integration-v2]
     paths:
+      - 'js/exchange-session-proof.js'
+      - 'js/page-stocks.js'
+      - 'js/page-sectors.js'
+      - 'js/stock-setup-adapter.js'
+      - 'js/stock-setup-engine.js'
+      - 'js/sector-rotation-adapter.js'
+      - 'tests/exchange-session-*.test.cjs'
       - 'js/analysis-integration-panel-v1.js'
       - 'js/market-regime-engine.js'
       - 'js/page-strategy.js'
@@ -23,6 +30,14 @@ jobs:
           node-version: '22'
       - name: Syntax and cache-only UI wiring checks
         run: |
+          node --check js/exchange-session-proof.js
+          node --check js/page-stocks.js
+          node --check js/page-sectors.js
+          node --check js/stock-setup-adapter.js
+          node --check js/stock-setup-engine.js
+          node --check js/sector-rotation-adapter.js
+          node --check tests/exchange-session-proof.test.cjs
+          node --check tests/exchange-session-integration.test.cjs
           node --check js/analysis-integration-panel-v1.js
           node --check js/market-regime-engine.js
           node --check js/page-strategy.js
@@ -30,3 +45,7 @@ jobs:
           node --check tests/analysis-integration-wiring.test.cjs
           node tests/analysis-integration-panel-v1.test.cjs
           node tests/analysis-integration-wiring.test.cjs
+          node tests/exchange-session-proof.test.cjs
+          node tests/exchange-session-integration.test.cjs
+          node tests/stock-setup-adapter.test.cjs
+          node tests/sector-rotation-adapter.test.cjs
