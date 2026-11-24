@@ -2,7 +2,7 @@
   'use strict';
   const titles={home:'홈',market:'글로벌 시장',sectors:'산업·테마',stocks:'종목 분석',strategy:'투자 전략',news:'뉴스·이벤트',accounts:'내 계좌관리',settings:'설정·진단'};
   if(AppRouter.routes.includes('diagnostics')){titles.settings='설정';titles.diagnostics='검증·진단'}
-  let prepared=false,started=false,current=null,revision=0;const instances=new Map(),scrolls=new Map();
+  let prepared=false,started=false,current=null,revision=0,navMeasure=null;const instances=new Map(),scrolls=new Map();
   const ctx=AppContext.create();let viewport,title,status,nav,router;
   function prepare(){
     if(prepared)return;prepared=true;
@@ -30,21 +30,23 @@
   function change(route){
     if(!started||!ctx.authenticated())return;
     if(current){root.DashboardTransport?.cancelReads?.();ctx.cancelPending?.();scrolls.set(current.path,viewport.scrollTop);unmount(current.page)}
+    if(navMeasure!==null)root.MYInvestWebPerformance?.finish(navMeasure,'cancelled');
+    navMeasure=root.MYInvestWebPerformance?.begin(route.page,'navigation')??null;
     current=route;const epoch=++revision;title.textContent=titles[route.page];title.focus({preventScroll:true});
     for(const a of nav.querySelectorAll('a')){if(a.dataset.page===route.page)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')}
     status.classList.remove('shell-error');status.textContent='페이지 연결 중';root.DevelopmentDiagnostics?.pageResult(route.page,'mounted');
     try{
       if(!instances.has(route.page))instances.set(route.page,DashboardPages.create(route.page));
       const page=instances.get(route.page);page.setRoute?.(route);page.mount(viewport,ctx);viewport.scrollTop=scrolls.get(route.path)||0;
-      Promise.resolve(page.refresh(ctx)).then(()=>{if(epoch===revision){status.textContent='연결됨 · 미확인 항목은 페이지에서 확인하세요.';root.DevelopmentDiagnostics?.pageResult(route.page,'ready')}}).catch(()=>{if(epoch===revision)error()});
-    }catch{viewport.replaceChildren(DashboardPages.note('해당 페이지를 열지 못했습니다. 다른 메뉴를 이용할 수 있습니다.'));error()}
+      Promise.resolve(page.refresh(ctx)).then(()=>{if(epoch===revision){root.MYInvestWebPerformance?.finish(navMeasure,'ready');navMeasure=null;status.textContent='연결됨 · 미확인 항목은 페이지에서 확인하세요.';root.DevelopmentDiagnostics?.pageResult(route.page,'ready')}}).catch(()=>{if(epoch===revision){root.MYInvestWebPerformance?.finish(navMeasure,'failed');navMeasure=null;error()}});
+    }catch{root.MYInvestWebPerformance?.finish(navMeasure,'failed');navMeasure=null;viewport.replaceChildren(DashboardPages.note('해당 페이지를 열지 못했습니다. 다른 메뉴를 이용할 수 있습니다.'));error()}
   }
-  async function refreshPage(force=true){if(!started||!current)return;const epoch=revision;status.textContent='현재 페이지 갱신 중';try{await instances.get(current.page).refresh(ctx,force);if(epoch===revision){status.textContent='갱신 요청 완료 · 각 영역의 수신 상태 확인';root.DevelopmentDiagnostics?.pageResult(current.page,'ready')}}catch{if(epoch===revision)error()}}
+  async function refreshPage(force=true){if(!started||!current)return;const epoch=revision,measure=root.MYInvestWebPerformance?.begin(current.page,'refresh');status.textContent='현재 페이지 갱신 중';try{await instances.get(current.page).refresh(ctx,force);root.MYInvestWebPerformance?.finish(measure,epoch===revision?'ready':'cancelled');if(epoch===revision){status.textContent='갱신 요청 완료 · 각 영역의 수신 상태 확인';root.DevelopmentDiagnostics?.pageResult(current.page,'ready')}}catch{root.MYInvestWebPerformance?.finish(measure,'failed');if(epoch===revision)error()}}
   function start(){
     prepare();if(!LS('invest_session_token')||$('appContainer').style.display!=='block')return;
     if(started)return;if(root.DevelopmentDiagnostics){root.DevelopmentDiagnostics.synchronize();$('errBar')?.remove()}started=true;root.MYInvestGoogleCalendarTransport?.initialize();clock();startTimers();manualRefresh=()=>refreshPage(true);router.start();
   }
-  function stop(){started=false;revision++;root.DashboardTransport?.cancelReads?.();root.MYInvestCalendar?.close();root.MYInvestIcsCalendar?.clear();root.MYInvestGoogleCalendarSync?.disconnect();root.MYInvestGoogleCalendarAuth?.disconnect();root.MYInvestGoogleCalendarTransport?.clear();root.MYInvestCalendarPending=false;root.InvestWorkflow?.clear();root.ReadStatus?.clear();root.DevelopmentDiagnostics?.clear();router?.stop();unmount(current?.page);instances.clear();scrolls.clear();current=null;ctx.clear();viewport?.replaceChildren();
+  function stop(){root.MYInvestWebPerformance?.clear();navMeasure=null;started=false;revision++;root.DashboardTransport?.cancelReads?.();root.MYInvestCalendar?.close();root.MYInvestIcsCalendar?.clear();root.MYInvestGoogleCalendarSync?.disconnect();root.MYInvestGoogleCalendarAuth?.disconnect();root.MYInvestGoogleCalendarTransport?.clear();root.MYInvestCalendarPending=false;root.InvestWorkflow?.clear();root.ReadStatus?.clear();root.DevelopmentDiagnostics?.clear();router?.stop();unmount(current?.page);instances.clear();scrolls.clear();current=null;ctx.clear();viewport?.replaceChildren();
 
     // Detached page views are discarded on logout; original account clear logic
     // remains the authority for holdings, OCR, drafts and server session cleanup.
