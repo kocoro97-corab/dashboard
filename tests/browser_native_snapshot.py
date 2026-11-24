@@ -28,6 +28,13 @@ def synthetic_transport(route,*args,**kwargs):
     # This fixture isolates the original native adapter, not routed app startup.
     if "/js/app-shell.js" in route.request.url:
         route.fulfill(content_type="application/javascript",body="");return
+    if "/js/auth.js" in route.request.url:
+        from pathlib import Path
+        source=(Path(__file__).resolve().parents[1]/"js"/"auth.js").read_text()
+        anchor="async function checkAuthentication(){"
+        assert source.count(anchor)==1
+        source=source.replace(anchor,anchor+"window.__syntheticAuthProbe={called:true,tokenAtStart:!!LS('invest_session_token'),freshAtStart:sessionLeftMs()>0,customEndpointSelected:MYP()===window.__syntheticTarget};")
+        route.fulfill(content_type="application/javascript",body=source);return
     if route.request.url!=TARGET:return real_continue(route,*args,**kwargs)
     body=json.loads(kwargs.get('post_data') or route.request.post_data or '{}');action=body.get('action')
     synthetic_actions.append(action if action in ('login','logout','sessionInfo','nhAccounts','protectedHoldings','externalHoldings','externalHistory','appVersion') else 'other')
