@@ -22,7 +22,7 @@ assert.equal(strategy.includes('MYInvestEventContext.collect'),true,'reuse only 
 assert.equal(strategy.includes('InvestWorkflow.holdings(ctx,s,latestData)'),true,'reuse already validated private holdings transiently');
 assert.equal(strategy.includes('MYInvestEventContext?.refreshAll'),false,'new strategy bridge must not initiate additional calendar requests');
 const bridge=fs.readFileSync(path.join(root,'js/cached-strategy-bridge.js'),'utf8');
-assert.equal(/fetch\\s*\\(|XMLHttpRequest|localStorage|sessionStorage/.test(bridge),false,
+assert.equal(/fetch\s*\(|XMLHttpRequest|localStorage|sessionStorage/.test(bridge),false,
  'integrated bridge cannot fetch or store personal data');
 assert.equal(bridge.includes('sectorLink?.verified===true'),true,'sector membership requires independent proof');
 const start=strategy.indexOf('// Opt-in evidence panel reads existing quotes');
