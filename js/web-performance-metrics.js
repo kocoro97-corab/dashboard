@@ -33,7 +33,7 @@ function snapshot(){
  return {schemaVersion:1,scope:'UI route elapsed time only, not API breakdown',samples:items,summary,
   memoryOnly:true,networkCalls:0,containsPrivateFields:false};
 }
-function clear(){pending.clear();results=[];serial=0}
+function clear(){pending.clear();results=[]}
 const api=Object.freeze({begin,finish,snapshot,clear});
 if(typeof module==='object'&&module.exports)module.exports=api;else root.MYInvestWebPerformance=api;
 })(globalThis);
