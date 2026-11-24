@@ -214,13 +214,27 @@ def native_browser_check(target, username, password, binding=None):
                 report.update(gasCommunication='PASS',displayMatchesResponse='PASS')
                 token=page.evaluate("()=>LS('invest_session_token')")
                 report['phase']='SESSION_RELOAD'
+                report['reloadPreflight']=page.evaluate("""() => ({
+                    tokenPresent:!!LS('invest_session_token'),
+                    sessionFresh:sessionLeftMs()>0,
+                    lastActiveRecorded:!!localStorage.getItem('invest_last_active'),
+                    savedEndpointPresent:!!localStorage.getItem('invest_myproxy')
+                })""")
                 page.reload(wait_until='domcontentloaded')
+                report['reloadAfterDocument']=page.evaluate("""() => ({
+                    tokenPresent:typeof LS==='function'&&!!LS('invest_session_token'),
+                    savedTokenPresent:!!localStorage.getItem('invest_session_token'),
+                    sessionFresh:typeof sessionLeftMs==='function'&&sessionLeftMs()>0,
+                    appVisible:document.getElementById('appContainer')?.style.display==='block',
+                    endpointStored:!!localStorage.getItem('invest_myproxy')
+                })""")
                 try:
                     page.wait_for_function("()=>$('appContainer').style.display==='block'&&!NH_ACCOUNT_BUSY&&NH_ACCOUNT_SESSION===LS('invest_session_token')",timeout=120000)
                 except Exception:
                     # Capture only boolean readiness indicators while the browser is still open.
                     # No token values, account fields, remote URLs or raw console output.
-                    report['reloadDiagnostic']=page.evaluate("""() => ({
+                    try:
+                        report['reloadDiagnostic']=page.evaluate("""() => ({
                         documentReady:document.readyState==='complete',
                         authenticated:typeof LS==='function'&&!!LS('invest_session_token'),
                         appVisible:document.getElementById('appContainer')?.style.display==='block',
@@ -230,6 +244,8 @@ def native_browser_check(target, username, password, binding=None):
                         sessionHasTime:typeof sessionLeftMs==='function'&&sessionLeftMs()>0,
                         shellPresent:!!window.DashboardShell
                     })""")
+                    except Exception as diagnostic_error:
+                        report['reloadDiagnostic']={'evaluationErrorType':type(diagnostic_error).__name__}
                     raise
                 if page.evaluate("()=>LS('invest_session_token')")!=token:raise RuntimeError('reload')
                 report['reloadSession']='PASS'
