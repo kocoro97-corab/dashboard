@@ -50,14 +50,14 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True, pub
         text=text.replace("form-action 'none'", "form-action https://myinvest-v2-dev-relay.kocoro97.workers.dev/oauth/google/start https://accounts.google.com/o/oauth2/v2/auth")
     debug_anchor = '<script defer src="js/debug.js?v=3-safe"></script>'
     if text.count(debug_anchor) != 1:raise ValueError('DEV_DIAGNOSTIC_ANCHOR_CHANGED')
-    text = text.replace(debug_anchor, '<script>window.MYINVEST_DEV_DIAGNOSTICS=true;</script>\n<script src="js/development-diagnostics.js?v=1"></script>\n'+debug_anchor)
+    text = text.replace(debug_anchor, '<script>window.MYINVEST_DEV_DIAGNOSTICS=true;</script>\n<script defer src="js/development-diagnostics.js?v=1"></script>\n'+debug_anchor)
     marker = '<script defer src="js/transport.js?v=1"></script>'
     if text.count(marker) != 1:
         raise ValueError('DEV_TRANSPORT_MARKER_CHANGED')
     if relay_endpoint:
         text=text.replace(marker, '<script>window.MYINVEST_PERSISTENT_RELAY=Object.freeze('+json.dumps({'profile':'isolated','endpoint':relay_endpoint},separators=(',',':'))+');</script>\n'+marker)
-    text = text.replace(marker, '<script>window.MYINVEST_TRANSPORT_CONFIG={mode:"relay",endpoint:"",devSession:true};</script>\n<script src="js/dev_market.js?v=1"></script>\n<script src="js/dev_inspection.js?v=1"></script>\n<script src="js/dev_connect.js?v=1"></script>\n' + marker)
-    text = text.replace(marker, '<script async src="vendor/ocr/tesseract.min.js"></script>\n<script src="js/dev_ocr.js?v=1"></script>\n'+marker)
+    text = text.replace(marker, '<script>window.MYINVEST_TRANSPORT_CONFIG={mode:"relay",endpoint:"",devSession:true};</script>\n<script defer src="js/dev_market.js?v=1"></script>\n<script defer src="js/dev_inspection.js?v=1"></script>\n<script defer src="js/dev_connect.js?v=1"></script>\n' + marker)
+    text = text.replace(marker, '<script async src="vendor/ocr/tesseract.min.js"></script>\n<script defer src="js/dev_ocr.js?v=1"></script>\n'+marker)
     # Only the isolated development artifact receives the optional manual strategy
     # comparator. Production index.html, NEWS/PR#8 and live endpoints stay untouched.
     strategy_anchor = '<script defer src="js/page-strategy.js?v=1"></script>'
@@ -73,16 +73,16 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True, pub
         'five-minute-reference-panel-v1.js',
         'strategy-scenario-compare-panel-v1.js',
     )
-    compare_scripts = ''.join('<script src="js/' + name + '?v=1"></script>\n'
+    compare_scripts = ''.join('<script defer src="js/' + name + '?v=1"></script>\n'
                               for name in strategy_optional_modules)
     text = text.replace(strategy_anchor, compare_scripts + strategy_anchor)
     shell_anchor='<script defer src="js/app-shell.js?v=2"></script>'
     if text.count(shell_anchor)!=1:raise ValueError('DEV_SHELL_ANCHOR_CHANGED')
-    text=text.replace(shell_anchor, '<script src="js/page-diagnostics.js?v=1"></script>\n'+shell_anchor)
+    text=text.replace(shell_anchor, '<script defer src="js/page-diagnostics.js?v=1"></script>\n'+shell_anchor)
     auth_anchor = '<script defer src="js/auth.js?v=14-transport"></script>'
     if text.count(auth_anchor) != 1:
         raise ValueError('DEV_AUTH_ANCHOR_CHANGED')
-    text = text.replace(auth_anchor, auth_anchor + '\n<script src="js/dev_session.js?v=1"></script>')
+    text = text.replace(auth_anchor, auth_anchor + '\n<script defer src="js/dev_session.js?v=1"></script>')
     text = re.sub(r'(src="js/[^"?]+\?[^" ]+)(")', lambda m: m[1] + '&dev=' + revision[:12] + m[2], text)
     (output / 'index.html').write_text(text)
     assets = {'js': set(re.findall(r'src="js/([A-Za-z0-9_-]+\.js)', text)),
