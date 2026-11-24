@@ -6,7 +6,8 @@
  */
 const symbolPattern=/^(?:\d{6}|[A-Z][A-Z0-9.=-]{0,14})$/;
 const validSymbol=s=>typeof s==='string'&&symbolPattern.test(s);
-function evaluate({selection=null,analysis=null,quotes=null,quoteSources=null,received=null,now=Date.now()}={}){
+function evaluate({selection=null,analysis=null,quotes=null,quoteSources=null,received=null,
+ publicEvents=null,holdingRows=[],now=Date.now()}={}){
  if(!Number.isFinite(now)||now<=0||now>8.64e15)throw Error('ANALYSIS_BRIDGE_DATE_INVALID');
  const market=selection?.market==='KR'?'KR':selection?.market==='US'?'US':null;
  const symbol=validSymbol(selection?.symbol)?selection.symbol:null;
@@ -55,6 +56,15 @@ function evaluate({selection=null,analysis=null,quotes=null,quoteSources=null,re
    }
   }catch{stockSetup=null}
  }
+ let integrated=null;
+ if(stockSetup?.status==='descriptive'&&root.MYInvestCachedStrategyBridge?.evaluate){
+  const zone=market==='KR'?'Asia/Seoul':'America/New_York';
+  const nowDay=root.MYInvestExchangeSessionProof?.localDay(now,zone);
+  if(nowDay)try{integrated=root.MYInvestCachedStrategyBridge.evaluate({
+   selection:{symbol,market,mode},stockSetup,marketRegime,
+   publicEvents,holdingRows,nowDay
+  })}catch{integrated=null}
+ }
  const checks=[
   {key:'market',label:'시장 지수 기준일·관측시각',state:marketRegime?.status==='descriptive'?'usable':'missing',
    detail:marketRegime?.status==='descriptive'?marketRegime.direction.label:'필요한 핵심 지수 자료가 없거나 시점이 불일치'},
@@ -78,7 +88,7 @@ function evaluate({selection=null,analysis=null,quotes=null,quoteSources=null,re
    detail:'공식 일정 일부 미수집 상태가 있을 수 있어 안전 판정 불가'}
  ];
  return {status:checks.every(c=>c.state==='usable')?'ready':'partial',
-  symbol,market,mode,marketRegime,stockSetup,checks,
+  symbol,market,mode,marketRegime,stockSetup,integrated,checks,
   canUseStrictStockSetup:stockSetup?.status==='descriptive',
   source:identity?analysis.source:null,receivedAt:sourceTimes?new Date(analysis.receivedAt).toISOString():null,
   warnings:['기존 캐시만 이용 · 추가 API 호출 없음','확인되지 않은 거래일·마감봉을 임의 보정하지 않음',
@@ -120,6 +130,19 @@ function mount(container,provider){
    body.append(row('p','관찰조건: '+(info.stockSetup.setup.candidates.map(c=>c.label).join(' · ')||'확인된 조건 없음')));
    body.append(row('p','시장 상대강도·산업 소속·이벤트 전체 범위 미연결: 진입·보유 전략 확정 불가'));
   }else body.append(row('p','확정 일봉의 거래소 날짜·OHLCV 검증이 완료되지 않아 엄격한 종목 분석을 보류합니다.'));
+  if(info.integrated?.candidate){
+   const x=info.integrated;
+   body.append(row('p','신규 투자 후보 · '+x.candidate.label));
+   body.append(row('p','검토할 근거: '+(x.candidate.blocking.join(' · ')||'현재 추가 차단조건 없음')));
+   body.append(row('p','관찰조건: '+(x.candidate.conditions.join(' · ')||'확인된 기술 관찰조건 없음')));
+   body.append(row('p','공식 이벤트 수집 범위: '+(x.candidate.eventCoverage==='complete'?'검증된 원천 수신':'일부 미연결 · 위험 없음으로 판단 금지')));
+   body.append(row('p','기존 보유종목 · '+(x.holdingCount>0?x.holdingCount+'개 검증된 계좌별 기록에서 대응을 별도로 점검':'연결된 검증 보유자료 미확인')));
+   if(x.holdingCount>0)for(const [i,h] of x.holdings.entries()){
+    body.append(row('p','보유기록 '+(i+1)+' · '+h.label+' · 검토사항: '+(h.blocking.join(' · ')||'차단조건 없음')));
+   }
+   if(x.holdingCount>1)body.append(row('p','동일 종목의 복수 계좌는 하나의 보유 우선순위로 합치지 않습니다.'));
+   body.append(row('p',x.disclaimer));
+  }else body.append(row('p','시장·산업·종목·일정 검증을 조합한 통합 투자전략을 아직 계산할 수 없습니다.'));
  }
  details.addEventListener('toggle',draw);
  return {ok:true,update:draw,destroy(){active=false;details.removeEventListener('toggle',draw);details.remove()}};
