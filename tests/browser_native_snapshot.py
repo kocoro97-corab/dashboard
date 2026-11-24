@@ -19,7 +19,7 @@ from playwright.sync_api import Route, Page
 from nh_v2_browser_check import native_browser_check
 from test_nh_v2_final import TARGET
 
-fixture=FakeWeb();fixture.call('nhSnapshotCapture');revoked=False
+fixture=FakeWeb();fixture.call('nhSnapshotCapture');revoked=False;synthetic_actions=[]
 real_continue=Route.continue_
 real_wait=Page.wait_for_function
 
@@ -30,6 +30,7 @@ def synthetic_transport(route,*args,**kwargs):
         route.fulfill(content_type="application/javascript",body="");return
     if route.request.url!=TARGET:return real_continue(route,*args,**kwargs)
     body=json.loads(kwargs.get('post_data') or route.request.post_data or '{}');action=body.get('action')
+    synthetic_actions.append(action if action in ('login','logout','sessionInfo','nhAccounts','protectedHoldings','externalHoldings','externalHistory','appVersion') else 'other')
     assert body.get('stagingBinding')=='f'*64
     if action=='nhAccounts':data={'success':True,'accounts':fixture.accounts,'gatewayVersion':2} if body.get('token') else {'success':False,'code':'AUTH_REQUIRED'}
     elif action=='appVersion':data={'success':True,'freshTestEnvironment':True,'sheetHash':'f'*64}
@@ -47,7 +48,7 @@ def synthetic_expiry(page,expression,*args,**kwargs):
 
 with patch.object(Route,'continue_',synthetic_transport),patch.object(Page,'wait_for_function',synthetic_expiry):
     report=native_browser_check(TARGET,'synthetic','SYNTHETIC_PRIVATE_PASSWORD','f'*64)
-assert report['status']=='PASS', {k:v for k,v in report.items() if k in ('phase','code','status','errorType','reloadDiagnostic','login','gasCommunication','displayMatchesResponse','reloadSession','browserMetadata','unauthenticatedBlocked')}
+assert report['status']=='PASS', {**{k:v for k,v in report.items() if k in ('phase','code','status','errorType','reloadDiagnostic','login','gasCommunication','displayMatchesResponse','reloadSession','browserMetadata','unauthenticatedBlocked')},'requestActions':{key:synthetic_actions.count(key) for key in set(synthetic_actions)},'revoked':revoked}
 assert report['browserMetadata']=='PASS' and report['unauthenticatedBlocked']=='PASS' and report['reloadSession']=='PASS'
 assert report['displayMatchesResponse']=='PASS' and not report['storageWrites']
 assert not any(value in json.dumps(report) for value in ('SYNTHETIC_PRIVATE_PASSWORD','SYNTHETIC_PRIVATE_TOKEN','SYNTHETIC_PRIVATE_HOLDING',TARGET))
