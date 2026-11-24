@@ -56,14 +56,24 @@ async function readSeries(ctx,symbol){
   sessionProof:proven?{status:'ready',zone:proof.zone,closedDates:bars.map(x=>x.sessionDay),excludedOpenBars:proof.openDates.length}:{status:'unavailable',reason:proof?.reason||'원천 거래일 확인 불가'}};
  SERIES_CACHE.set(symbol,{at:Date.now(),value});return value;
 }
-function comparableWindow(value,benchmark,n){return value.times.length>n&&[value.times.length-1,value.times.length-1-n].every((i,k)=>new Date(value.times[i]*1000).toISOString().slice(0,10)===new Date(benchmark.times[benchmark.times.length-1-k*n]*1000).toISOString().slice(0,10))}
+function seriesDay(value,i){
+ if(value?.sessionProof?.status==='ready')
+  return value.sessionDates?.[i]||null;
+ const t=value?.times?.[i];
+ return Number.isSafeInteger(t)?new Date(t*1000).toISOString().slice(0,10):null;
+}
+function comparableWindow(value,benchmark,n){return value.times.length>n&&
+ [value.times.length-1,value.times.length-1-n].every((i,k)=>
+  seriesDay(value,i)===seriesDay(benchmark,benchmark.times.length-1-k*n))}
 
 // Compare actual observations on the benchmark calendar. A missing latest index
 // close must not discard every constituent or invent an index close.
 function alignedWindow(value,benchmark,n){
  if(benchmark.times.length<=n)return null;
- const days=benchmark.times.slice(-n-1),day=t=>new Date(t*1000).toISOString().slice(0,10),positions=new Map(value.times.map((t,i)=>[day(t),i]));
- const indices=days.map(t=>positions.get(day(t)));if(indices.some(i=>i===undefined))return null;
+ const days=benchmark.times.slice(-n-1).map((_,i)=>seriesDay(benchmark,benchmark.times.length-n-1+i));
+ if(days.some(d=>!d))return null;
+ const positions=new Map(value.times.map((_,i)=>[seriesDay(value,i),i]));
+ const indices=days.map(d=>positions.get(d));if(indices.some(i=>i===undefined))return null;
  const closes=indices.map(i=>value.bars[i]),change=ret(closes,n),base=ret(benchmark.bars,n);if(change===null||base===null)return null;
  return {change,relative:change-base,asof:days.at(-1)*1000,close:closes.at(-1),volume:value.volume?.[indices.at(-1)]};
 }
