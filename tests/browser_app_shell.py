@@ -74,6 +74,8 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
     unexpected.append(u.hostname);r.abort()
    context.route('**/*',route);page=context.new_page();page.on('pageerror',lambda e:errors.append(type(e).__name__));page.on('dialog',lambda d:d.accept())
    page.goto(PAGE+'#/accounts/ocr',wait_until='domcontentloaded')
+   # Wait for async scripts: a DOMContentLoaded-only resource snapshot can miss eager OCR.
+   page.wait_for_load_state('load',timeout=30000)
    startup=page.evaluate("""() => {
      const urls=performance.getEntriesByType('resource').map(x=>x.name);
      return {
