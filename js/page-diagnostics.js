@@ -53,7 +53,7 @@ DashboardPages.register('diagnostics',()=>{
     ]){const tr=node('tr');tr.append(node('td',name),node('td',value));readBudget.append(tr)}
     performanceHost.append(node('h3','개발 중계 읽기 요청 혼잡도'),readBudget,node('p','실행·대기 건수는 이 브라우저 탭의 읽기 요청에 한정됩니다. Cloudflare 전체 이용자의 요청량이나 GAS 상태를 직접 측정한 값이 아닙니다.','dv-muted'))
   }
-  const summary=routes?.summary||{},order=['home','market','sectors','stocks','strategy','news','accounts','settings','diagnostics'];
+  const summary=routes?.summary||{},mountSummary=routes?.mountSummary||{},order=['home','market','sectors','stocks','strategy','news','accounts','settings','diagnostics'];
   const selected=order.filter(name=>summary[name]?.count||summary[name]?.cancelledCount||summary[name]?.failedCount);
   const routeTable=table(['메뉴','정상 건수','중앙값','최대']);
   for(const name of selected){const row=summary[name],tr=node('tr');tr.append(node('td',DevelopmentDiagnosticLabels[name]||name),node('td',String(row.count)),node('td',fmt(row.medianMs)),node('td',fmt(row.maxMs)));routeTable.append(tr)}
@@ -62,6 +62,12 @@ DashboardPages.register('diagnostics',()=>{
     const row=summary[name],label=DevelopmentDiagnosticLabels[name]||name;
     return label+' · 취소 '+row.cancelledCount+'건 (최장 '+fmt(row.cancelledMaxMs)+') · 실패 '+row.failedCount+'건'
   });
+  const mounted=order.filter(name=>mountSummary[name]?.count);
+  const mountTable=table(['메뉴','DOM 구성 건수','중앙값','최대']);
+  for(const name of mounted){const row=mountSummary[name],tr=node('tr');tr.append(node('td',DevelopmentDiagnosticLabels[name]||name),node('td',String(row.count)),node('td',fmt(row.medianMs)),node('td',fmt(row.maxMs)));mountTable.append(tr)}
+  performanceHost.append(node('h3','메뉴 DOM 구성시간 · 데이터 수신 제외'),
+    mounted.length?mountTable:node('p','아직 DOM 구성 측정이 없습니다.','dv-muted'),
+    node('p','DOM 구성 완료는 실제 시세·뉴스 수신이나 브라우저 화면 그리기 완료를 보증하지 않습니다.','dv-muted'));
   performanceHost.append(
     node('h3','메뉴 전환·새로고침 처리시간'),
     selected.length?routeTable:node('p','아직 측정된 메뉴가 없습니다. 다른 메뉴로 이동한 후 다시 열어보세요.','dv-muted'),
