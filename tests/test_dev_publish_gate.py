@@ -131,6 +131,38 @@ class DevelopmentPublishGateTests(unittest.TestCase):
                 pub.require_reviewed_preview(SOURCE,'main')
             api.assert_not_called()
 
+    def test_pr11_preview_requires_exact_draft_sha_base_and_owner(self):
+        valid={'state':'open','draft':True,'merged_at':None,
+               'head':{'ref':pub.NEXT_PREVIEW_BRANCH,'sha':SOURCE,
+                       'repo':{'full_name':'kocoro97-corab/dashboard'}},
+               'base':{'ref':pub.PREVIEW_BRANCH}}
+        with patch.object(pub,'api',return_value=valid) as api:
+            pub.require_reviewed_preview(SOURCE,pub.NEXT_PREVIEW_BRANCH)
+            api.assert_called_once_with('repos/kocoro97-corab/dashboard/pulls/11')
+        for wrong in (
+            {'draft':False},
+            {'state':'closed'},
+            {'base':{'ref':pub.SOURCE_BRANCH}},
+            {'head':{'ref':pub.NEXT_PREVIEW_BRANCH,'sha':'f'*40,
+                     'repo':{'full_name':'kocoro97-corab/dashboard'}}},
+            {'head':{'ref':pub.NEXT_PREVIEW_BRANCH,'sha':SOURCE,
+                     'repo':{'full_name':'another/other'}}},
+        ):
+            with self.subTest(wrong=wrong),patch.object(pub,'api',return_value=dict(valid,**wrong)):
+                with self.assertRaisesRegex(pub.Stop,'DEV_PREVIEW_PR_MISMATCH'):
+                    pub.require_reviewed_preview(SOURCE,pub.NEXT_PREVIEW_BRANCH)
+
+    def test_pr11_build_retains_public_calendar_and_identifies_source(self):
+        with patch.object(pub,'git',side_effect=[pub.NEXT_PREVIEW_BRANCH,SOURCE]):
+            self.assertEqual(pub.verified_source_commit(SOURCE,pub.NEXT_PREVIEW_BRANCH),SOURCE)
+        with tempfile.TemporaryDirectory() as tmp:
+            folder=Path(tmp)
+            with patch.object(pub,'build',return_value={'index.html':'synthetic'}) as build:
+                pub.build_with_preserved_calendar(folder/'next',folder,pub.NEXT_PREVIEW_BRANCH)
+                build.assert_called_once_with(folder/'next',public_data=folder/'data',source_branch=pub.NEXT_PREVIEW_BRANCH)
+        self.assertEqual(pub.REPO,'kocoro97-corab/dashboard-v2-dev')
+        self.assertEqual(pub.BRANCH,'dev-pages')
+
     def test_preview_checkout_and_build_keep_original_publish_path(self):
         with patch.object(pub,'git',side_effect=[pub.PREVIEW_BRANCH,SOURCE]):
             self.assertEqual(pub.verified_source_commit(SOURCE,pub.PREVIEW_BRANCH),SOURCE)
