@@ -33,8 +33,10 @@
   function isRelay(){return config().mode==='relay'}
   // Shared physical read budget. Auth and reviewed writes are never replayed.
   const reads=new Set(['publicFetch','nhQuotes','nhExternalQuotes','nhAccounts','externalHoldings','externalHistory','externalAccounts','googleCalendarStatus','googleCalendarList','googleCalendarEvents']);
-  const waiting=[],running=new Set(),publicPending=new Map();let epoch=0,sharedEpoch=0,completed=0,cancelled=0,pauseUntil=0,pauseTimer=null,throttleUntil=0,sharedPromotions=0,sharedJoins=0;
+  const waiting=[],running=new Set(),publicPending=new Map();let epoch=0,sharedEpoch=0,completed=0,cancelled=0,pauseUntil=0,pauseTimer=null,throttleUntil=0,sharedPromotions=0,sharedJoins=0,maxQueueWaitMs=0,maxPhysicalReadMs=0;
   const readClock=()=>root.performance?.now?.()??Date.now();
+  // Anonymous in-memory latency only: no URLs, tokens, account data, or payloads.
+  const elapsed=since=>Number.isFinite(since)?Math.max(0,Math.min(86400000,Math.round(readClock()-since))):0;
   const abortError=()=>Object.assign(new Error('READ_CANCELLED'),{name:'AbortError',code:'READ_CANCELLED'});
   function cancelReads(options={}){
     const keepShared=options?.keepSharedPublic===true;
@@ -76,17 +78,17 @@
       if(headBackground&&[...running].some(j=>j.sharedPublic&&!j.cancelled&&j.sharedTag!==visibleTag))return;
       if(running.size>=Math.min(head.limit,readClock()<throttleUntil?1:Infinity))return;
       const job=waiting.shift();if(job.cancelled||!job.current()){job.cancel(failure('SESSION_CHANGED'));continue}
-      running.add(job);job.started=true;
+      running.add(job);job.started=true;job.startedAt=readClock();maxQueueWaitMs=Math.max(maxQueueWaitMs,elapsed(job.enqueuedAt));
       // Do not abort a physical request on navigation: Worker lease release may
       // lag a browser abort. Keep its slot until the server response settles.
       Promise.resolve().then(job.run).then(value=>{if(job.current()&&!job.cancelled)job.resolve(value);else job.cancel(failure('SESSION_CHANGED'))},error=>job.reject(error))
-        .finally(()=>{job.detach();running.delete(job);completed++;pump()});
+        .finally(()=>{maxPhysicalReadMs=Math.max(maxPhysicalReadMs,elapsed(job.startedAt));job.detach();running.delete(job);completed++;pump()});
     }
   }
   function enqueueRead(run,current,signal,limit,sharedTag=null){
     if(waiting.length>=128)return Promise.reject(failure('READ_QUEUE_FULL'));
     return new Promise((resolve,reject)=>{
-      const job={run,current,resolve,reject,limit,sharedPublic:sharedTag!==null,sharedTag,cancelled:false,started:false,detach(){signal?.removeEventListener('abort',onAbort)},cancel(error){if(this.cancelled)return;this.cancelled=true;cancelled++;this.detach();reject(error)}};
+      const job={run,current,resolve,reject,limit,sharedPublic:sharedTag!==null,sharedTag,cancelled:false,started:false,enqueuedAt:readClock(),startedAt:null,detach(){signal?.removeEventListener('abort',onAbort)},cancel(error){if(this.cancelled)return;this.cancelled=true;cancelled++;this.detach();reject(error)}};
       const onAbort=()=>{job.cancel(abortError());pump()};
       if(signal?.aborted){job.cancel(abortError());return}
       signal?.addEventListener('abort',onAbort,{once:true});
@@ -95,7 +97,18 @@
       pump();
     });
   }
-  function readState(){return {generation:epoch,active:running.size,queued:waiting.filter(j=>!j.cancelled).length,completed,cancelled,limit:config().persistentRelay===true&&readClock()>=throttleUntil?2:1,backpressureMs:Math.max(0,Math.ceil(Math.max(pauseUntil,throttleUntil)-readClock())),sharedQueued:waiting.filter(j=>j.sharedPublic&&!j.cancelled).length,sharedActive:[...running].filter(j=>j.sharedPublic&&!j.cancelled).length,sharedPromotions,sharedJoins}}
+  function readState(){
+    const queue=waiting.filter(j=>!j.cancelled);
+    const active=[...running].filter(j=>!j.cancelled);
+    return {generation:epoch,active:running.size,queued:queue.length,completed,cancelled,
+      limit:config().persistentRelay===true&&readClock()>=throttleUntil?2:1,
+      backpressureMs:Math.max(0,Math.ceil(Math.max(pauseUntil,throttleUntil)-readClock())),
+      sharedQueued:queue.filter(j=>j.sharedPublic).length,
+      sharedActive:active.filter(j=>j.sharedPublic).length,sharedPromotions,sharedJoins,
+      oldestQueuedMs:queue.length?Math.max(...queue.map(j=>elapsed(j.enqueuedAt))):0,
+      oldestActiveMs:active.length?Math.max(...active.map(j=>elapsed(j.startedAt))):0,
+      maxQueueWaitMs,maxPhysicalReadMs};
+  }
   function post(payload,options){
     const c=config();options=options||{};
     if(c.mode==='direct')return root.fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),signal:options.signal});
