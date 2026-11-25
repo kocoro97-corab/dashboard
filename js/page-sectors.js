@@ -146,7 +146,9 @@ function create(){
    if(!active||version!==analysisVersion||keyFor(market)!==key)return;
    const rows=[],failures=[],themes=[];
    if(market==='US'){
-    await poolLimited(US_SECTORS,3,async ([symbol,name])=>{try{if(!active||version!==analysisVersion||keyFor(market)!==key)return;const v=await series(context,symbol);const aligned=alignedWindow(v,benchmark,n);if(v.instrumentType!=='ETF'){failures.push({symbol,reason:'ETF_IDENTITY_MISMATCH'});return}if(aligned&&v.currency==='USD')rows.push({symbol,name,...aligned,coverage:'ETF',v});else failures.push({symbol,reason:v.bars.length<=n?'INSUFFICIENT_HISTORY':'DATE_MISMATCH'})}catch{failures.push({symbol,reason:'SERIES_UNAVAILABLE'})}});
+    // The US theme view must not download eleven sector ETF series hidden
+    // behind a collapsed reference. They remain available in industry mode.
+    if(category==='industry')await poolLimited(US_SECTORS,3,async ([symbol,name])=>{try{if(!active||version!==analysisVersion||keyFor(market)!==key)return;const v=await series(context,symbol);const aligned=alignedWindow(v,benchmark,n);if(v.instrumentType!=='ETF'){failures.push({symbol,reason:'ETF_IDENTITY_MISMATCH'});return}if(aligned&&v.currency==='USD')rows.push({symbol,name,...aligned,coverage:'ETF',v});else failures.push({symbol,reason:v.bars.length<=n?'INSUFFICIENT_HISTORY':'DATE_MISMATCH'})}catch{failures.push({symbol,reason:'SERIES_UNAVAILABLE'})}});
     const universe=category==='theme'?await usUniverse().catch(()=>{failures.push({symbol:'US_THEMES',reason:'UNIVERSE_UNAVAILABLE'});return {themes:[]}}):{themes:[]};
     await poolLimited(universe.themes,2,async t=>{
      if(!active||version!==analysisVersion||keyFor(market)!==key)return;const sample=[];
@@ -190,8 +192,19 @@ function create(){
   if(analysisError&&!data)list.append(make('p',analysisError,'stv2-status'));
   if(!data){if(!analysisBusy)list.append(button('실제 시계열 조회',()=>void loadAnalytics(true)));return}
   const n=PERIODS[period],label=market==='US'?'미국 11개 섹터 ETF 상대강도':(category==='industry'?'국내 산업 구성종목 표본 분석':'국내 상위 테마 구성종목 표본 분석');
-  if(market==='US'&&category==='theme')renderUSThemes(data);
-  const target=market==='US'&&category==='theme'?make('details',undefined,'stv2-etfs'):list;if(market==='US'&&category==='theme'){target.append(make('summary','참고: 11개 섹터 ETF 상대강도 펼치기'));list.append(target)}
+  if(market==='US'&&category==='theme'){
+   renderUSThemes(data);
+   const sectorReference=make('details',undefined,'stv2-etfs');
+   sectorReference.append(make('summary','참고: 11개 섹터 ETF 상대강도는 요청 시 별도 조회'));
+   sectorReference.append(make('p','현재 테마 분석에서는 숨겨진 ETF 11개를 자동 조회하지 않습니다. 필요하면 산업 분석으로 전환해 검증된 SPY 대비 섹터 ETF 상대강도를 확인하세요.','stv2-muted'),
+    button('미국 산업 ETF 분석 열기',()=>{supersedeAnalytics();category='industry';saveDisplay();draw();scheduleAnalytics()}));
+   list.append(sectorReference);
+   if(root.DevelopmentDiagnostics){root.DevelopmentDiagnostics.quality('sectors',data.failures||[],data);if(data.failures?.length)list.append(make('p','일부 자료 제외 · 검증·진단에서 상세 확인','stv2-status'))}
+   else if(data.failures?.length)list.append(make('p','일부 자료 수신/검증 실패 · 이번 테마 표본에 포함하지 않았습니다.','stv2-status'));
+   if(mode==='swing')list.append(make('p','스윙 관찰: 상대강도와 기간 수익률만 표시. 실적·기관수급·진입/손절 검증 전 매수 추천이 아닙니다.','stv2-muted'));
+   return;
+  }
+  const target=list;
   if(!(market==='KR'&&category==='industry'))target.append(make('h3',label));target.append(make('p','기간 '+n+'거래일 · 기준 '+data.benchmarkSymbol+' '+pct(data.benchmark)+' · 수신 '+new Date(data.received).toLocaleString('ko-KR')+' · 공통 관측일 '+new Date(data.asof).toLocaleDateString('ko-KR')+' · 관측 종가 가격수익률 (배당·분배금 제외, 실시간 아님)','stv2-muted'));
   const table=make('table',undefined,'stv2-table'),head=make('tr');['섹터/테마','기간 수익률','기준 대비','데이터 범위','관측일'].forEach(x=>head.append(make('th',x)));table.append(head);
   for(const row of data.rows){const tr=make('tr');tr.append((()=>{const cell=make('td');if(market==='US'&&category==='industry')cell.append(button(row.name+' ('+row.symbol+') · ETF 대리지표',()=>root.MYInvestStockSelection?.open(row.symbol,{name:row.name,industry:row.name,source:'industry',mode,relativeStrength:row.relative,stockRelativeStrength:row.relative,stockReturn:row.change,themeReturn:row.change,themeReceivedAt:data.received,observedAt:row.asof,dataScope:'us_sector_etf',benchmark:'SPY',period})));else cell.textContent=row.name+' ('+row.symbol+')';return cell})(),make('td',pct(row.change)),make('td',pct(row.relative)),make('td',row.coverage),make('td',new Date(row.asof).toLocaleDateString('ko-KR')));table.append(tr)}
