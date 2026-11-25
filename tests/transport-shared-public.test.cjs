@@ -185,3 +185,19 @@ test('anonymous relay telemetry separates queued wait from physical read duratio
  assert.equal(f.api.readState().active,0);
  assert.equal(f.api.readState().maxPhysicalReadMs,1750);
 });
+
+test('cancelled route releases its UI result but still reports occupied physical lease',async()=>{
+ const f=fixture();
+ const request=f.api.post({action:'nhAccounts',token});
+ await f.tick();
+ f.advance(1200);
+ f.location.hash='#/market';
+ f.api.cancelReads({keepSharedPublic:true});
+ await assert.rejects(request,/SESSION_CHANGED/);
+ assert.equal(f.api.readState().active,1,'cancelled request still occupies physical slot');
+ assert.equal(f.api.readState().oldestActiveMs,1200,'diagnostics must not hide a cancelled pending transport');
+ f.advance(300);
+ f.releases[0]();await f.tick();await f.tick();
+ assert.equal(f.api.readState().active,0);
+ assert.equal(f.api.readState().maxPhysicalReadMs,1500);
+});
