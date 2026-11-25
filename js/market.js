@@ -333,7 +333,7 @@ async function loadNews(){
     fetchNews('코스피 OR 증시 OR 나스닥 when:2d'),
     fetchNews('(삼성전자 OR SK하이닉스 OR 한미반도체 OR 알테오젠) when:2d')
   ]);
-  if(session!==LS('invest_session_token'))return;
+  if(session!==LS('invest_session_token'))return false;
   const renderN=(list,el,stEl)=>{
     if(!Array.isArray(list)){$(el).replaceChildren();$(stEl).textContent='뉴스 수신 실패 · 미확인';return}
     const m={};list.forEach(a=>{const k=a.t.replace(/\s-\s[^-]+$/,'');if(!m[k]||a.d>m[k].d)m[k]={t:k,l:a.l,s:a.s,d:a.d}});
@@ -342,6 +342,7 @@ async function loadNews(){
     $(stEl).textContent=arr.length?arr.length+'건':'없음';
   };
   renderN(mks,'nl_mk','nst_mk');renderN(hds,'nl_hd','nst_hd');
+  return Array.isArray(mks)||Array.isArray(hds);
 }
 
 function setTick(){
