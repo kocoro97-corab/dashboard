@@ -77,3 +77,40 @@ test('an obsolete sector view can abort its public read without a fallback or a 
  assert.equal(calls,1);
  assert.equal(vm.runInContext('NET.fail',f.ctx),0);
 });
+
+test('first Naver quote is published while another Naver source is still pending',async()=>{
+ const f=setup(),seen=[];let release;
+ f.ctx.getJSON=url=>{
+  if(url.includes('domestic/index/KOSDAQ'))return new Promise(resolve=>{release=resolve});
+  if(url.includes('domestic/index/KOSPI'))return Promise.resolve([{closePrice:'2500',compareToPreviousClosePrice:'20'}]);
+  return Promise.resolve({});
+ };
+ const found=new Set();
+ const pending=f.ctx.fillNaver(['^KS11','^KQ11'],found,symbol=>seen.push(symbol));
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.deepEqual(seen,['^KS11']);
+ assert.equal(vm.runInContext('Q["^KS11"].p',f.ctx),2500);
+ release([{closePrice:'800',compareToPreviousClosePrice:'5'}]);
+ await pending;
+ assert.deepEqual(seen,['^KS11','^KQ11']);
+});
+
+test('visible market renders first valid quote before remaining fallback work settles',async()=>{
+ const f=setup(),seen=[];let finishFallback;
+ const pendingFallback=new Promise(resolve=>{finishFallback=resolve});
+ Object.assign(f.ctx,{
+  fillNaver:async (requested,found,onQuote)=>{
+   assert.ok(requested.includes('AAA'));
+   vm.runInContext('Q.AAA={p:100,prev:98}',f.ctx);
+   found.add('AAA');onQuote('AAA');
+  },
+  fillQuotes:async()=>{seen.push('fallback-start');await pendingFallback},
+  fillAuthorizedMarketSources:async()=>{},
+  renderCards:()=>seen.push('render'),updateTickGauge:()=>{},generateScenario:()=>{}
+ });
+ const running=f.ctx.refreshMarket(['AAA']);
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.deepEqual(seen.slice(0,2),['render','fallback-start']);
+ finishFallback();await running;
+ assert.equal(seen.at(-1),'render','final state should still be displayed');
+});
