@@ -22,7 +22,14 @@ DashboardPages.register('diagnostics',()=>{
   checks.replaceChildren();const t=table(['검사','현재 세션 결과','최근 상태 시각']);for(const row of data.checks){const tr=node('tr'),state=node('td');tr.dataset.checkId=row.id;tr.dataset.checkState=row.status;state.append(node('strong',labels[row.status]||'상태 미확인'),node('p',checkHint(row),'dv-muted'));if(row.code)state.append(node('small',row.code+(row.http?' · HTTP '+row.http:'')));tr.append(node('td',row.label),state,node('td',time(row.at)));t.append(tr)}checks.append(t,node('p','실행 전은 버튼을 누르기 전이며 자동 실행 대기가 아닙니다. 결과 수집 미연결은 이 표의 수집 기능을 뜻하며 기존 기능의 성공·실패 판정이 아닙니다. 현재 로그인에서 관측한 결과만 표시하며 페이지 새로고침·재로그인 시 초기화됩니다.','dv-muted'));
  }
  const DevelopmentDiagnosticLabels={home:'홈',market:'글로벌 시장',sectors:'산업·테마',stocks:'종목 분석',strategy:'투자 전략',news:'뉴스·이벤트',accounts:'내 계좌관리',settings:'설정',diagnostics:'검증·진단',shared:'공통'};
- async function copy(){const meter=root.MYInvestWebPerformance;const text=JSON.stringify({...hub.snapshot(),session:sessionEvidence(),performance:{browser:meter?.browserSnapshot?.(),routes:meter?.snapshot?.()}});try{await navigator.clipboard.writeText(text);if(active)copyStatus.textContent='인증정보·계좌자료를 제외한 검증 결과를 복사했습니다.'}catch{if(active){copyText.value=text;copyText.hidden=false;copyText.select();copyStatus.textContent='아래 결과를 선택해 복사하세요.'}}}
+ async function copy(){const meter=root.MYInvestWebPerformance;const relay=root.DashboardTransport?.readState?.();
+    const safeCounter=v=>Number.isSafeInteger(v)&&v>=0?v:null;
+    const relaySummary=relay?{active:safeCounter(relay.active),queued:safeCounter(relay.queued),
+      sharedActive:safeCounter(relay.sharedActive),sharedQueued:safeCounter(relay.sharedQueued),
+      sharedJoins:safeCounter(relay.sharedJoins),sharedPromotions:safeCounter(relay.sharedPromotions),
+      backpressureMs:safeCounter(relay.backpressureMs)}:null;
+    const text=JSON.stringify({...hub.snapshot(),session:sessionEvidence(),
+      performance:{browser:meter?.browserSnapshot?.(),routes:meter?.snapshot?.(),relay:relaySummary}});try{await navigator.clipboard.writeText(text);if(active)copyStatus.textContent='인증정보·계좌자료를 제외한 검증 결과를 복사했습니다.'}catch{if(active){copyText.value=text;copyText.hidden=false;copyText.select();copyStatus.textContent='아래 결과를 선택해 복사하세요.'}}}
  function renderPerformance(){
   if(!performanceHost)return;
   const meter=root.MYInvestWebPerformance,local=meter?.browserSnapshot?.(),routes=meter?.snapshot?.();
@@ -49,6 +56,10 @@ DashboardPages.register('diagnostics',()=>{
       ['실행 중인 읽기 요청',count(relay.active)+'건'],
       ['대기 중인 읽기 요청',count(relay.queued)+'건'],
       ['현재 동시 처리 제한',count(relay.limit)+'건'],
+      ['유지 중인 공개 사전조회',count(relay.sharedActive)+'건'],
+      ['대기 중인 공유 공개 조회',count(relay.sharedQueued)+'건'],
+      ['기존 요청 합류 횟수',count(relay.sharedJoins)+'회'],
+      ['현재 메뉴 요청 우선 승격',count(relay.sharedPromotions)+'회'],
       ['혼잡 완화 남은 시간',Number.isFinite(relay.backpressureMs)?Math.ceil(Math.max(0,relay.backpressureMs)/1000)+'초':'미확인']
     ]){const tr=node('tr');tr.append(node('td',name),node('td',value));readBudget.append(tr)}
     performanceHost.append(node('h3','개발 중계 읽기 요청 혼잡도'),readBudget,node('p','실행·대기 건수는 이 브라우저 탭의 읽기 요청에 한정됩니다. Cloudflare 전체 이용자의 요청량이나 GAS 상태를 직접 측정한 값이 아닙니다.','dv-muted'))
