@@ -7,13 +7,16 @@
     async function once(key,fn,force=false,ttlMs=Infinity){
       const token=synchronize();if(!token)throw Error('AUTH_REQUIRED');
       const prior=jobs.get(key);
-      if(prior&&(prior.busy||!force&&prior.completedAt!==null&&Date.now()-prior.completedAt<ttlMs))return prior.promise;
-      const epoch=revision,job={busy:true,completedAt:null};
+      if(prior&&(prior.busy||!force&&prior.completedAt!==null&&Date.now()-prior.completedAt<ttlMs)){
+        if(prior.busy&&prior.sharedPublic)root.DashboardTransport?.promoteShared?.(key);
+        return prior.promise;
+      }
+      const epoch=revision,job={busy:true,completedAt:null,cancelled:false,sharedPublic:['sectors','news'].includes(key)};
       job.promise=Promise.resolve().then(fn).then(value=>{
-        if(epoch!==revision||token!==LS('invest_session_token'))return;
+        if(job.cancelled||epoch!==revision||token!==LS('invest_session_token'))return;
         job.completedAt=Date.now();return value;
       }).catch(error=>{if(jobs.get(key)===job)jobs.delete(key);throw error})
-        .finally(()=>{job.busy=false;if(epoch===revision)emit()});
+        .finally(()=>{job.busy=false;if(epoch===revision&&!job.cancelled)emit()});
       jobs.set(key,job);return job.promise;
     }
     const development=()=>window.MYINVEST_TRANSPORT_CONFIG?.devSession===true;
@@ -34,7 +37,10 @@
       data:Object.freeze({publicRead:(url,options)=>publicConnected()?getTxt(url,options):Promise.resolve(null),accounts:snapshot}),
       error:()=>({status:'error',message:'모듈 처리 실패 · 연결 상태를 확인하세요.'}),
       subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn)},
-      cancelPending(){revision++;for(const [key,job] of jobs)if(job.busy)jobs.delete(key)},
+      cancelPending(options={}){
+        if(options.keepSharedPublic!==true)revision++;
+        for(const [key,job] of jobs)if(job.busy&&(options.keepSharedPublic!==true||!job.sharedPublic)){job.cancelled=true;jobs.delete(key)}
+      },
       clear(){scope=null;revision++;jobs.clear();emit()},
       market(force=false,symbols=[]){
         if(!publicConnected())return Promise.resolve();
