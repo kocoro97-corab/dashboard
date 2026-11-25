@@ -58,3 +58,22 @@ test('failed refresh keeps the last quote and original receipt with an explicit 
 test('departed market bulk collector does not start the rest of an old route queue',async()=>{
  const f=setup();f.ctx.window.location={hash:'#/market'};const release=[],calls=[];f.ctx.quote=s=>{calls.push(s);return new Promise(r=>release.push(r))};const running=f.ctx.fillQuotes(['AAA','BBB','CCC','DDD','EEE','FFF']);f.ctx.window.location.hash='#/news';release.forEach(r=>r({p:100,prev:99}));await running;assert.equal(calls.length,4);assert.equal(vm.runInContext('Object.keys(Q).length',f.ctx),0);
 });
+
+
+test('an obsolete sector view can abort its public read without a fallback or a failure counter',async()=>{
+ const f=setup({body:'{"synthetic":true}'});
+ const controller=new AbortController();
+ let forwarded=null,calls=0;
+ f.ctx.DashboardTransport.publicRead=(url,options)=>{
+  calls++;forwarded=options?.signal;
+  return new Promise((resolve,reject)=>{
+   options.signal.addEventListener('abort',()=>reject(Object.assign(Error('READ_CANCELLED'),{code:'READ_CANCELLED'})),{once:true});
+  });
+ };
+ const promise=f.ctx.getTxt('https://synthetic.public.example/cancellable',{signal:controller.signal});
+ assert.strictEqual(forwarded,controller.signal);
+ controller.abort();
+ assert.equal(await promise,null);
+ assert.equal(calls,1);
+ assert.equal(vm.runInContext('NET.fail',f.ctx),0);
+});
