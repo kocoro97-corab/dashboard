@@ -81,6 +81,10 @@ async function fetchTopThemes(){
     // early without claiming any composite/constituent scoring is complete.
     THM_PREVIEW=cand.map(t=>({name:t.name,rate:t.rate}));
     renderThemes();
+    // The legacy theme panel is hidden in the routed V2 shell; notify the
+    // visible sectors view now, before slow constituent requests settle.
+    if(typeof window!=='undefined'&&typeof window.dispatchEvent==='function'&&typeof window.Event==='function')
+      window.dispatchEvent(new window.Event('myinvest:theme-preview'));
     if(!cand.length){
       if(all.length){THM=[];THM_AT=Date.now();THM_MSG='현재 상승 중인 테마가 없습니다.'}
       else THM_MSG='테마 데이터 수신 실패'+(THM.length?' · 이전 수신 자료 유지':' · 미확인');
