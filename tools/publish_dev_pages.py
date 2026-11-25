@@ -81,6 +81,16 @@ def require_green_ci(source_sha):
         raise Stop('DEV_CI_NOT_GREEN')
 
 
+def build_with_preserved_calendar(artifact, checkout):
+    """Retain newer validated public calendar snapshots already on dev-pages.
+
+    The exporter independently validates each snapshot, compares retrievedAt,
+    and preserves verified previous collection-failure status. Never copies
+    private files or accepts raw unchecked provider responses.
+    """
+    return build(artifact, public_data=checkout / 'data')
+
+
 def publish(expected_source_sha=None, expected_dev_head=None):
     # Never publish without both an exact approved source and a dev-pages lease.
     if not expected_source_sha or not expected_dev_head:raise Stop('DEV_APPROVED_SHA_REQUIRED')
@@ -108,7 +118,6 @@ def publish(expected_source_sha=None, expected_dev_head=None):
     with tempfile.TemporaryDirectory() as tmp:
         folder = Path(tmp)
         artifact = folder / 'artifact'
-        manifest = build(artifact)
         checkout = folder / 'checkout'
         checkout.mkdir()
         git(['init', '--initial-branch=' + BRANCH], checkout)
@@ -119,6 +128,7 @@ def publish(expected_source_sha=None, expected_dev_head=None):
         git(['fetch', '--depth=1', 'origin', BRANCH], checkout)
         checked_dev_head(git(['rev-parse', 'FETCH_HEAD'], checkout), expected_dev_head)
         git(['checkout', '-B', BRANCH, 'FETCH_HEAD'], checkout)
+        manifest = build_with_preserved_calendar(artifact, checkout)
         # Old files must be removed *before* adding the new manifest. This was
         # previously unreachable inside an elif that always raised.
         old = json.loads((checkout / 'asset-manifest.json').read_text())
