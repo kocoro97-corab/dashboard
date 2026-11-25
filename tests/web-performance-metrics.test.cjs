@@ -64,6 +64,26 @@ assert.equal(current.containsPrivateFields,false);
 assert.doesNotMatch(JSON.stringify(current),/SYNTHETIC_SECRET_CANARY|SYNTHETIC_ACCOUNT_1234|example\.test|token=/);
 assert.equal(typeof current.urls,'undefined');
 assert.equal(typeof current.resources,'undefined');
+// Interruption-heavy mobile sessions must not appear fast just because
+// cancelled navigation is omitted from the normal-completion median.
+let tick=5000;
+sandbox.performance.now=()=>tick;
+const slow=sandbox.module.exports.begin('sectors','navigation');
+tick+=111827;
+assert.equal(sandbox.module.exports.finish(slow,'cancelled'),true);
+const bad=sandbox.module.exports.begin('news','navigation');
+tick+=1400;
+assert.equal(sandbox.module.exports.finish(bad,'failed'),true);
+const interrupted=sandbox.module.exports.snapshot();
+assert.equal(interrupted.summary.sectors.count,0);
+assert.equal(interrupted.summary.sectors.medianMs,null);
+assert.equal(interrupted.summary.sectors.cancelledCount,1);
+assert.equal(interrupted.summary.sectors.cancelledMaxMs,111827);
+assert.equal(interrupted.summary.news.failedCount,1);
+assert.equal(interrupted.summary.news.maxMs,null);
+assert.equal(interrupted.containsPrivateFields,false);
+sandbox.module.exports.clear();
+assert.equal(sandbox.module.exports.snapshot().summary.sectors,undefined);
 const noPerformance={module:{exports:{}}};
 vm.runInNewContext(source,noPerformance);
 const empty=noPerformance.module.exports.browserSnapshot();
