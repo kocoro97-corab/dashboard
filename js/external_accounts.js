@@ -8,20 +8,35 @@ let EXT_AUTO_TIMER=null;
 let EXT_PRICE_BUSY=false;
 let EXT_PRICE_PENDING=false;
 let EXT_RUN_ID=0;
-let EXT_MASTER=null,EXT_MASTER_ERROR='';
+let EXT_MASTER=null,EXT_MASTER_ERROR='',EXT_MASTER_RECEIVED_AT=0,EXT_MASTER_SOURCE_AT=0,EXT_MASTER_PENDING=null;
 let EXT_SAVED_REV=null,EXT_SAVED_ROWS=[],EXT_UNDO=[],EXT_HISTORY=[];
 let EXT_DRAFT_VERSION=0,EXT_LOAD_RUN=0;
 function extRows(rows){return rows.map(x=>{const row={accountType:x.accountType,code:String(x.code||''),name:String(x.name||''),quantity:ExternalCore.number(x.quantity),avgPrice:ExternalCore.number(x.avgPrice),source:x.source||'manual'};if(x.accountId)row.accountId=x.accountId;return row})}
 function extCheckpoint(){EXT_DRAFT_VERSION++;EXT_UNDO.push(extRows(EXT_ASSETS));if(EXT_UNDO.length>10)EXT_UNDO.shift();extStoreControls()}
 function undoExternalChange(){if(!EXT_UNDO.length)return;EXT_DRAFT_VERSION++;EXT_ASSETS=EXT_UNDO.pop();renderExternalAssets();showExternalSaveButton()}
 async function loadExternalMaster(){
-  try{
-    const response=await fetch('data/krx-instruments.json',{cache:'no-cache'});if(!response.ok)throw Error('마스터 HTTP '+response.status);
-    const document=await response.json();const date=Date.parse(document.source&&document.source.fetchedAt);
-    if(!Number.isFinite(date)||Date.now()-date>30*86400000||date>Date.now()+86400000)throw Error('종목 마스터 갱신 필요');
-    EXT_MASTER=ExternalCore.master(document);EXT_MASTER_ERROR='';
-    const el=$('externalMasterStatus');if(el)el.textContent=document.source.provider+' · 기준 '+new Date(date).toLocaleDateString('ko-KR')+' · '+document.instruments.length+'종목';
-  }catch(error){EXT_MASTER=null;EXT_MASTER_ERROR=SafeDiagnostics.message(error);const el=$('externalMasterStatus');if(el)el.textContent='마스터 확인 실패 · '+SafeDiagnostics.message(error)+' · 코드 추측 안 함'}
+  const now=Date.now();
+  // Share a verified static KRX catalog with repeated account, news and sector
+  // views. Source freshness still expires at 30 days; never reuse failed data.
+  if(EXT_MASTER&&EXT_MASTER_SOURCE_AT>0&&now-EXT_MASTER_SOURCE_AT<30*86400000&&
+    EXT_MASTER_RECEIVED_AT>0&&now-EXT_MASTER_RECEIVED_AT<10*60000)return;
+  if(EXT_MASTER_PENDING)return EXT_MASTER_PENDING;
+  const pending=(async()=>{
+    try{
+      const response=await fetch('data/krx-instruments.json',{cache:'no-cache'});if(!response.ok)throw Error('마스터 HTTP '+response.status);
+      const document=await response.json(),date=Date.parse(document.source&&document.source.fetchedAt);
+      if(!Number.isFinite(date)||Date.now()-date>30*86400000||date>Date.now()+86400000)throw Error('종목 마스터 갱신 필요');
+      EXT_MASTER=ExternalCore.master(document);EXT_MASTER_ERROR='';
+      EXT_MASTER_RECEIVED_AT=Date.now();EXT_MASTER_SOURCE_AT=date;
+      const el=$('externalMasterStatus');if(el)el.textContent=document.source.provider+' · 기준 '+new Date(date).toLocaleDateString('ko-KR')+' · '+document.instruments.length+'종목';
+    }catch(error){
+      EXT_MASTER=null;EXT_MASTER_RECEIVED_AT=0;EXT_MASTER_SOURCE_AT=0;
+      EXT_MASTER_ERROR=SafeDiagnostics.message(error);
+      const el=$('externalMasterStatus');if(el)el.textContent='마스터 확인 실패 · '+SafeDiagnostics.message(error)+' · 코드 추측 안 함';
+    }
+  })();
+  EXT_MASTER_PENDING=pending;
+  try{return await pending}finally{if(EXT_MASTER_PENDING===pending)EXT_MASTER_PENDING=null}
 }
 function extStoreControls(){const undo=$('externalUndoBtn');if(undo)undo.disabled=!EXT_UNDO.length}
 function extImport(rows){
