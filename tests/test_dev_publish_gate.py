@@ -2,6 +2,7 @@
 import sys
 from pathlib import Path
 import unittest
+import tempfile
 from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'tools'))
@@ -36,6 +37,35 @@ class DevelopmentPublishGateTests(unittest.TestCase):
         pub.checked_dev_head(DEV_HEAD,DEV_HEAD)
         with self.assertRaisesRegex(pub.Stop,'DEV_PAGES_HEAD_CHANGED'):
             pub.checked_dev_head('c'*40,DEV_HEAD)
+
+    def test_obsolete_assets_are_staged_for_removal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            checkout=Path(tmp)
+            (checkout/'js').mkdir()
+            (checkout/'js/obsolete.js').write_text('old development-only data')
+            (checkout/'js/kept.js').write_text('new file')
+            before={'js/obsolete.js':'x','js/kept.js':'y'}
+            after={'js/kept.js':'z'}
+            with patch.object(pub,'git') as git:
+                pub.remove_obsolete_assets(checkout,before,after)
+                git.assert_called_once_with(['rm','--','js/obsolete.js'],checkout)
+
+    def test_manifest_cleanup_rejects_traversal_and_git_control_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for bad in ('../private.txt','/absolute.txt','.git/config','a\\b','a?b'):
+                with self.subTest(bad=bad):
+                    with patch.object(pub,'git') as git:
+                        with self.assertRaisesRegex(pub.Stop,'DEV_MANIFEST_PATH_INVALID'):
+                            pub.remove_obsolete_assets(Path(tmp),{bad:'hash'}, {})
+                        git.assert_not_called()
+            with self.assertRaisesRegex(pub.Stop,'DEV_MANIFEST_INVALID'):
+                pub.remove_obsolete_assets(Path(tmp),['bad list'],{})
+
+    def test_missing_pinned_shas_fail_before_github_or_git_writes(self):
+        with patch.object(pub,'shutil') as shutil:
+            with self.assertRaisesRegex(pub.Stop,'DEV_APPROVED_SHA_REQUIRED'):
+                pub.publish()
+            shutil.which.assert_not_called()
 
     def test_fixed_development_repository_and_no_production_target(self):
         self.assertEqual(pub.REPO,'kocoro97-corab/dashboard-v2-dev')
