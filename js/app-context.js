@@ -31,7 +31,7 @@
     }
     return {once,emit,snapshot,development,publicConnected,accountReads,authenticated:()=>!!synchronize(),
       settings:()=>({indicators:JSON.parse(JSON.stringify(CFG)),market:sess()}),
-      data:Object.freeze({publicRead:url=>publicConnected()?getTxt(url):Promise.resolve(null),accounts:snapshot}),
+      data:Object.freeze({publicRead:(url,options)=>publicConnected()?getTxt(url,options):Promise.resolve(null),accounts:snapshot}),
       error:()=>({status:'error',message:'모듈 처리 실패 · 연결 상태를 확인하세요.'}),
       subscribe(fn){listeners.add(fn);return()=>listeners.delete(fn)},
       cancelPending(){revision++;for(const [key,job] of jobs)if(job.busy)jobs.delete(key)},
