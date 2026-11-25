@@ -13,6 +13,23 @@
     if(url.username||url.password||url.search||url.hash||url.pathname!=='/api'||!(url.protocol==='https:'||development&&url.protocol==='http:'))throw failure('RELAY_CONFIG_INVALID');
     return c;
   }
+  function isSharedPublicUrl(url,tag){
+    try{
+      const u=new URL(url);
+      if(u.protocol!=='https:'||u.username||u.password||u.hash)return false;
+      const matches=expected=>[...u.searchParams.keys()].sort().join(',')===Object.keys(expected).sort().join(',')&&
+        Object.entries(expected).every(([key,value])=>value===null?!!u.searchParams.get(key):u.searchParams.get(key)===value);
+      if(tag==='news')return u.hostname==='news.google.com'&&u.pathname==='/rss/search'&&
+        matches({q:null,hl:'ko',gl:'KR',ceid:'KR:ko'});
+      if(tag==='sectors'){
+        if(u.hostname==='m.stock.naver.com'&&/^\/api\/stocks\/theme(?:\/\d+)?$/.test(u.pathname))
+          return matches({page:'1',pageSize:'100'});
+        if(u.hostname==='stock.naver.com'&&/^\/api\/domestic\/market\/theme\/\d+\/stocklist$/.test(u.pathname))
+          return matches({marketType:'ALL',orderType:'priceTop',startIdx:'0',pageSize:'100'});
+      }
+    }catch{}
+    return false;
+  }
   function isRelay(){return config().mode==='relay'}
   // Shared physical read budget. Auth and reviewed writes are never replayed.
   const reads=new Set(['publicFetch','nhQuotes','nhExternalQuotes','nhAccounts','externalHoldings','externalHistory','externalAccounts','googleCalendarStatus','googleCalendarList','googleCalendarEvents']);
@@ -88,7 +105,7 @@
       headers.Authorization='Bearer '+data.token;delete data.token;
     }
     const queued=reads.has(data.action),endpoint=c.endpoint,generation=epoch,sharedGeneration=sharedEpoch,token=payload.token,route=root.location?.hash,access=c.devAccessCode;
-    const sharedPublic=queued&&data.action==='publicFetch'&&options.sharedPublic===true&&c.devSession===true&&c.publicMarket===true&&['sectors','news'].includes(options.sharedTag)&&!options.signal;
+    const sharedPublic=queued&&data.action==='publicFetch'&&options.sharedPublic===true&&c.devSession===true&&c.publicMarket===true&&['sectors','news'].includes(options.sharedTag)&&isSharedPublicUrl(data.url,options.sharedTag)&&!options.signal;
     if(options.sharedPublic===true&&!sharedPublic)throw failure('RELAY_CONFIG_INVALID');
     const current=()=>(sharedPublic?sharedGeneration===sharedEpoch:generation===epoch&&route===root.location?.hash)&&c===root.MYINVEST_TRANSPORT_CONFIG&&c.endpoint===endpoint&&c.mode==='relay'&&c.devAccessCode===access&&!options.signal?.aborted&&(token==null||token===(typeof LS==='function'?LS('invest_session_token'):null));
     const send=()=>{
@@ -116,7 +133,7 @@
   async function publicRead(url,options){
     options=options||{};
     const started=config(),access=started.devAccessCode,mode=started.mode,token=typeof LS==='function'?LS('invest_session_token'):null,endpoint=started.endpoint,generation=epoch,sharedGeneration=sharedEpoch,route=root.location?.hash;
-    const shared=options.sharedPublic===true&&started.devSession===true&&started.publicMarket===true&&!options.signal&&['sectors','news'].includes(options.sharedTag)&&typeof token==='string';
+    const shared=options.sharedPublic===true&&started.devSession===true&&started.publicMarket===true&&!options.signal&&['sectors','news'].includes(options.sharedTag)&&isSharedPublicUrl(url,options.sharedTag)&&typeof token==='string';
     const current=()=>(shared?sharedGeneration===sharedEpoch:generation===epoch&&route===root.location?.hash)&&
       (mode!=='relay'||started===root.MYINVEST_TRANSPORT_CONFIG)&&mode===config().mode&&access===config().devAccessCode&&endpoint===config().endpoint&&!options.signal?.aborted&&token===(typeof LS==='function'?LS('invest_session_token'):null);
     const prior=publicPending.get(url);if(prior&&prior.current()&&prior.signal===options.signal){if(shared)sharedJoins++;return prior.promise;}
