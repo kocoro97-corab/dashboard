@@ -41,6 +41,18 @@ DashboardPages.register('diagnostics',()=>{
     const tr=node('tr');tr.append(node('td',name),node('td',value));info.append(tr)
   }
   performanceHost.append(node('p','이 기기의 현재 문서에서 브라우저가 관측한 시간과 요청 수입니다. 요청 URL·계좌·인증정보는 수집하거나 표시하지 않습니다. 새로고침·캐시·통신 환경에 따라 값이 달라집니다.','dv-muted'),info);
+  const relay=root.DashboardTransport?.readState?.();
+  if(relay){
+    const count=v=>Number.isInteger(v)&&v>=0?String(v):'미확인';
+    const readBudget=table(['개발 중계 읽기 상태','현재 값']);
+    for(const [name,value] of [
+      ['실행 중인 읽기 요청',count(relay.active)+'건'],
+      ['대기 중인 읽기 요청',count(relay.queued)+'건'],
+      ['현재 동시 처리 제한',count(relay.limit)+'건'],
+      ['혼잡 완화 남은 시간',Number.isFinite(relay.backpressureMs)?Math.ceil(Math.max(0,relay.backpressureMs)/1000)+'초':'미확인']
+    ]){const tr=node('tr');tr.append(node('td',name),node('td',value));readBudget.append(tr)}
+    performanceHost.append(node('h3','개발 중계 읽기 요청 혼잡도'),readBudget,node('p','실행·대기 건수는 이 브라우저 탭의 읽기 요청에 한정됩니다. Cloudflare 전체 이용자의 요청량이나 GAS 상태를 직접 측정한 값이 아닙니다.','dv-muted'))
+  }
   const summary=routes?.summary||{},order=['home','market','sectors','stocks','strategy','news','accounts','settings','diagnostics'];
   const selected=order.filter(name=>summary[name]?.count);
   const routeTable=table(['메뉴','측정 횟수','중앙값','최대']);
