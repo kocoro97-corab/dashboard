@@ -90,11 +90,21 @@ async function poolLimited(items,limit,fn){let index=0;await Promise.all(Array.f
 
 function create(){
  const legacy=DashboardPages.legacy({ids:['themesSection'],refresh:(ctx,force)=>ctx.sectors(force)});
- let ctxRef=null,unsubscribe=null,legacyHolder=null,view,summary,list,notice,watchArea,market='KR',period='1d',mode='day',watch=saved(),active=false,loading=false,loadError='',analytics=new Map(),analysisBusy=false,analysisError='',analysisKey='',analysisVersion=0,detailVersion=0,category='theme',industryRows=[],industryReceived=null,industryBusy=false,industryError='',marketTimer=null,manualMarket=false;
+ let ctxRef=null,unsubscribe=null,legacyHolder=null,view,summary,list,notice,watchArea,market='KR',period='1d',mode='day',watch=saved(),active=false,loading=false,loadError='',analytics=new Map(),analysisBusy=false,analysisError='',analysisKey='',analysisVersion=0,analysisController=null,detailVersion=0,category='theme',industryRows=[],industryReceived=null,industryBusy=false,industryError='',marketTimer=null,manualMarket=false;
  const css='.stv2{margin-bottom:18px}.stv2-heading{display:flex;gap:8px;align-items:center;justify-content:space-between}.stv2-heading h2{margin:0;min-width:0}.stv2-heading>button{flex-shrink:0}.stv2-industry-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.stv2-industry-head h3{margin:0}.stv2-mixed{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stv2-mixed>section{background:#172238;border:1px solid #344158;border-radius:9px;padding:11px;min-width:0}.stv2-mixed button{display:block;text-align:left;width:100%;margin:6px 0}.stv2-period-label{font-size:12px;color:#b6c5d9}.stv2-toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:10px 0}.stv2-toolbar .stv2-tabs{margin:0}.stv2-region{padding:7px 11px;border:1px solid #72b5ff;border-radius:7px;background:#264365;color:#e7eef9}.stv2-etfs{margin-top:12px}.stv2-status p{overflow-wrap:anywhere}.stv2 button{cursor:pointer}.stv2-tabs{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}.stv2-tabs button{padding:7px 11px;border:1px solid #465775;border-radius:7px;background:#172238;color:#e7eef9}.stv2-tabs button[aria-pressed="true"]{border-color:#72b5ff;background:#264365}.stv2-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stv2-card{padding:13px;background:#172238;border:1px solid #344158;border-radius:10px;min-width:0;color:#e7eef9}.stv2-muted{color:#b6c5d9;font-size:12px}.stv2-row{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}.stv2-row input{min-width:140px;max-width:100%}.stv2-table-scroll{width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}.stv2-table{width:100%;border-collapse:collapse}.stv2-table-scroll .stv2-table{min-width:max-content}.stv2-table td,.stv2-table th{padding:7px;border-bottom:1px solid #344158;text-align:left}.stv2-table button{color:#e7eef9;background:#264365;border:0;border-radius:5px;padding:5px}.stv2-status{padding:10px;border:1px solid #465775;border-radius:8px}.stv2-card:focus-visible{outline:2px solid #72b5ff}@media(max-width:650px){.stv2-mixed{grid-template-columns:1fr}}@media(max-width:550px){.stv2-grid{grid-template-columns:1fr}.stv2-table{font-size:12px}}';
  function saveDisplay(){try{localStorage.setItem(UI_KEY,JSON.stringify({market:manualMarket?market:null,mode,period,category}))}catch{}}
  function restoreDisplay(){try{const state=JSON.parse(localStorage.getItem(UI_KEY)||'null');if(!state||typeof state!=='object')return;if(['KR','US','MIX'].includes(state.market)){market=state.market;manualMarket=true}if(['day','swing'].includes(state.mode))mode=state.mode;if(['theme','industry'].includes(state.category))category=state.category;period=mode==='swing'&&['5d','20d','60d'].includes(state.period)?state.period:'1d'}catch{}}
- function chooseMarket(next){if(!['KR','US','MIX'].includes(next))return false;manualMarket=true;market=next;analysisError='';saveDisplay();draw();if((next==='KR'||next==='MIX')&&category==='theme'&&!data().length)void reload();void loadAnalytics();return false}
+ // An obsolete selection must not block the newest one. The shared transport
+ // keeps actual Worker leases until the in-flight network request settles.
+ function supersedeAnalytics(){
+  analysisVersion++;
+  analysisController?.abort();
+  analysisController=null;
+  analysisBusy=false;
+  analysisKey='';
+  analysisError='';
+ }
+ function chooseMarket(next){if(!['KR','US','MIX'].includes(next))return false;if(next!==market)supersedeAnalytics();manualMarket=true;market=next;analysisError='';saveDisplay();draw();if((next==='KR'||next==='MIX')&&category==='theme'&&!data().length)void reload();void loadAnalytics();return false}
  function tabs(parent,options,get,set){const box=make('div',undefined,'stv2-tabs');options.forEach(([value,label])=>{const b=button(label,()=>{const next=set(value);if(next!==false)draw()});b.setAttribute('aria-pressed',String(get()===value));box.append(b)});parent.append(box)}
  function data(){return typeof THM!=='undefined'&&Array.isArray(THM)?THM:[]}
  function holdings(){const codes=new Set();let snap;try{snap=ctxRef?.snapshot()}catch{return codes}if(!snap||!Array.isArray(snap.details)||!Array.isArray(snap.result?.rows)||snap.details.length!==snap.result.rows.length)return codes;for(let i=0;i<snap.details.length;i++){const d=snap.details[i],a=snap.result.rows[i],code=String(d?.code||'').trim();if(!/^\d{6}$/.test(code)||d.market!=='domestic'||d.currency!=='KRW'||d.draft||!a?.identity||a.issues?.includes('IDENTITY_UNKNOWN')||!Number.isFinite(d.quantity)||d.quantity<=0)continue;codes.add(code)}return codes}
@@ -113,8 +123,12 @@ function create(){
    const market=requestedMarket;
   if(!active||!ctxRef||!ctxRef.publicConnected?.()||analysisBusy||(market==='KR'&&loading))return;
   if(market==='KR'&&period==='1d'&&mode==='day'){if(category==='industry'&&!industryRows.length)void loadIndustries(force);return;}
-  const key=keyFor(market),viewKey=keyFor();if(!force&&analytics.has(key))return;const context=ctxRef;if(force)SERIES_CACHE.clear();
-  analysisBusy=true;analysisError='';analysisKey=key;const version=++analysisVersion;draw();
+  const key=keyFor(market),viewKey=keyFor();if(!force&&analytics.has(key))return;if(force)SERIES_CACHE.clear();
+  analysisBusy=true;analysisError='';analysisKey=key;const version=++analysisVersion;
+  const controller=new AbortController();analysisController=controller;
+  const context=Object.create(ctxRef);
+  context.data={...ctxRef.data,publicRead:url=>ctxRef.data.publicRead(url,{signal:controller.signal})};
+  draw();
   try{
    if(market==='KR'&&category==='industry'&&!industryRows.length){await loadIndustries(force);if(!industryRows.length)throw Error('INDUSTRY_UNAVAILABLE')}
    const n=PERIODS[period],benchmarkSymbol=market==='US'?'SPY':'^KS11',benchmark=await series(context,benchmarkSymbol),base=ret(benchmark.bars,n);
@@ -154,7 +168,10 @@ function create(){
      nowDay:root.MYInvestExchangeSessionProof?.localDay(Date.now(),'America/New_York')}):null;
    analytics.set(key,{category,benchmarkSeries:benchmark,rows:rows.sort((a,b)=>b.relative-a.relative),benchmark:base,benchmarkSymbol,received:Date.now(),period,market,failures,themes:themes.sort((a,b)=>b.relative-a.relative),asof:benchmark.last,strictRotation});
   }catch(e){if(active&&version===analysisVersion&&keyFor()===key)analysisError='시계열 수신 또는 검증 실패 · 실제 데이터 연결 상태를 확인하세요.'}
-  finally{if(active&&version===analysisVersion){analysisBusy=false;draw();if(keyFor()!==viewKey)void loadAnalytics()}}
+  finally{
+   if(analysisController===controller)analysisController=null;
+   if(active&&version===analysisVersion){analysisBusy=false;draw();if(keyFor()!==viewKey)void loadAnalytics()}
+  }
  }
  function analyticsView(){
   const key=keyFor(),data=analytics.get(key);
@@ -267,18 +284,18 @@ function create(){
   }
   summary.append(header);if(loadError)notice.textContent=loadError;
   const controls=make('div',undefined,'stv2-toolbar');
-  const scope=button(category==='theme'?'분석: 테마 → 산업':'분석: 산업 → 테마',()=>{category=category==='theme'?'industry':'theme';saveDisplay();draw();void loadAnalytics()});
+  const scope=button(category==='theme'?'분석: 테마 → 산업':'분석: 산업 → 테마',()=>{supersedeAnalytics();category=category==='theme'?'industry':'theme';saveDisplay();draw();void loadAnalytics()});
   scope.setAttribute('aria-label','분석 범위 전환: 현재 '+(category==='theme'?'테마':'산업'));controls.append(scope);
   tabs(controls,[['KR','한국'],['US','미국'],['MIX','한국+미국']],()=>market,chooseMarket);
   tabs(controls,[['day','단타'],['swing','스윙']],()=>mode,v=>{
-   if(mode!==v){mode=v;period=v==='swing'?'5d':'1d'}
+   if(mode!==v){supersedeAnalytics();mode=v;period=v==='swing'?'5d':'1d'}
    saveDisplay();void loadAnalytics();
   });
   summary.append(controls);
   if(mode==='swing'){
    const periods=make('div',undefined,'stv2-toolbar');
    periods.append(make('span','스윙 분석기간 ('+(PERIODS[period]||5)+'거래일):','stv2-period-label'));
-   tabs(periods,[['5d','5일'],['20d','20일'],['60d','60일']],()=>period,v=>{period=v;saveDisplay();void loadAnalytics()});
+   tabs(periods,[['5d','5일'],['20d','20일'],['60d','60일']],()=>period,v=>{if(period!==v)supersedeAnalytics();period=v;saveDisplay();void loadAnalytics()});
    summary.append(periods);
   }
   const observed=market==='US'?analytics.get(keyFor())?.received:market==='MIX'?analytics.get(keyFor('US'))?.received:(category==='industry'?industryReceived:typeof THM_AT!=='undefined'?THM_AT:null),stamp=observed?new Date(observed).toLocaleString('ko-KR'):'미수신';
@@ -313,8 +330,8 @@ function create(){
   if(!evidenceDetails.open)return;renderEvidence();
   root.MYInvestEventContext?.refreshAll().then(()=>{if(active&&evidenceDetails.isConnected&&evidenceDetails.open)renderEvidence()}).catch(()=>{});
  });
- legacy.mount(container,ctx);const content=container.querySelector(':scope > .page-content');if(content){legacyHolder=make('div');legacyHolder.hidden=true;content.replaceWith(legacyHolder);legacyHolder.append(content)}container.prepend(view);draw();if((market==='KR'||market==='MIX')&&category==='theme'&&!data().length&&!loading&&ctx.publicConnected?.())void reload();void loadAnalytics();const checkMarket=()=>{if(!active)return;const next=defaultMarketAt();if(!manualMarket&&next!==market){market=next;draw();if(market==='KR'&&!data().length&&ctxRef?.publicConnected?.())void reload();void loadAnalytics()}marketTimer=setTimeout(checkMarket,60000-Date.now()%60000+5)};marketTimer=setTimeout(checkMarket,60000-Date.now()%60000+5)}
- return {mount,refresh:async(ctx,force)=>{await legacy.refresh(ctx,force);draw();if(force)analytics.clear();void loadAnalytics(force)},unmount:()=>{active=false;if(marketTimer!==null){clearTimeout(marketTimer);marketTimer=null}manualMarket=false;analysisVersion++;detailVersion++;analysisBusy=false;unsubscribe?.();unsubscribe=null;ctxRef=null;view?.remove();legacy.unmount();legacyHolder?.remove();legacyHolder=null},getStatus:()=>({status:active?'ready':'unmounted',market,period,mode,category})};
+ legacy.mount(container,ctx);const content=container.querySelector(':scope > .page-content');if(content){legacyHolder=make('div');legacyHolder.hidden=true;content.replaceWith(legacyHolder);legacyHolder.append(content)}container.prepend(view);draw();if((market==='KR'||market==='MIX')&&category==='theme'&&!data().length&&!loading&&ctx.publicConnected?.())void reload();void loadAnalytics();const checkMarket=()=>{if(!active)return;const next=defaultMarketAt();if(!manualMarket&&next!==market){supersedeAnalytics();market=next;draw();if(market==='KR'&&!data().length&&ctxRef?.publicConnected?.())void reload();void loadAnalytics()}marketTimer=setTimeout(checkMarket,60000-Date.now()%60000+5)};marketTimer=setTimeout(checkMarket,60000-Date.now()%60000+5)}
+ return {mount,refresh:async(ctx,force)=>{await legacy.refresh(ctx,force);draw();if(force)analytics.clear();void loadAnalytics(force)},unmount:()=>{active=false;supersedeAnalytics();if(marketTimer!==null){clearTimeout(marketTimer);marketTimer=null}manualMarket=false;analysisVersion++;detailVersion++;analysisBusy=false;unsubscribe?.();unsubscribe=null;ctxRef=null;view?.remove();legacy.unmount();legacyHolder?.remove();legacyHolder=null},getStatus:()=>({status:active?'ready':'unmounted',market,period,mode,category})};
 }
 DashboardPages.register('sectors',create);
 })(window);
