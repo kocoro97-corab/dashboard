@@ -8,12 +8,12 @@ const token='a'.repeat(64);
 const sectorUrl='https://m.stock.naver.com/api/stocks/theme?page=1&pageSize=100';
 const newsUrl='https://news.google.com/rss/search?q=test&hl=ko&gl=KR&ceid=KR:ko';
 function fixture({development=true}={}){
- let authToken=token, requestId=0;
+ let authToken=token, requestId=0,nowMs=5000;
  const releases=[],calls=[];
  const location=new URL('https://kocoro97-corab.github.io/dashboard-v2-dev/');
  location.hash='#/home';
  const ctx=vm.createContext({
-   URL,Response,AbortController,Event,performance:{now:()=>5000},
+   URL,Response,AbortController,Event,performance:{now:()=>nowMs},
    location,AppRouter:{validHash:()=>true},
    MYINVEST_PERSISTENT_RELAY:{endpoint},
    MYINVEST_TRANSPORT_CONFIG:{mode:'relay',endpoint,devSession:development,publicMarket:development,persistentRelay:true},
@@ -34,7 +34,7 @@ function fixture({development=true}={}){
  vm.runInContext(source,ctx,{filename:'transport.js'});
  const api=ctx.DashboardTransport;
  const tick=async()=>{await new Promise(resolve=>setImmediate(resolve))};
- return {api,calls,releases,location,tick,setToken:value=>{authToken=value}};
+ return {api,calls,releases,location,tick,setToken:value=>{authToken=value},advance:ms=>{nowMs+=ms}};
 }
 test('shared themes request survives navigation and is joined instead of repeated',async()=>{
  const f=fixture();
@@ -155,4 +155,49 @@ test('a newly visible shared request jumps ahead of unrelated queued idle work',
  assert.equal(f.calls[2].url,newsUrl);
  f.releases[0]();f.releases[2]();
  await Promise.all([a,b,c]);
+});
+
+test('anonymous relay telemetry separates queued wait from physical read duration',async()=>{
+ const f=fixture();
+ const first=f.api.post({action:'nhAccounts',token});
+ const second=f.api.post({action:'nhQuotes',token});
+ const third=f.api.post({action:'externalAccounts',token});
+ await f.tick();await f.tick();
+ assert.equal(f.calls.length,2,'only two physical relay reads at once');
+ assert.equal(f.api.readState().queued,1);
+ f.advance(1500);
+ let state=f.api.readState();
+ assert.equal(state.oldestQueuedMs,1500);
+ assert.equal(state.oldestActiveMs,1500);
+ assert.equal(state.maxQueueWaitMs,0);
+ f.releases[0]();await f.tick();await f.tick();
+ state=f.api.readState();
+ assert.equal(f.calls.length,3);
+ assert.equal(state.maxQueueWaitMs,1500);
+ assert.equal(state.maxPhysicalReadMs,1500);
+ assert.equal(state.oldestQueuedMs,0);
+ assert.ok(!('url' in state)&&!('token' in state)&&!('account' in state),'no identity or request metadata');
+ f.advance(250);
+ assert.equal(f.api.readState().oldestActiveMs,1750);
+ f.releases[1]();f.releases[2]();
+ await Promise.all([first,second,third]);
+ await f.tick();
+ assert.equal(f.api.readState().active,0);
+ assert.equal(f.api.readState().maxPhysicalReadMs,1750);
+});
+
+test('cancelled route releases its UI result but still reports occupied physical lease',async()=>{
+ const f=fixture();
+ const request=f.api.post({action:'nhAccounts',token});
+ await f.tick();
+ f.advance(1200);
+ f.location.hash='#/market';
+ f.api.cancelReads({keepSharedPublic:true});
+ await assert.rejects(request,/SESSION_CHANGED/);
+ assert.equal(f.api.readState().active,1,'cancelled request still occupies physical slot');
+ assert.equal(f.api.readState().oldestActiveMs,1200,'diagnostics must not hide a cancelled pending transport');
+ f.advance(300);
+ f.releases[0]();await f.tick();await f.tick();
+ assert.equal(f.api.readState().active,0);
+ assert.equal(f.api.readState().maxPhysicalReadMs,1500);
 });

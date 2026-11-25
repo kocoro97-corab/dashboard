@@ -20,7 +20,9 @@ PREVIEW_BRANCH = 'fix/visible-first-market-20261125'
 PREVIEW_PR = 10
 NEXT_PREVIEW_BRANCH = 'fix/visible-first-data-20261125'
 NEXT_PREVIEW_PR = 11
-APPROVED_SOURCE_BRANCHES = (SOURCE_BRANCH,PREVIEW_BRANCH,NEXT_PREVIEW_BRANCH)
+TIMING_PREVIEW_BRANCH = 'fix/relay-timing-diagnostics-20261125'
+TIMING_PREVIEW_PR = 12
+APPROVED_SOURCE_BRANCHES = (SOURCE_BRANCH,PREVIEW_BRANCH,NEXT_PREVIEW_BRANCH,TIMING_PREVIEW_BRANCH)
 
 
 class Stop(Exception):pass
@@ -92,6 +94,7 @@ def require_reviewed_preview(source_sha, source_branch):
     reviewed = {
         PREVIEW_BRANCH:(PREVIEW_PR,SOURCE_BRANCH),
         NEXT_PREVIEW_BRANCH:(NEXT_PREVIEW_PR,PREVIEW_BRANCH),
+        TIMING_PREVIEW_BRANCH:(TIMING_PREVIEW_PR,NEXT_PREVIEW_BRANCH),
     }
     if source_branch not in reviewed:raise Stop('DEV_SOURCE_BRANCH_NOT_APPROVED')
     pr_id,expected_base = reviewed[source_branch]
@@ -114,7 +117,7 @@ def build_with_preserved_calendar(artifact, checkout, source_branch=SOURCE_BRANC
     """
     if source_branch == SOURCE_BRANCH:
         return build(artifact, public_data=checkout / 'data')
-    if source_branch in (PREVIEW_BRANCH,NEXT_PREVIEW_BRANCH):
+    if source_branch in (PREVIEW_BRANCH,NEXT_PREVIEW_BRANCH,TIMING_PREVIEW_BRANCH):
         return build(artifact, public_data=checkout / 'data', source_branch=source_branch)
     raise Stop('DEV_SOURCE_BRANCH_NOT_APPROVED')
 

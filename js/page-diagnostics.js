@@ -3,7 +3,7 @@
 'use strict';
 if(!root.DevelopmentDiagnostics||!AppRouter.routes.includes('diagnostics'))return;
 const {node,button}=DashboardPages,hub=root.DevelopmentDiagnostics;
-const labels={NOT_VISITED:'미점검',mounted:'화면 열기 중',ready:'화면 연결 확인',error:'화면 처리 오류',NOT_RUN:'실행 전',NOT_CONNECTED:'결과 수집 미연결',RUNNING:'실행 중',BLOCKED:'실행 불가',CANCELLED:'취소됨',PASS:'성공 · 브라우저 관측',PARTIAL:'일부 성공',FAIL:'실행 오류'};
+const labels={NOT_VISITED:'미점검',mounted:'화면 구성됨 · 데이터 확인 중',ready:'화면 연결 확인',error:'화면 처리 오류',NOT_RUN:'실행 전',NOT_CONNECTED:'결과 수집 미연결',RUNNING:'실행 중',BLOCKED:'실행 불가',CANCELLED:'취소됨',PASS:'성공 · 브라우저 관측',PARTIAL:'일부 성공',FAIL:'실행 오류'};
 function checkHint(row){switch(row.status){case 'NOT_CONNECTED':return '이 통합표의 검사 결과 수집이 아직 연결되지 않았습니다.';case 'NOT_RUN':return '아래 수동 연결 검사에서 조회 버튼을 눌러 실행하세요.';case 'RUNNING':return row.phase==='CAPABILITY'?'중계 연결 조건 확인 중':'자료 요청·수신 중';case 'BLOCKED':return '실행을 시도했으나 중계 연결 조건이 충족되지 않았습니다.';case 'CANCELLED':return '완료 전에 화면 이동·닫기 등으로 취소되었습니다. 다시 실행할 수 있습니다.';case 'FAIL':return '실행했으나 요청 또는 자료 검증에 실패했습니다. 오류 코드를 확인하세요.';case 'PASS':return '수신·검증 완료'+(row.bars?' · '+row.bars+'개 봉':'')+' · 실시간 여부 미검증';case 'PARTIAL':return '자료 일부를 확인했습니다. 수동 검사 패널의 누락·주의 내용을 확인하세요.';default:return '상태 확인 필요'}}
 const sessionStates={VERIFIED:'인증 확인',VERIFYING:'인증 확인 중',RESTORING:'기존 세션 복원 중',RETRYING:'연결 재확인 중',ENDED:'종료',SIGNED_OUT:'로그아웃',PASSWORD_CHANGE_REQUIRED:'비밀번호 변경 필요'};
 function sessionEvidence(){const s=root.DevelopmentSession?.getStatus()||{};return {mode:'BROWSER_OBSERVED_SESSION_METADATA',clientInactivityMs:s.inactivityMs===3600000?3600000:null,serverPolicyIdleMs:[300000,3600000].includes(s.serverPolicyIdleMs)?s.serverPolicyIdleMs:null,serverIdleMs:[300000,3600000].includes(s.serverIdleMs)?s.serverIdleMs:null,state:Object.hasOwn(sessionStates,s.state)?s.state:'UNKNOWN',code:['SESSION_REJECTED','SESSION_VERIFY_UNAVAILABLE','SESSION_IDLE_EXPIRED','SESSION_TRANSPORT_UNAVAILABLE','SESSION_RESPONSE_UNCONFIRMED','SESSION_RESTORE_UNAVAILABLE'].includes(s.code)?s.code:null,http:Number.isInteger(s.http)&&s.http>=100&&s.http<=599?s.http:null,independentTransportVerification:false}}
@@ -27,7 +27,9 @@ DashboardPages.register('diagnostics',()=>{
     const relaySummary=relay?{active:safeCounter(relay.active),queued:safeCounter(relay.queued),
       sharedActive:safeCounter(relay.sharedActive),sharedQueued:safeCounter(relay.sharedQueued),
       sharedJoins:safeCounter(relay.sharedJoins),sharedPromotions:safeCounter(relay.sharedPromotions),
-      backpressureMs:safeCounter(relay.backpressureMs)}:null;
+      backpressureMs:safeCounter(relay.backpressureMs),
+      oldestQueuedMs:safeCounter(relay.oldestQueuedMs),oldestActiveMs:safeCounter(relay.oldestActiveMs),
+      maxQueueWaitMs:safeCounter(relay.maxQueueWaitMs),maxPhysicalReadMs:safeCounter(relay.maxPhysicalReadMs)}:null;
     const text=JSON.stringify({...hub.snapshot(),session:sessionEvidence(),
       performance:{browser:meter?.browserSnapshot?.(),routes:meter?.snapshot?.(),relay:relaySummary}});try{await navigator.clipboard.writeText(text);if(active)copyStatus.textContent='인증정보·계좌자료를 제외한 검증 결과를 복사했습니다.'}catch{if(active){copyText.value=text;copyText.hidden=false;copyText.select();copyStatus.textContent='아래 결과를 선택해 복사하세요.'}}}
  function renderPerformance(){
@@ -60,9 +62,13 @@ DashboardPages.register('diagnostics',()=>{
       ['대기 중인 공유 공개 조회',count(relay.sharedQueued)+'건'],
       ['기존 요청 합류 횟수',count(relay.sharedJoins)+'회'],
       ['현재 메뉴 요청 우선 승격',count(relay.sharedPromotions)+'회'],
-      ['혼잡 완화 남은 시간',Number.isFinite(relay.backpressureMs)?Math.ceil(Math.max(0,relay.backpressureMs)/1000)+'초':'미확인']
+      ['혼잡 완화 남은 시간',Number.isFinite(relay.backpressureMs)?Math.ceil(Math.max(0,relay.backpressureMs)/1000)+'초':'미확인'],
+      ['현재 가장 오래 대기 중인 요청',Number.isFinite(relay.oldestQueuedMs)?relay.oldestQueuedMs+' ms':'미확인'],
+      ['현재 가장 오래 처리 중인 요청',Number.isFinite(relay.oldestActiveMs)?relay.oldestActiveMs+' ms':'미확인'],
+      ['관측된 최대 중계 대기시간',Number.isFinite(relay.maxQueueWaitMs)?relay.maxQueueWaitMs+' ms':'미확인'],
+      ['관측된 최대 실제 읽기 소요',Number.isFinite(relay.maxPhysicalReadMs)?relay.maxPhysicalReadMs+' ms':'미확인']
     ]){const tr=node('tr');tr.append(node('td',name),node('td',value));readBudget.append(tr)}
-    performanceHost.append(node('h3','개발 중계 읽기 요청 혼잡도'),readBudget,node('p','실행·대기 건수는 이 브라우저 탭의 읽기 요청에 한정됩니다. Cloudflare 전체 이용자의 요청량이나 GAS 상태를 직접 측정한 값이 아닙니다.','dv-muted'))
+    performanceHost.append(node('h3','개발 중계 읽기 요청 혼잡도'),readBudget,node('p','실행·대기 건수는 이 브라우저 탭의 읽기 요청에 한정됩니다. Cloudflare 전체 이용자의 요청량이나 GAS 상태를 직접 측정한 값이 아닙니다. 대기시간은 브라우저 내부 대기열, 실제 읽기 소요는 요청 시작부터 완료까지이며 서버 내부 처리시간만을 뜻하지 않습니다.','dv-muted'))
   }
   const summary=routes?.summary||{},mountSummary=routes?.mountSummary||{},order=['home','market','sectors','stocks','strategy','news','accounts','settings','diagnostics'];
   const selected=order.filter(name=>summary[name]?.count||summary[name]?.cancelledCount||summary[name]?.failedCount);
