@@ -67,12 +67,27 @@ def remove_obsolete_assets(checkout, old, new):
             git(['rm', '--', name], checkout)
 
 
+def require_green_ci(source_sha):
+    """Only publish a commit whose normal secret-free push and PR regressions passed."""
+    response = api('repos/kocoro97-corab/dashboard/actions/runs?head_sha=' + source_sha + '&per_page=100')
+    runs = response.get('workflow_runs', [])
+    if not isinstance(runs, list):raise Stop('DEV_CI_NOT_GREEN')
+    approved = {r.get('event') for r in runs if isinstance(r,dict)
+                and r.get('head_sha') == source_sha
+                and r.get('name') == 'PR regression tests'
+                and r.get('status') == 'completed'
+                and r.get('conclusion') == 'success'}
+    if not {'push','pull_request'}.issubset(approved):
+        raise Stop('DEV_CI_NOT_GREEN')
+
+
 def publish(expected_source_sha=None, expected_dev_head=None):
     # Never publish without both an exact approved source and a dev-pages lease.
     if not expected_source_sha or not expected_dev_head:raise Stop('DEV_APPROVED_SHA_REQUIRED')
     if not shutil.which('gh'):raise Stop('OWNER_GITHUB_CLI_REQUIRED')
     if git(['status', '--porcelain', '--untracked-files=no'], ROOT):raise Stop('DEV_TRACKED_SOURCE_DIRTY')
-    verified_source_commit(expected_source_sha)
+    source_sha=verified_source_commit(expected_source_sha)
+    require_green_ci(source_sha)
     if api('user').get('login') != 'kocoro97-corab':raise Stop('OWNER_GITHUB_ACCOUNT_MISMATCH')
     target = 'repos/' + REPO
     repo = api(target, optional=True)
