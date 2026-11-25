@@ -3,6 +3,11 @@
 // Module 5: read-only news and user-entered event workspace. Existing verified news renderer remains authoritative.
 const EVENT_KEY='myinvest_events_manual_v1',WATCH_KEY='myinvest_sector_watch_v2';
 const valid=s=>/^(?:[0-9]{6}|[A-Z][A-Z0-9.=-]{0,14})$/.test(s);
+const kstNewsDay=value=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
+function isNewsPostedToday(raw,now=Date.now()){
+ const stamp=typeof raw==='string'&&raw?Date.parse(raw):NaN;
+ return Number.isFinite(stamp)&&stamp>0&&stamp<=now+300000&&kstNewsDay(stamp)===kstNewsDay(now);
+}
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e};
 const btn=(text,fn)=>{const e=el('button',text);e.type='button';e.addEventListener('click',fn);return e};
 function loadEvents(){try{const x=JSON.parse(localStorage.getItem(EVENT_KEY)||'[]');return Array.isArray(x)?x.filter(v=>v&&typeof v.id==='string'&&typeof v.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v.date)&&typeof v.title==='string'&&v.title.length<=100&&typeof v.category==='string').slice(0,100):[]}catch{return []}}
@@ -150,13 +155,11 @@ function create(){
  function filterNewsByDay(){
   if(!active||!newsDayHost||!newsDayStatus)return;
   const articles=[...newsDayHost.querySelectorAll('.news')];
-  const today=briefToday(),format=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'});
+  const today=briefToday();
   let count=0;
   for(const article of articles){
    const raw=article.getAttribute('data-news-published');
-   const stamp=raw?Date.parse(raw):NaN;
-   const validStamp=Number.isFinite(stamp)&&stamp>0&&stamp<=Date.now()+300000;
-   const current=validStamp&&format.format(new Date(stamp))===today;
+   const current=isNewsPostedToday(raw);
    if(current)count++;
    article.hidden=!!newsTodayOnly&&!current;
   }
