@@ -149,7 +149,11 @@
     };
     // Shared public reads are single-attempt: navigation must not abort the retry
     // timer, and transient relay errors still reach the existing visible diagnostics.
-    const promise=shared?perform():root.ReadStatus?root.ReadStatus.execute(url,perform,{current,signal:options.signal}):perform();
+    const promise=shared?perform().then(value=>{if(current())root.ReadStatus?.clear?.(url);return value},error=>{
+      if(current()&&!['SESSION_CHANGED','READ_CANCELLED'].includes(error?.code))
+        root.ReadStatus?.note?.(error,{key:url,scope:'public'});
+      throw error;
+    }):root.ReadStatus?root.ReadStatus.execute(url,perform,{current,signal:options.signal}):perform();
     const job={promise,current,signal:options.signal};publicPending.set(url,job);try{return await promise}finally{if(publicPending.get(url)===job)publicPending.delete(url)}
   }
   root.DashboardTransport=Object.freeze({post,publicRead,isRelay,cancelReads,readState,deferReads,promoteShared});
