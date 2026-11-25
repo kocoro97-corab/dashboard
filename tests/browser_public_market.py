@@ -105,7 +105,8 @@ with tempfile.TemporaryDirectory() as tmp:
                 assert denied==401
                 gas.live=True;gas.news_fail=True
                 page.evaluate('loadNews()')
-                page.wait_for_function("()=>$('nst_mk').textContent==='뉴스 수신 실패 · 미확인'&&$('nst_hd').textContent==='뉴스 수신 실패 · 미확인'")
+                page.wait_for_function("()=>$('nst_mk').textContent.includes('원천 수신 실패 · 이전 기사 유지 (최신 아님)')&&$('nst_hd').textContent.includes('원천 수신 실패 · 이전 기사 유지 (최신 아님)')")
+                assert page.locator('#nl_mk .news').count()>0 and page.locator('#nl_hd .news').count()>0,'last received synthetic articles are retained and marked stale'
                 assert not errors and not unexpected,(errors,unexpected)
                 assert set(gas.calls)<={'appVersion','login','sessionInfo','logout'}
                 assert set(relay.metrics['upstreamAttempts'])<={'appVersion','login','sessionInfo','logout','publicFetch'}
