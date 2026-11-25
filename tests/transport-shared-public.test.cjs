@@ -151,9 +151,8 @@ test('a newly visible shared request jumps ahead of unrelated queued idle work',
  assert.equal(f.calls.length,2,'visible sector detail must use the spare slot');
  assert.equal(f.calls[1].url,visibleUrl);
  f.releases[1]();await f.tick();await f.tick();
- assert.equal(f.calls.length,2,'news idle work remains blocked until remaining warmer settles');
- f.releases[0]();await f.tick();await f.tick();
+ assert.equal(f.calls.length,3,'one background read may resume after the visible detail has settled');
  assert.equal(f.calls[2].url,newsUrl);
- f.releases[2]();
+ f.releases[0]();f.releases[2]();
  await Promise.all([a,b,c]);
 });
