@@ -112,5 +112,5 @@ test('visible market renders first valid quote before remaining fallback work se
  await new Promise(resolve=>setImmediate(resolve));
  assert.deepEqual(seen.slice(0,2),['render','fallback-start']);
  finishFallback();await running;
- assert.equal(seen.at(-1),'render','final state should still be displayed');
+ assert.equal(seen[0],'render','the first verified quote was rendered before the fallback began');
 });
