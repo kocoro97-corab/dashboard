@@ -2,7 +2,7 @@ name: PR regression tests
 on:
   pull_request:
   push:
-    branches: ['fix/**', 'main', 'feat/nh-integration-v2']
+    branches: ['fix/**', 'main', 'feat/nh-integration-v2', 'feat/mobile-sector-news-calendar-ui-20261126']
 permissions:
   contents: read
 jobs:
