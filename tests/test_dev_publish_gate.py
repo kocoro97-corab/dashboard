@@ -104,6 +104,48 @@ class DevelopmentPublishGateTests(unittest.TestCase):
                 self.assertEqual(result,{'index.html':'synthetic'})
                 build.assert_called_once_with(folder/'artifact',public_data=checkout/'data')
 
+    def test_preview_branch_requires_exact_draft_pr_identity_and_sha(self):
+        valid={'state':'open','draft':True,'merged_at':None,
+               'head':{'ref':pub.PREVIEW_BRANCH,'sha':SOURCE,
+                       'repo':{'full_name':'kocoro97-corab/dashboard'}},
+               'base':{'ref':pub.SOURCE_BRANCH}}
+        with patch.object(pub,'api',return_value=valid) as api:
+            pub.require_reviewed_preview(SOURCE,pub.PREVIEW_BRANCH)
+            api.assert_called_once_with('repos/kocoro97-corab/dashboard/pulls/10')
+        for wrong in (
+            {'draft':False},
+            {'state':'closed'},
+            {'head':{'ref':pub.PREVIEW_BRANCH,'sha':'c'*40,
+                     'repo':{'full_name':'kocoro97-corab/dashboard'}}},
+            {'head':{'ref':pub.PREVIEW_BRANCH,'sha':SOURCE,
+                     'repo':{'full_name':'another/other'}}},
+            {'base':{'ref':'main'}},
+            {'merged_at':'2026-11-25T00:00:00Z'}
+        ):
+            row=dict(valid,**wrong)
+            with self.subTest(wrong=wrong),patch.object(pub,'api',return_value=row):
+                with self.assertRaisesRegex(pub.Stop,'DEV_PREVIEW_PR_MISMATCH'):
+                    pub.require_reviewed_preview(SOURCE,pub.PREVIEW_BRANCH)
+        with patch.object(pub,'api') as api:
+            with self.assertRaisesRegex(pub.Stop,'DEV_SOURCE_BRANCH_NOT_APPROVED'):
+                pub.require_reviewed_preview(SOURCE,'main')
+            api.assert_not_called()
+
+    def test_preview_checkout_and_build_keep_original_publish_path(self):
+        with patch.object(pub,'git',side_effect=[pub.PREVIEW_BRANCH,SOURCE]):
+            self.assertEqual(pub.verified_source_commit(SOURCE,pub.PREVIEW_BRANCH),SOURCE)
+        with patch.object(pub,'git',return_value='main'):
+            with self.assertRaisesRegex(pub.Stop,'DEV_SOURCE_BRANCH_MISMATCH'):
+                pub.verified_source_commit(SOURCE,pub.PREVIEW_BRANCH)
+        with tempfile.TemporaryDirectory() as tmp:
+            folder=Path(tmp)
+            with patch.object(pub,'build',return_value={'index.html':'synthetic'}) as build:
+                pub.build_with_preserved_calendar(folder/'preview',folder,pub.PREVIEW_BRANCH)
+                build.assert_called_once_with(folder/'preview',public_data=folder/'data',source_branch=pub.PREVIEW_BRANCH)
+            with patch.object(pub,'build',return_value={'index.html':'synthetic'}) as build:
+                pub.build_with_preserved_calendar(folder/'original',folder,pub.SOURCE_BRANCH)
+                build.assert_called_once_with(folder/'original',public_data=folder/'data')
+
     def test_fixed_development_repository_and_no_production_target(self):
         self.assertEqual(pub.REPO,'kocoro97-corab/dashboard-v2-dev')
         self.assertEqual(pub.BRANCH,'dev-pages')
