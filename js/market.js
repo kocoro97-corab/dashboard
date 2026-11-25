@@ -122,7 +122,8 @@ async function getTxt(targetUrl,options={}){
   try{
     const c=relay||options.signal?null:new AbortController();t=c?setTimeout(()=>c.abort(),9000):null;
     const signal=options.signal||c?.signal;
-    const r=await (typeof DashboardTransport!=='undefined'?DashboardTransport.publicRead(targetUrl,signal?{signal}:{}):fetch(fullUrl,{signal}));
+    const requestOptions=signal?{signal}:options.sharedPublic===true?{sharedPublic:true,sharedTag:options.sharedTag}:{};
+    const r=await (typeof DashboardTransport!=='undefined'?DashboardTransport.publicRead(targetUrl,requestOptions):fetch(fullUrl,{signal}));
     if(r.ok){const x=await r.text();if(typeof x==='string'&&x.trim()){NET.ok++;return x}}
     NET.fail++;
   }catch(e){
@@ -135,7 +136,7 @@ async function getTxt(targetUrl,options={}){
   }finally{if(t!==null)clearTimeout(t)}
   return null;
 }
-async function getJSON(u){const x=await getTxt(u);try{return JSON.parse(x)}catch(e){return null}}
+async function getJSON(u,options={}){const x=await getTxt(u,options);try{return JSON.parse(x)}catch(e){return null}}
 
 function openDg(){const relay=typeof DashboardTransport!=='undefined'&&DashboardTransport.isRelay();$('dgs').textContent='성공 '+NET.ok+'회 · 실패 '+NET.fail+'회'+(relay?' · 중계 연결':'');$('dgl').textContent=['NH 나무증권: '+NH_STATUS,'출처별 수신: '+srcSummary(Object.keys(Q)),'--- 통신 기록'].concat(NET.log.length?NET.log:['기록 없음']).join('\n');$('dgp').value=relay?window.MYINVEST_TRANSPORT_CONFIG.endpoint:MYP();$('dgp').readOnly=relay;const save=$('saveProxyBtn');if(save)save.disabled=relay;$('dg').classList.add('on')}
 function closeDg(){$('dg').classList.remove('on')}
@@ -319,18 +320,20 @@ const esc=v=>String(v).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[
 const ago=d=>{const m=(Date.now()-d)/60000;return m<1?'방금':m<60?Math.floor(m)+'분 전':Math.floor(m/1440)+'일 전'};
 
 async function fetchNews(q){
-  const x=await getTxt('https://news.google.com/rss/search?q='+encodeURIComponent(q)+'&hl=ko&gl=KR&ceid=KR:ko');if(!x)return null;
+  const x=await getTxt('https://news.google.com/rss/search?q='+encodeURIComponent(q)+'&hl=ko&gl=KR&ceid=KR:ko',{sharedPublic:true,sharedTag:'news'});if(!x)return null;
   const d=new DOMParser().parseFromString(x,'text/xml');if(d.querySelector('parsererror')||!d.querySelector('rss,feed'))return null;
   return[...d.querySelectorAll('item')].map(i=>{const g=t=>{const e=i.querySelector(t);return e?e.textContent:''};return{t:g('title'),l:g('link'),s:g('source'),d:new Date(g('pubDate')||NaN)}})
 }
 
 async function loadNews(){
+  const session=LS('invest_session_token');
   $('nst_mk').textContent='불러오는 중...';$('nst_hd').textContent='불러오는 중...';
   // Independent read-only feeds can load concurrently; each retains its own failure state.
   const [mks,hds]=await Promise.all([
     fetchNews('코스피 OR 증시 OR 나스닥 when:2d'),
     fetchNews('(삼성전자 OR SK하이닉스 OR 한미반도체 OR 알테오젠) when:2d')
   ]);
+  if(session!==LS('invest_session_token'))return;
   const renderN=(list,el,stEl)=>{
     if(!Array.isArray(list)){$(el).replaceChildren();$(stEl).textContent='뉴스 수신 실패 · 미확인';return}
     const m={};list.forEach(a=>{const k=a.t.replace(/\s-\s[^-]+$/,'');if(!m[k]||a.d>m[k].d)m[k]={t:k,l:a.l,s:a.s,d:a.d}});
