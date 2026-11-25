@@ -48,6 +48,10 @@ async def main():
      await dialog.get_by_role('button',name='닫기',exact=True).focus();await page.keyboard.press('Shift+Tab');assert await dialog.evaluate('e=>e.contains(document.activeElement)')
      before=len(reads);await page.keyboard.press('Escape');assert await dialog.count()==0
      await page.get_by_role('button',name='투자 캘린더',exact=True).click();await dialog.wait_for();await page.wait_for_timeout(80);assert len(reads)==before
+     assert await dialog.locator('.nev5-calendar-support').count()==1
+     assert not await dialog.locator('.nev5-calendar-support').get_attribute('open')
+     assert await dialog.locator('.nev5-day').count()>=28,'calendar stays visible without expanded help'
+     await dialog.get_by_text('설명·연동·설정 보기',exact=True).click()
      await dialog.get_by_role('button',name='공식 일정 확인',exact=True).click();await page.wait_for_timeout(200);assert len(reads)==before+4
      await dialog.get_by_label('Google 캘린더 ICS 파일 선택').set_input_files({'name':'synthetic-private.ics','mimeType':'text/calendar','buffer':b'BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:private-canary\nDTSTART;VALUE=DATE:20261123\nSUMMARY:PRIVATE_CALENDAR_CANARY\nEND:VEVENT\nEND:VCALENDAR'})
      await page.wait_for_function('()=>MYInvestIcsCalendar.list().length===1')
