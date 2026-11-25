@@ -69,7 +69,14 @@
       const headBackground=head.sharedPublic&&head.sharedTag!==visibleTag;
       // Idle warming may use only one physical lease; leave another for the visible screen.
       // A promoted/shared request becomes foreground when its page is visible.
-      if(headBackground&&[...running].some(j=>j.sharedPublic&&!j.cancelled&&j.sharedTag!==visibleTag))return;
+      if(headBackground&&[...running].some(j=>j.sharedPublic&&!j.cancelled&&j.sharedTag!==visibleTag)){
+        // A previous menu's idle work must never hold the front of the queue
+        // ahead of a freshly visited menu. No extra physical read is created.
+        const visibleIndex=waiting.findIndex(j=>!j.cancelled&&j.current()&&(!j.sharedPublic||j.sharedTag===visibleTag));
+        if(visibleIndex<0)return;
+        waiting.unshift(waiting.splice(visibleIndex,1)[0]);
+        continue;
+      }
       if(running.size>=Math.min(head.limit,readClock()<throttleUntil?1:Infinity))return;
       const job=waiting.shift();if(job.cancelled||!job.current()){job.cancel(failure('SESSION_CHANGED'));continue}
       running.add(job);job.started=true;
