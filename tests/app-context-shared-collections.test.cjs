@@ -15,7 +15,7 @@ function fixture(){
  };
  root.globalThis=root;
  vm.runInNewContext(source,root,{filename:'app-context.js'});
- return {ctx:root.AppContext.create(),finishSector:()=>resolveSector?.(),counters:()=>({sectorCalls,newsCalls,promotions:[...promotions]}),setToken:value=>{token=value}};
+ return {ctx:root.AppContext.create(),finishSector:value=>resolveSector?.(value),counters:()=>({sectorCalls,newsCalls,promotions:[...promotions]}),setToken:value=>{token=value}};
 }
 test('visible sectors joins background collection after navigation and reuses completed data',async()=>{
  const f=fixture();
@@ -55,4 +55,17 @@ test('non-shared jobs are cancelled and never become reusable across navigation'
  await f.ctx.once('private-synthetic',()=>{reruns++;return true});
  assert.equal(reruns,1);
  assert.equal(f.counters().sectorCalls,0);
+});
+
+test('failed background public query is not treated as a valid TTL cache',async()=>{
+ const f=fixture();
+ const first=f.ctx.sectors();
+ await Promise.resolve();
+ f.finishSector(false);
+ await assert.rejects(first,/PUBLIC_THEME_UNAVAILABLE/);
+ const retry=f.ctx.sectors();
+ await Promise.resolve();
+ assert.equal(f.counters().sectorCalls,2);
+ f.finishSector(true);
+ await retry;
 });
