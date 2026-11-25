@@ -95,7 +95,7 @@ function normalizeBrief(row){
 root.MYInvestBriefingData=Object.freeze({normalize:normalizeBrief});
 function create(){
  const legacy=DashboardPages.legacy({ids:['newsSection'],intro:'기존 뉴스 피드: 실제 수신 기사만 표시합니다. 기사 게시시각·출처·원문 링크를 확인하세요.',refresh:(ctx,force)=>ctx.news(force)});
- let view,eventsArea,symbolsArea,status,ctxRef,active=false,filter='all',newsVersion=0;
+ let view,eventsArea,symbolsArea,status,ctxRef,active=false,filter='all',newsVersion=0,newsTodayOnly=false,newsDayHost=null,newsDayStatus=null,todayButton=null,recentButton=null;
 
  const BRIEF_KEY='myinvest_public_ai_briefings_v1';
  const briefToday=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
@@ -144,9 +144,28 @@ function create(){
   }else viewer.textContent='등록된 AI 브리핑이 없습니다.\n\n오전 7시 ChatGPT 브리핑의 자동 전달은 아직 연결되지 않았습니다. 위에서 받은 보고서를 직접 등록하면 이 화면에서 날짜별로 볼 수 있습니다.';
   const bodyDetails=el('details',undefined,'nev5-brief-body');bodyDetails.open=briefOpen;bodyDetails.append(el('summary','브리핑 본문 접기·펼치기'),viewer);bodyDetails.addEventListener('toggle',()=>{if(bodyDetails.isConnected)briefOpen=bodyDetails.open});briefingArea.append(bodyDetails);sharedPublicFeed?.refreshLocal?.();
  }
- const BRIEF_CSS='.nev5-news-top{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;align-items:start}.nev5-news-top>*{min-width:0}.nev5-news-top>.page-content{max-height:600px;overflow:auto}.nev5-news-top>.page-content>.page-note{display:none}.nev5-news-top #newsSection{grid-template-columns:1fr}.nev5-brief-body>summary{cursor:pointer;min-height:38px;padding:7px 0}.nev5-brief-editor label{display:grid;gap:3px}.nev5-brief-editor input{min-width:0;max-width:100%;box-sizing:border-box}@media(max-width:900px){.nev5-news-top{grid-template-columns:1fr}.nev5-news-top>.page-content{max-height:480px}}.nev5-brief{margin:8px 0 14px;background:#111c2d;border:1px solid #344158;padding:12px;border-radius:10px}.nev5-brief-row{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;margin:8px 0}.nev5-brief-row h3{margin:0}.nev5-brief-row small{color:#b6c5d9}.nev5-brief-row select,.nev5-brief-editor input,.nev5-brief-editor textarea{background:#101a2a;color:#e7eef9;border:1px solid #465775;border-radius:7px;padding:8px}.nev5-brief-editor{flex:1;min-width:180px;border:1px solid #465775;border-radius:7px;padding:8px}.nev5-brief-editor summary{cursor:pointer}.nev5-brief-editor form{display:grid;gap:7px;margin-top:10px}.nev5-brief-editor textarea{width:100%;box-sizing:border-box;resize:vertical}.nev5-brief-row button{padding:7px 10px;color:#fff;background:#264365;border:1px solid #465775;border-radius:7px}.nev5-brief-scroll{height:clamp(350px,39vh,450px);overflow:auto;overscroll-behavior:contain;white-space:pre-wrap;overflow-wrap:anywhere;background:#0c1626;color:#edf3ff;padding:13px;border-radius:8px;border:1px solid #344158;line-height:1.5;font-size:13px}@media(max-width:900px){.nev5-brief-scroll{height:clamp(220px,34vh,320px)}}';
+ const BRIEF_CSS='.nev5-news-search{display:inline-flex;align-items:center;color:#b1d9ff;padding:7px 8px;min-height:38px}.nev5-news-top .news[hidden]{display:none!important}.nev5-news-top{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;align-items:start}.nev5-news-top>*{min-width:0}.nev5-news-top>.page-content{max-height:600px;overflow:auto}.nev5-news-top>.page-content>.page-note{display:none}.nev5-news-top #newsSection{grid-template-columns:1fr}.nev5-brief-body>summary{cursor:pointer;min-height:38px;padding:7px 0}.nev5-brief-editor label{display:grid;gap:3px}.nev5-brief-editor input{min-width:0;max-width:100%;box-sizing:border-box}@media(max-width:900px){.nev5-news-top{grid-template-columns:1fr}.nev5-news-top>.page-content{max-height:480px}}.nev5-brief{margin:8px 0 14px;background:#111c2d;border:1px solid #344158;padding:12px;border-radius:10px}.nev5-brief-row{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;margin:8px 0}.nev5-brief-row h3{margin:0}.nev5-brief-row small{color:#b6c5d9}.nev5-brief-row select,.nev5-brief-editor input,.nev5-brief-editor textarea{background:#101a2a;color:#e7eef9;border:1px solid #465775;border-radius:7px;padding:8px}.nev5-brief-editor{flex:1;min-width:180px;border:1px solid #465775;border-radius:7px;padding:8px}.nev5-brief-editor summary{cursor:pointer}.nev5-brief-editor form{display:grid;gap:7px;margin-top:10px}.nev5-brief-editor textarea{width:100%;box-sizing:border-box;resize:vertical}.nev5-brief-row button{padding:7px 10px;color:#fff;background:#264365;border:1px solid #465775;border-radius:7px}.nev5-brief-scroll{height:clamp(350px,39vh,450px);overflow:auto;overscroll-behavior:contain;white-space:pre-wrap;overflow-wrap:anywhere;background:#0c1626;color:#edf3ff;padding:13px;border-radius:8px;border:1px solid #344158;line-height:1.5;font-size:13px}@media(max-width:900px){.nev5-brief-scroll{height:clamp(220px,34vh,320px)}}';
 
  const css='.nev5-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}.nev5-layout>section{min-width:0;border:1px solid #344158;border-radius:12px;padding:14px;background:#111c2d}.nev5-layout .nev5-grid{grid-template-columns:1fr}@media(max-width:900px){.nev5-layout{grid-template-columns:1fr}}.nev5-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px}.nev5-modal{width:min(760px,100%);max-height:88vh;overflow:auto;background:#101a2a;color:#e7eef9;border:1px solid #465775;border-radius:12px;padding:16px}.nev5-calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.nev5-calendar>strong{text-align:center;font-size:12px}.nev5-day{min-height:65px;background:#172238;border:1px solid #344158;border-radius:5px;padding:4px;overflow-wrap:anywhere}.nev5-day small{display:block;font-size:10px;margin-top:4px;color:#9fd4ff}@media(max-width:550px){.nev5-day{min-height:45px;padding:2px}.nev5-day small{font-size:9px}}.nev5{margin-bottom:20px}.nev5 button{cursor:pointer}.nev5-nav{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.nev5-nav button{padding:8px 12px;border:1px solid #465775;border-radius:7px;background:#172238;color:#e7eef9}.nev5-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.nev5-card{border:1px solid #344158;background:#172238;color:#e7eef9;border-radius:9px;padding:12px}.nev5-muted{font-size:12px;color:#b6c5d9}.nev5-form{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.nev5-form input,.nev5-form select{min-width:0;padding:9px;border:1px solid #52637c;border-radius:6px;background:#101a2a;color:#fff}.nev5-row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0}.nev5-row button{color:#e7eef9;background:#264365;border:0;border-radius:6px;padding:6px 9px}@media(max-width:550px){.nev5-grid{grid-template-columns:1fr}.nev5-form input{width:100%}}';
+ function filterNewsByDay(){
+  if(!active||!newsDayHost||!newsDayStatus)return;
+  const articles=[...newsDayHost.querySelectorAll('.news')];
+  const today=briefToday(),format=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'});
+  let count=0;
+  for(const article of articles){
+   const raw=article.getAttribute('data-news-published');
+   const stamp=raw?Date.parse(raw):NaN;
+   const validStamp=Number.isFinite(stamp)&&stamp>0&&stamp<=Date.now()+300000;
+   const current=validStamp&&format.format(new Date(stamp))===today;
+   if(current)count++;
+   article.hidden=!!newsTodayOnly&&!current;
+  }
+  todayButton?.setAttribute('aria-pressed',String(newsTodayOnly));
+  recentButton?.setAttribute('aria-pressed',String(!newsTodayOnly));
+  newsDayStatus.textContent=!articles.length?'실제 기사 미수신 · 뉴스 원천 확인 또는 외부 기사 검색 이용':
+   newsTodayOnly?today+' (한국시간) 게시 확인 '+count+'건'+(!count?' · 오늘 기사 없음 또는 게시시각 미확인':''):
+   '최근 수신 기사 '+articles.length+'건 · 오늘 '+count+'건 · 원천 오류 시 이전 기사일 수 있음';
+ }
  function holdings(){let snap;try{snap=ctxRef?.snapshot()}catch{}if(!snap||!Array.isArray(snap.details)||!Array.isArray(snap.result?.rows))return [];const set=new Map();snap.details.forEach((h,i)=>{const a=snap.result.rows[i],s=String(h?.code||'').toUpperCase();if(!valid(s)||h.draft||!a?.identity||a.issues?.includes('IDENTITY_UNKNOWN')||!Number.isFinite(h.quantity)||h.quantity<=0)return;const label=(h.name||s)+' ('+s+')';if(!set.has(s))set.set(s,{code:s,name:label,accounts:[]});set.get(s).accounts.push(h.accountLabel||'계좌명 미확인')});return [...set.values()]}
  async function annotateNews(){const version=++newsVersion;await root.InstrumentNames?.load();if(typeof loadExternalMaster==='function')try{await loadExternalMaster()}catch{}if(!active||version!==newsVersion)return;for(const article of view.querySelectorAll('.news')){article.querySelector('.nev5-news-links')?.remove();const title=article.querySelector('strong')?.textContent||'',matches=new Map();if(typeof EXT_MASTER!=='undefined'&&EXT_MASTER?.byCode)for(const row of EXT_MASTER.byCode.values())if(row.name.length>=3&&title.includes(row.name))matches.set(row.code,{symbol:row.code,name:row.name});for(const word of title.split(/[^가-힣A-Za-z0-9.]+/).filter(w=>w.length>=3)){const rows=(root.InstrumentNames?.search(word,20)||[]).filter(r=>r.nameKo===word||r.nameEn.toLowerCase()===word.toLowerCase()||r.nameEn.toLowerCase().startsWith(word.toLowerCase()+' '));if(rows.length===1)matches.set(rows[0].symbol,{symbol:rows[0].symbol,name:rows[0].nameKo||rows[0].nameEn})}const box=el('div',undefined,'nev5-news-links');box.append(el('small','중요도 미검증 · 기사 제목의 검증된 종목명 언급만 연결'));for(const row of [...matches.values()].slice(0,3)){const themes=typeof THM!=='undefined'?THM.filter(t=>(t.rows||[]).some(r=>r.code===row.symbol)).map(t=>t.name).slice(0,2):[];box.append(btn(row.name+' ('+row.symbol+') 분석',()=>root.MYInvestStockSelection?.open(row.symbol,{name:row.name,source:'news',mode:'swing'})));if(themes.length)box.append(el('small','구성종목 기준 테마 후보: '+themes.join(' · ')))}article.append(box)}}
  function symbols(){if(!active)return;symbolsArea.replaceChildren();const owned=holdings(),watch=loadWatch(),ownedSet=new Set(owned.map(x=>x.code)),all=[...owned,...watch.filter(x=>!ownedSet.has(x)).map(code=>({code,name:code,accounts:[]}))];symbolsArea.append(el('h3','보유·관심종목 뉴스 탐색'),el('p','보유종목은 조회된 계좌 기준, 관심종목은 브라우저 저장 목록 기준입니다. 아래 버튼은 종목 분석 또는 외부 뉴스 검색으로 연결하며 해당 종목의 뉴스 수신을 보장하지 않습니다.','nev5-muted'));if(!all.length){symbolsArea.append(el('p','검증된 보유종목 또는 등록된 관심종목이 없습니다.','nev5-muted'));return}const grid=el('div',undefined,'nev5-grid');all.slice(0,60).forEach(x=>{const card=el('div',undefined,'nev5-card');card.append(el('strong',x.name),el('p',x.accounts.length?'보유 계좌: '+x.accounts.join(', '):'관심종목','nev5-muted'));const nav=el('div',undefined,'nev5-nav');nav.append(btn('AI 종목분석',()=>root.MYInvestStockSelection?.open(x.code,{name:x.name,mode:'swing'})));const search=btn('뉴스 검색',()=>{const q=encodeURIComponent(x.code+' 주식 최신 뉴스');root.open('https://www.google.com/search?tbm=nws&q='+q,'_blank','noopener,noreferrer')});nav.append(search);card.append(nav);grid.append(card)});symbolsArea.append(grid);if(all.length>60)symbolsArea.append(el('p','종목 '+all.length+'개 중 앞의 60개 표시','nev5-muted'))}
@@ -159,7 +178,16 @@ function create(){
   status=el('p','뉴스 피드 갱신 전에는 기존 수신 자료가 표시될 수 있습니다.','nev5-muted');view.append(status);
   const sharedHost=el('div');sharedHost.dataset.newsBlock='briefing';view.append(sharedHost);
   const briefStyle=el('style');briefStyle.textContent=BRIEF_CSS+'.nev5-news-top{display:block}.nev5-news-top>.page-content{max-height:none}.nev5-management{margin:12px 0;min-width:0}.nev5-management>summary{cursor:pointer;min-height:40px;padding:9px;background:#172238;border:1px solid #344158;border-radius:8px}.mifv1-stale{color:#ffd383}';view.append(briefStyle);
-  const newsTop=el('section',undefined,'nev5-news-top');newsTop.dataset.newsBlock='live-news';newsTop.append(el('h3','실시간 주요 뉴스'));view.append(newsTop);
+  const newsTop=el('section',undefined,'nev5-news-top');newsTop.dataset.newsBlock='live-news';newsTop.append(el('h3','실시간 주요 뉴스'));
+  newsDayHost=newsTop;newsTodayOnly=false;
+  const newsActions=el('div',undefined,'nev5-nav');
+  todayButton=btn('오늘의 뉴스',()=>{newsTodayOnly=true;filterNewsByDay()});
+  recentButton=btn('최근 수신 뉴스',()=>{newsTodayOnly=false;filterNewsByDay()});
+  const sourceLink=el('a','Google 뉴스 원문 검색');sourceLink.href='https://news.google.com/search?q='+encodeURIComponent('한국 미국 증시')+'&hl=ko&gl=KR&ceid=KR:ko';
+  sourceLink.target='_blank';sourceLink.rel='noopener noreferrer';sourceLink.className='nev5-news-search';
+  newsActions.append(todayButton,recentButton,sourceLink);newsTop.append(newsActions);
+  newsDayStatus=el('p','수신된 기사 게시일 확인 중…','nev5-muted');newsDayStatus.setAttribute('role','status');newsTop.append(newsDayStatus);
+  view.append(newsTop);
   symbolsArea=el('section');symbolsArea.dataset.newsBlock='symbols';view.append(symbolsArea);
   const management=el('details',undefined,'nev5-management');management.dataset.newsBlock='history';management.append(el('summary','지난 브리핑 조회·관리'));view.append(management);
   const archiveHost=el('div');management.append(archiveHost);archivePanel=root.MYInvestBriefingPanelV1?.mount(archiveHost,{onChange:()=>sharedPublicFeed?.refreshLocal?.()});
@@ -170,18 +198,18 @@ function create(){
    const keys=new Set(rows.map(r=>r.date+'|'+r.origin));return rows.concat(converted.filter(r=>!keys.has(r.date+'|'+r.origin))).slice(0,90);
   }})||null;
   eventsArea=el('section');eventsArea.dataset.newsBlock='events';view.append(eventsArea);
-  legacy.mount(container,ctx);newsTop.append(container.firstElementChild);container.prepend(view);symbols();events();if(root.MYInvestCalendarPending){root.MYInvestCalendarPending=false;root.MYInvestCalendar?.open()}
+  legacy.mount(container,ctx);newsTop.append(container.firstElementChild);container.prepend(view);filterNewsByDay();symbols();events();if(root.MYInvestCalendarPending){root.MYInvestCalendarPending=false;root.MYInvestCalendar?.open()}
  }
 
  return {mount,refresh:async(ctx,force)=>{
    let sourceFailed=false;
-   try{await legacy.refresh(ctx,force);if(active)status.textContent='뉴스 원천 조회 완료 · 기사 출처·게시시각 확인'}
-   catch{sourceFailed=true;if(active)status.textContent='실시간 뉴스 원천 수신 실패 · 저장된 브리핑·일정은 계속 이용할 수 있습니다.'}
+   try{await legacy.refresh(ctx,force);if(active){status.textContent='뉴스 원천 조회 완료 · 기사 출처·게시시각 확인';filterNewsByDay()}}
+   catch{sourceFailed=true;if(active){status.textContent='실시간 뉴스 원천 수신 실패 · 저장된 브리핑·일정은 계속 이용할 수 있습니다.';filterNewsByDay()}}
    if(!active)return {dataState:sourceFailed?'degraded':'ready'};
    symbols();
    try{await annotateNews()}catch{if(active)status.textContent+=' · 종목명 연결 일부 미확인'}
    return {dataState:sourceFailed?'degraded':'ready'};
-  },unmount(){active=false;newsVersion++;archivePanel?.destroy?.();archivePanel=null;sharedPublicFeed?.destroy?.();sharedPublicFeed=null;ctxRef=null;newsHoldings=()=>[];briefingArea=null;view?.remove();legacy.unmount()},getStatus:()=>({status:active?'ready':'unmounted',events:loadEvents().length})};
+  },unmount(){active=false;newsVersion++;newsDayHost=null;newsDayStatus=null;todayButton=null;recentButton=null;archivePanel?.destroy?.();archivePanel=null;sharedPublicFeed?.destroy?.();sharedPublicFeed=null;ctxRef=null;newsHoldings=()=>[];briefingArea=null;view?.remove();legacy.unmount()},getStatus:()=>({status:active?'ready':'unmounted',events:loadEvents().length})};
 
 }
 root.MYInvestCalendar=Object.freeze({open:()=>{openCalendar();const id=++economicRequest;Promise.resolve(root.MYInvestEventContext?.refreshAll()).then(()=>{if(id===economicRequest&&calendarDialog?.isConnected)calendarRedraw?.()});return true},close:closeCalendar});DashboardPages.register('news',create);
