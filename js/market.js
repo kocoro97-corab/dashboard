@@ -329,13 +329,18 @@ async function loadNews(){
   const session=LS('invest_session_token');
   $('nst_mk').textContent='불러오는 중...';$('nst_hd').textContent='불러오는 중...';
   // Independent read-only feeds can load concurrently; each retains its own failure state.
-  const [mks,hds]=await Promise.all([
+  const feeds=await Promise.allSettled([
     fetchNews('코스피 OR 증시 OR 나스닥 when:2d'),
     fetchNews('(삼성전자 OR SK하이닉스 OR 한미반도체 OR 알테오젠) when:2d')
   ]);
+  const [mks,hds]=feeds.map(result=>result.status==='fulfilled'?result.value:null);
   if(session!==LS('invest_session_token'))return false;
   const renderN=(list,el,stEl)=>{
-    if(!Array.isArray(list)){$(el).replaceChildren();$(stEl).textContent='뉴스 수신 실패 · 미확인';return}
+    if(!Array.isArray(list)){
+      const previous=$(el).querySelector('.news');
+      $(stEl).textContent=previous?'원천 수신 실패 · 이전 기사 유지 (최신 아님)':'뉴스 원천 미수신 · 외부 검색 이용';
+      return;
+    }
     const m={};list.forEach(a=>{const k=a.t.replace(/\s-\s[^-]+$/,'');if(!m[k]||a.d>m[k].d)m[k]={t:k,l:a.l,s:a.s,d:a.d}});
     const arr=Object.values(m).sort((a,b)=>b.d-a.d).slice(0,6);
     $(el).innerHTML=arr.length?arr.map(a=>`<div class="news" data-news-published="${Number.isFinite(a.d.getTime())&&a.d.getTime()<=Date.now()+300000?a.d.toISOString():''}"><strong><a href="${escA(/^https:\/\//i.test(String(a.l))?a.l:'#')}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${esc(a.t)}</a></strong><span class="mini">${esc(a.s)} · ${Number.isFinite(a.d.getTime())&&a.d.getTime()<=Date.now()+300000?esc(a.d.toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}))+' KST':'게시시각 미확인'}</span></div>`).join(''):'<div class="mini">기사 없음</div>';
