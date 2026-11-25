@@ -80,14 +80,9 @@ test('request retention is restricted to explicitly approved public RSS/themes U
  const f=fixture();
  const bad='https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=1y';
  const req=f.api.publicRead(bad,{sharedPublic:true,sharedTag:'sectors'});
- await f.tick();
- assert.equal(f.calls.length,1);
- assert.equal(f.api.readState().sharedActive,0,'non-approved URL cannot become route-persistent');
- f.location.hash='#/market';
- f.api.cancelReads({keepSharedPublic:true});
- await assert.rejects(req,/SESSION_CHANGED/);
- f.releases[0]();
- await f.tick();
+ await assert.rejects(req,/RELAY_CONFIG_INVALID/);
+ assert.equal(f.calls.length,0,'unauthorized shared mode cannot issue a network request');
+ assert.equal(f.api.readState().sharedActive,0);
 });
 test('pending foreground reads move ahead of queued background requests without extra network calls',async()=>{
  const f=fixture();
