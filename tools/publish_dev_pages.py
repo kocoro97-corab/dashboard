@@ -15,6 +15,7 @@ from build_dev_pages import build, ROOT, PAGE
 REPO = 'kocoro97-corab/dashboard-v2-dev'
 BRANCH = 'dev-pages'
 DESCRIPTION = 'Isolated MY INVEST V2 development login and HTTPS validation. No credentials or financial data.'
+SOURCE_BRANCH = 'feat/nh-integration-v2'
 
 
 class Stop(Exception):pass
@@ -38,9 +39,25 @@ def git(args, cwd):
     return result.stdout.strip()
 
 
-def publish():
+def verified_source_commit(expected_source_sha=None):
+    """Fail closed when the owner's checkout differs from the intended V2 branch/commit."""
+    branch = git(['branch', '--show-current'], ROOT)
+    if branch != SOURCE_BRANCH:raise Stop('DEV_SOURCE_BRANCH_MISMATCH')
+    commit = git(['rev-parse', 'HEAD'], ROOT)
+    if expected_source_sha and commit != expected_source_sha:
+        raise Stop('DEV_SOURCE_SHA_MISMATCH')
+    return commit
+
+
+def checked_dev_head(observed, expected=None):
+    """Verify that the existing development Pages checkout has not moved."""
+    if expected and observed != expected:raise Stop('DEV_PAGES_HEAD_CHANGED')
+
+
+def publish(expected_source_sha=None, expected_dev_head=None):
     if not shutil.which('gh'):raise Stop('OWNER_GITHUB_CLI_REQUIRED')
     if git(['status', '--porcelain', '--untracked-files=no'], ROOT):raise Stop('DEV_TRACKED_SOURCE_DIRTY')
+    verified_source_commit(expected_source_sha)
     if api('user').get('login') != 'kocoro97-corab':raise Stop('OWNER_GITHUB_ACCOUNT_MISMATCH')
     target = 'repos/' + REPO
     repo = api(target, optional=True)
@@ -72,7 +89,10 @@ def publish():
         git(['remote', 'add', 'origin', 'https://github.com/' + REPO + '.git'], checkout)
         if previous is not None:
             git(['fetch', '--depth=1', 'origin', BRANCH], checkout)
+            checked_dev_head(git(['rev-parse', 'FETCH_HEAD'], checkout), expected_dev_head)
             git(['checkout', '-B', BRANCH, 'FETCH_HEAD'], checkout)
+        elif expected_dev_head:
+            raise Stop('DEV_PAGES_HEAD_CHANGED')
             old = json.loads((checkout / 'asset-manifest.json').read_text())
             for name in old:
                 path = Path(name)
@@ -110,9 +130,14 @@ def publish():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--publish-dev-pages', action='store_true', required=True)
-    parser.parse_args()
+    parser.add_argument('--expect-source-sha', metavar='SHA40')
+    parser.add_argument('--expect-dev-head', metavar='SHA40')
+    args=parser.parse_args()
     try:
-        report = publish()
+        for value in (args.expect_source_sha, args.expect_dev_head):
+            if value is not None and (len(value)!=40 or any(ch not in '0123456789abcdef' for ch in value)):
+                raise Stop('DEV_EXPECTED_SHA_INVALID')
+        report = publish(args.expect_source_sha,args.expect_dev_head)
     except Stop as error:
         report = {'status': 'NOT_RUN', 'code': str(error), 'productionChanged': False}
     except Exception:
