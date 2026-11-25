@@ -97,8 +97,10 @@ test('pending foreground reads move ahead of queued background requests without 
  f.releases[0]();await f.tick();await f.tick();
  assert.equal(f.calls[2].action,'nhAccounts','current foreground access must precede idle background');
  f.releases[2]();await f.tick();await f.tick();
+ assert.equal(f.calls.length,3,'unrelated background remains queued while another warmer is active');
+ f.releases[1]();await f.tick();await f.tick();
  assert.equal(f.calls[3].url,'https://news.google.com/rss/search?q=more&hl=ko&gl=KR&ceid=KR:ko');
- f.releases[1]();f.releases[3]();
+ f.releases[3]();
  await Promise.all([a,b,c,d]);
 });
 
@@ -127,7 +129,9 @@ test('background public prefetch reserves one read slot for the visible menu',as
  assert.equal(f.calls.length,2);
  assert.equal(f.calls[1].action,'nhAccounts','current view retains a physical read slot');
  f.releases[1]();await f.tick();await f.tick();
- assert.equal(f.calls.length,3,'queued background work resumes once capacity returns');
- f.releases[0]();f.releases[2]();
+ assert.equal(f.calls.length,2,'the other background request remains gated');
+ f.releases[0]();await f.tick();await f.tick();
+ assert.equal(f.calls.length,3,'queued background work resumes once the warmer settles');
+ f.releases[2]();
  await Promise.all([first,second,urgent]);
 });
