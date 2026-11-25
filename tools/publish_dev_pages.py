@@ -18,6 +18,9 @@ DESCRIPTION = 'Isolated MY INVEST V2 development login and HTTPS validation. No 
 SOURCE_BRANCH = 'feat/nh-integration-v2'
 PREVIEW_BRANCH = 'fix/visible-first-market-20261125'
 PREVIEW_PR = 10
+NEXT_PREVIEW_BRANCH = 'fix/visible-first-data-20261125'
+NEXT_PREVIEW_PR = 11
+APPROVED_SOURCE_BRANCHES = (SOURCE_BRANCH,PREVIEW_BRANCH,NEXT_PREVIEW_BRANCH)
 
 
 class Stop(Exception):pass
@@ -44,7 +47,7 @@ def git(args, cwd):
 def verified_source_commit(expected_source_sha=None, source_branch=SOURCE_BRANCH):
     """Fail closed when the owner's checkout differs from the intended V2 branch/commit."""
     branch = git(['branch', '--show-current'], ROOT)
-    if source_branch not in (SOURCE_BRANCH, PREVIEW_BRANCH) or branch != source_branch:raise Stop('DEV_SOURCE_BRANCH_MISMATCH')
+    if source_branch not in APPROVED_SOURCE_BRANCHES or branch != source_branch:raise Stop('DEV_SOURCE_BRANCH_MISMATCH')
     commit = git(['rev-parse', 'HEAD'], ROOT)
     if expected_source_sha and commit != expected_source_sha:
         raise Stop('DEV_SOURCE_SHA_MISMATCH')
@@ -86,14 +89,19 @@ def require_green_ci(source_sha):
 def require_reviewed_preview(source_sha, source_branch):
     """Never allow a generic feature branch to publish by relaxing this gate."""
     if source_branch == SOURCE_BRANCH:return
-    if source_branch != PREVIEW_BRANCH:raise Stop('DEV_SOURCE_BRANCH_NOT_APPROVED')
-    pr = api('repos/kocoro97-corab/dashboard/pulls/' + str(PREVIEW_PR))
+    reviewed = {
+        PREVIEW_BRANCH:(PREVIEW_PR,SOURCE_BRANCH),
+        NEXT_PREVIEW_BRANCH:(NEXT_PREVIEW_PR,PREVIEW_BRANCH),
+    }
+    if source_branch not in reviewed:raise Stop('DEV_SOURCE_BRANCH_NOT_APPROVED')
+    pr_id,expected_base = reviewed[source_branch]
+    pr = api('repos/kocoro97-corab/dashboard/pulls/' + str(pr_id))
     if not isinstance(pr,dict) or pr.get('state') != 'open' or pr.get('draft') is not True or pr.get('merged_at') is not None:
         raise Stop('DEV_PREVIEW_PR_MISMATCH')
     head=pr.get('head') or {}
     base=pr.get('base') or {}
     repository=head.get('repo') or {}
-    if head.get('ref') != PREVIEW_BRANCH or head.get('sha') != source_sha or        repository.get('full_name') != 'kocoro97-corab/dashboard' or base.get('ref') != SOURCE_BRANCH:
+    if head.get('ref') != PREVIEW_BRANCH or head.get('sha') != source_sha or        repository.get('full_name') != 'kocoro97-corab/dashboard' or base.get('ref') != expected_base:
         raise Stop('DEV_PREVIEW_PR_MISMATCH')
 
 
@@ -106,7 +114,7 @@ def build_with_preserved_calendar(artifact, checkout, source_branch=SOURCE_BRANC
     """
     if source_branch == SOURCE_BRANCH:
         return build(artifact, public_data=checkout / 'data')
-    if source_branch == PREVIEW_BRANCH:
+    if source_branch in (PREVIEW_BRANCH,NEXT_PREVIEW_BRANCH):
         return build(artifact, public_data=checkout / 'data', source_branch=source_branch)
     raise Stop('DEV_SOURCE_BRANCH_NOT_APPROVED')
 
@@ -128,7 +136,7 @@ def publish(expected_source_sha=None, expected_dev_head=None, source_branch=SOUR
     previous = api(target + '/contents/development-only.json?ref=' + BRANCH, optional=True)
     if previous is not None:
         marker = json.loads(base64.b64decode(previous['content']))
-        if marker.get('myinvestDevelopmentOnly') is not True or marker.get('sourceBranch') not in (SOURCE_BRANCH,PREVIEW_BRANCH):
+        if marker.get('myinvestDevelopmentOnly') is not True or marker.get('sourceBranch') not in APPROVED_SOURCE_BRANCHES:
             raise Stop('DEV_REPOSITORY_MARKER_MISMATCH')
     elif not (repo.get('size', 0) == 0 and repo.get('description') == DESCRIPTION):
         raise Stop('DEV_REPOSITORY_NOT_EMPTY_OR_OURS')
@@ -187,7 +195,7 @@ if __name__ == '__main__':
     parser.add_argument('--publish-dev-pages', action='store_true', required=True)
     parser.add_argument('--expect-source-sha', metavar='SHA40',required=True)
     parser.add_argument('--expect-dev-head', metavar='SHA40',required=True)
-    parser.add_argument('--source-branch', choices=[SOURCE_BRANCH,PREVIEW_BRANCH],default=SOURCE_BRANCH)
+    parser.add_argument('--source-branch', choices=APPROVED_SOURCE_BRANCHES,default=SOURCE_BRANCH)
     args=parser.parse_args()
     try:
         for value in (args.expect_source_sha, args.expect_dev_head):
