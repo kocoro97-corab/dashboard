@@ -65,18 +65,15 @@
     if(!waiting.length&&pauseTimer!==null){root.clearTimeout(pauseTimer);pauseTimer=null}
     if(waiting.length&&readClock()<pauseUntil){if(pauseTimer===null&&root.setTimeout)pauseTimer=root.setTimeout(()=>{pauseTimer=null;pump()},pauseUntil-readClock());return}
     while(waiting.length){
-      const head=waiting[0],visibleTag=(root.location?.hash||'').replace(/^#\//,'');
+      const visibleTag=(root.location?.hash||'').replace(/^#\//,'');
+      // The visible route wins before any spare physical relay slot is leased.
+      const candidate=waiting.findIndex(j=>!j.cancelled&&j.current()&&(!j.sharedPublic||j.sharedTag===visibleTag));
+      if(candidate>0)waiting.unshift(waiting.splice(candidate,1)[0]);
+      const head=waiting[0];
       const headBackground=head.sharedPublic&&head.sharedTag!==visibleTag;
       // Idle warming may use only one physical lease; leave another for the visible screen.
       // A promoted/shared request becomes foreground when its page is visible.
-      if(headBackground&&[...running].some(j=>j.sharedPublic&&!j.cancelled&&j.sharedTag!==visibleTag)){
-        // A previous menu's idle work must never hold the front of the queue
-        // ahead of a freshly visited menu. No extra physical read is created.
-        const visibleIndex=waiting.findIndex(j=>!j.cancelled&&j.current()&&(!j.sharedPublic||j.sharedTag===visibleTag));
-        if(visibleIndex<0)return;
-        waiting.unshift(waiting.splice(visibleIndex,1)[0]);
-        continue;
-      }
+      if(headBackground&&[...running].some(j=>j.sharedPublic&&!j.cancelled&&j.sharedTag!==visibleTag))return;
       if(running.size>=Math.min(head.limit,readClock()<throttleUntil?1:Infinity))return;
       const job=waiting.shift();if(job.cancelled||!job.current()){job.cancel(failure('SESSION_CHANGED'));continue}
       running.add(job);job.started=true;
