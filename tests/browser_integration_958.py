@@ -155,24 +155,48 @@ async def sectors_checks(browser,artifact,tmp,width):
    if args.public_feeds:return
    h.overrides[history_url('XLE')]={'text':json.dumps({'chart':{'result':[]}})};await select_sector_market(h,'US');await h.page.locator('.stv2-tabs button',has_text='단타').click();await h.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click();await h.page.wait_for_function('()=>DevelopmentDiagnostics.snapshot().issues.some(r=>r.page==="sectors"&&r.code==="SERIES_UNAVAILABLE"&&r.active)');assert '검증 수신 10/11개 ETF' in await h.page.locator('.stv2').text_content();assert await h.page.locator('.stv2-etfs table tr').count()==11
   if not args.public_feeds:await case(h,'API_FAILURE_IS_SEPARATE_FROM_VALID_ROWS',partial)
-  async def rapid():
-   if args.public_feeds:return
-   h.overrides[history_url('SPY')]={'text':feeds[history_url('SPY')],'delayMs':400};h.overrides[history_url('XLE')]={'text':feeds[history_url('XLE')]};await h.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click();await select_sector_market(h,'KR');await h.page.locator('.stv2-tabs button',has_text='단타').click();await select_sector_market(h,'US');await h.page.locator('.stv2-tabs button',has_text='스윙').click();await h.page.locator('.stv2-tabs button').filter(has_text=re.compile('^20일$')).click()
+  # The previous scenarios intentionally refresh dozens of public instruments.
+  # Use an independent real Worker-gate instance for the rapid-switch race so
+  # the per-IP rolling quota is not exhausted by unrelated coverage tests.
+  # Quota/backoff behavior remains covered by browser_relay_busy.py.
+  if not args.public_feeds:
+   fresh=await Harness(browser,artifact,feeds,width,args.published).start_browser(tmp)
    try:
-    await h.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("미국 11개 섹터 ETF 상대강도")&&document.querySelector(".stv2")?.textContent.includes("기간 20거래일")')
-   except Exception as exc:
-    state=await h.page.evaluate("""() => ({
-      activeUS:document.querySelector('.stv2-toolbar .stv2-tabs button[aria-pressed=true]')?.textContent==='미국',
-      period20:document.querySelector('.stv2')?.textContent.includes('기간 20거래일'),
-      etfTitle:document.querySelector('.stv2')?.textContent.includes('미국 11개 섹터 ETF 상대강도'),
-      hasLoading:document.querySelector('.stv2')?.textContent.includes('실제 일봉 데이터 분석 중'),
-      hasError:document.querySelector('.stv2')?.textContent.includes('시계열 수신 또는 검증 실패'),
-      selectedLabels:[...document.querySelectorAll('.stv2-toolbar .stv2-tabs button[aria-pressed=true]')].map(x=>x.textContent.slice(0,20)),
-      transport:typeof DashboardTransport?.readState==='function'?DashboardTransport.readState():null
-    })""")
-    raise AssertionError('RAPID_UI_DIAGNOSTIC '+json.dumps(state,ensure_ascii=False)) from exc
-   assert '국내 상위 테마 구성종목 표본 분석' not in await h.page.locator('.stv2').inner_text();await h.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click();await h.go('news');assert await h.page.locator('.stv2').count()==0
-  if not args.public_feeds:await case(h,'RAPID_SELECTION_AND_NAVIGATION_DURING_LOAD',rapid)
+    await fresh.page.clock.set_fixed_time('2026-11-17T03:00:00Z')
+    await fresh.login('sectors')
+    await fresh.page.wait_for_function('()=>!THM_BUSY&&THM.length>0')
+    async def rapid():
+     fresh.overrides[history_url('SPY')]={'text':feeds[history_url('SPY')],'delayMs':400}
+     fresh.overrides[history_url('XLE')]={'text':feeds[history_url('XLE')]}
+     await select_sector_market(fresh,'US')
+     await fresh.page.wait_for_timeout(200)  # SPY request starts, remains in-flight
+     await select_sector_market(fresh,'KR')
+     await fresh.page.locator('.stv2-tabs button',has_text='단타').click()
+     await select_sector_market(fresh,'US')
+     await fresh.page.locator('.stv2-tabs button',has_text='스윙').click()
+     await fresh.page.locator('.stv2-tabs button').filter(has_text=re.compile('^20일$')).click()
+     try:
+      await fresh.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("미국 11개 섹터 ETF 상대강도")&&document.querySelector(".stv2")?.textContent.includes("기간 20거래일")')
+     except Exception as exc:
+      state=await fresh.page.evaluate("""() => ({
+        activeUS:document.querySelector('.stv2-toolbar .stv2-tabs button[aria-pressed=true]')?.textContent==='미국',
+        period20:document.querySelector('.stv2')?.textContent.includes('기간 20거래일'),
+        etfTitle:document.querySelector('.stv2')?.textContent.includes('미국 11개 섹터 ETF 상대강도'),
+        hasLoading:document.querySelector('.stv2')?.textContent.includes('실제 일봉 데이터 분석 중'),
+        hasError:document.querySelector('.stv2')?.textContent.includes('시계열 수신 또는 검증 실패'),
+        selectedLabels:[...document.querySelectorAll('.stv2-toolbar .stv2-tabs button[aria-pressed=true]')].map(x=>x.textContent.slice(0,20)),
+        transport:typeof DashboardTransport?.readState==='function'?DashboardTransport.readState():null
+      })""")
+      raise AssertionError('RAPID_UI_DIAGNOSTIC '+json.dumps(state,ensure_ascii=False)) from exc
+     assert '국내 상위 테마 구성종목 표본 분석' not in await fresh.page.locator('.stv2').inner_text()
+     await fresh.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click()
+     await fresh.go('news')
+     assert await fresh.page.locator('.stv2').count()==0
+    await case(fresh,'RAPID_SELECTION_AND_NAVIGATION_DURING_LOAD',rapid)
+    assert not fresh.errors,fresh.errors
+    assert not any(x['action'] in ['nhAccounts','nhQuotes','order','saveExternalHoldings'] for x in fresh.requests)
+   finally:
+    await fresh.close()
   assert not h.errors,h.errors;assert not any(r['action'] in ['nhAccounts','nhQuotes','order','saveExternalHoldings'] for r in h.requests)
   timings.append({'area':'sectors','width':width,'mode':MODE,'firstDisplayMs':first,'firstFrameMs':h.first_frame_ms,'initialDataMs':h.initial_data_ms,'initialRenderSettleMs':h.initial_render_ms,'requestCount':len(h.requests),'lastResponseMs':max((r.get('endMs',0) for r in h.requests),default=0)})
  finally:await h.close()
