@@ -67,6 +67,31 @@ class DevelopmentPublishGateTests(unittest.TestCase):
                 pub.publish()
             shutil.which.assert_not_called()
 
+    def test_publication_requires_green_push_and_pr_for_same_commit(self):
+        def report(events):
+            return {'workflow_runs': [
+                {'event':e,'head_sha':SOURCE,'name':'PR regression tests',
+                 'status':'completed','conclusion':'success'} for e in events]}
+        with patch.object(pub,'api',return_value=report(['push','pull_request'])) as api:
+            pub.require_green_ci(SOURCE)
+            self.assertIn('head_sha='+SOURCE,api.call_args.args[0])
+        with patch.object(pub,'api',return_value=report(['push'])):
+            with self.assertRaisesRegex(pub.Stop,'DEV_CI_NOT_GREEN'):
+                pub.require_green_ci(SOURCE)
+
+    def test_ci_from_different_sha_or_failed_checks_never_authorizes_publish(self):
+        wrong={'event':'pull_request','head_sha':'c'*40,
+               'name':'PR regression tests','status':'completed','conclusion':'success'}
+        failed={'event':'pull_request','head_sha':SOURCE,
+                'name':'PR regression tests','status':'completed','conclusion':'failure'}
+        good={'event':'push','head_sha':SOURCE,
+              'name':'PR regression tests','status':'completed','conclusion':'success'}
+        for checks in ([good,wrong],[good,failed],[],[good,{'event':'pull_request','head_sha':SOURCE,'name':'another workflow','status':'completed','conclusion':'success'}]):
+            with self.subTest(checks=checks):
+                with patch.object(pub,'api',return_value={'workflow_runs':checks}):
+                    with self.assertRaisesRegex(pub.Stop,'DEV_CI_NOT_GREEN'):
+                        pub.require_green_ci(SOURCE)
+
     def test_fixed_development_repository_and_no_production_target(self):
         self.assertEqual(pub.REPO,'kocoro97-corab/dashboard-v2-dev')
         self.assertEqual(pub.BRANCH,'dev-pages')
