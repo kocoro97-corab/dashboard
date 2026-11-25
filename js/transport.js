@@ -134,12 +134,14 @@
     options=options||{};
     const started=config(),access=started.devAccessCode,mode=started.mode,token=typeof LS==='function'?LS('invest_session_token'):null,endpoint=started.endpoint,generation=epoch,sharedGeneration=sharedEpoch,route=root.location?.hash;
     const shared=options.sharedPublic===true&&started.devSession===true&&started.publicMarket===true&&!options.signal&&['sectors','news'].includes(options.sharedTag)&&isSharedPublicUrl(url,options.sharedTag)&&typeof token==='string';
+    if(options.sharedPublic===true&&started.devSession===true&&started.publicMarket===true&&!shared)throw failure('RELAY_CONFIG_INVALID');
     const current=()=>(shared?sharedGeneration===sharedEpoch:generation===epoch&&route===root.location?.hash)&&
       (mode!=='relay'||started===root.MYINVEST_TRANSPORT_CONFIG)&&mode===config().mode&&access===config().devAccessCode&&endpoint===config().endpoint&&!options.signal?.aborted&&token===(typeof LS==='function'?LS('invest_session_token'):null);
     const prior=publicPending.get(url);if(prior&&prior.current()&&prior.signal===options.signal){if(shared)sharedJoins++;return prior.promise;}
     const perform=async()=>{
       if(!isRelay()){const r=await root.fetch(MYP()+(MYP().includes('?')?'&':'?')+'url='+encodeURIComponent(url),options);if(!r.ok){const e=failure('GAS_HTTP');e.http=r.status;throw e}const text=await r.text();return {ok:true,status:r.status,text:async()=>text}}
-      const response=await post({action:'publicFetch',url,token},shared?{sharedPublic:true,sharedTag:options.sharedTag}:options);let data;try{data=await response.json()}catch{const e=failure('RELAY_RESPONSE_INVALID');e.http=response.status;throw e}
+      const response=await post({action:'publicFetch',url,token},
+        shared?{sharedPublic:true,sharedTag:options.sharedTag}:options.sharedPublic===true?{signal:options.signal}:options);let data;try{data=await response.json()}catch{const e=failure('RELAY_RESPONSE_INVALID');e.http=response.status;throw e}
       if(!response.ok||!data||data.success!==true||typeof data.text!=='string'){
         const safe=new Set(['AUTH_REQUIRED','RELAY_PUBLIC_URL_DENIED','RELAY_PUBLIC_FAILED','RELAY_RATE_LIMIT','RELAY_BUSY','RELAY_UPSTREAM_NETWORK','RELAY_REDIRECT_DENIED','RELAY_GAS_ACCESS_REQUIRED','RELAY_TARGET_MISMATCH','RELAY_ACCESS_CLOSED']);const e=failure(safe.has(data?.code)?data.code:'RELAY_PUBLIC_FAILED');e.http=response.status;const hint=response.headers?.get?.('Retry-After');if(hint!=null)e.retryAfter=String(hint).slice(0,128);if(['relay','gas','nh'].includes(data?.layer))e.verifiedLayer=data.layer;throw e;
       }
