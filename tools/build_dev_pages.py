@@ -23,7 +23,12 @@ def fixed_relay(value):
     return value
 
 
-def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True, public_data=None):
+def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True, public_data=None,
+          source_branch='feat/nh-integration-v2'):
+    # Only the original V2 branch and this specific isolated performance review
+    # may identify the source of a development Pages artifact.
+    if source_branch not in ('feat/nh-integration-v2','fix/visible-first-market-20261125'):
+        raise ValueError('DEV_SOURCE_BRANCH_NOT_APPROVED')
     public_config=root/'config/development-relay.json'
     if use_public_config and relay_endpoint is None and public_config.is_file():
         doc=json.loads(public_config.read_text())
@@ -161,7 +166,7 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True, pub
     shutil.copyfile(ocr / 'manifest.json', output / 'vendor/ocr/manifest.json')
     (output / '.nojekyll').write_text('')
     (output / 'robots.txt').write_text('User-agent: *\nDisallow: /\n')
-    (output / 'development-only.json').write_text(json.dumps({'myinvestDevelopmentOnly': True, 'authOnly': False, 'publicMarketCapable': True, 'nhAccountQueries': False, 'storageWrites': False, 'screenInspection': True, 'sourceBranch': 'feat/nh-integration-v2', 'sourceCommit': revision}))
+    (output / 'development-only.json').write_text(json.dumps({'myinvestDevelopmentOnly': True, 'authOnly': False, 'publicMarketCapable': True, 'nhAccountQueries': False, 'storageWrites': False, 'screenInspection': True, 'sourceBranch': source_branch, 'sourceCommit': revision}))
     manifest = {p.relative_to(output).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
                 for p in sorted(output.rglob('*')) if p.is_file()}
     (output / 'asset-manifest.json').write_text(json.dumps(manifest, sort_keys=True))
