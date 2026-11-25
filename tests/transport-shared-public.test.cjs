@@ -135,3 +135,25 @@ test('background public prefetch reserves one read slot for the visible menu',as
  f.releases[2]();
  await Promise.all([first,second,urgent]);
 });
+
+test('a newly visible shared request jumps ahead of unrelated queued idle work',async()=>{
+ const f=fixture();
+ const a=f.api.publicRead(sectorUrl,{sharedPublic:true,sharedTag:'sectors'});
+ const b=f.api.publicRead(newsUrl,{sharedPublic:true,sharedTag:'news'});
+ const visibleUrl='https://m.stock.naver.com/api/stocks/theme/12?page=1&pageSize=100';
+ const c=f.api.publicRead(visibleUrl,{sharedPublic:true,sharedTag:'sectors'});
+ await f.tick();
+ assert.equal(f.calls.length,1);
+ assert.equal(f.api.readState().sharedQueued,2);
+ f.location.hash='#/sectors';
+ f.api.cancelReads({keepSharedPublic:true});
+ await f.tick();await f.tick();
+ assert.equal(f.calls.length,2,'visible sector detail must use the spare slot');
+ assert.equal(f.calls[1].url,visibleUrl);
+ f.releases[1]();await f.tick();await f.tick();
+ assert.equal(f.calls.length,2,'news idle work remains blocked until remaining warmer settles');
+ f.releases[0]();await f.tick();await f.tick();
+ assert.equal(f.calls[2].url,newsUrl);
+ f.releases[2]();
+ await Promise.all([a,b,c]);
+});
