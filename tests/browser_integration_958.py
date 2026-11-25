@@ -126,8 +126,8 @@ async def sectors_checks(browser,artifact,tmp,width):
    await select_sector_market(h,'US')
    # The theme view no longer downloads hidden ETF histories. Explicitly
    # switch to the industry scope to request and verify all eleven ETFs.
-   assert await h.page.get_by_role('button',name='분석: 테마 → 산업',exact=True).count()==1
-   await h.page.get_by_role('button',name='분석: 테마 → 산업',exact=True).click()
+   assert await h.page.get_by_role('button',name='분석 범위 전환: 현재 테마',exact=True).count()==1
+   await h.page.get_by_role('button',name='분석 범위 전환: 현재 테마',exact=True).click()
    for days in [1,5,20,60]:
     if days==5:await h.page.locator('.stv2-tabs button',has_text='스윙').click()
     if days!=1:await h.page.locator('.stv2-tabs button').filter(has_text=re.compile('^'+str(days)+'일$')).click()
@@ -141,7 +141,7 @@ async def sectors_checks(browser,artifact,tmp,width):
   async def kr():
    await select_sector_market(h,'KR')
    # KR swing sample analysis is a theme result, not the industry scope.
-   if await h.page.get_by_role('button',name='분석: 산업 → 테마',exact=True).count():await h.page.get_by_role('button',name='분석: 산업 → 테마',exact=True).click()
+   if await h.page.get_by_role('button',name='분석 범위 전환: 현재 산업',exact=True).count():await h.page.get_by_role('button',name='분석 범위 전환: 현재 산업',exact=True).click()
    await h.page.locator('.stv2-tabs button',has_text='스윙').click()
    for days in [5,20,60]:
     await h.page.locator('.stv2-tabs button').filter(has_text=re.compile('^'+str(days)+'일$')).click();await h.page.wait_for_function('(n)=>{const el=document.querySelector(".stv2");return !!el&&el.textContent.includes("기간 "+n+"거래일")&&!el.textContent.includes("검증된 일부 표본 먼저 표시")}',arg=days)
@@ -161,7 +161,7 @@ async def sectors_checks(browser,artifact,tmp,width):
   async def partial():
    if args.public_feeds:return
    h.overrides[history_url('XLE')]={'text':json.dumps({'chart':{'result':[]}})};await select_sector_market(h,'US')
-   if await h.page.get_by_role('button',name='분석: 테마 → 산업',exact=True).count():await h.page.get_by_role('button',name='분석: 테마 → 산업',exact=True).click()
+   if await h.page.get_by_role('button',name='분석 범위 전환: 현재 테마',exact=True).count():await h.page.get_by_role('button',name='분석 범위 전환: 현재 테마',exact=True).click()
    await h.page.locator('.stv2-tabs button',has_text='단타').click();await h.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click()
    await h.page.wait_for_function('()=>DevelopmentDiagnostics.snapshot().issues.some(r=>r.page==="sectors"&&r.code==="SERIES_UNAVAILABLE"&&r.active)')
    await h.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("검증 수신 10/11개 ETF")&&!document.querySelector(".stv2")?.textContent.includes("검증된 일부 표본 먼저 표시")')
