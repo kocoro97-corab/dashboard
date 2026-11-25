@@ -64,7 +64,13 @@
     for(let i=0;i<waiting.length;){const job=waiting[i];if(job.cancelled||!job.current()){waiting.splice(i,1);job.cancel(failure('SESSION_CHANGED'));continue}i++}
     if(!waiting.length&&pauseTimer!==null){root.clearTimeout(pauseTimer);pauseTimer=null}
     if(waiting.length&&readClock()<pauseUntil){if(pauseTimer===null&&root.setTimeout)pauseTimer=root.setTimeout(()=>{pauseTimer=null;pump()},pauseUntil-readClock());return}
-    while(waiting.length){if(running.size>=Math.min(waiting[0].limit,readClock()<throttleUntil?1:Infinity))return;
+    while(waiting.length){
+      const head=waiting[0],visibleTag=(root.location?.hash||'').replace(/^#\//,'');
+      const headBackground=head.sharedPublic&&head.sharedTag!==visibleTag;
+      // Idle warming may use only one physical lease; leave another for the visible screen.
+      // A promoted/shared request becomes foreground when its page is visible.
+      if(headBackground&&[...running].some(j=>j.sharedPublic&&!j.cancelled&&j.sharedTag!==visibleTag))return;
+      if(running.size>=Math.min(head.limit,readClock()<throttleUntil?1:Infinity))return;
       const job=waiting.shift();if(job.cancelled||!job.current()){job.cancel(failure('SESSION_CHANGED'));continue}
       running.add(job);job.started=true;
       // Do not abort a physical request on navigation: Worker lease release may
