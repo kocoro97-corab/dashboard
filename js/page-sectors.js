@@ -206,12 +206,13 @@ function create(){
   if(!data){if(!analysisBusy)list.append(button('실제 시계열 조회',()=>void loadAnalytics(true)));return}
   const n=PERIODS[period],label=market==='US'?'미국 11개 섹터 ETF 상대강도':(category==='industry'?'국내 산업 구성종목 표본 분석':'국내 상위 테마 구성종목 표본 분석');
   if(market==='US'&&category==='theme'){
+   list.append(make('p','기간 '+PERIODS[period]+'거래일 · SPY 기준 '+pct(data.benchmark)+' · 공통 관측일 '+new Date(data.asof).toLocaleDateString('ko-KR')+' · 검증된 확정 종가 가격수익률 (분배금 제외)','stv2-muted'));
    renderUSThemes(data);
    const sectorReference=make('details',undefined,'stv2-etfs');
-   sectorReference.append(make('summary','참고: 11개 섹터 ETF 상대강도는 요청 시 별도 조회'));
+   sectorReference.append(make('summary','참고: 미국 11개 섹터 ETF 상대강도는 산업 메뉴에서 요청 시 조회'));
    sectorReference.append(make('p','현재 테마 분석에서는 숨겨진 ETF 11개를 자동 조회하지 않습니다. 필요하면 산업 분석으로 전환해 검증된 SPY 대비 섹터 ETF 상대강도를 확인하세요.','stv2-muted'),
     button('미국 산업 ETF 분석 열기',()=>{supersedeAnalytics();category='industry';saveDisplay();draw();scheduleAnalytics()}));
-   list.append(sectorReference);
+   list.append(sectorReference,make('p','개별 미국 테마 일반종목 표본은 미국 섹터 ETF 대리지표와 구분됩니다. 숨겨진 ETF를 자동 조회하지 않으며, 상세 섹터 검증은 산업 분석에서 제공합니다.','stv2-muted'));
    if(root.DevelopmentDiagnostics){root.DevelopmentDiagnostics.quality('sectors',data.failures||[],data);if(data.failures?.length)list.append(make('p','일부 자료 제외 · 검증·진단에서 상세 확인','stv2-status'))}
    else if(data.failures?.length)list.append(make('p','일부 자료 수신/검증 실패 · 이번 테마 표본에 포함하지 않았습니다.','stv2-status'));
    if(mode==='swing')list.append(make('p','스윙 관찰: 상대강도와 기간 수익률만 표시. 실적·기관수급·진입/손절 검증 전 매수 추천이 아닙니다.','stv2-muted'));
@@ -255,7 +256,7 @@ function create(){
   list.append(make('h3','미국 일반종목 테마 · 검증 표본'),make('p','운용사 공개 구성자료의 미국 상장 일반종목 표본 · 종가 가격수익률 동일가중 · 검증된 구성종목 60% 미만은 순위 보류 · 전체 미국 시장 순위 아님','stv2-muted'));
   const cards=make('div',undefined,'stv2-grid stv2-us-themes');
   for(const [i,t] of (data.themes||[]).entries()){const card=button('',()=>usDetail(t));card.className='stv2-card';card.style.textAlign='left';const up=t.sample.filter(x=>x.change>0).length,down=t.sample.filter(x=>x.change<0).length;card.append(make('strong',(data.partial?'잠정 '+(i+1)+'번째 · ':(i+1)+'위 · ')+t.name),make('p',PERIODS[period]+'일 표본 수익률 '+pct(t.change)+' · SPY 대비 '+pct(t.relative)),make('p','상승 '+up+' / 하락 '+down+' · 상승비율 '+(t.quality?.breadth==null?'미확인':t.quality.breadth.toFixed(1)+'%')+' · 확인 '+t.sample.length+'/'+t.instruments.length+'종목','stv2-muted'),make('p',t.sample.slice().sort((a,b)=>b.change-a.change).slice(0,3).map(x=>root.InstrumentNames?.label(x.symbol,x.name)||x.name+' ('+x.symbol+')').join(' · '),'stv2-muted'),make('p','구성 기준 '+t.asOf+(Date.now()-Date.parse(t.asOf)>7*86400000?' · 구성자료 7일 초과, 최신성 확인 필요':'')+' · 관측 '+new Date(t.asof).toLocaleDateString('ko-KR'),'stv2-muted'));cards.append(card)}
-  list.append(cards);if(!data.themes?.length)list.append(make('p','검증된 미국 일반종목 테마 자료가 없습니다. 새로고침 후 연결 상태를 확인하세요.','stv2-status'));
+  list.append(cards);if(!data.themes?.length)list.append(make('p',data.partial?'미국 테마의 검증된 구성종목 표본 조회 중…':'검증된 미국 일반종목 테마 자료가 없습니다. 새로고침 후 연결 상태를 확인하세요.','stv2-status'));
   list.append(make('p','순위는 표본 충족률 60% 이상인 테마 간 비교에 한정됩니다. 구성목록 기준일과 공식 출처를 확인하세요. 시세 새로고침과 구성자료 갱신은 별개이며 ETF 가격은 테마 수익률로 사용하지 않습니다.','stv2-muted'));
  }
  function usDetail(t){list.replaceChildren();list.append(button('← 테마 순위로',draw),make('h3',t.name),make('p','구성 기준 '+t.asOf+' · 일반종목 '+t.sample.length+'/'+t.instruments.length+'개 표본 · 상승비율 '+(t.quality?.breadth==null?'미확인':t.quality.breadth.toFixed(1)+'%')+' · 공통 거래일 종가의 가격수익률 (배당 제외)','stv2-muted'));
