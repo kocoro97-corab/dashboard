@@ -92,6 +92,18 @@ class DevelopmentPublishGateTests(unittest.TestCase):
                     with self.assertRaisesRegex(pub.Stop,'DEV_CI_NOT_GREEN'):
                         pub.require_green_ci(SOURCE)
 
+    def test_development_publish_builder_preserves_existing_public_calendar(self):
+        # The publish entrypoint must never silently reset independently
+        # refreshed dev-pages calendar snapshots to older source snapshots.
+        with tempfile.TemporaryDirectory() as tmp:
+            folder=Path(tmp)
+            checkout=folder/'checkout'
+            checkout.mkdir()
+            with patch.object(pub,'build',return_value={'index.html':'synthetic'}) as build:
+                result=pub.build_with_preserved_calendar(folder/'artifact',checkout)
+                self.assertEqual(result,{'index.html':'synthetic'})
+                build.assert_called_once_with(folder/'artifact',public_data=checkout/'data')
+
     def test_fixed_development_repository_and_no_production_target(self):
         self.assertEqual(pub.REPO,'kocoro97-corab/dashboard-v2-dev')
         self.assertEqual(pub.BRANCH,'dev-pages')
