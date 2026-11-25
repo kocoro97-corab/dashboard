@@ -382,7 +382,13 @@ function create(){
   root.MYInvestEventContext?.refreshAll().then(()=>{if(active&&evidenceDetails.isConnected&&evidenceDetails.open)renderEvidence()}).catch(()=>{});
  });
  legacy.mount(container,ctx);const content=container.querySelector(':scope > .page-content');if(content){legacyHolder=make('div');legacyHolder.hidden=true;content.replaceWith(legacyHolder);legacyHolder.append(content)}container.prepend(view);draw();if((market==='KR'||market==='MIX')&&category==='theme'&&!data().length&&!loading&&ctx.publicConnected?.())void reload();void loadAnalytics();const checkMarket=()=>{if(!active)return;const next=defaultMarketAt();if(!manualMarket&&next!==market){supersedeAnalytics();market=next;draw();if(market==='KR'&&!data().length&&ctxRef?.publicConnected?.())void reload();scheduleAnalytics()}marketTimer=setTimeout(checkMarket,60000-Date.now()%60000+5)};marketTimer=setTimeout(checkMarket,60000-Date.now()%60000+5)}
- return {mount,refresh:async(ctx,force)=>{await legacy.refresh(ctx,force);draw();if(force)analytics.clear();void loadAnalytics(force)},unmount:()=>{active=false;supersedeAnalytics();if(marketTimer!==null){clearTimeout(marketTimer);marketTimer=null}manualMarket=false;analysisVersion++;detailVersion++;analysisBusy=false;root.removeEventListener?.('myinvest:theme-preview',previewReady);unsubscribe?.();unsubscribe=null;ctxRef=null;view?.remove();legacy.unmount();legacyHolder?.remove();legacyHolder=null},getStatus:()=>({status:active?'ready':'unmounted',market,period,mode,category})};
+ return {mount,refresh:async(ctx,force)=>{
+   // Explicit refresh replaces any in-progress analysis; it must not silently
+   // return from the analysisBusy guard or revive an earlier partial result.
+   if(force){supersedeAnalytics();analytics.clear();SERIES_CACHE.clear()}
+   await legacy.refresh(ctx,force);
+   if(active){draw();void loadAnalytics(force)}
+  },unmount:()=>{active=false;supersedeAnalytics();if(marketTimer!==null){clearTimeout(marketTimer);marketTimer=null}manualMarket=false;analysisVersion++;detailVersion++;analysisBusy=false;root.removeEventListener?.('myinvest:theme-preview',previewReady);unsubscribe?.();unsubscribe=null;ctxRef=null;view?.remove();legacy.unmount();legacyHolder?.remove();legacyHolder=null},getStatus:()=>({status:active?'ready':'unmounted',market,period,mode,category})};
 }
 DashboardPages.register('sectors',create);
 })(window);
