@@ -16,16 +16,26 @@
   function isRelay(){return config().mode==='relay'}
   // Shared physical read budget. Auth and reviewed writes are never replayed.
   const reads=new Set(['publicFetch','nhQuotes','nhExternalQuotes','nhAccounts','externalHoldings','externalHistory','externalAccounts','googleCalendarStatus','googleCalendarList','googleCalendarEvents']);
-  const waiting=[],running=new Set(),publicPending=new Map();let epoch=0,completed=0,cancelled=0,pauseUntil=0,pauseTimer=null;
+  const waiting=[],running=new Set(),publicPending=new Map();let epoch=0,completed=0,cancelled=0,pauseUntil=0,pauseTimer=null,throttleUntil=0;
   const readClock=()=>root.performance?.now?.()??Date.now();
   const abortError=()=>Object.assign(new Error('READ_CANCELLED'),{name:'AbortError',code:'READ_CANCELLED'});
   function cancelReads(){epoch++;for(const job of [...waiting,...running])job.cancel(failure('SESSION_CHANGED'));root.dispatchEvent?.(new Event('myinvest:cancel-reads'));pump()}
   function deferReads(ms){if(!Number.isFinite(ms)||ms<0)return;pauseUntil=Math.max(pauseUntil,readClock()+Math.min(ms,30000));pump()}
+  // Back off only after a verified 429/503 busy response from the isolated relay.
+  // Never retry mutations or authenticate against a second endpoint.
+  function noteBusyResponse(response,body){
+    if(!((response.status===503&&body?.code==='RELAY_BUSY')||
+         (response.status===429&&body?.code==='RELAY_RATE_LIMIT')))return;
+    const seconds=Number(response.headers?.get?.('Retry-After'));
+    const delay=Number.isFinite(seconds)&&seconds>0?Math.min(30000,Math.max(1000,seconds*1000)):5000;
+    throttleUntil=Math.max(throttleUntil,readClock()+30000);
+    deferReads(delay);
+  }
   function pump(){
     for(let i=0;i<waiting.length;){const job=waiting[i];if(job.cancelled||!job.current()){waiting.splice(i,1);job.cancel(failure('SESSION_CHANGED'));continue}i++}
     if(!waiting.length&&pauseTimer!==null){root.clearTimeout(pauseTimer);pauseTimer=null}
     if(waiting.length&&readClock()<pauseUntil){if(pauseTimer===null&&root.setTimeout)pauseTimer=root.setTimeout(()=>{pauseTimer=null;pump()},pauseUntil-readClock());return}
-    while(waiting.length){if(running.size>=waiting[0].limit)return;
+    while(waiting.length){if(running.size>=Math.min(waiting[0].limit,readClock()<throttleUntil?1:Infinity))return;
       const job=waiting.shift();if(job.cancelled||!job.current()){job.cancel(failure('SESSION_CHANGED'));continue}
       running.add(job);job.started=true;
       // Do not abort a physical request on navigation: Worker lease release may
@@ -43,7 +53,7 @@
       signal?.addEventListener('abort',onAbort,{once:true});waiting.push(job);pump();
     });
   }
-  function readState(){return {generation:epoch,active:running.size,queued:waiting.filter(j=>!j.cancelled).length,completed,cancelled,limit:config().persistentRelay===true?2:1}}
+  function readState(){return {generation:epoch,active:running.size,queued:waiting.filter(j=>!j.cancelled).length,completed,cancelled,limit:config().persistentRelay===true&&readClock()>=throttleUntil?2:1,backpressureMs:Math.max(0,Math.ceil(Math.max(pauseUntil,throttleUntil)-readClock()))}}
   function post(payload,options){
     const c=config();options=options||{};
     if(c.mode==='direct')return root.fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),signal:options.signal});
@@ -69,6 +79,9 @@
       const timer=controller&&root.setTimeout?root.setTimeout(()=>controller.abort(),35000):null;
       return root.fetch(endpoint,{method:'POST',headers,body:JSON.stringify(data),credentials:'omit',redirect:'error',cache:'no-store',referrerPolicy:'strict-origin-when-cross-origin',signal:queued?controller?.signal:options.signal}).then(async response=>{
       if(queued&&typeof response.arrayBuffer==='function'&&typeof response.clone==='function')await response.clone().arrayBuffer();
+      if(queued&&c.persistentRelay===true&&[429,503].includes(response.status)&&typeof response.clone==='function'){
+        try{noteBusyResponse(response,await response.clone().json())}catch{}
+      }
       if(queued&&!current())throw failure('SESSION_CHANGED');
       if(root.ReadStatus&&['nhAccounts','nhQuotes','nhExternalQuotes','externalHoldings','externalHistory','externalAccounts'].includes(data.action))root.ReadStatus.observeResponse(response,data.action,()=>!queued||current());
       if(c.persistentRelay===true&&['saveExternalHoldings','restoreExternalHoldings','saveExternalAccounts'].includes(data.action)){let result;try{result=await response.clone().json()}catch{throw failure('RELAY_WRITE_OUTCOME_UNKNOWN')}if(!result||typeof result.success!=='boolean')throw failure('RELAY_WRITE_OUTCOME_UNKNOWN')}
