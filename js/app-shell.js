@@ -37,7 +37,12 @@
     status.classList.remove('shell-error');status.textContent='페이지 연결 중';root.DevelopmentDiagnostics?.pageResult(route.page,'mounted');
     try{
       if(!instances.has(route.page))instances.set(route.page,DashboardPages.create(route.page));
-      const page=instances.get(route.page);page.setRoute?.(route);page.mount(viewport,ctx);viewport.scrollTop=scrolls.get(route.path)||0;
+      const page=instances.get(route.page);page.setRoute?.(route);
+      const mountToken=root.MYInvestWebPerformance?.begin(route.page,'mount')??null;
+      try{page.mount(viewport,ctx);root.MYInvestWebPerformance?.finish(mountToken,'ready')}
+      catch(e){root.MYInvestWebPerformance?.finish(mountToken,'failed');throw e}
+      viewport.scrollTop=scrolls.get(route.path)||0;
+      status.textContent='화면 구성 완료 · 최신 데이터 조회 중';
       Promise.resolve(page.refresh(ctx)).then(()=>{if(epoch===revision){root.MYInvestWebPerformance?.finish(navMeasure,'ready');navMeasure=null;status.textContent='연결됨 · 미확인 항목은 페이지에서 확인하세요.';root.DevelopmentDiagnostics?.pageResult(route.page,'ready')}}).catch(()=>{if(epoch===revision){root.MYInvestWebPerformance?.finish(navMeasure,'failed');navMeasure=null;error()}});
     }catch{root.MYInvestWebPerformance?.finish(navMeasure,'failed');navMeasure=null;viewport.replaceChildren(DashboardPages.note('해당 페이지를 열지 못했습니다. 다른 메뉴를 이용할 수 있습니다.'));error()}
   }
