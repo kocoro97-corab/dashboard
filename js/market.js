@@ -113,15 +113,16 @@ function publicReadScope(){
   const generation=typeof DashboardTransport!=='undefined'?DashboardTransport.readState?.().generation:null;
   return ()=>token===LS('invest_session_token')&&route===window.location?.hash&&generation===(typeof DashboardTransport!=='undefined'?DashboardTransport.readState?.().generation:null);
 }
-async function getTxt(targetUrl){
+async function getTxt(targetUrl,options={}){
   const relay=typeof DashboardTransport!=='undefined'&&DashboardTransport.isRelay();
   const proxy=MYP();
   if(!relay&&!proxy)return null;
   const fullUrl=proxy+(proxy.includes('?')?'&':'?')+'url='+encodeURIComponent(targetUrl);
   let t=null;
   try{
-    const c=relay?null:new AbortController();t=c?setTimeout(()=>c.abort(),9000):null;
-    const r=await (typeof DashboardTransport!=='undefined'?DashboardTransport.publicRead(targetUrl,c?{signal:c.signal}:{}):fetch(fullUrl,{signal:c?.signal}));
+    const c=relay||options.signal?null:new AbortController();t=c?setTimeout(()=>c.abort(),9000):null;
+    const signal=options.signal||c?.signal;
+    const r=await (typeof DashboardTransport!=='undefined'?DashboardTransport.publicRead(targetUrl,signal?{signal}:{}):fetch(fullUrl,{signal}));
     if(r.ok){const x=await r.text();if(typeof x==='string'&&x.trim()){NET.ok++;return x}}
     NET.fail++;
   }catch(e){
