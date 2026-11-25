@@ -4,7 +4,7 @@ const TH_API='https://stock.naver.com/api/domestic/market/theme/';
 const TH_LIST_URL='https://m.stock.naver.com/api/stocks/theme?page=1&pageSize=100';
 const TH_CAND=12,TH_TOP=6;
 const TH_CACHE_MS=10*60*1000;   // 자동 갱신 아님: 설정 저장 등으로 곧바로 다시 불릴 때 재수신을 막는 캐시 (↻ 버튼은 THM_AT=0 으로 무시)
-let THM=[],THM_MSG='',THM_BUSY=false,THM_AT=0,THM_SCOPE=null,THM_RUN=0;
+let THM=[],THM_MSG='',THM_BUSY=false,THM_AT=0,THM_SCOPE=null,THM_RUN=0,THM_PREVIEW=[];
 
 const sm=a=>a.reduce((s,x)=>s+(x||0),0);
 const escA=v=>esc(v).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -70,13 +70,17 @@ async function fetchTopThemes(){
   const session=LS('invest_session_token');
   if(THM_BUSY&&THM_SCOPE!==session)THM_BUSY=false;
   if(THM_BUSY||(THM_SCOPE===session&&THM.length&&Date.now()-THM_AT<TH_CACHE_MS))return;   // 수동 갱신(↻) 시 THM_AT=0
-  THM_BUSY=true;THM_SCOPE=session;const run=++THM_RUN;$('thS').textContent='테마 분석 중...';
+  THM_BUSY=true;THM_SCOPE=session;THM_PREVIEW=[];const run=++THM_RUN;$('thS').textContent='테마 분석 중...';
   try{
     const raw=rowsOf(await getJSON(TH_LIST_URL,{sharedPublic:true,sharedTag:'sectors'}));
     if(session!==LS('invest_session_token')||run!==THM_RUN)return false;
     dbg('테마목록',raw[0]);
     const all=raw.map(parseTheme).filter(t=>t.no!=null&&t.name&&t.rate!=null);
     const cand=all.filter(t=>t.rate>0).sort((a,b)=>b.rate-a.rate).slice(0,TH_CAND);
+    // The approved source has supplied verified theme names/rates. Display these
+    // early without claiming any composite/constituent scoring is complete.
+    THM_PREVIEW=cand.map(t=>({name:t.name,rate:t.rate}));
+    renderThemes();
     if(!cand.length){
       if(all.length){THM=[];THM_AT=Date.now();THM_MSG='현재 상승 중인 테마가 없습니다.'}
       else THM_MSG='테마 데이터 수신 실패'+(THM.length?' · 이전 수신 자료 유지':' · 미확인');
@@ -98,7 +102,7 @@ async function fetchTopThemes(){
     if(session===LS('invest_session_token')&&run===THM_RUN)THM_MSG='테마 분석 중 오류가 발생했습니다.'+(THM.length?' 이전 수신 자료 유지':'');
     return false;
   }finally{
-    if(run===THM_RUN){THM_BUSY=false;if(session===LS('invest_session_token')){if(THM_MSG)$('thS').textContent=THM_MSG;renderThemes()}}
+    if(run===THM_RUN){THM_BUSY=false;THM_PREVIEW=[];if(session===LS('invest_session_token')){if(THM_MSG)$('thS').textContent=THM_MSG;renderThemes()}}
 
   }
 }
