@@ -101,7 +101,7 @@ def require_reviewed_preview(source_sha, source_branch):
     head=pr.get('head') or {}
     base=pr.get('base') or {}
     repository=head.get('repo') or {}
-    if head.get('ref') != PREVIEW_BRANCH or head.get('sha') != source_sha or        repository.get('full_name') != 'kocoro97-corab/dashboard' or base.get('ref') != expected_base:
+    if head.get('ref') != source_branch or head.get('sha') != source_sha or        repository.get('full_name') != 'kocoro97-corab/dashboard' or base.get('ref') != expected_base:
         raise Stop('DEV_PREVIEW_PR_MISMATCH')
 
 
