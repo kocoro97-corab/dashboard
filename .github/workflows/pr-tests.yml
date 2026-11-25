@@ -22,7 +22,7 @@ jobs:
           node -e "const fs=require('fs'),vm=require('vm');for(const dir of ['js','gas'])for(const name of fs.readdirSync(dir))if(/\.(js|gs)$/.test(name))new vm.Script(fs.readFileSync(dir+'/'+name,'utf8'),{filename:name})"
       - name: Python storage/deployment/master regressions
         run: |
-          python3 -m py_compile tests/browser_integration_958.py
+          python3 -m compileall -q tests
           python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Install browser test dependency
         run: |
