@@ -16,10 +16,22 @@
   function isRelay(){return config().mode==='relay'}
   // Shared physical read budget. Auth and reviewed writes are never replayed.
   const reads=new Set(['publicFetch','nhQuotes','nhExternalQuotes','nhAccounts','externalHoldings','externalHistory','externalAccounts','googleCalendarStatus','googleCalendarList','googleCalendarEvents']);
-  const waiting=[],running=new Set(),publicPending=new Map();let epoch=0,completed=0,cancelled=0,pauseUntil=0,pauseTimer=null,throttleUntil=0;
+  const waiting=[],running=new Set(),publicPending=new Map();let epoch=0,sharedEpoch=0,completed=0,cancelled=0,pauseUntil=0,pauseTimer=null,throttleUntil=0,sharedPromotions=0,sharedJoins=0;
   const readClock=()=>root.performance?.now?.()??Date.now();
   const abortError=()=>Object.assign(new Error('READ_CANCELLED'),{name:'AbortError',code:'READ_CANCELLED'});
-  function cancelReads(){epoch++;for(const job of [...waiting,...running])job.cancel(failure('SESSION_CHANGED'));root.dispatchEvent?.(new Event('myinvest:cancel-reads'));pump()}
+  function cancelReads(options={}){
+    const keepShared=options?.keepSharedPublic===true;
+    epoch++;if(!keepShared)sharedEpoch++;
+    for(const job of [...waiting,...running])if(!keepShared||!job.sharedPublic)job.cancel(failure('SESSION_CHANGED'));
+    root.dispatchEvent?.(new Event('myinvest:cancel-reads'));pump();
+  }
+  function promoteShared(tag){
+    if(!['sectors','news'].includes(tag))return 0;
+    const target=waiting.filter(job=>job.sharedTag===tag&&!job.cancelled&&job.current());
+    if(!target.length)return 0;
+    for(const job of target){const index=waiting.indexOf(job);if(index>=0)waiting.splice(index,1)}
+    waiting.unshift(...target);sharedPromotions+=target.length;pump();return target.length;
+  }
   function deferReads(ms){if(!Number.isFinite(ms)||ms<0)return;pauseUntil=Math.max(pauseUntil,readClock()+Math.min(ms,30000));pump()}
   // Back off only after a verified 429/503 busy response from the isolated relay.
   // Never retry mutations or authenticate against a second endpoint.
@@ -44,16 +56,19 @@
         .finally(()=>{job.detach();running.delete(job);completed++;pump()});
     }
   }
-  function enqueueRead(run,current,signal,limit){
+  function enqueueRead(run,current,signal,limit,sharedTag=null){
     if(waiting.length>=128)return Promise.reject(failure('READ_QUEUE_FULL'));
     return new Promise((resolve,reject)=>{
-      const job={run,current,resolve,reject,limit,cancelled:false,started:false,detach(){signal?.removeEventListener('abort',onAbort)},cancel(error){if(this.cancelled)return;this.cancelled=true;cancelled++;this.detach();reject(error)}};
+      const job={run,current,resolve,reject,limit,sharedPublic:sharedTag!==null,sharedTag,cancelled:false,started:false,detach(){signal?.removeEventListener('abort',onAbort)},cancel(error){if(this.cancelled)return;this.cancelled=true;cancelled++;this.detach();reject(error)}};
       const onAbort=()=>{job.cancel(abortError());pump()};
       if(signal?.aborted){job.cancel(abortError());return}
-      signal?.addEventListener('abort',onAbort,{once:true});waiting.push(job);pump();
+      signal?.addEventListener('abort',onAbort,{once:true});
+      if(sharedTag===null){const position=waiting.findIndex(x=>x.sharedPublic);if(position>=0)waiting.splice(position,0,job);else waiting.push(job)}
+      else waiting.push(job);
+      pump();
     });
   }
-  function readState(){return {generation:epoch,active:running.size,queued:waiting.filter(j=>!j.cancelled).length,completed,cancelled,limit:config().persistentRelay===true&&readClock()>=throttleUntil?2:1,backpressureMs:Math.max(0,Math.ceil(Math.max(pauseUntil,throttleUntil)-readClock()))}}
+  function readState(){return {generation:epoch,active:running.size,queued:waiting.filter(j=>!j.cancelled).length,completed,cancelled,limit:config().persistentRelay===true&&readClock()>=throttleUntil?2:1,backpressureMs:Math.max(0,Math.ceil(Math.max(pauseUntil,throttleUntil)-readClock())),sharedQueued:waiting.filter(j=>j.sharedPublic&&!j.cancelled).length,sharedActive:[...running].filter(j=>j.sharedPublic&&!j.cancelled).length,sharedPromotions,sharedJoins}}
   function post(payload,options){
     const c=config();options=options||{};
     if(c.mode==='direct')return root.fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),signal:options.signal});
@@ -72,8 +87,10 @@
       if(typeof data.token!=='string'||!/^[a-fA-F0-9]{64}$/.test(data.token))throw failure('AUTH_REQUIRED');
       headers.Authorization='Bearer '+data.token;delete data.token;
     }
-    const queued=reads.has(data.action),endpoint=c.endpoint,generation=epoch,token=payload.token,route=root.location?.hash,access=c.devAccessCode;
-    const current=()=>generation===epoch&&c===root.MYINVEST_TRANSPORT_CONFIG&&c.endpoint===endpoint&&c.mode==='relay'&&c.devAccessCode===access&&route===root.location?.hash&&!options.signal?.aborted&&(token==null||token===(typeof LS==='function'?LS('invest_session_token'):null));
+    const queued=reads.has(data.action),endpoint=c.endpoint,generation=epoch,sharedGeneration=sharedEpoch,token=payload.token,route=root.location?.hash,access=c.devAccessCode;
+    const sharedPublic=queued&&data.action==='publicFetch'&&options.sharedPublic===true&&c.devSession===true&&c.publicMarket===true&&['sectors','news'].includes(options.sharedTag)&&!options.signal;
+    if(options.sharedPublic===true&&!sharedPublic)throw failure('RELAY_CONFIG_INVALID');
+    const current=()=>(sharedPublic?sharedGeneration===sharedEpoch:generation===epoch&&route===root.location?.hash)&&c===root.MYINVEST_TRANSPORT_CONFIG&&c.endpoint===endpoint&&c.mode==='relay'&&c.devAccessCode===access&&!options.signal?.aborted&&(token==null||token===(typeof LS==='function'?LS('invest_session_token'):null));
     const send=()=>{
       const controller=queued&&typeof root.AbortController==='function'?new root.AbortController():null;
       const timer=controller&&root.setTimeout?root.setTimeout(()=>controller.abort(),35000):null;
@@ -93,23 +110,29 @@
     })
       .finally(()=>{if(timer!==null)root.clearTimeout(timer)});
     };
-    return queued?enqueueRead(send,current,options.signal,c.persistentRelay===true?2:1):send();
+    return queued?enqueueRead(send,current,options.signal,c.persistentRelay===true?2:1,sharedPublic?options.sharedTag:null):send();
   }
 
   async function publicRead(url,options){
-    options=options||{};const started=config(),access=started.devAccessCode,mode=started.mode,token=typeof LS==='function'?LS('invest_session_token'):null,endpoint=started.endpoint,generation=epoch,route=root.location?.hash,current=()=>generation===epoch&&(mode!=='relay'||started===root.MYINVEST_TRANSPORT_CONFIG)&&mode===config().mode&&access===config().devAccessCode&&endpoint===config().endpoint&&route===root.location?.hash&&!options.signal?.aborted&&token===(typeof LS==='function'?LS('invest_session_token'):null);
-    const prior=publicPending.get(url);if(prior&&prior.current()&&prior.signal===options.signal)return prior.promise;
+    options=options||{};
+    const started=config(),access=started.devAccessCode,mode=started.mode,token=typeof LS==='function'?LS('invest_session_token'):null,endpoint=started.endpoint,generation=epoch,sharedGeneration=sharedEpoch,route=root.location?.hash;
+    const shared=options.sharedPublic===true&&started.devSession===true&&started.publicMarket===true&&!options.signal&&['sectors','news'].includes(options.sharedTag)&&typeof token==='string';
+    const current=()=>(shared?sharedGeneration===sharedEpoch:generation===epoch&&route===root.location?.hash)&&
+      (mode!=='relay'||started===root.MYINVEST_TRANSPORT_CONFIG)&&mode===config().mode&&access===config().devAccessCode&&endpoint===config().endpoint&&!options.signal?.aborted&&token===(typeof LS==='function'?LS('invest_session_token'):null);
+    const prior=publicPending.get(url);if(prior&&prior.current()&&prior.signal===options.signal){if(shared)sharedJoins++;return prior.promise;}
     const perform=async()=>{
       if(!isRelay()){const r=await root.fetch(MYP()+(MYP().includes('?')?'&':'?')+'url='+encodeURIComponent(url),options);if(!r.ok){const e=failure('GAS_HTTP');e.http=r.status;throw e}const text=await r.text();return {ok:true,status:r.status,text:async()=>text}}
-      const response=await post({action:'publicFetch',url,token},options);let data;try{data=await response.json()}catch{const e=failure('RELAY_RESPONSE_INVALID');e.http=response.status;throw e}
+      const response=await post({action:'publicFetch',url,token},shared?{sharedPublic:true,sharedTag:options.sharedTag}:options);let data;try{data=await response.json()}catch{const e=failure('RELAY_RESPONSE_INVALID');e.http=response.status;throw e}
       if(!response.ok||!data||data.success!==true||typeof data.text!=='string'){
         const safe=new Set(['AUTH_REQUIRED','RELAY_PUBLIC_URL_DENIED','RELAY_PUBLIC_FAILED','RELAY_RATE_LIMIT','RELAY_BUSY','RELAY_UPSTREAM_NETWORK','RELAY_REDIRECT_DENIED','RELAY_GAS_ACCESS_REQUIRED','RELAY_TARGET_MISMATCH','RELAY_ACCESS_CLOSED']);const e=failure(safe.has(data?.code)?data.code:'RELAY_PUBLIC_FAILED');e.http=response.status;const hint=response.headers?.get?.('Retry-After');if(hint!=null)e.retryAfter=String(hint).slice(0,128);if(['relay','gas','nh'].includes(data?.layer))e.verifiedLayer=data.layer;throw e;
       }
       return {ok:true,status:response.status,text:async()=>data.text};
     };
-    const promise=root.ReadStatus?root.ReadStatus.execute(url,perform,{current,signal:options.signal}):perform();
+    // Shared public reads are single-attempt: navigation must not abort the retry
+    // timer, and transient relay errors still reach the existing visible diagnostics.
+    const promise=shared?perform():root.ReadStatus?root.ReadStatus.execute(url,perform,{current,signal:options.signal}):perform();
     const job={promise,current,signal:options.signal};publicPending.set(url,job);try{return await promise}finally{if(publicPending.get(url)===job)publicPending.delete(url)}
   }
-  root.DashboardTransport=Object.freeze({post,publicRead,isRelay,cancelReads,readState,deferReads});
+  root.DashboardTransport=Object.freeze({post,publicRead,isRelay,cancelReads,readState,deferReads,promoteShared});
   if(typeof module==='object'&&module.exports)module.exports=root.DashboardTransport;
 })(typeof globalThis!=='undefined'?globalThis:this);
