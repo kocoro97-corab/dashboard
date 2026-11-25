@@ -37,7 +37,7 @@
   function change(route){
     if(!started||!ctx.authenticated())return;
     idlePrefetch?.cancel();
-    if(current){root.DashboardTransport?.cancelReads?.();ctx.cancelPending?.();scrolls.set(current.path,viewport.scrollTop);unmount(current.page)}
+    if(current){root.DashboardTransport?.cancelReads?.({keepSharedPublic:true});ctx.cancelPending?.({keepSharedPublic:true});scrolls.set(current.path,viewport.scrollTop);unmount(current.page)}
     if(navMeasure!==null)root.MYInvestWebPerformance?.finish(navMeasure,'cancelled');
     navMeasure=root.MYInvestWebPerformance?.begin(route.page,'navigation')??null;
     current=route;const epoch=++revision;title.textContent=titles[route.page];title.focus({preventScroll:true});
