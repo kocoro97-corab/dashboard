@@ -168,7 +168,15 @@ function create(){
   legacy.mount(container,ctx);newsTop.append(container.firstElementChild);container.prepend(view);symbols();events();if(root.MYInvestCalendarPending){root.MYInvestCalendarPending=false;root.MYInvestCalendar?.open()}
  }
 
- return {mount,refresh:async(ctx,force)=>{try{await legacy.refresh(ctx,force);if(active)status.textContent='기존 뉴스 원천 갱신 요청 완료 · 각 기사 출처와 게시시각 확인'}catch(e){if(active)status.textContent='기존 뉴스 수신 실패 · 외부 원천 연결을 확인하세요.';throw e}symbols();await annotateNews()},unmount(){active=false;newsVersion++;archivePanel?.destroy?.();archivePanel=null;sharedPublicFeed?.destroy?.();sharedPublicFeed=null;ctxRef=null;newsHoldings=()=>[];briefingArea=null;view?.remove();legacy.unmount()},getStatus:()=>({status:active?'ready':'unmounted',events:loadEvents().length})};
+ return {mount,refresh:async(ctx,force)=>{
+   let sourceFailed=false;
+   try{await legacy.refresh(ctx,force);if(active)status.textContent='뉴스 원천 조회 완료 · 기사 출처·게시시각 확인'}
+   catch{sourceFailed=true;if(active)status.textContent='실시간 뉴스 원천 수신 실패 · 저장된 브리핑·일정은 계속 이용할 수 있습니다.'}
+   if(!active)return {dataState:sourceFailed?'degraded':'ready'};
+   symbols();
+   try{await annotateNews()}catch{if(active)status.textContent+=' · 종목명 연결 일부 미확인'}
+   return {dataState:sourceFailed?'degraded':'ready'};
+  },unmount(){active=false;newsVersion++;archivePanel?.destroy?.();archivePanel=null;sharedPublicFeed?.destroy?.();sharedPublicFeed=null;ctxRef=null;newsHoldings=()=>[];briefingArea=null;view?.remove();legacy.unmount()},getStatus:()=>({status:active?'ready':'unmounted',events:loadEvents().length})};
 
 }
 root.MYInvestCalendar=Object.freeze({open:()=>{openCalendar();const id=++economicRequest;Promise.resolve(root.MYInvestEventContext?.refreshAll()).then(()=>{if(id===economicRequest&&calendarDialog?.isConnected)calendarRedraw?.()});return true},close:closeCalendar});DashboardPages.register('news',create);
