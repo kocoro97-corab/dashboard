@@ -1,0 +1,10 @@
+(function(root){'use strict';
+const KEY='myinvest_calendar_decisions_v1';
+const norm=s=>String(s||'').trim().toUpperCase().replace(/\s+/g,' ').slice(0,120);
+const validDate=s=>typeof s==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&!Number.isNaN(Date.parse(s+'T00:00:00Z'))&&new Date(s+'T00:00:00Z').toISOString().slice(0,10)===s;
+const identity=e=>e&&validDate(e.date)&&norm(e.publisher)&&norm(e.type)?[norm(e.publisher),norm(e.type),norm(e.symbol||'MARKET'),e.date].join('|'):null;
+const family=e=>e&&norm(e.publisher)&&norm(e.type)?[norm(e.publisher),norm(e.type),norm(e.symbol||'MARKET')].join('|'):null;
+function read(){try{const x=JSON.parse(localStorage.getItem(KEY)||'[]');return Array.isArray(x)?x.filter(v=>v&&typeof v.key==='string'&&typeof v.action==='string').slice(-500):[]}catch{return []}}
+function record(e,action){const key=identity(e),group=family(e);if(!key||!['approve','reject','delete','approve-rule','disable'].includes(action))throw Error('INVALID_DECISION');const history=read();history.push({key,group,action,at:new Date().toISOString(),source:'browser-local'});localStorage.setItem(KEY,JSON.stringify(history.slice(-500)));return history.length}
+function decide(e,existing=[],history=read()){const key=identity(e),group=family(e);if(!key||!e?.verified||!/^https:\/\//.test(e.sourceUrl||''))return {status:'review',reason:'UNVERIFIED'};if(existing.some(x=>identity(x)===key))return {status:'skip',reason:'DUPLICATE'};const exactRemoved=history.some(x=>x.key===key&&['delete','reject'].includes(x.action));if(exactRemoved)return {status:'blocked',reason:'USER_REMOVED'};const last=[...history].reverse().find(x=>x.group===group);if(last&&['delete','reject','disable'].includes(last.action))return {status:'review',reason:'PREVIOUSLY_REMOVED'};if(last?.action==='approve-rule')return {status:'auto-eligible',reason:'BACKEND_VERIFICATION_REQUIRED'};return {status:'review',reason:'NEW_EVENT'}}
+const api=Object.freeze({identity,family,read,record,decide});if(typeof module==='object'&&module.exports)module.exports=api;else root.InvestCalendarPolicy=api})(globalThis);

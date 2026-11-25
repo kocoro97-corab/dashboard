@@ -55,7 +55,7 @@ function getSession_(token) {
         self.assertIn("followRedirects: false", result[0]["source"])
         self.assertIn("return securitySession_(token)", result[0]["source"])
         self.assertIn("function securityLegacyDoPost_(e)", result[0]["source"])
-        self.assertEqual({f["name"] for f in result}, {"Code", "Nhplug", "PrivateHelper", "appsscript", "Security", "SecurityKdf", "ExternalHoldings"})
+        self.assertEqual({f["name"] for f in result}, {"Code", "Nhplug", "PrivateHelper", "appsscript", "Security", "SecurityKdf", "ExternalHoldings", "NhGatewayV2", "NhAccountsV2", "NhForeignIdentityV2", "NhSnapshotV2", "AccountStoreV2"})
 
     def test_transform_is_idempotent(self):
         result = module.apply_security(self.files(), "new quotes", root / "gas")
@@ -72,7 +72,7 @@ function getSession_(token) {
             temporary = Path(folder)
             (temporary / "js").mkdir()
             (temporary / "gas").mkdir()
-            for name in ("Security", "SecurityKdf", "ExternalHoldings"):
+            for name in ("Security", "SecurityKdf", "ExternalHoldings", "NhGatewayV2", "NhAccountsV2", "NhForeignIdentityV2", "NhSnapshotV2", "AccountStoreV2"):
                 (temporary / "gas" / (name + ".gs")).write_text((root / "gas" / (name + ".gs")).read_text())
             holdings = [["fixture account", "fixture name", 1, 2, 3, 4, 5, "000001", ""]]
             (temporary / "js" / "data.js").write_text("const H=" + json.dumps(holdings) + ";\n")

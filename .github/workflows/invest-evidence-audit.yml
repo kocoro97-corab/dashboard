@@ -1,0 +1,24 @@
+name: Investment evidence provenance audit tests
+on:
+  push:
+    branches: [feat/nh-integration-v2]
+    paths:
+      - 'js/invest-evidence-audit.js'
+      - 'tests/invest-evidence-audit.test.cjs'
+      - '.github/workflows/invest-evidence-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  provenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Deterministic source quality checks
+        run: |
+          node --check js/invest-evidence-audit.js
+          node --check tests/invest-evidence-audit.test.cjs
+          node tests/invest-evidence-audit.test.cjs

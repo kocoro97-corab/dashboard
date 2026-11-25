@@ -1,0 +1,72 @@
+name: Strategy analysis panel integration checks
+on:
+  push:
+    branches: [feat/nh-integration-v2]
+    paths:
+      - 'js/exchange-session-proof.js'
+      - 'js/page-stocks.js'
+      - 'js/page-sectors.js'
+      - 'js/stock-setup-adapter.js'
+      - 'js/stock-setup-engine.js'
+      - 'js/sector-rotation-adapter.js'
+      - 'js/sector-rotation-engine.js'
+      - 'js/sector-cache-rotation-bridge.js'
+      - 'tests/sector-cache-rotation-bridge.test.cjs'
+      - 'tests/exchange-session-*.test.cjs'
+      - 'js/integrated-strategy-engine.js'
+      - 'js/integrated-event-adapter.js'
+      - 'js/opportunity-review-queue.js'
+      - 'js/cached-strategy-bridge.js'
+      - 'js/invest-event-context.js'
+      - 'tests/cached-strategy-bridge.test.cjs'
+      - 'js/analysis-integration-panel-v1.js'
+      - 'js/market-regime-engine.js'
+      - 'js/page-strategy.js'
+      - 'index.html'
+      - 'tests/analysis-integration-panel-v1.test.cjs'
+      - 'tests/analysis-integration-wiring.test.cjs'
+      - '.github/workflows/analysis-integration-panel.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  read-only-panel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and cache-only UI wiring checks
+        run: |
+          node --check js/exchange-session-proof.js
+          node --check js/page-stocks.js
+          node --check js/page-sectors.js
+          node --check js/stock-setup-adapter.js
+          node --check js/stock-setup-engine.js
+          node --check js/sector-rotation-adapter.js
+          node --check js/sector-rotation-engine.js
+          node --check js/sector-cache-rotation-bridge.js
+          node --check tests/sector-cache-rotation-bridge.test.cjs
+          node --check tests/exchange-session-proof.test.cjs
+          node --check tests/exchange-session-integration.test.cjs
+          node --check js/integrated-strategy-engine.js
+          node --check js/integrated-event-adapter.js
+          node --check js/opportunity-review-queue.js
+          node --check js/cached-strategy-bridge.js
+          node --check tests/cached-strategy-bridge.test.cjs
+          node --check js/analysis-integration-panel-v1.js
+          node --check js/market-regime-engine.js
+          node --check js/page-strategy.js
+          node --check tests/analysis-integration-panel-v1.test.cjs
+          node --check tests/analysis-integration-wiring.test.cjs
+          node tests/analysis-integration-panel-v1.test.cjs
+          node tests/analysis-integration-wiring.test.cjs
+          node tests/cached-strategy-bridge.test.cjs
+          node tests/integrated-strategy-engine.test.cjs
+          node tests/integrated-event-adapter.test.cjs
+          node tests/exchange-session-proof.test.cjs
+          node tests/exchange-session-integration.test.cjs
+          node tests/stock-setup-adapter.test.cjs
+          node tests/sector-rotation-adapter.test.cjs
+          node tests/sector-cache-rotation-bridge.test.cjs

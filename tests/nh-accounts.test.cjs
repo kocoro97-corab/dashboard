@@ -1,8 +1,8 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');const vm=require('node:vm');
 function backend({overseasFailure=false,paged=false}={}){
   let domesticPages=0;const calls=[];
-  const ctx=vm.createContext({sessionUser_:token=>token==='test-token'?'fixture-owner':null,jsonResponse:x=>x,Utilities:{formatDate:()=> 'fixture timestamp'}});
-  vm.runInContext(fs.readFileSync(path.join(__dirname,'../gas/Nhplug.gs'),'utf8'),ctx);
+  const ctx=vm.createContext({sessionUser_:token=>token==='test-token'?'fixture-owner':null,jsonResponse:x=>x,Utilities:{DigestAlgorithm:{SHA_256:'sha256'},computeDigest:(_,s)=>[...require('node:crypto').createHash('sha256').update(s).digest()],formatDate:()=> 'fixture timestamp'}});
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../gas/NhGatewayV2.gs'),'utf8'),ctx);vm.runInContext(fs.readFileSync(path.join(__dirname,'../gas/NhAccountsV2.gs'),'utf8'),ctx);vm.runInContext(fs.readFileSync(path.join(__dirname,'../gas/Nhplug.gs'),'utf8'),ctx);
   ctx.nhCall_=(endpoint,input,options)=>{
     calls.push({endpoint,input,options});
     if(endpoint==='/n2/acctinfo')return {http:200,body:{Output_0:[{acct_no:'SYNTHETIC-ACCOUNT-A',acct_type:'01'},{acct_no:'SYNTHETIC-MOCK',acct_type:'03'},{acct_no:'SYNTHETIC-PENSION',acct_type:'04'}]}};

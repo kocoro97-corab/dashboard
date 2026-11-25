@@ -60,8 +60,10 @@ test('OCR does not steal numbers from adjacent cash or quantity-only rows',()=>{
   assert.equal(row.quantity,null);assert.equal(row.avgPrice,null);assert.equal(row.needsReview,true);
 });
 test('missing headers or missing word coordinates do not trigger positional guessing',()=>{
+  assert.equal(core.parse({text:'synthetic text only'},'ISA',index).layoutVerified,false);
   assert.equal(core.parse({text:'카카오 10 100'},'ISA',index).holdings.length,0);
   const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/irp-ocr.json')));
+  assert.equal(core.parse(fixture.data,fixture.accountType,index).layoutVerified,true);
   fixture.data.words=fixture.data.words.filter(x=>x.bbox.y0!==180);
   assert.match(core.parse(fixture.data,'IRP',index).warnings[0],/머리글/);
 });
@@ -93,4 +95,94 @@ test('an explicit code column is separated from the name and contradictory OCR c
   const data={words:[w('종목코드',10,90,100),w('종목명',150,100,100),w('수량',610,110,100),w('평균매입가',800,140,100),w('999999',10,80,200),w('카카오',150,100,200),w('101',650,40,200),w('20,100',840,90,200)]};
   const result=core.parse(data,'ISA',index);assert.equal(result.holdings.length,1);assert.equal(result.holdings[0].name,'카카오');assert.equal(result.holdings[0].code,'');assert.match(result.warnings[0],/불일치/);
   data.words.find(x=>x.text==='999999').text='035720';assert.equal(core.parse(data,'ISA',index).holdings[0].code,'035720');
+});
+test('overlapping name and numeric boxes with different center lines remain one review row',()=>{
+  const w=(text,x,y,width=70)=>({text,bbox:{x0:x,x1:x+width,y0:y,y1:y+20}});
+  const data={words:[w('종목명',20,100),w('수량',450,100),w('매입가',700,100),
+    w('AB글라즈',20,200,140),w('7',450,212),w('1,300',700,212),
+    w('현금',20,250),w('999',450,250),w('9,999',700,250)]};
+  const result=core.parse(data,'ISA',index);
+  assert.equal(result.holdings.length,1);
+  assert.equal(result.holdings[0].name,'AB글라즈');assert.equal(result.holdings[0].code,'');
+  assert.equal(result.holdings[0].quantity,7);assert.equal(result.holdings[0].avgPrice,1300);
+  assert.equal(result.holdings[0].needsReview,true);assert.equal(result.regions.length,1);
+});
+test('single-language crop correction requires high-confidence exact full master name',()=>{
+  const word=(text,x=0,confidence=99)=>({text,confidence,bbox:{x0:x,x1:x+80,y0:0,y1:20}});
+  const korean={words:[word('카카오')]},english={words:[word('UNKNOWN')]};
+  assert.equal(core.refinedName(korean,english,index),'카카오');
+  korean.words[0].confidence=30;assert.equal(core.refinedName(korean,english,index),null);
+  korean.words[0]=word('카카O');assert.equal(core.refinedName(korean,english,index),null);
+  korean.words=[word('카카오'),word('서호전기',100)];assert.equal(core.refinedName(korean,english,index),null);
+  korean.words=[word('카카오')];english.words=[word('서호전기')];assert.equal(core.refinedName(korean,english,index),null);
+});
+test('the overlap allowance never fills values from a nonoverlapping numeric line',()=>{
+  const w=(text,x,y)=>({text,bbox:{x0:x,x1:x+80,y0:y,y1:y+20}});
+  const result=core.parse({words:[w('종목명',20,100),w('수량',450,100),w('매입가',700,100),
+    w('카카오',20,200),w('7',450,224),w('1,300',700,224)]},'ISA',index);
+  assert.equal(result.holdings.length,1);assert.equal(result.holdings[0].quantity,null);
+  assert.equal(result.holdings[0].avgPrice,null);assert.equal(result.holdings[0].needsReview,true);
+});
+test('reproduced name-header OCR confusion is accepted only with the other verified columns',()=>{
+  const w=(text,x,y)=>({text,bbox:{x0:x,x1:x+100,y0:y,y1:y+20}});
+  const words=[w('송목명',20,100),w('수량',450,100),w('매입가',700,100),
+    w('카카오',20,200),w('7',450,200),w('1,300',700,200)];
+  assert.equal(core.parse({words},'ISA',index).layoutVerified,true);
+  const failed=core.parse({words:words.filter(w=>w.text!=='매입가')},'ISA',index);
+  assert.equal(failed.layoutVerified,false);assert.equal(failed.holdings.length,0);
+  assert.deepEqual(failed.headerChecks,{name:true,quantity:true,avgPrice:false});
+  assert.equal(core.match({name:'송목명'},index).code,null);
+});
+test('separately read Latin pixels can complete a mixed name only with exact symbol evidence',()=>{
+  const s=(text,x0,x1,confidence=99)=>({text,confidence,bbox:{x0,x1,y0:10,y1:30}});
+  const korean={words:[{text:'misread',confidence:20,symbols:[s('테',45,65),s('스',66,86),s('트',87,107)]}]};
+  const bad={words:[{text:'unverified',confidence:20,symbols:[s('?',5,36,20)]}]};
+  const prefix={words:[{text:'AB',confidence:99,symbols:[s('A',5,20),s('B',21,36)]}]};
+  const master=core.master({schema:1,source:{},instruments:[{name:'AB테스트',code:'000001',type:'STOCK'},{name:'XY테스트',code:'000002',type:'STOCK'}]});
+  assert.deepEqual(core.mixedPrefixRegion(korean),{x0:0,x1:45});
+  assert.equal(core.refinedName(korean,bad,master),null);
+  assert.equal(core.refinedName(korean,bad,master,prefix),'AB테스트');
+  prefix.words[0].symbols[0].confidence=89;assert.equal(core.refinedName(korean,bad,master,prefix),null);
+  prefix.words[0].symbols[0].confidence=99;
+  const conflict={words:[{text:'XY테스트',confidence:99,bbox:{x0:0,x1:107,y0:10,y1:30}}]};
+  assert.equal(core.refinedName(korean,conflict,master,prefix),null);
+  korean.words[0].symbols[0].confidence=79;assert.equal(core.mixedPrefixRegion(korean),null);
+  assert.equal(core.refinedName(korean,bad,master,prefix),null);
+});
+test('targeted name-header reread preserves every numeric body cell and requires a real label',()=>{
+  const w=(text,x,y)=>({text,bbox:{x0:x,x1:x+80,y0:y,y1:y+20}});
+  const source={words:[w('UNKNOWN_HEADER',20,100),w('평가손익',250,100),w('수량',450,100),w('매입가',700,100),
+    w('카카오',20,200),w('7',450,200),w('1,300',700,200)]};
+  const before=core.parse(source,'ISA',index);assert.equal(before.layoutVerified,false);
+  const region=before.headerRetryRegion;assert.ok(region);assert.equal(region.x1,250);
+  const recovered={words:[{text:'종목명',bbox:{x0:40,x1:200,y0:20,y1:60}}]};
+  const merged=core.replaceHeaderRegion(source,recovered,region,2);
+  const after=core.parse(merged,'ISA',index);assert.equal(after.layoutVerified,true);
+  assert.equal(after.holdings[0].quantity,7);assert.equal(after.holdings[0].avgPrice,1300);
+  assert.equal(source.words[0].text,'UNKNOWN_HEADER');
+  assert.equal(core.parse(core.replaceHeaderRegion(source,{words:[w('STILL_UNKNOWN',40,20)]},region,2),'ISA',index).layoutVerified,false);
+  assert.throws(()=>core.replaceHeaderRegion(source,recovered,region,0));
+});
+test('numeric headers on different rows cannot supply a name-header retry region',()=>{
+  const w=(text,x,y)=>({text,bbox:{x0:x,x1:x+80,y0:y,y1:y+20}});
+  const result=core.parse({words:[w('수량',450,100),w('매입가',700,200)]},'ISA',index);
+  assert.equal(result.layoutVerified,false);assert.equal(result.headerRetryRegion,null);
+});
+test('separate Hangul pixels can repair a misread suffix without lowering confidence or hiding conflict',()=>{
+  const s=(text,x0,x1,confidence=99)=>({text,confidence,bbox:{x0,x1,y0:10,y1:30}});
+  const korean={words:[{text:'unverified',confidence:20,symbols:[s('틀',45,65,86),s('스',66,86),s('트',87,107)]}]};
+  const english={words:[{text:'AB',confidence:99,symbols:[s('A',5,20),s('B',21,36)]}]};
+  const local={words:[{text:'테스트',confidence:99,bbox:{x0:0,x1:62,y0:10,y1:30},symbols:[s('테',0,20),s('스',21,41),s('트',42,62)]}]};
+  const suffix=core.offsetReading(local,45,0);
+  const instruments=[{name:'AB테스트',code:'000001',type:'STOCK'},{name:'테스트',code:'000003',type:'STOCK'}];
+  const m=core.master({schema:1,source:{},instruments});
+  assert.equal(core.refinedName(korean,english,m),null);
+  assert.equal(core.refinedName(korean,english,m,undefined,suffix),'AB테스트');
+  assert.equal(core.refinedName(korean,undefined,m,undefined,suffix),null); // A suffix is not a full holding identity.
+  assert.equal(local.words[0].symbols[0].bbox.x0,0);
+  const conflict=core.master({schema:1,source:{},instruments:instruments.concat({name:'AB틀스트',code:'000002',type:'STOCK'})});
+  assert.equal(core.refinedName(korean,english,conflict,undefined,suffix),null);
+  suffix.words[0].symbols[0].confidence=79;
+  assert.equal(core.refinedName(korean,english,m,undefined,suffix),null);
+  assert.throws(()=>core.offsetReading(local,NaN,0));
 });

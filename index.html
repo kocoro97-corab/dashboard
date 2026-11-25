@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#0b1220">
 <title>개인 투자 대시보드</title>
 <link rel="stylesheet" href="css/style.css?v=3">
+<link rel="stylesheet" href="css/dashboard-shell.css?v=1">
+<link rel="stylesheet" href="css/dashboard-dense.css?v=20261119">
 </head>
 <body>
 
@@ -29,7 +31,7 @@
 
 <div id="appContainer">
   <header>
-    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">v34 · 로그인 복구 · 실시간 테마</div><div class="sub" id="status">시세 불러오는 중...</div></div>
+    <div><div class="brand">MY <span>INVEST</span> DASHBOARD</div><div class="sub" id="clock">KST</div><div class="sub">V2 · 메뉴 기반 대시보드</div><div class="sub" id="status">시세 불러오는 중...</div></div>
     <div class="hr">
       <span id="sessionBadge" class="badge">시장 판별 중</span>
       <button id="adminBtn" style="display:none;background:#3f261e;color:#ffab71;border-color:#f97316" onclick="openAdminModal()">👥 회원승인</button>
@@ -46,13 +48,13 @@
       <div class="mini" id="qi" style="margin-top:6px;min-height:14px"></div>
       <div class="hr" style="justify-content:space-between;margin-top:6px"><span class="tabs"><button id="qm1" onclick="qMode('l')">라인</button><button id="qm2" class="active" onclick="qMode('c')">캔들</button></span><a id="qy" target="_blank" rel="noopener" class="mini">Yahoo Finance ↗</a></div>
     </section>
-    <section>
+    <section id="marketSection">
       <div class="sh"><div><h2 id="mt">시장 종합</h2><p id="ms"></p></div>
         <div class="hr"><span class="mini" id="mkSt"></span><button id="mkBtn" onclick="refreshMarket()">↻ 지수 갱신</button></div></div>
       <div class="grid mg" id="cards"></div>
     </section>
     <div class="grid two">
-      <section class="card">
+      <section class="card" id="tickSection">
         <div class="sh"><div><h2>NYSE $TICK</h2><p>실시간(TradingView)</p></div></div>
         <div id="tickq" style="height:110px"></div>
         <div class="gauge"><i></i><i></i><i></i><i></i><i></i><b id="tm"></b></div>
@@ -60,55 +62,59 @@
         <div class="kr"><span>현재 $TICK 입력</span><span><input type="number" id="tin" style="width:90px" placeholder="예: 420" oninput="setTick()"> <b id="tl2" class="neutral">—</b></span></div>
         <div class="mini" id="tickSt" style="margin-top:6px;line-height:1.6"></div>
       </section>
-      <section class="card">
-        <div class="sh"><div><h2>오늘의 시장 시나리오</h2><p id="gptTime">AI 분석</p></div>
+      <section class="card" id="strategySection">
+        <div class="sh"><div><h2>오늘의 시장 시나리오</h2><p id="gptTime">규칙 기반 분석</p></div>
         <div class="hr"><button onclick="copyScenario()">시나리오 복사</button><button onclick="refreshScenario()">↻ 재분석</button></div></div>
         <div id="gv" style="white-space:pre-wrap;line-height:1.6;font-size:11px"></div>
       </section>
     </div>
-    <section>
+    <section id="themesSection">
       <div class="sh"><div><h2>실시간 주도 테마 & 강도판</h2><p id="thS">거래대금·거래량·상승률 종합</p></div><button onclick="THM_AT=0;fetchTopThemes()">↻ 테마 갱신</button></div>
       <div class="grid three" id="themes"></div>
     </section>
     <section class="card" id="nhAccountSection">
-      <div class="sh"><div><h2>NH 나무 일반계좌 · 실시간 잔고</h2><p>운영 일반계좌(01·02)만 조회 · ISA·연금저축·IRP 및 모의계좌 제외 · 주문 기능 없음</p><div class="mini" id="nhAccountStatus">계좌 조회 대기</div></div>
+      <div class="sh"><div><h2>일반계좌 · NH 나무 조회 전용</h2><p>일반계좌(01·02)만 조회 · ISA·연금저축·IRP 및 모의계좌 제외 · 주문 기능 없음</p><div class="mini" id="nhAccountStatus">계좌 조회 대기</div></div>
         <div class="hr"><select id="nhAssetFilter" onchange="renderNHAccounts()"><option value="all">국내+해외 전체</option><option value="domestic">국내주식</option><option value="overseas">해외주식</option></select><button id="nhAccountBtn" onclick="loadNHAccounts()">↻ 계좌 잔고 조회</button></div></div>
       <div class="grid three" id="nhAccountCards" style="margin-bottom:8px"></div>
       <div class="tw"><table><thead><tr><th>계좌</th><th>구분</th><th>종목</th><th>코드</th><th>수량</th><th>평단가</th><th>현재가</th><th>평가금액(원)</th><th>평가손익(원)</th><th>수익률</th></tr></thead><tbody id="nhAccountRows"><tr><td colspan="10" style="text-align:center">조회 버튼을 눌러 NH 계좌 잔고를 불러오세요.</td></tr></tbody></table></div>
     </section>
     <section class="card" id="externalAssetSection">
-      <div class="sh"><div><h2>외부계좌 통합 자산관리 · ISA / 연금저축 / IRP</h2><p>캡처 이미지 인식 → 종목·수량 확인 → NH 현재가 조회 · 주문 기능 없음</p><div class="mini" id="externalStatus">외부계좌 자료를 불러오는 중...</div></div>
+      <div class="sh"><div><h2>외부계좌 · 증권사별 계좌 관리</h2><p>캡처 이미지 인식 → 종목·수량 확인 → NH 현재가 조회 · 주문 기능 없음</p><div class="mini" id="externalStatus">외부계좌 자료를 불러오는 중...</div></div>
         <div class="hr"><button onclick="refreshExternalPrices()">↻ 현재가 새로고침</button></div></div>
       <div class="mini" id="externalMasterStatus">종목 마스터 확인 중...</div>
       <div class="hr" style="margin:6px 0"><button onclick="applyExternalMatchedCodes()">마스터 코드 적용 확인</button><button id="externalUndoBtn" onclick="undoExternalChange()" disabled>삭제·편집 취소</button><button onclick="showExternalHistory()">저장 복구 기록</button></div>
       <div class="grid three" id="externalSummaryCards"></div>
       <details><summary>시세 실패 진단</summary><div id="externalQuoteDiagnostics" class="mini"></div></details>
       <details><summary>저장 복구 미리보기</summary><div id="externalHistory"></div></details>
+      <div class="hr" style="margin:8px 0"><button type="button" id="externalOpenImport" data-shell-control="true" onclick="ExternalAccountUI.openImport()">+ 외부계좌 자료 추가 (OCR·직접 입력)</button><span class="mini">등록된 종목은 아래 표에서 수정·삭제하고 검토 후 저장할 수 있습니다.</span></div>
+      <div id="externalImportDialog" role="dialog" aria-modal="true" aria-label="외부계좌 자료 입력" onkeydown="if(event.key===&quot;Escape&quot;){this.hidden=true;document.getElementById(&quot;externalOpenImport&quot;).focus()}" onclick="if(event.target===this){this.hidden=true;document.getElementById(&quot;externalOpenImport&quot;).focus()}" hidden style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.75);overflow:auto;padding:clamp(12px,4vw,40px)">
+      <div class="card" style="max-width:900px;margin:2vh auto;max-height:90vh;overflow:auto">
+      <div class="hr" style="justify-content:space-between"><h2>외부계좌 자료 입력</h2><button type="button" data-shell-control="true" onclick="ExternalAccountUI.closeImport()">닫기 ✕</button></div>
+      <p class="mini">OCR 또는 직접 입력을 선택하세요. 등록된 값은 저장 전에 표에서 검토·수정할 수 있습니다.</p>
       <div class="hr" style="margin:8px 0;align-items:flex-end">
-        <label>계좌 구분<br><select id="externalAccountType"><option value="ISA">ISA</option><option value="PENSION">연금저축</option><option value="IRP">IRP</option></select></label>
+        <label>계좌 구분<br><select id="externalAccountType"><option value="ISA">ISA</option><option value="PENSION">연금저축</option><option value="IRP">IRP</option><option value="BROKER">다른 증권사</option></select></label><label id="externalBrokerSelectWrap" hidden>증권사명 직접 입력<br><input id="externalBrokerNameInput" type="text" maxlength="30" placeholder="예: 토스증권, 키움증권" list="externalBrokerNames"><datalist id="externalBrokerNames"></datalist></label><button type="button" id="externalBrokerAdd" onclick="addExternalBrokerChoice()">입력한 증권사 추가</button><button type="button" id="externalBrokerRemove" onclick="removeExternalBrokerChoice()">증권사 삭제</button>
         <label>캡처 이미지 직접 업로드<br><input type="file" id="externalImageFiles" accept="image/*" multiple></label>
         <button id="externalUploadBtn" onclick="processExternalUploads()">이미지 인식</button>
       </div>
-      <div class="hr" style="margin:6px 0;align-items:flex-end">
-        <label style="flex:1;min-width:220px">Google Drive 폴더 ID<br><input id="externalDriveFolder" type="text" placeholder="Drive 폴더 ID 붙여넣기" style="width:100%"></label>
-        <button onclick="importExternalDriveImages()">Drive 이미지 가져오기</button>
-      </div>
+      <div class="mini" style="margin:8px 0">Google Drive 연동은 전체 기능 개발 이후 진행합니다. 현재는 이미지 업로드 또는 직접 입력을 이용하세요.</div>
+      <input type="hidden" id="externalDriveFolder" value="">
       <div class="hr" style="margin:6px 0;align-items:flex-end">
         <label>종목코드(선택·6자리)<br><input id="externalManualCode" maxlength="20" placeholder="예: 360750"></label>
         <label>종목명<br><input id="externalManualName" placeholder="ETF/주식명 또는 코드 검색" list="externalMasterNames" oninput="suggestExternalNames(this.value)"><datalist id="externalMasterNames"></datalist></label>
         <label>수량<br><input id="externalManualQty" type="number" min="0" step="any" placeholder="0"></label>
         <label>평균매입가<br><input id="externalManualAvg" type="number" min="0" step="any" placeholder="0"></label>
-        <button onclick="addExternalManual()">종목 직접 추가</button>
+        <button id="externalManualAddBtn" onclick="addExternalManual()">종목 직접 추가</button>
       </div>
-      <div class="mini" style="line-height:1.6;margin:4px 0 8px">Drive 폴더에는 계좌별 캡처 이미지를 넣어주세요. 이미지 파일을 읽으려면 Apps Script 배포 계정에 해당 폴더 접근권한이 필요합니다. 인식 결과는 저장 전에 직접 확인·수정할 수 있습니다.</div>
+      <div class="mini" style="line-height:1.6;margin:4px 0 8px">이미지 인식 결과와 직접 입력한 종목은 아래 외부계좌 표에서 확인·수정한 뒤 저장하세요. Google Drive 가져오기는 추후 활성화합니다.</div>
       <div id="externalOcrProgress" class="mini" style="margin:6px 0"></div>
+      </div></div>
       <div class="tw"><table style="min-width:760px"><thead><tr><th>계좌</th><th>종목명</th><th>종목코드</th><th>보유수량</th><th>평균매입가</th><th>현재가(NH)</th><th>평가금액</th><th>평가손익</th><th>관리</th></tr></thead><tbody id="externalAssetRows"><tr><td colspan="9" style="text-align:center">등록된 외부계좌 종목이 없습니다.</td></tr></tbody></table></div>
       <div class="hr" style="justify-content:space-between;margin-top:8px"><div class="hr"><label class="mini"><input type="checkbox" id="externalAutoRefresh"> 자동갱신 사용</label><label class="mini">간격 <select id="externalAutoMinutes"><option value="5">5분</option><option value="10" selected>10분</option><option value="30">30분</option><option value="60">60분</option></select></label></div><button onclick="saveExternalSettings()">갱신 설정 저장</button></div>
       <div class="mini" style="margin-top:5px">기본 설정은 자동갱신 꺼짐입니다. 대시보드 접속 시 1회 조회하며, 이후에는 수동 새로고침을 사용합니다. 자동갱신을 켜면 선택한 간격으로 현재가만 갱신합니다.</div>
     </section>
-    <div class="grid two">
+    <div class="grid two" id="newsSection">
       <section class="card"><div class="sh"><div><h2>실시간 시장 뉴스</h2><p id="nst_mk">기사 불러오는 중...</p></div></div><div id="nl_mk"></div></section>
-      <section class="card"><div class="sh"><div><h2>내 보유종목 뉴스</h2><p id="nst_hd">기사 불러오는 중...</p></div></div><div id="nl_hd"></div></section>
+      <section class="card"><div class="sh"><div><h2>기본 관심종목 뉴스</h2><p id="nst_hd">기사 불러오는 중...</p></div></div><div id="nl_hd"></div></section>
     </div>
   </main>
 </div>
@@ -129,24 +135,85 @@
 <div class="hr" style="justify-content:space-between"><h3 style="font-size:14px">🩺 연결 진단</h3><button onclick="closeDg()">✕</button></div>
 <div class="mb"><div id="dgs" style="font-weight:700"></div>
 <pre id="dgl" style="font-size:10px;white-space:pre-wrap;color:var(--muted)"></pre>
-<div class="mini">GAS 웹 앱 URL:</div>
+<div class="mini">연결 주소 (중계 연결에서는 배포 설정으로 관리):</div>
 <input id="dgp" style="width:100%;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px;font:inherit">
-<button onclick="saveProxy()" style="background:var(--blue);color:#000;font-weight:700;margin-top:6px">저장 후 테스트</button>
+<button id="saveProxyBtn" onclick="saveProxy()" style="background:var(--blue);color:#000;font-weight:700;margin-top:6px">저장 후 테스트</button>
 </div></div></div>
 
 <!-- 스크립트: 순서를 바꾸지 마세요. 코드 수정 후 반영이 안 되면 ?v= 숫자를 올리세요. -->
-<script src="js/diagnostics.js?v=1-safe"></script>
-<script src="js/debug.js?v=3-safe"></script>
-<script src="js/auth.js?v=13-safe"></script>
-<script src="js/data.js?v=10-security"></script>
-<script src="js/market.js?v=13-safe"></script>
-<script src="js/chart.js?v=4"></script>
-<script src="js/themes.js?v=5-safe"></script>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
-<script src="js/external_core.js?v=12-real-ocr"></script>
-<script src="js/external_accounts.js?v=13-safe"></script>
-<script src="js/init.js?v=13-safe"></script>
+<script defer src="js/diagnostics.js?v=1-safe"></script>
+<script defer src="js/debug.js?v=3-safe"></script>
+<script defer src="js/read-status.js?v=1"></script>
+<script defer src="js/transport.js?v=1"></script>
+<script defer src="js/auth.js?v=14-transport"></script>
+<script defer src="js/data.js?v=10-security"></script>
+<script defer src="js/market-source-priority.js?v=1"></script>
+<script defer src="js/market.js?v=15-transport"></script>
+<script defer src="js/chart.js?v=4"></script>
+<script defer src="js/themes.js?v=5-safe"></script>
+<!-- Tesseract.js is requested only when image OCR starts (external_accounts.js). -->
+<script defer src="js/external_core.js?v=12-real-ocr"></script>
+<script defer src="js/external_accounts.js?v=15-transport"></script>
+<script defer src="js/dev_accounts.js?v=1"></script>
+<script defer src="js/external-account-ui.js?v=1"></script>
+<script defer src="js/work-portfolio.js?v=1"></script>
+<script defer src="js/account-overview.js?v=1"></script>
+<script defer src="js/app-router.js?v=1"></script>
+<script defer src="js/app-context.js?v=1"></script>
+<script defer src="js/page-adapter.js?v=1"></script>
+<script defer src="js/instrument-names.js?v=1"></script>
+<script defer src="js/invest-workflow.js?v=1"></script>
+<script defer src="js/home-market-policy.js?v=1"></script>
+<script defer src="js/page-home.js?v=2"></script>
+<script defer src="js/page-market.js?v=1"></script>
+<script defer src="js/industry-data.js?v=1"></script>
+<script defer src="js/sector-insights.js?v=1"></script>
+<script defer src="js/exchange-session-proof.js?v=1"></script>
+<script defer src="js/sector-rotation-adapter.js?v=1"></script>
+<script defer src="js/sector-rotation-engine.js?v=1"></script>
+<script defer src="js/sector-cache-rotation-bridge.js?v=1"></script>
+<script defer src="js/page-sectors.js?v=1"></script>
+<script defer src="js/page-stocks.js?v=1"></script>
+<script defer src="js/market-regime-engine.js?v=1"></script>
+<script defer src="js/stock-setup-adapter.js?v=1"></script>
+<script defer src="js/stock-setup-engine.js?v=1"></script>
+<script defer src="js/integrated-strategy-engine.js?v=1"></script>
+<script defer src="js/integrated-event-adapter.js?v=1"></script>
+<script defer src="js/opportunity-review-queue.js?v=1"></script>
+<script defer src="js/cached-strategy-bridge.js?v=1"></script>
+<script defer src="js/analysis-integration-panel-v1.js?v=1"></script>
+<script defer src="js/page-strategy.js?v=1"></script>
+<script defer src="js/invest-calendar-policy.js?v=1"></script>
+<script defer src="js/calendar-market-holidays.js?v=1"></script>
+<script defer src="js/calendar-korean-holidays.js?v=1"></script>
+<script defer src="js/calendar-ics-import.js?v=1"></script>
+<script defer src="js/calendar-google-sync.js?v=1"></script>
+<script defer src="js/calendar-google-auth.js?v=1"></script>
+<script defer src="js/calendar-google-transport.js?v=1"></script>
+<script defer src="js/economic-bls-parser.js?v=1"></script>
+<script defer src="js/economic-calendar.js?v=1"></script>
+<script defer src="js/economic-bea-parser.js?v=1"></script>
+<script defer src="js/economic-bea-calendar.js?v=1"></script>
+<script defer src="js/economic-fomc-schedule.js?v=1"></script>
+<script defer src="js/economic-bok-policy.js?v=1"></script>
+<script defer src="js/economic-bok-stats-parser.js?v=1"></script>
+<script defer src="js/economic-bok-stats-calendar.js?v=1"></script>
+<script defer src="js/earnings-calendar.js?v=1"></script>
+<script defer src="js/economic-policy-calendar.js?v=1"></script>
+<script defer src="js/invest-event-context.js?v=1"></script>
+<script defer src="js/news-briefing-archive-v1.js?v=1"></script>
+<script defer src="js/news-briefing-transfer-v1.js?v=1"></script>
+<script defer src="js/news-briefing-panel-v1.js?v=1"></script>
+<script defer src="js/news-briefing-public-feed-v1.js?v=1"></script>
+<script defer src="js/page-news.js?v=2"></script>
+<script defer src="js/page-accounts.js?v=1"></script>
+<script defer src="js/page-settings.js?v=1"></script>
+<script defer src="js/work-macro-live-preview.js?v=2"></script>
+<script defer src="js/web-performance-metrics.js?v=1"></script>
+<script defer src="js/app-shell.js?v=2"></script>
+<script defer src="js/init.js?v=13-safe"></script>
 
+<script defer src="js/dashboard-presentation.js?v=1"></script>
 </body>
 </html>
 

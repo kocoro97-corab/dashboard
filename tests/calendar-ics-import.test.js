@@ -1,0 +1,17 @@
+'use strict';
+const assert=require('node:assert/strict');
+const api=require('../js/calendar-ics-import.js');
+const sample='BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:abc\r\nDTSTART;VALUE=DATE:20261224\r\nSUMMARY:Family event\r\nEND:VEVENT\r\nEND:VCALENDAR';
+const imported=api.importText(sample);
+assert.equal(imported.events.length,1);
+assert.equal(imported.events[0].date,'2026-12-24');
+assert.equal(imported.events[0].title,'Family event');
+assert.equal(imported.events[0].verified,false);
+assert.equal(api.parseIcs(sample.replace('END:VCALENDAR','BEGIN:VEVENT\r\nUID:abc\r\nDTSTART;VALUE=DATE:20261224\r\nSUMMARY:Family event\r\nEND:VEVENT\r\nEND:VCALENDAR')).events.length,1);
+assert.throws(()=>api.parseIcs('not an ICS file'),/ICS_INVALID/);
+assert.throws(()=>api.parseIcs('x'.repeat(1048577)),/ICS_FILE_TOO_LARGE/);
+api.clear();assert.equal(api.list().length,0);
+const recurring=sample.replace('SUMMARY:Family event','RRULE:FREQ=YEARLY\r\nSUMMARY:Family event');
+assert.equal(api.parseIcs(recurring).recurrences,1);
+assert.equal(api.parseIcs(recurring).events.length,1);
+console.log('ICS read-only importer PASS (10 assertions)');

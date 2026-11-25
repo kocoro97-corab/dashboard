@@ -1,0 +1,20 @@
+'use strict';
+// Run: node tests/calendar-korean-holidays.test.js
+const assert=require('node:assert/strict');
+const calendar=require('../js/calendar-korean-holidays.js');
+const all=calendar.list(2026);
+const publicDays=all.filter(x=>x.category==='holidayKR');
+const closures=all.filter(x=>x.category==='closeKRX');
+const find=(day,category)=>all.find(x=>x.date===day&&x.category===category);
+assert.equal(publicDays.length,22);
+assert.equal(closures.length,17);
+assert.ok(find('2026-05-01','holidayKR'));
+assert.ok(find('2026-05-01','closeKRX'));
+assert.ok(find('2026-06-03','closeKRX'));
+assert.ok(find('2026-07-17','closeKRX'));
+assert.ok(find('2026-12-31','closeKRX'));
+assert.equal(find('2026-12-31','holidayKR'),undefined);
+assert.equal(calendar.list(2027).length,0,'2027 calendar is not yet verified in this module');
+assert.equal(new Set(all.map(x=>x.id)).size,all.length,'No duplicate event IDs');
+assert.ok(all.every(x=>x.verified&&x.sourceUrl.startsWith('https://')));
+console.log('Korean calendar tests PASS (11 checks)');

@@ -36,7 +36,7 @@ def apply_security(files, nhplug_source, root=Path("gas")):
     matches[0]["source"] = source
     nh = next(f for f in files if f["name"] == "Nhplug")
     nh["source"] = nhplug_source
-    for name in ("Security", "SecurityKdf", "ExternalHoldings"):
+    for name in ("Security", "SecurityKdf", "ExternalHoldings", "NhGatewayV2", "NhAccountsV2", "NhForeignIdentityV2", "NhSnapshotV2", "AccountStoreV2"):
         replacement = (root / (name + ".gs")).read_text()
         existing = next((f for f in files if f["name"] == name), None)
         if existing:

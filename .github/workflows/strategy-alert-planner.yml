@@ -1,0 +1,24 @@
+name: Strategy risk alert planner unit tests
+on:
+  push:
+    branches: [feat/nh-integration-v2]
+    paths:
+      - 'js/strategy-alert-planner.js'
+      - 'tests/strategy-alert-planner.test.cjs'
+      - '.github/workflows/strategy-alert-planner.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  risk-alert-planner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax and deterministic no-send regression
+        run: |
+          node --check js/strategy-alert-planner.js
+          node --check tests/strategy-alert-planner.test.cjs
+          node tests/strategy-alert-planner.test.cjs

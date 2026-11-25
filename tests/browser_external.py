@@ -46,6 +46,9 @@ with sync_playwright() as playwright:
 
         def route_request(route):
             url = route.request.url
+            # Isolate the existing module contract; full routing has its own integration test.
+            if '/js/app-shell.js' in url:
+                route.fulfill(content_type='application/javascript',body='');return
             if "127.0.0.1" in url:
                 if "/js/init.js" in url:
                     # Keep definitions, isolate unrelated market/chart initialization.
@@ -111,6 +114,7 @@ with sync_playwright() as playwright:
         diagnostic = page.locator("#externalQuoteDiagnostics").inner_text()
         assert ("NH_RSP" if kind == "isa" else "GAS_HTTP" if kind == "pension" else "FRONTEND_NETWORK") in diagnostic, {'account':kind,'diagnostic':diagnostic,'status':page.locator('#externalStatus').inner_text(),'master':page.evaluate('EXT_MASTER_ERROR'),'errors':errors}
         assert page.locator("#externalAssetRows tr td").nth(5).inner_text() == "시세 미확인"
+        page.locator('#externalOpenImport').click()
         page.select_option("#externalAccountType", fixture["accountType"])
         page.evaluate("data=>{window.Tesseract={recognize:async()=>({data})}}", fixture["data"])
         page.locator("#externalImageFiles").set_input_files({"name": "synthetic.png", "mimeType": "image/png", "buffer": pixel})
@@ -128,6 +132,7 @@ with sync_playwright() as playwright:
         page.click("#externalUploadBtn")
         page.wait_for_function("!$('externalUploadBtn').disabled")
         assert page.evaluate("EXT_ASSETS.length") == expected_count
+        page.get_by_role("button",name="닫기 ✕",exact=True).click()
         page.locator("#externalAssetRows tr").first.locator("button").click()
         assert page.evaluate("EXT_ASSETS.length") == expected_count - 1
         page.click("#externalUndoBtn")

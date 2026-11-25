@@ -20,19 +20,28 @@ function securityEnvironmentGuard_(body){
   if(body.action==='register')throw new Error('STAGING_REGISTRATION_DISABLED');
   if(body.action!=='appVersion'&&body.stagingBinding!==stagingHash_(sheet.getId()))throw new Error('STAGING_BINDING_REQUIRED');
 }
+function securityEnvironmentSessionIdleMs_(){
+  const sheet=stagingSheet_(),props=PropertiesService.getScriptProperties();
+  return props.getProperty('NH_V2_FRESH_TEST')==='true'&&ScriptApp.getScriptId()!==NH_SNAPSHOT_OLD_SCRIPT&&sheet.getId()!==NH_SNAPSHOT_OLD_SHEET?3600000:300000;
+}
+function securityEnvironmentSessionMetadata_(session){
+  return {developmentSessionPolicyVersion:1,sessionIdleMs:session?securitySessionIdleMs_(session):securityEnvironmentSessionIdleMs_(),sessionAbsoluteMs:28800000};
+}
 function securityEnvironmentMetadata_(){
   const props=PropertiesService.getScriptProperties();const sheet=stagingSheet_();
-  return {testEnvironment:'nh-staging',scriptHash:stagingHash_(ScriptApp.getScriptId()),sheetHash:stagingHash_(sheet.getId()),sourceDigest:NH_STAGING_SOURCE_DIGEST,revision:NH_STAGING_REVISION,storeVersion:2,nhTestCredentialsDeclared:props.getProperty('NHPLUG_KEY_USAGE')==='staging-readonly'&&!!props.getProperty('NHPLUG_APP_KEY')&&!!props.getProperty('NHPLUG_APP_SECRET')};
+  return Object.assign({freshTestEnvironment:props.getProperty('NH_V2_FRESH_TEST')==='true'&&ScriptApp.getScriptId()!==NH_SNAPSHOT_OLD_SCRIPT&&sheet.getId()!==NH_SNAPSHOT_OLD_SHEET,gatewayVersion:2,storeEngine:'account-store-v2',testEnvironment:'nh-staging',scriptHash:stagingHash_(ScriptApp.getScriptId()),sheetHash:stagingHash_(sheet.getId()),sourceDigest:NH_STAGING_SOURCE_DIGEST,revision:NH_STAGING_REVISION,storeVersion:2,nhTestCredentialsDeclared:props.getProperty('NHPLUG_KEY_USAGE')==='staging-readonly'&&!!props.getProperty('NHPLUG_APP_KEY')&&!!props.getProperty('NHPLUG_APP_SECRET')},securityEnvironmentSessionMetadata_(),typeof calendarIdentityMetadata_==='function'?calendarIdentityMetadata_():{});
 }
 function getSheet(name){const ss=stagingSheet_();let sheet=ss.getSheetByName(name);if(!sheet){sheet=ss.insertSheet(name);if(name==='Users')sheet.appendRow(['userId','password','status','isAdmin','createdAt'])}return sheet}
 function jsonResponse(value){return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON)}
 function getSession_(token){return securitySession_(token)}
 function sessionUser_(token){const session=securitySession_(token);return session?session.u:null}
 function deleteSession_(token){if(typeof token==='string')PropertiesService.getScriptProperties().deleteProperty('S_'+token)}
-function purgeSessions_(){const props=PropertiesService.getScriptProperties(),all=props.getProperties();Object.keys(all).filter(k=>k.startsWith('S_')).forEach(k=>{try{if(Date.now()-JSON.parse(all[k]).t>300000)props.deleteProperty(k)}catch(error){props.deleteProperty(k)}})}
+function purgeSessions_(){const idle=securityIdleMs_(),props=PropertiesService.getScriptProperties(),all=props.getProperties();Object.keys(all).filter(k=>k.startsWith('S_')).forEach(k=>{try{const s=JSON.parse(all[k]);if(!s||s.v!==2||!Number.isFinite(s.t)||!Number.isFinite(s.c)||s.t>Date.now()+1000||Date.now()-s.t>securitySessionIdleMs_(s,idle)||Date.now()-s.c>28800000)props.deleteProperty(k)}catch(error){props.deleteProperty(k)}})}
 function verifyAdmin(token){const user=sessionUser_(token);const found=user&&securityFindUser_(user);return !!found&&String(found.row[3])==='true'}
 function securityLegacyDoPost_(e){
   const body=JSON.parse(e.postData.contents);securityEnvironmentGuard_(body);
+  if(body.action==='calendarPrivateIdentityV1')return handleCalendarIdentityV1_(body);
+  if(body.action==='calendarOwnerConfigureIdentityV1')return configureCalendarIdentityV1_(body);
   if(body.action==='nhAccounts')return handleNhAccounts(body.token);
   if(body.action==='nhExternalQuotes')return handleNhExternalQuotes(body.token,body.codes);
   if(body.action==='nhQuotes')return handleNhQuotes(body.token,body.items);
@@ -52,5 +61,15 @@ function setupNhStaging(){
   if(found){if(!securityVerifyPassword_(password,found.row[1])||String(found.row[2])!=='approved'||String(found.row[3])!=='true')throw new Error('EXISTING_STAGING_USER_MISMATCH')}
   else{if(users.getLastRow()>1)throw new Error('STAGING_USERS_NOT_EMPTY');users.appendRow([user,securityNewPassword_(password),'approved','true',new Date()])}
   props.deleteProperty('STAGING_TEST_PASSWORD');
-  Logger.log(JSON.stringify({environment:'nh-staging',scriptId:ScriptApp.getScriptId(),spreadsheetId:sheet.getId(),revision:NH_STAGING_REVISION}));
+  Logger.log(JSON.stringify({status:'STAGING_SETUP_OK',sourceOrValuesIncluded:false}));
+}
+
+// Fresh follow-up environment only. Refuses existing test project and any pre-bound Sheet.
+function setupNhFreshV2(){
+  stagingProjectGuard_();const p=PropertiesService.getScriptProperties();
+  if(ScriptApp.getScriptId()===NH_SNAPSHOT_OLD_SCRIPT||p.getProperty('APP_ENV')||p.getProperty('STAGING_SHEET_ID'))throw new Error('FRESH_UNBOUND_PROJECT_REQUIRED');
+  if(!/^[A-Za-z0-9][A-Za-z0-9_.-]{1,63}$/.test(p.getProperty('STAGING_TEST_USER')||'')||(p.getProperty('STAGING_TEST_PASSWORD')||'').length<16||(p.getProperty('STAGING_TEST_PASSWORD')||'').length>256||p.getProperty('NHPLUG_KEY_USAGE')!=='staging-readonly'||!p.getProperty('NHPLUG_APP_KEY')||!p.getProperty('NHPLUG_APP_SECRET'))throw new Error('PRIVATE_TEST_SETTINGS_REQUIRED');
+  const sheet=SpreadsheetApp.create('NH-STAGING V2 FRESH '+NH_STAGING_REVISION.slice(0,12));
+  p.setProperty('STAGING_SHEET_ID',sheet.getId());p.setProperty('NH_V2_FRESH_TEST','true');
+  setupNhStaging();
 }

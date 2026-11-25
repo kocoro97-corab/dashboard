@@ -1,6 +1,7 @@
 /* ===== 진단용: 스크립트 오류를 화면 아래에 표시 ===== */
 (function(){
-  function show(m){
+  function show(m,code){
+    if(window.DevelopmentDiagnostics?.runtime(code||'BOOTSTRAP_MISSING_MODULE'))return;
     var el=document.getElementById('authMsg');if(el)el.textContent=m;
     var b=document.getElementById('errBar');
     if(!b){b=document.createElement('div');b.id='errBar';
@@ -8,8 +9,8 @@
       document.body.appendChild(b)}
     b.textContent=m;
   }
-  window.addEventListener('error',function(e){e.preventDefault();show('⚠ 스크립트 오류 [SCRIPT_ERROR]')});
-  window.addEventListener('unhandledrejection',function(e){e.preventDefault();show('⚠ 비동기 오류 [ASYNC_ERROR]')});
+  window.addEventListener('error',function(e){e.preventDefault();show('⚠ 스크립트 오류 [SCRIPT_ERROR]','SCRIPT_ERROR')});
+  window.addEventListener('unhandledrejection',function(e){e.preventDefault();show('⚠ 비동기 오류 [ASYNC_ERROR]','ASYNC_ERROR')});
   window.addEventListener('load',function(){
     if(typeof handleAuthSubmit!=='function')show('⚠ 로그인 스크립트(auth.js)가 실행되지 않았습니다.');
     else if(typeof fetchTopThemes!=='function')show('⚠ themes.js 등 나머지 스크립트가 없거나 오류가 있습니다.');

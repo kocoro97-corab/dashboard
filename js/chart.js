@@ -6,6 +6,21 @@ const qKey=(t,i)=>{const d=new Date(t);if(i===3)return d.getFullYear();if(i===2)
 function qAgg(rows,i){const out=[];let ck=null;rows.forEach(d=>{const k=qKey(d.t,i),o=d.o==null?d.c:d.o,h=d.h==null?d.c:d.h,l=d.l==null?d.c:d.l;
   if(k!==ck){out.push({t:d.t,o:o,h:h,l:l,c:d.c});ck=k}else{const x=out[out.length-1];x.h=Math.max(x.h,h);x.l=Math.min(x.l,l);x.c=d.c}});return out}
 let QX=null,qrg=0,qmd='c',QD=[],qhi=-1,qseq=0;
+// Public chart data only, scoped to the current development login and target.
+const Q_CACHE=new Map();let Q_CACHE_TOKEN=null,Q_CACHE_ENDPOINT=null,Q_CACHE_SCOPE=0;
+function clearChartCache(){Q_CACHE.clear();Q_CACHE_TOKEN=null;Q_CACHE_ENDPOINT=null;Q_CACHE_SCOPE++}
+function chartCacheScope(){
+  const cfg=window.MYINVEST_TRANSPORT_CONFIG,token=typeof LS==='function'?LS('invest_session_token'):null;
+  if(!cfg||cfg.devSession!==true||cfg.publicMarket!==true||!token||typeof sessionLeftMs!=='function'||sessionLeftMs()<=0){clearChartCache();return null}
+  if(token!==Q_CACHE_TOKEN||cfg.endpoint!==Q_CACHE_ENDPOINT){clearChartCache();Q_CACHE_TOKEN=token;Q_CACHE_ENDPOINT=cfg.endpoint}
+  return Q_CACHE_SCOPE;
+}
+function rememberChart(i,source,scope){
+  if(scope===null||chartCacheScope()!==scope||!QD.length)return;
+  const key=QX.y+'|'+i;Q_CACHE.delete(key);
+  if(Q_CACHE.size>=12)Q_CACHE.delete(Q_CACHE.keys().next().value);
+  Q_CACHE.set(key,{at:Date.now(),rows:QD.map(row=>({...row})),source});
+}
 const ysym=c=>isKR(c)?[...new Set([KY[c]||c+'.KS',c+'.KS',c+'.KQ'])]:[c];
 
 function showQ(y,name,t,ns){QX={y,name,t};$('qn').textContent=name;$('qy').href='https://finance.yahoo.com/quote/'+encodeURIComponent(ysym(y)[0]);
@@ -32,19 +47,25 @@ async function nvChart(y,n,pg){
 }
 
 async function loadQ(i){
+  const scope=chartCacheScope(),cached=scope===null?null:Q_CACHE.get(QX.y+'|'+i);
+  if(cached&&Date.now()>=cached.at&&Date.now()-cached.at<30000){
+    qrg=i;qseq++;qhi=-1;QD=cached.rows.map(row=>({...row}));
+    document.querySelectorAll('#qr button').forEach((b,k)=>b.classList.toggle('active',k===i));
+    finishQ(i,null,cached.source+' · 캐시 · '+Math.floor((Date.now()-cached.at)/1000)+'초 전 수신');return;
+  }
   qrg=i;const my=++qseq;document.querySelectorAll('#qr button').forEach((b,k)=>b.classList.toggle('active',k===i));QD=[];qhi=-1;$('qp').textContent='';$('qc').textContent='';$('qi').textContent='로딩중...';drawQ();
   let rows=null;if(i===0){try{rows=await nvChart(QX.y,0,2)}catch(e){}if(my!==qseq)return;
-  if(rows&&rows.length>1){QD=rows.slice(-QR[0][4]);finishQ(i,null,'네이버증권');return}}
+  if(rows&&rows.length>1){QD=rows.slice(-QR[0][4]);finishQ(i,null,'네이버증권');rememberChart(i,'네이버증권',scope);return}}
   const r=QR[i];let res=null;
   for(const sy of ysym(QX.y)){const j=await getJSON('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(sy)+'?interval='+r[1]+'&range='+r[2]);if(my!==qseq)return;
   const v=j&&j.chart&&j.chart.result&&j.chart.result[0];if(v&&v.timestamp&&v.indicators.quote[0]){res=v;if(isKR(QX.y)){KY[QX.y]=sy;$('qy').href='https://finance.yahoo.com/quote/'+sy}break}}
   if(!res&&i>0){let dr=null;try{dr=await nvChart(QX.y,0,12)}catch(e){}if(my!==qseq)return;
-  if(dr&&dr.length>1){QD=qAgg(dr,i);if(QR[i][4])QD=QD.slice(-QR[i][4]);finishQ(i,null,'네이버증권(일봉 합산)');return}}
+  if(dr&&dr.length>1){QD=qAgg(dr,i);if(QR[i][4])QD=QD.slice(-QR[i][4]);finishQ(i,null,'네이버증권(일봉 합산)');rememberChart(i,'네이버증권(일봉 합산)',scope);return}}
   if(!res){$('qi').textContent='차트 수신 실패';return}
   const q=res.indicators.quote[0];QD=res.timestamp.map((t,k)=>({t:t*1000,o:q.open[k],h:q.high[k],l:q.low[k],c:q.close[k]})).filter(d=>d.c!=null);
   if(i===3)QD=qAgg(QD,3);else if(QR[i][4])QD=QD.slice(-QR[i][4]);
   if(!QD.length){$('qi').textContent='데이터 없음';return}
-  finishQ(i,null,'Yahoo')
+  finishQ(i,null,'Yahoo');rememberChart(i,'Yahoo',scope)
 }
 
 function drawQ(){

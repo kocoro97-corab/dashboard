@@ -2,7 +2,7 @@ name: PR regression tests
 on:
   pull_request:
   push:
-    branches: ['fix/**', 'main']
+    branches: ['fix/**', 'main', 'feat/nh-integration-v2']
 permissions:
   contents: read
 jobs:
@@ -13,12 +13,17 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Node regressions and GAS syntax
         run: |
-          for file in tests/*.test.cjs; do node "$file" || exit 1; done
+          for file in tests/*.test.cjs tests/*.test.js; do node "$file" || exit 1; done
           node -e "const fs=require('fs'),vm=require('vm');for(const dir of ['js','gas'])for(const name of fs.readdirSync(dir))if(/\.(js|gs)$/.test(name))new vm.Script(fs.readFileSync(dir+'/'+name,'utf8'),{filename:name})"
       - name: Python storage/deployment/master regressions
-        run: python3 -m unittest discover -s tests -p 'test_*.py'
+        run: |
+          python3 -m compileall -q tests
+          python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Install browser test dependency
         run: |
           python3 -m venv .venv-browser
@@ -28,9 +33,34 @@ jobs:
         run: |
           .venv-browser/bin/python tests/browser_external.py
           .venv-browser/bin/python tests/browser_diagnostics.py
+          .venv-browser/bin/python tests/browser_native_snapshot.py
+          .venv-browser/bin/python tests/browser_relay.py
+          .venv-browser/bin/python tests/browser_persistent_relay.py
+          .venv-browser/bin/python tests/browser_https_dev.py
+          .venv-browser/bin/python tests/browser_dev_connection_errors.py
+          .venv-browser/bin/python tests/browser_public_market.py
+          .venv-browser/bin/python tests/browser_relay_busy.py
+          .venv-browser/bin/python tests/browser_futures_display.py
+          .venv-browser/bin/python tests/browser_manual_preview.py
+          .venv-browser/bin/python tests/browser_account_inquiry.py
+          .venv-browser/bin/python tests/browser_app_shell.py
+          .venv-browser/bin/python tests/browser_market_sector_recheck.py
+          .venv-browser/bin/python tests/browser_integration_958.py
+          .venv-browser/bin/python tests/browser_sector_followup.py
+          .venv-browser/bin/python tests/browser_names_review.py
+          .venv-browser/bin/python tests/browser_invest_workflow.py
+          .venv-browser/bin/python tests/browser_public_briefing.py
+          .venv-browser/bin/python tests/browser_final_integration.py
+          .venv-browser/bin/python tests/browser_dense_review.py --widths 1440 344 --scales 1 1.5 --output /tmp/dense-ci
+          .venv-browser/bin/python tests/browser_work_handoff.py
+          .venv-browser/bin/python tests/browser_commit_review.py --extended
+          .venv-browser/bin/python tests/browser_external_catalog.py
+          .venv-browser/bin/python tests/browser_calendar_final.py
+          .venv-browser/bin/python tests/browser_calendar_oauth_bootstrap.py
+          .venv-browser/bin/python tests/browser_accounts_profile.py
   nh-staging-live:
     # Security/preflight preparation branches never consume live credentials in CI.
-    if: github.event_name == 'pull_request' && github.head_ref != 'fix/issue-4-safe-diagnostics' && github.head_ref != 'fix/4b1-safety-checks' && github.event.pull_request.head.repo.full_name == github.repository && vars.NH_STAGING_ENABLED == 'true'
+    if: github.event_name == 'pull_request' && github.head_ref != 'fix/issue-4-safe-diagnostics' && github.head_ref != 'fix/4b1-safety-checks' && github.head_ref != 'feat/nh-integration-v2' && github.event.pull_request.head.repo.full_name == github.repository && vars.NH_STAGING_ENABLED == 'true'
     needs: regression
     runs-on: ubuntu-24.04
     timeout-minutes: 15

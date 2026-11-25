@@ -1,0 +1,44 @@
+name: BEA economic calendar snapshot
+on:
+  push:
+    branches: [feat/nh-integration-v2]
+    paths:
+      - 'js/economic-bea-*.js'
+      - 'js/economic-fomc-schedule.js'
+      - 'scripts/collect-bea-calendar.cjs'
+      - 'tests/economic-bea-*.js'
+      - 'tests/economic-bea-*.cjs'
+      - 'tests/economic-fomc.test.js'
+      - '.github/workflows/economic-bea.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: bea-economic-calendar-dev-snapshot
+  cancel-in-progress: false
+jobs:
+  validate-and-refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/nh-integration-v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate BEA and FOMC modules
+        run: |
+          node --check js/economic-bea-parser.js
+          node --check js/economic-bea-calendar.js
+          node --check js/economic-fomc-schedule.js
+          node --check scripts/collect-bea-calendar.cjs
+          node tests/economic-bea-parser.test.js
+          node tests/economic-bea-calendar.test.js
+          node tests/economic-fomc.test.js
+          node tests/economic-bea-collector.test.cjs
+      - name: Collect official BEA release schedule
+        run: node scripts/collect-bea-calendar.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bea-economic-calendar-dev-snapshot
+          path: data/bea-events.json

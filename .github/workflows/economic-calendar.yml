@@ -1,0 +1,40 @@
+name: Economic calendar source validation and snapshot
+on:
+  push:
+    branches: [feat/nh-integration-v2]
+    paths:
+      - 'js/economic-*.js'
+      - 'scripts/collect-economic-calendar.cjs'
+      - 'tests/economic-*.js'
+      - 'tests/economic-*.cjs'
+      - '.github/workflows/economic-calendar.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: economic-calendar-dev-snapshot
+  cancel-in-progress: false
+jobs:
+  validate-and-refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/nh-integration-v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify parser and browser modules
+        run: |
+          node --check js/economic-bls-parser.js
+          node --check js/economic-calendar.js
+          node --check scripts/collect-economic-calendar.cjs
+          node tests/economic-bls-parser.test.js
+          node tests/economic-calendar.test.js
+          node tests/economic-collector.test.cjs
+      - name: Fetch official BLS schedule and validate it
+        run: node scripts/collect-economic-calendar.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: economic-calendar-dev-snapshot
+          path: data/economic-events.json

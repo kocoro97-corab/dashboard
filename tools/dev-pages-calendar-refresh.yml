@@ -1,0 +1,69 @@
+name: Refresh development public calendar data
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 */12 * * *'
+permissions:
+  contents: write
+  pages: write
+concurrency:
+  group: development-calendar-data
+  cancel-in-progress: false
+jobs:
+  refresh:
+    if: github.repository == 'kocoro97-corab/dashboard-v2-dev' && github.ref == 'refs/heads/dev-pages'
+    runs-on: ubuntu-24.04
+    env:
+      CALENDAR_SOURCE_SHA: __VERIFIED_CALENDAR_SOURCE_SHA__
+    steps:
+      - name: Read pinned, verified public collectors
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: kocoro97-corab/dashboard
+          ref: ${{ env.CALENDAR_SOURCE_SHA }}
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Collect sources independently
+        run: |
+          node source/scripts/refresh-calendar-development.cjs > /tmp/calendar-result.json || true
+          node -e 'const r=require("/tmp/calendar-result.json");if(!Array.isArray(r.rows)||r.rows.length!==5)process.exit(1)'
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: dev-pages
+          path: pages
+      - name: Validate and publish successful public snapshots only
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,shutil,subprocess,datetime
+          pages=pathlib.Path('pages');source=pathlib.Path('source');report=json.load(open('/tmp/calendar-result.json'))
+          names={'BLS':'economic-events.json','BEA':'bea-events.json','BOK':'bok-stats-events.json','EARNINGS':'earnings-events.json','VERIFIED_EARNINGS':'earnings-events.json','OFFICIAL_POLICY':'policy-events.json','POLICY':'policy-events.json'}
+          manifest=json.loads((pages/'asset-manifest.json').read_text());rows=[]
+          for row in report['rows']:
+              name=names[row['source']];dest=pages/'data'/name;status='FAILED'
+              if row['status']=='PASS':
+                  raw=source/'data'/name
+                  subprocess.run(['node',str(source/'scripts/validate-calendar-snapshots.cjs'),str(raw)],check=True)
+                  shutil.copyfile(raw,dest);status='VERIFIED'
+                  manifest['data/'+name]=hashlib.sha256(dest.read_bytes()).hexdigest()
+              old=json.loads(dest.read_text()) if dest.exists() else {}
+              rows.append({'file':name,'status':status,'source':old.get('source'),'retrievedAt':old.get('retrievedAt'),'attemptedAt':datetime.datetime.now(datetime.timezone.utc).isoformat()})
+          status=pages/'calendar-data-status.json';status.write_text(json.dumps(rows,indent=2)+'\n')
+          manifest[status.name]=hashlib.sha256(status.read_bytes()).hexdigest()
+          (pages/'asset-manifest.json').write_text(json.dumps(manifest,sort_keys=True))
+          PY
+          git -C pages config user.name 'github-actions[bot]'
+          git -C pages config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C pages add -- data/economic-events.json data/bea-events.json data/bok-stats-events.json data/earnings-events.json data/policy-events.json calendar-data-status.json asset-manifest.json
+          if ! git -C pages diff --cached --quiet; then
+            git -C pages commit -m 'data(calendar): refresh verified development public schedules'
+            git -C pages push origin HEAD:dev-pages
+          fi
+      - name: Request existing development Pages build
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh api --method POST repos/kocoro97-corab/dashboard-v2-dev/pages/builds --jq '{status}'
+      - name: Report source failures after preserving existing data
+        run: node -e 'const r=require("/tmp/calendar-result.json");console.log(JSON.stringify(r));if(r.rows.some(x=>x.status!=="PASS"))process.exit(1)'
