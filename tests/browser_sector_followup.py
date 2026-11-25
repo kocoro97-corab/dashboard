@@ -62,15 +62,27 @@ async def features(browser,artifact,tmp,width):
    assert await h.page.locator('.stv2-status:not([open])').count()>0
   await check(h,'ETF_RESPONSE_REJECTED_FOR_GENERAL_STOCK_MEMBER',bad_identity)
   if width==1440:
-   async def insufficient_coverage():
-    target=UNIVERSE['themes'][0]
-    for member in target['instruments'][:6]:
-     h.overrides[history_url(member['symbol'])]={'text':json.dumps({'chart':{'result':[]}})}
-    await h.page.get_by_role('button',name='현재 시장 섹터·테마 새로고침',exact=True).click()
-    await h.page.wait_for_function('()=>DevelopmentDiagnostics.snapshot().issues.some(r=>r.page==="sectors"&&r.code==="SAMPLE_COVERAGE_INSUFFICIENT"&&r.active)')
-    assert await h.page.locator('.stv2-us-themes .stv2-card').filter(has=h.page.locator('strong',has_text=target['name'])).count()==0
-    assert '표본 충족률 60% 이상' in await h.page.locator('.stv2').inner_text()
-   await check(h,'THEME_RANK_WITHHELD_WHEN_VERIFIED_MEMBER_COVERAGE_BELOW_60_PERCENT',insufficient_coverage)
+   # The preceding tests deliberately force repeated full-theme refreshes.
+   # Validate the 60% rule in a fresh isolated synthetic Worker session:
+   # prior test traffic must not silently exhaust the 120-requests/IP quota.
+   bad_feeds=synthetic_feeds()
+   target=UNIVERSE['themes'][0]
+   for member in target['instruments'][:6]:
+    bad_feeds[history_url(member['symbol'])]=json.dumps({'chart':{'result':[]}})
+   isolated=await Harness(browser,artifact,bad_feeds,width,args.published).start_browser(tmp)
+   try:
+    await isolated.page.clock.set_fixed_time('2026-11-17T03:00:00Z')
+    await isolated.login('sectors')
+    async def insufficient_coverage():
+     await region(isolated,'US')
+     await isolated.page.wait_for_function('()=>DevelopmentDiagnostics.snapshot().issues.some(r=>r.page==="sectors"&&r.code==="SAMPLE_COVERAGE_INSUFFICIENT"&&r.active)')
+     assert await isolated.page.locator('.stv2-us-themes .stv2-card').filter(has=isolated.page.locator('strong',has_text=target['name'])).count()==0
+     assert '표본 충족률 60% 이상' in await isolated.page.locator('.stv2').inner_text()
+     assert not isolated.errors,isolated.errors
+     assert not any(row['action'] in ['nhAccounts','nhQuotes','order','saveExternalHoldings','restoreExternalHoldings'] for row in isolated.requests)
+    await check(isolated,'THEME_RANK_WITHHELD_WHEN_VERIFIED_MEMBER_COVERAGE_BELOW_60_PERCENT',insufficient_coverage)
+   finally:
+    await isolated.close()
   async def cleanup():
    await h.page.evaluate('MYInvestCalendar.open()');assert await h.page.get_by_role('dialog',name='투자 일정 캘린더',exact=True).count()==1;await h.page.evaluate('logout()');await h.page.wait_for_function('()=>DashboardShell.getStatus().page===null');assert await h.page.locator('.stv2').count()==0;assert await h.page.get_by_role('dialog').count()==0;assert not h.errors;assert not any(r['action'] in ['nhAccounts','nhQuotes','order','saveExternalHoldings','restoreExternalHoldings'] for r in h.requests)
   await check(h,'LOGOUT_CLEARS_THEME_UI_WITH_ZERO_PRIVATE_WRITES',cleanup)
