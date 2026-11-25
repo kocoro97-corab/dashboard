@@ -54,6 +54,19 @@ def checked_dev_head(observed, expected=None):
     if expected and observed != expected:raise Stop('DEV_PAGES_HEAD_CHANGED')
 
 
+def remove_obsolete_assets(checkout, old, new):
+    """Stage removal of assets present in the old manifest but absent from a new build."""
+    if not isinstance(old, dict):raise Stop('DEV_MANIFEST_INVALID')
+    for name in old:
+        if not isinstance(name, str) or not name or any(ch not in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./-' for ch in name):
+            raise Stop('DEV_MANIFEST_PATH_INVALID')
+        path = Path(name)
+        if path.is_absolute() or '..' in path.parts or '.git' in path.parts:
+            raise Stop('DEV_MANIFEST_PATH_INVALID')
+        if name not in new and (checkout / name).is_file():
+            git(['rm', '--', name], checkout)
+
+
 def publish(expected_source_sha=None, expected_dev_head=None):
     # Never publish without both an exact approved source and a dev-pages lease.
     if not expected_source_sha or not expected_dev_head:raise Stop('DEV_APPROVED_SHA_REQUIRED')
@@ -94,14 +107,7 @@ def publish(expected_source_sha=None, expected_dev_head=None):
         # Old files must be removed *before* adding the new manifest. This was
         # previously unreachable inside an elif that always raised.
         old = json.loads((checkout / 'asset-manifest.json').read_text())
-        if not isinstance(old,dict):raise Stop('DEV_MANIFEST_INVALID')
-        for name in old:
-            if not isinstance(name,str):raise Stop('DEV_MANIFEST_PATH_INVALID')
-            path = Path(name)
-            if not name or path.is_absolute() or '..' in path.parts:
-                raise Stop('DEV_MANIFEST_PATH_INVALID')
-            if name not in manifest and (checkout / name).is_file():
-                git(['rm', '--', name], checkout)
+        remove_obsolete_assets(checkout,old,manifest)
         for source in artifact.rglob('*'):
             if source.is_file():
                 dest = checkout / source.relative_to(artifact)
