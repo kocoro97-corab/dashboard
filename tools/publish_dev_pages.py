@@ -16,6 +16,8 @@ REPO = 'kocoro97-corab/dashboard-v2-dev'
 BRANCH = 'dev-pages'
 DESCRIPTION = 'Isolated MY INVEST V2 development login and HTTPS validation. No credentials or financial data.'
 SOURCE_BRANCH = 'feat/nh-integration-v2'
+PREVIEW_BRANCH = 'fix/visible-first-market-20261125'
+PREVIEW_PR = 10
 
 
 class Stop(Exception):pass
@@ -39,10 +41,10 @@ def git(args, cwd):
     return result.stdout.strip()
 
 
-def verified_source_commit(expected_source_sha=None):
+def verified_source_commit(expected_source_sha=None, source_branch=SOURCE_BRANCH):
     """Fail closed when the owner's checkout differs from the intended V2 branch/commit."""
     branch = git(['branch', '--show-current'], ROOT)
-    if branch != SOURCE_BRANCH:raise Stop('DEV_SOURCE_BRANCH_MISMATCH')
+    if source_branch not in (SOURCE_BRANCH, PREVIEW_BRANCH) or branch != source_branch:raise Stop('DEV_SOURCE_BRANCH_MISMATCH')
     commit = git(['rev-parse', 'HEAD'], ROOT)
     if expected_source_sha and commit != expected_source_sha:
         raise Stop('DEV_SOURCE_SHA_MISMATCH')
@@ -81,22 +83,41 @@ def require_green_ci(source_sha):
         raise Stop('DEV_CI_NOT_GREEN')
 
 
-def build_with_preserved_calendar(artifact, checkout):
+def require_reviewed_preview(source_sha, source_branch):
+    """Never allow a generic feature branch to publish by relaxing this gate."""
+    if source_branch == SOURCE_BRANCH:return
+    if source_branch != PREVIEW_BRANCH:raise Stop('DEV_SOURCE_BRANCH_NOT_APPROVED')
+    pr = api('repos/kocoro97-corab/dashboard/pulls/' + str(PREVIEW_PR))
+    if not isinstance(pr,dict) or pr.get('state') != 'open' or pr.get('draft') is not True or pr.get('merged_at') is not None:
+        raise Stop('DEV_PREVIEW_PR_MISMATCH')
+    head=pr.get('head') or {}
+    base=pr.get('base') or {}
+    repository=head.get('repo') or {}
+    if head.get('ref') != PREVIEW_BRANCH or head.get('sha') != source_sha or        repository.get('full_name') != 'kocoro97-corab/dashboard' or base.get('ref') != SOURCE_BRANCH:
+        raise Stop('DEV_PREVIEW_PR_MISMATCH')
+
+
+def build_with_preserved_calendar(artifact, checkout, source_branch=SOURCE_BRANCH):
     """Retain newer validated public calendar snapshots already on dev-pages.
 
     The exporter independently validates each snapshot, compares retrievedAt,
     and preserves verified previous collection-failure status. Never copies
     private files or accepts raw unchecked provider responses.
     """
-    return build(artifact, public_data=checkout / 'data')
+    if source_branch == SOURCE_BRANCH:
+        return build(artifact, public_data=checkout / 'data')
+    if source_branch == PREVIEW_BRANCH:
+        return build(artifact, public_data=checkout / 'data', source_branch=source_branch)
+    raise Stop('DEV_SOURCE_BRANCH_NOT_APPROVED')
 
 
-def publish(expected_source_sha=None, expected_dev_head=None):
+def publish(expected_source_sha=None, expected_dev_head=None, source_branch=SOURCE_BRANCH):
     # Never publish without both an exact approved source and a dev-pages lease.
     if not expected_source_sha or not expected_dev_head:raise Stop('DEV_APPROVED_SHA_REQUIRED')
     if not shutil.which('gh'):raise Stop('OWNER_GITHUB_CLI_REQUIRED')
     if git(['status', '--porcelain', '--untracked-files=no'], ROOT):raise Stop('DEV_TRACKED_SOURCE_DIRTY')
-    source_sha=verified_source_commit(expected_source_sha)
+    source_sha=verified_source_commit(expected_source_sha, source_branch)
+    require_reviewed_preview(source_sha, source_branch)
     require_green_ci(source_sha)
     if api('user').get('login') != 'kocoro97-corab':raise Stop('OWNER_GITHUB_ACCOUNT_MISMATCH')
     target = 'repos/' + REPO
@@ -107,7 +128,7 @@ def publish(expected_source_sha=None, expected_dev_head=None):
     previous = api(target + '/contents/development-only.json?ref=' + BRANCH, optional=True)
     if previous is not None:
         marker = json.loads(base64.b64decode(previous['content']))
-        if marker.get('myinvestDevelopmentOnly') is not True or marker.get('sourceBranch') != 'feat/nh-integration-v2':
+        if marker.get('myinvestDevelopmentOnly') is not True or marker.get('sourceBranch') not in (SOURCE_BRANCH,PREVIEW_BRANCH):
             raise Stop('DEV_REPOSITORY_MARKER_MISMATCH')
     elif not (repo.get('size', 0) == 0 and repo.get('description') == DESCRIPTION):
         raise Stop('DEV_REPOSITORY_NOT_EMPTY_OR_OURS')
@@ -128,7 +149,7 @@ def publish(expected_source_sha=None, expected_dev_head=None):
         git(['fetch', '--depth=1', 'origin', BRANCH], checkout)
         checked_dev_head(git(['rev-parse', 'FETCH_HEAD'], checkout), expected_dev_head)
         git(['checkout', '-B', BRANCH, 'FETCH_HEAD'], checkout)
-        manifest = build_with_preserved_calendar(artifact, checkout)
+        manifest = build_with_preserved_calendar(artifact, checkout, source_branch)
         # Old files must be removed *before* adding the new manifest. This was
         # previously unreachable inside an elif that always raised.
         old = json.loads((checkout / 'asset-manifest.json').read_text())
@@ -166,12 +187,13 @@ if __name__ == '__main__':
     parser.add_argument('--publish-dev-pages', action='store_true', required=True)
     parser.add_argument('--expect-source-sha', metavar='SHA40',required=True)
     parser.add_argument('--expect-dev-head', metavar='SHA40',required=True)
+    parser.add_argument('--source-branch', choices=[SOURCE_BRANCH,PREVIEW_BRANCH],default=SOURCE_BRANCH)
     args=parser.parse_args()
     try:
         for value in (args.expect_source_sha, args.expect_dev_head):
             if value is not None and (len(value)!=40 or any(ch not in '0123456789abcdef' for ch in value)):
                 raise Stop('DEV_EXPECTED_SHA_INVALID')
-        report = publish(args.expect_source_sha,args.expect_dev_head)
+        report = publish(args.expect_source_sha,args.expect_dev_head,args.source_branch)
     except Stop as error:
         report = {'status': 'NOT_RUN', 'code': str(error), 'productionChanged': False}
     except Exception:
