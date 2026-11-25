@@ -1,5 +1,5 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
-function setup({setTimer=fn=>{fn()},clearTimer=()=>{}}={}){const ctx=vm.createContext({Event,Date,clearTimeout:clearTimer,setTimeout:setTimer,dispatchEvent(){}});vm.runInContext(fs.readFileSync('js/read-status.js','utf8'),ctx);return ctx.ReadStatus}
+function setup({setTimer=fn=>{fn()},clearTimer=()=>{},transport=null}={}){const ctx=vm.createContext({Event,Date,clearTimeout:clearTimer,setTimeout:setTimer,dispatchEvent(){},DashboardTransport:transport});vm.runInContext(fs.readFileSync('js/read-status.js','utf8'),ctx);return ctx.ReadStatus}
 test('transient public error retries once with shared pending request then clears on recovery',async()=>{const api=setup();let calls=0,release;const op=()=>{calls++;return calls===1?Promise.reject({http:503,code:'RELAY_BUSY'}):new Promise(r=>release=r)},a=api.execute('A',op),b=api.execute('A',op);await new Promise(r=>setImmediate(r));assert.equal(calls,2);assert.equal(api.snapshot()[0].attempts,1);release('OK');assert.equal(await a,'OK');assert.equal(await b,'OK');assert.equal(api.snapshot().length,0)});
 test('access/format faults do not retry; HTTP alone does not identify a failing server',async()=>{for(const error of [{http:401},{http:403},{code:'READ_FORMAT'}]){const api=setup();let calls=0;await assert.rejects(api.execute('A',async()=>{calls++;throw error}));assert.equal(calls,1);assert.equal(api.snapshot()[0].layer,'unknown')}const api=setup();let calls=0;await assert.rejects(api.execute('A',async()=>{calls++;throw {http:502}}));assert.equal(calls,3);assert.equal(api.snapshot()[0].layer,'unknown')});
 test('GAS/NH/timeouts/network are distinct; diagnostic snapshot excludes raw replies and secrets',()=>{const api=setup();for(const [code,type,layer] of [['GAS_REJECTED','GAS','gas'],['NH_HTTP','NH','nh'],['READ_TIMEOUT','TIMEOUT','unknown'],['READ_NETWORK','NETWORK','unknown']]){const safe=api.classify({code,verifiedLayer:layer,body:'SECRET',token:'SECRET',account:'SYNTHETIC'});assert.equal(safe.type,type);assert.equal(safe.layer,layer);assert.ok(safe.id&&Date.parse(safe.at));assert.ok(!JSON.stringify(safe).includes('SECRET'))}});
@@ -24,4 +24,29 @@ test('aborting during backoff cancels the timer without retry or cancellation di
 
 test('isolation and permission faults never retry even if the HTTP response is 503',async()=>{
  for(const code of ['RELAY_TARGET_MISMATCH','RELAY_ACCESS_CLOSED','RELAY_PUBLIC_URL_DENIED']){const api=setup();let calls=0;await assert.rejects(api.execute(code,async()=>{calls++;throw {http:503,code}}));assert.equal(calls,1)}
+});
+
+test('a source HTTP 502 retries locally without pausing every unrelated relay read',async()=>{
+ let globalPauses=0,attempts=0;
+ const api=setup({transport:{deferReads(){globalPauses++}}});
+ const result=await api.execute('synthetic-public-feed',async()=>{
+   attempts++;
+   if(attempts===1)throw {http:502,code:'RELAY_PUBLIC_FAILED'};
+   return 'RECOVERED';
+ });
+ assert.equal(result,'RECOVERED');
+ assert.equal(attempts,2,'the failed read still retries');
+ assert.equal(globalPauses,0,'unrelated current-page requests must not be stalled by a generic upstream failure');
+ assert.equal(api.snapshot().length,0);
+});
+test('verified relay busy is still reported while local retries do not double-throttle transport',async()=>{
+ let globalPauses=0,attempts=0;
+ const api=setup({transport:{deferReads(){globalPauses++}}});
+ const result=await api.execute('synthetic-busy',async()=>{
+   if(++attempts===1)throw {http:503,code:'RELAY_BUSY',retryAfter:'3'};
+   return 'RECOVERED';
+ });
+ assert.equal(result,'RECOVERED');
+ assert.equal(attempts,2);
+ assert.equal(globalPauses,0,'the actual transport response handler alone governs global busy backpressure');
 });
