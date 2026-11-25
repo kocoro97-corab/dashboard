@@ -85,7 +85,7 @@ test('request retention is restricted to explicitly approved public RSS/themes U
  assert.equal(f.api.readState().sharedActive,0);
 });
 test('pending foreground reads move ahead of queued background requests without extra network calls',async()=>{
- const f=fixture();
+ const f=fixture();f.location.hash='#/sectors';
  const a=f.api.publicRead(sectorUrl,{sharedPublic:true,sharedTag:'sectors'});
  const b=f.api.publicRead(newsUrl,{sharedPublic:true,sharedTag:'news'});
  await f.tick();assert.equal(f.calls.length,2);
@@ -113,4 +113,21 @@ test('production relay ignores development-only sharing flags and still cancels 
  await assert.rejects(req,/SESSION_CHANGED/);
  f.releases[0]();
  await f.tick();
+});
+
+test('background public prefetch reserves one read slot for the visible menu',async()=>{
+ const f=fixture();
+ const first=f.api.publicRead(sectorUrl,{sharedPublic:true,sharedTag:'sectors'});
+ const second=f.api.publicRead(newsUrl,{sharedPublic:true,sharedTag:'news'});
+ await f.tick();
+ assert.equal(f.calls.length,1,'only one unrelated background request may occupy transport');
+ assert.equal(f.api.readState().sharedQueued,1);
+ const urgent=f.api.post({action:'nhAccounts',token});
+ await f.tick();await f.tick();
+ assert.equal(f.calls.length,2);
+ assert.equal(f.calls[1].action,'nhAccounts','current view retains a physical read slot');
+ f.releases[1]();await f.tick();await f.tick();
+ assert.equal(f.calls.length,3,'queued background work resumes once capacity returns');
+ f.releases[0]();f.releases[2]();
+ await Promise.all([first,second,urgent]);
 });
