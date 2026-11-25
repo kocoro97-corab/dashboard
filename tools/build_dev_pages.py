@@ -27,7 +27,7 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True, pub
           source_branch='feat/nh-integration-v2'):
     # Only the original V2 branch and this specific isolated performance review
     # may identify the source of a development Pages artifact.
-    if source_branch not in ('feat/nh-integration-v2','fix/visible-first-market-20261125','fix/visible-first-data-20261125','fix/relay-timing-diagnostics-20261125'):
+    if source_branch not in ('feat/nh-integration-v2','fix/visible-first-market-20261125','fix/visible-first-data-20261125','fix/relay-timing-diagnostics-20261125','fix/relay-retry-isolation-preview-20261126','feat/mobile-sector-news-calendar-ui-20261126'):
         raise ValueError('DEV_SOURCE_BRANCH_NOT_APPROVED')
     public_config=root/'config/development-relay.json'
     if use_public_config and relay_endpoint is None and public_config.is_file():
