@@ -155,9 +155,9 @@ const srcTag=(k,full)=>{const s=SRC[k];if(!s||!Q[k])return '';return full?(SRC_N
 const srcSummary=keys=>{const c={};keys.forEach(k=>{const s=SRC[k];if(Q[k]&&s)c[s]=(c[s]||0)+1});return Object.keys(c).map(s=>(SRC_NAME[s]||s)+' '+c[s]).join(' · ')||'수신 없음'};
 const srcLine=t=>t?`<div class="mini" style="font-size:9px;margin-top:2px;opacity:.75">출처 ${t}</div>`:'';
 
-async function fillNaver(want,fr){
+async function fillNaver(want,fr,onQuote=null){
   const current=publicReadScope(),W=new Set(want),T=[];let n=0;
-  const put=(k,o)=>{const q=nq(o);if(current()&&q&&W.has(k)){Q[k]=q;SRC[k]='N';QT[k]=Date.now();fr.add(k);n++}};
+  const put=(k,o)=>{const q=nq(o);if(current()&&q&&W.has(k)){Q[k]=q;SRC[k]='N';QT[k]=Date.now();fr.add(k);n++;if(typeof onQuote==='function')onQuote(k)}};
   [['^KS11','KOSPI'],['^KQ11','KOSDAQ']].forEach(([k,c])=>{if(W.has(k))T.push(getJSON('https://polling.finance.naver.com/api/realtime/domestic/index/'+c).then(j=>put(k,narr(j)[0])))});
   const wi={'.INX':'^GSPC','.IXIC':'^IXIC','.DJI':'^DJI','.SOX':'^SOX','.VIX':'^VIX'},wk=Object.keys(wi).filter(c=>W.has(wi[c]));
   if(wk.length)T.push(getJSON('https://stock.naver.com/api/polling/worldstock/index?reutersCodes='+wk.join(',')).then(j=>narr(j).forEach((o,i)=>{const rc=o.reutersCode||o.symbolCode||wk[i];if(wi[rc])put(wi[rc],o)})));
@@ -178,7 +178,7 @@ async function quote(s){
 const KY={};
 async function quoteKR(c){for(const x of['.KS','.KQ']){const q=await quote(c+x);if(q){KY[c]=c+x;return q}}return null}
 
-async function fillQuotes(list){
+async function fillQuotes(list,onQuote=null){
   const current=publicReadScope();let i=0;
   await Promise.all(Array.from({length:4},async()=>{
     while(i<list.length){
@@ -186,7 +186,7 @@ async function fillQuotes(list){
       const c=list[i++];
       const q=await(isKR(c)?quoteKR(c):quote(c));
       if(!current())return;
-      if(q){Q[c]=q;SRC[c]='Y';QT[c]=Date.now()}else if(Q[c])Q[c].refreshFailed=true;
+      if(q){Q[c]=q;SRC[c]='Y';QT[c]=Date.now();if(typeof onQuote==='function')onQuote(c)}else if(Q[c])Q[c].refreshFailed=true;
     }
   }));
 }
@@ -199,8 +199,13 @@ async function refreshMarket(requested=[]){   // '시장 종합' 카드(지수·
   try{
     const extra=Array.isArray(requested)?requested.filter(s=>typeof s==='string'&&/^[A-Za-z0-9^=.-]{1,32}$/.test(s)&&!['k3','k4','TICK'].includes(s)).slice(0,24):[];
     const list=CFG[sess()],want=[...new Set([...list.filter(x=>x.y).map(x=>x.y),...extra])],fr=new Set();
-    await fillNaver(want,fr);if(!current())return;
-    await fillQuotes(want.filter(c=>!fr.has(c)));if(!current())return;
+    // Paint the first verified quote while the slower sources continue.
+    // A route/session change must not update the old screen.
+    let firstVisible=false;
+    const firstQuote=()=>{if(firstVisible||!current())return;firstVisible=true;renderCards();updateTickGauge()};
+    await fillNaver(want,fr,firstQuote);if(!current())return;
+    await fillQuotes(want.filter(c=>!fr.has(c)),firstQuote);if(!current())return;
+    if(!firstVisible&&want.some(c=>Q[c]))firstQuote();
     const requestedNH=[...new Set([...list.filter(x=>NHF[x.id]).map(x=>x.id),...(Array.isArray(requested)?requested:[]).filter(id=>NHF[id])])],hasNH=requestedNH.length>0,nh=hasNH?await fillNH(requestedNH):{ok:0,fail:0};if(!current())return;
     const hasFut=list.some(x=>x.fut)||Array.isArray(requested)&&requested.includes('k3'),fu=hasFut?await fillFutures(new Set(Object.keys(NQ))):{ok:0,fail:0};if(!current())return;
     await fillAuthorizedMarketSources(requestedNH.includes('k4'));
