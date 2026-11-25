@@ -80,7 +80,7 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True, pub
     text = text.replace(strategy_anchor, compare_scripts + strategy_anchor)
     shell_anchor='<script defer src="js/app-shell.js?v=2"></script>'
     if text.count(shell_anchor)!=1:raise ValueError('DEV_SHELL_ANCHOR_CHANGED')
-    text=text.replace(shell_anchor, '<script defer src="js/page-diagnostics.js?v=1"></script>\n'+shell_anchor)
+    text=text.replace(shell_anchor, '<script defer src="js/page-diagnostics.js?v=1"></script>\n<script defer src="js/view-idle-preload.js?v=1"></script>\n'+shell_anchor)
     auth_anchor = '<script defer src="js/auth.js?v=14-transport"></script>'
     if text.count(auth_anchor) != 1:
         raise ValueError('DEV_AUTH_ANCHOR_CHANGED')
