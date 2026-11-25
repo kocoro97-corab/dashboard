@@ -63,3 +63,17 @@ test('market controls expose separate Korea, US and mixed choices',()=>{
  h.button('한국').click();assert.equal(h.app.getStatus().market,'KR');
  h.button('한국+미국').click();assert.equal(h.app.getStatus().market,'MIX');
 });
+
+test('swing periods sit immediately to the right on the same horizontal control line',()=>{
+ const h=setup().mount();
+ h.button('스윙').click();
+ const line=h.nodes().find(x=>x.className==='stv2-mode-line');
+ assert.ok(line,'same-line mode controls must exist');
+ assert.equal(line.children.length,2);
+ const modes=line.children[0],intervals=line.children[1];
+ assert.equal(intervals.className,'stv2-swing-periods');
+ assert.deepEqual(modes.children.map(x=>x.textContent),['단타','스윙']);
+ assert.deepEqual(intervals.children[0].children.map(x=>x.textContent),['5일','20일','60일']);
+ h.button('단타').click();
+ assert.ok(!h.nodes().some(x=>x.className==='stv2-swing-periods'),'intervals hidden in daytrade mode');
+});

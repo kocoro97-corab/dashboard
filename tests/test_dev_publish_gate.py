@@ -194,6 +194,37 @@ class DevelopmentPublishGateTests(unittest.TestCase):
         self.assertEqual(pub.REPO,'kocoro97-corab/dashboard-v2-dev')
         self.assertEqual(pub.BRANCH,'dev-pages')
 
+    def test_pr14_preview_requires_exact_draft_identity_head_and_parent(self):
+        valid={'state':'open','draft':True,'merged_at':None,
+               'head':{'ref':pub.UI_PREVIEW_BRANCH,'sha':SOURCE,
+                       'repo':{'full_name':'kocoro97-corab/dashboard'}},
+               'base':{'ref':pub.RETRY_PREVIEW_BRANCH}}
+        with patch.object(pub,'api',return_value=valid) as api:
+            pub.require_reviewed_preview(SOURCE,pub.UI_PREVIEW_BRANCH)
+            api.assert_called_once_with('repos/kocoro97-corab/dashboard/pulls/14')
+        for invalid in (
+            {'draft':False},{'state':'closed'},{'merged_at':'2026-11-26T00:00:00Z'},
+            {'base':{'ref':pub.TIMING_PREVIEW_BRANCH}},
+            {'head':{'ref':pub.UI_PREVIEW_BRANCH,'sha':'f'*40,
+                     'repo':{'full_name':'kocoro97-corab/dashboard'}}},
+            {'head':{'ref':pub.UI_PREVIEW_BRANCH,'sha':SOURCE,
+                     'repo':{'full_name':'attacker/other'}}},
+        ):
+            with self.subTest(invalid=invalid),patch.object(pub,'api',return_value=dict(valid,**invalid)):
+                with self.assertRaisesRegex(pub.Stop,'DEV_PREVIEW_PR_MISMATCH'):
+                    pub.require_reviewed_preview(SOURCE,pub.UI_PREVIEW_BRANCH)
+
+    def test_pr14_build_retains_existing_dev_calendar(self):
+        with patch.object(pub,'git',side_effect=[pub.UI_PREVIEW_BRANCH,SOURCE]):
+            self.assertEqual(pub.verified_source_commit(SOURCE,pub.UI_PREVIEW_BRANCH),SOURCE)
+        with tempfile.TemporaryDirectory() as tmp:
+            folder=Path(tmp)
+            with patch.object(pub,'build',return_value={'index.html':'synthetic'}) as build:
+                pub.build_with_preserved_calendar(folder/'pr14',folder,pub.UI_PREVIEW_BRANCH)
+                build.assert_called_once_with(folder/'pr14',public_data=folder/'data',source_branch=pub.UI_PREVIEW_BRANCH)
+        self.assertEqual(pub.REPO,'kocoro97-corab/dashboard-v2-dev')
+        self.assertEqual(pub.BRANCH,'dev-pages')
+
     def test_preview_checkout_and_build_keep_original_publish_path(self):
         with patch.object(pub,'git',side_effect=[pub.PREVIEW_BRANCH,SOURCE]):
             self.assertEqual(pub.verified_source_commit(SOURCE,pub.PREVIEW_BRANCH),SOURCE)

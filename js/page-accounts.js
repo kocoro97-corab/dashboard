@@ -131,9 +131,20 @@
           }catch{if(session===LS('invest_session_token'))connection.textContent='합성 검증자료를 준비하지 못했습니다. 기존 자료는 변경하지 않았습니다.'}
         });loadTest.id='loadAccountTestData';actions.append(loadTest);diagnostic.append(node('h2','계좌 API 연결 진단'),actions,connection);view.append(diagnostic);
         const nav=node('nav',null,'account-nav');nav.setAttribute('aria-label','계좌관리 하위 메뉴');nav.dataset.shellControl='true';for(const [key,title] of tabs){const link=node('a',title);link.href='#/accounts/'+key;link.dataset.accountTab=key;nav.append(link)}
-        view.append(nav,node('div',null,'account-report'));attach('nhAccountSection');attach('externalAssetSection');
+        const progress=node('p','계좌 자료 연결 상태 확인 중…','mini');progress.id='accountFetchProgress';progress.setAttribute('role','status');view.append(nav,progress,node('div',null,'account-report'));attach('nhAccountSection');attach('externalAssetSection');
       },
-      refresh:(ctx,force)=>ctx.accounts(force),
+      refresh:async(ctx,force)=>{
+        const progress=document.getElementById('accountFetchProgress');
+        if(progress)progress.textContent=ctx.accountReads()?'NH·외부계좌 실제 읽기 조회 중 · 보이는 이전 자료는 최신 여부를 확인하세요.':'현재 연결은 계좌 조회가 허용되지 않았습니다.';
+        if(!ctx.accountReads())return;
+        try{
+          await ctx.accounts(force);
+          if(progress)progress.textContent='계좌 조회 요청 완료 · 실제 수신/누락 및 평가금액은 각 계좌의 확인 상태를 따르세요.';
+        }catch(error){
+          if(progress)progress.textContent='계좌 조회 실패 또는 일부 누락 · 연결 진단을 확인하세요. 이전 자료는 최신으로 간주하지 마세요.';
+          throw error;
+        }
+      },
       update(view,ctx){
         tab=route?.tab||'overview';for(const link of view.querySelectorAll('[data-account-tab]')){if(link.dataset.accountTab===tab)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current')}
         if(window.ExternalAccountUI)ExternalAccountUI.mount();
