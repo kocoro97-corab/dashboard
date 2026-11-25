@@ -25,7 +25,8 @@ async def region(h,target):
  b=h.page.locator('.stv2-toolbar .stv2-tabs').first.get_by_role('button',name=label,exact=True)
  if await b.get_attribute('aria-pressed')!='true':await b.click()
  assert await selected_market(h)==target
-async def settled(h,n=5):await h.page.wait_for_function('(n)=>document.querySelector(".stv2")?.textContent.includes("기간 "+n+"거래일")',arg=n)
+async def settled(h,n=5):
+ await h.page.wait_for_function('(n)=>{const el=document.querySelector(".stv2");return !!el&&el.textContent.includes("기간 "+n+"거래일")&&!el.textContent.includes("검증된 일부 표본 먼저 표시")}',arg=n)
 async def features(browser,artifact,tmp,width):
  feeds=synthetic_feeds();d=json.loads(feeds[history_url('^KS11')]);d['chart']['result'][0]['indicators']['quote'][0]['close'][-1]=None;feeds[history_url('^KS11')]=json.dumps(d)
  h=await Harness(browser,artifact,feeds,width,args.published).start_browser(tmp)
