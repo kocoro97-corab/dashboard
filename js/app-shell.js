@@ -51,7 +51,7 @@
       catch(e){root.MYInvestWebPerformance?.finish(mountToken,'failed');throw e}
       viewport.scrollTop=scrolls.get(route.path)||0;
       status.textContent='화면 구성 완료 · 최신 데이터 조회 중';
-      Promise.resolve(page.refresh(ctx)).then(()=>{if(epoch===revision){root.MYInvestWebPerformance?.finish(navMeasure,'ready');navMeasure=null;status.textContent='연결됨 · 미확인 항목은 페이지에서 확인하세요.';root.DevelopmentDiagnostics?.pageResult(route.page,'ready');idlePrefetch?.schedule(route.page)}}).catch(()=>{if(epoch===revision){root.MYInvestWebPerformance?.finish(navMeasure,'failed');navMeasure=null;error()}});
+      Promise.resolve(page.refresh(ctx)).then(()=>{if(epoch===revision){root.MYInvestWebPerformance?.finish(navMeasure,'ready');navMeasure=null;status.textContent='연결됨 · 미확인 항목은 페이지에서 확인하세요.';root.DevelopmentDiagnostics?.pageResult(route.page,'ready')}}).catch(()=>{if(epoch===revision){root.MYInvestWebPerformance?.finish(navMeasure,'failed');navMeasure=null;error()}});
     }catch{root.MYInvestWebPerformance?.finish(navMeasure,'failed');navMeasure=null;viewport.replaceChildren(DashboardPages.note('해당 페이지를 열지 못했습니다. 다른 메뉴를 이용할 수 있습니다.'));error()}
   }
   async function refreshPage(force=true){if(!started||!current)return;const epoch=revision,measure=root.MYInvestWebPerformance?.begin(current.page,'refresh');status.textContent='현재 페이지 갱신 중';try{await instances.get(current.page).refresh(ctx,force);root.MYInvestWebPerformance?.finish(measure,epoch===revision?'ready':'cancelled');if(epoch===revision){status.textContent='갱신 요청 완료 · 각 영역의 수신 상태 확인';root.DevelopmentDiagnostics?.pageResult(current.page,'ready')}}catch{root.MYInvestWebPerformance?.finish(measure,'failed');if(epoch===revision)error()}}
