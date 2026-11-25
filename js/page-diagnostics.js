@@ -54,10 +54,21 @@ DashboardPages.register('diagnostics',()=>{
     performanceHost.append(node('h3','개발 중계 읽기 요청 혼잡도'),readBudget,node('p','실행·대기 건수는 이 브라우저 탭의 읽기 요청에 한정됩니다. Cloudflare 전체 이용자의 요청량이나 GAS 상태를 직접 측정한 값이 아닙니다.','dv-muted'))
   }
   const summary=routes?.summary||{},order=['home','market','sectors','stocks','strategy','news','accounts','settings','diagnostics'];
-  const selected=order.filter(name=>summary[name]?.count);
-  const routeTable=table(['메뉴','측정 횟수','중앙값','최대']);
+  const selected=order.filter(name=>summary[name]?.count||summary[name]?.cancelledCount||summary[name]?.failedCount);
+  const routeTable=table(['메뉴','정상 건수','중앙값','최대']);
   for(const name of selected){const row=summary[name],tr=node('tr');tr.append(node('td',DevelopmentDiagnosticLabels[name]||name),node('td',String(row.count)),node('td',fmt(row.medianMs)),node('td',fmt(row.maxMs)));routeTable.append(tr)}
-  performanceHost.append(node('h3','메뉴 전환·새로고침 처리시간'),selected.length?routeTable:node('p','아직 측정된 메뉴가 없습니다. 다른 메뉴로 이동한 후 다시 열어보세요.','dv-muted'),node('p','실측값은 완료된 화면 처리에 한정됩니다. 전체 네트워크 지연이나 실제 투자 데이터의 최신성을 보증하지 않습니다.','dv-muted'))
+  const interrupted=selected.filter(name=>summary[name].cancelledCount||summary[name].failedCount);
+  const interruptions=interrupted.map(name=>{
+    const row=summary[name],label=DevelopmentDiagnosticLabels[name]||name;
+    return label+' · 취소 '+row.cancelledCount+'건 (최장 '+fmt(row.cancelledMaxMs)+') · 실패 '+row.failedCount+'건'
+  });
+  performanceHost.append(
+    node('h3','메뉴 전환·새로고침 처리시간'),
+    selected.length?routeTable:node('p','아직 측정된 메뉴가 없습니다. 다른 메뉴로 이동한 후 다시 열어보세요.','dv-muted'),
+    node('h3','완료되지 않은 화면 처리'),
+    node('p',interruptions.length?interruptions.join(' / '):'관측된 취소·실패 없음','dv-muted'),
+    node('p','정상 완료 중앙값은 취소·실패를 포함하지 않습니다. 취소 최장 시간은 작업 중단까지의 경과시간이며 전체 API 응답시간은 아닙니다.','dv-muted')
+  )
  }
  function mount(container){active=true;view=node('section',null,'dv-center');const style=node('style');style.textContent='.dv-center{min-width:0;color:inherit}.dv-center p{font-size:12px;color:#b6c5d9}.dv-center h2{font-size:18px;margin:12px 0}.dv-center h3{font-size:15px;margin:12px 0 8px}.dv-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr));gap:8px}.dv-summary>div{padding:10px;background:#172238;border:1px solid #344158;border-radius:8px}.dv-summary strong{display:block;font-size:22px}.dv-center table{width:100%;min-width:0;table-layout:fixed;border-collapse:collapse;font-size:12px}.dv-center td,.dv-center th{padding:7px;border-bottom:1px solid #344158;text-align:left;white-space:normal;overflow-wrap:anywhere}.dv-center button,.dv-center select{min-height:40px;padding:7px 10px;border:1px solid #52637c;border-radius:7px;background:#172238;color:#fff}.dv-actions{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}.dv-center a{color:#9bc8ff}.dv-center textarea{width:100%;box-sizing:border-box;min-height:100px}.dv-center details{margin:12px 0}.dv-center summary{cursor:pointer;min-height:35px;font-weight:700}';
   view.append(style,node('h2','개발 검증·진단'),node('p','현재 로그인에서 수집한 오류와 연결 검사를 통합합니다. 전체 API를 자동 실행하지 않으며 최근 100개 진단 항목을 유지합니다.'));
