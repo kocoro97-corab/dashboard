@@ -48,8 +48,8 @@
         return once('market:'+requested.join(','),()=>{const job=marketTail.then(()=>{if(token===LS('invest_session_token'))return refreshMarket(requested)});marketTail=job.catch(()=>{});return job},force,60*1000);
       },
       chart(force=false){return publicConnected()?once('chart',()=>{if(force&&QX)return loadQ(qrg);if(!QX)return showQ('^KS11','코스피','',1)},force):Promise.resolve()},
-      news(force=false){return publicConnected()?once('news',()=>loadNews(),force,3*60*1000):Promise.resolve()},
-      sectors(force=false){return publicConnected()?once('sectors',()=>{if(force)THM_AT=0;return fetchTopThemes()},force,10*60*1000):Promise.resolve()},
+      news(force=false){return publicConnected()?once('news',async()=>{if(await loadNews()===false)throw Error('PUBLIC_NEWS_UNAVAILABLE')},force,3*60*1000):Promise.resolve()},
+      sectors(force=false){return publicConnected()?once('sectors',async()=>{if(force)THM_AT=0;if(await fetchTopThemes()===false)throw Error('PUBLIC_THEME_UNAVAILABLE')},force,10*60*1000):Promise.resolve()},
       accounts(force=false){if(!accountReads())return Promise.resolve();return once('accounts',async()=>{if(!development())await loadProtectedHoldings();await loadNHAccounts();await loadExternalAssets()},force)},
       state(){return {authenticated:!!LS('invest_session_token'),publicConnected:publicConnected(),privateReads:accountReads(),running:[...jobs.values()].filter(j=>j.busy).length}}
     };
