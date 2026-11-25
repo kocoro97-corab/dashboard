@@ -25,10 +25,16 @@ function snapshot(){
  const items=results.map(({page,phase,result,elapsedMs})=>({page,phase,result,elapsedMs}));
  const summary={};
  for(const page of ALLOWED){
-  const durations=items.filter(x=>x.page===page&&x.result==='ready').map(x=>x.elapsedMs).sort((a,b)=>a-b);
-  if(!durations.length)continue;
-  summary[page]={count:durations.length,medianMs:durations[Math.floor((durations.length-1)/2)],
-   maxMs:durations.at(-1)};
+  const pageItems=items.filter(x=>x.page===page);
+  if(!pageItems.length)continue;
+  const durations=pageItems.filter(x=>x.result==='ready').map(x=>x.elapsedMs).sort((a,b)=>a-b);
+  const cancelled=pageItems.filter(x=>x.result==='cancelled').map(x=>x.elapsedMs);
+  const failed=pageItems.filter(x=>x.result==='failed');
+  summary[page]={count:durations.length,
+   medianMs:durations.length?durations[Math.floor((durations.length-1)/2)]:null,
+   maxMs:durations.at(-1)??null,
+   cancelledCount:cancelled.length,cancelledMaxMs:cancelled.length?Math.max(...cancelled):null,
+   failedCount:failed.length};
  }
  return {schemaVersion:1,scope:'UI route elapsed time only, not API breakdown',samples:items,summary,
   memoryOnly:true,networkCalls:0,containsPrivateFields:false};
