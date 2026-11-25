@@ -7,7 +7,7 @@ const endpoint='https://synthetic-shared-relay.workers.dev/api';
 const token='a'.repeat(64);
 const sectorUrl='https://m.stock.naver.com/api/stocks/theme?page=1&pageSize=100';
 const newsUrl='https://news.google.com/rss/search?q=test&hl=ko&gl=KR&ceid=KR:ko';
-function fixture(){
+function fixture({development=true}={}){
  let authToken=token, requestId=0;
  const releases=[],calls=[];
  const location=new URL('https://kocoro97-corab.github.io/dashboard-v2-dev/');
@@ -16,7 +16,7 @@ function fixture(){
    URL,Response,AbortController,Event,performance:{now:()=>5000},
    location,AppRouter:{validHash:()=>true},
    MYINVEST_PERSISTENT_RELAY:{endpoint},
-   MYINVEST_TRANSPORT_CONFIG:{mode:'relay',endpoint,devSession:true,publicMarket:true,persistentRelay:true},
+   MYINVEST_TRANSPORT_CONFIG:{mode:'relay',endpoint,devSession:development,publicMarket:development,persistentRelay:true},
    LS:()=>authToken,dispatchEvent:()=>{},
    setTimeout:()=>1,clearTimeout:()=>{},
    fetch:async(url,options)=>{
@@ -100,4 +100,17 @@ test('pending foreground reads move ahead of queued background requests without 
  assert.equal(f.calls[3].url,'https://news.google.com/rss/search?q=more&hl=ko&gl=KR&ceid=KR:ko');
  f.releases[1]();f.releases[3]();
  await Promise.all([a,b,c,d]);
+});
+
+test('production relay ignores development-only sharing flags and still cancels on navigation',async()=>{
+ const f=fixture({development:false});
+ const req=f.api.publicRead(sectorUrl,{sharedPublic:true,sharedTag:'sectors'});
+ await f.tick();
+ assert.equal(f.calls.length,1);
+ assert.equal(f.api.readState().sharedActive,0);
+ f.location.hash='#/news';
+ f.api.cancelReads({keepSharedPublic:true});
+ await assert.rejects(req,/SESSION_CHANGED/);
+ f.releases[0]();
+ await f.tick();
 });
