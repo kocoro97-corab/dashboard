@@ -4,6 +4,13 @@
   if(AppRouter.routes.includes('diagnostics')){titles.settings='설정';titles.diagnostics='검증·진단'}
   let prepared=false,started=false,current=null,revision=0,navMeasure=null;const instances=new Map(),scrolls=new Map();
   const ctx=AppContext.create();let viewport,title,status,nav,router;
+  // Only development builds load the idle policy. Production has no prefetch.
+  const idlePrefetch=root.MYInvestIdlePrefetch?.create({
+    state:()=>({page:current?.page,revision,scope:LS('invest_session_token'),
+      authenticated:started&&ctx.authenticated(),publicConnected:ctx.publicConnected(),visible:!document.hidden}),
+    readState:()=>root.DashboardTransport?.readState?.(),
+    load:kind=>kind==='sectors'?ctx.sectors(false):kind==='news'?ctx.news(false):Promise.resolve()
+  });
   function prepare(){
     if(prepared)return;prepared=true;
     const app=$('appContainer'),main=app.querySelector('main'),parking=document.createElement('div');parking.id='legacyParking';parking.hidden=true;parking.setAttribute('aria-hidden','true');
@@ -29,7 +36,8 @@
   function unmount(name){try{instances.get(name)?.unmount()}catch{}}
   function change(route){
     if(!started||!ctx.authenticated())return;
-    if(current){root.DashboardTransport?.cancelReads?.();ctx.cancelPending?.();scrolls.set(current.path,viewport.scrollTop);unmount(current.page)}
+    idlePrefetch?.cancel();
+    if(current){const keepSharedPublic=ctx.development()&&ctx.publicConnected();root.DashboardTransport?.cancelReads?.({keepSharedPublic});ctx.cancelPending?.({keepSharedPublic});scrolls.set(current.path,viewport.scrollTop);unmount(current.page)}
     if(navMeasure!==null)root.MYInvestWebPerformance?.finish(navMeasure,'cancelled');
     navMeasure=root.MYInvestWebPerformance?.begin(route.page,'navigation')??null;
     current=route;const epoch=++revision;title.textContent=titles[route.page];title.focus({preventScroll:true});
@@ -37,8 +45,13 @@
     status.classList.remove('shell-error');status.textContent='페이지 연결 중';root.DevelopmentDiagnostics?.pageResult(route.page,'mounted');
     try{
       if(!instances.has(route.page))instances.set(route.page,DashboardPages.create(route.page));
-      const page=instances.get(route.page);page.setRoute?.(route);page.mount(viewport,ctx);viewport.scrollTop=scrolls.get(route.path)||0;
-      Promise.resolve(page.refresh(ctx)).then(()=>{if(epoch===revision){root.MYInvestWebPerformance?.finish(navMeasure,'ready');navMeasure=null;status.textContent='연결됨 · 미확인 항목은 페이지에서 확인하세요.';root.DevelopmentDiagnostics?.pageResult(route.page,'ready')}}).catch(()=>{if(epoch===revision){root.MYInvestWebPerformance?.finish(navMeasure,'failed');navMeasure=null;error()}});
+      const page=instances.get(route.page);page.setRoute?.(route);
+      const mountToken=root.MYInvestWebPerformance?.begin(route.page,'mount')??null;
+      try{page.mount(viewport,ctx);root.MYInvestWebPerformance?.finish(mountToken,'ready')}
+      catch(e){root.MYInvestWebPerformance?.finish(mountToken,'failed');throw e}
+      viewport.scrollTop=scrolls.get(route.path)||0;
+      status.textContent='화면 구성 완료 · 최신 데이터 조회 중';
+      Promise.resolve(page.refresh(ctx)).then(()=>{if(epoch===revision){root.MYInvestWebPerformance?.finish(navMeasure,'ready');navMeasure=null;status.textContent='연결됨 · 미확인 항목은 페이지에서 확인하세요.';root.DevelopmentDiagnostics?.pageResult(route.page,'ready');idlePrefetch?.schedule(route.page)}}).catch(()=>{if(epoch===revision){root.MYInvestWebPerformance?.finish(navMeasure,'failed');navMeasure=null;error()}});
     }catch{root.MYInvestWebPerformance?.finish(navMeasure,'failed');navMeasure=null;viewport.replaceChildren(DashboardPages.note('해당 페이지를 열지 못했습니다. 다른 메뉴를 이용할 수 있습니다.'));error()}
   }
   async function refreshPage(force=true){if(!started||!current)return;const epoch=revision,measure=root.MYInvestWebPerformance?.begin(current.page,'refresh');status.textContent='현재 페이지 갱신 중';try{await instances.get(current.page).refresh(ctx,force);root.MYInvestWebPerformance?.finish(measure,epoch===revision?'ready':'cancelled');if(epoch===revision){status.textContent='갱신 요청 완료 · 각 영역의 수신 상태 확인';root.DevelopmentDiagnostics?.pageResult(current.page,'ready')}}catch{root.MYInvestWebPerformance?.finish(measure,'failed');if(epoch===revision)error()}}
@@ -46,7 +59,7 @@
     prepare();if(!LS('invest_session_token')||$('appContainer').style.display!=='block')return;
     if(started)return;if(root.DevelopmentDiagnostics){root.DevelopmentDiagnostics.synchronize();$('errBar')?.remove()}started=true;root.MYInvestGoogleCalendarTransport?.initialize();clock();startTimers();manualRefresh=()=>refreshPage(true);router.start();
   }
-  function stop(){root.MYInvestWebPerformance?.clear();navMeasure=null;started=false;revision++;root.DashboardTransport?.cancelReads?.();root.MYInvestCalendar?.close();root.MYInvestIcsCalendar?.clear();root.MYInvestGoogleCalendarSync?.disconnect();root.MYInvestGoogleCalendarAuth?.disconnect();root.MYInvestGoogleCalendarTransport?.clear();root.MYInvestCalendarPending=false;root.InvestWorkflow?.clear();root.ReadStatus?.clear();root.DevelopmentDiagnostics?.clear();router?.stop();unmount(current?.page);instances.clear();scrolls.clear();current=null;ctx.clear();viewport?.replaceChildren();
+  function stop(){idlePrefetch?.clear();root.MYInvestWebPerformance?.clear();navMeasure=null;started=false;revision++;root.DashboardTransport?.cancelReads?.();root.MYInvestCalendar?.close();root.MYInvestIcsCalendar?.clear();root.MYInvestGoogleCalendarSync?.disconnect();root.MYInvestGoogleCalendarAuth?.disconnect();root.MYInvestGoogleCalendarTransport?.clear();root.MYInvestCalendarPending=false;root.InvestWorkflow?.clear();root.ReadStatus?.clear();root.DevelopmentDiagnostics?.clear();router?.stop();unmount(current?.page);instances.clear();scrolls.clear();current=null;ctx.clear();viewport?.replaceChildren();
 
     // Detached page views are discarded on logout; original account clear logic
     // remains the authority for holdings, OCR, drafts and server session cleanup.

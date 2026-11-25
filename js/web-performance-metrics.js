@@ -4,7 +4,7 @@ const ALLOWED=new Set(['home','market','sectors','stocks','strategy','news','acc
 let now=()=>root.performance?.now?.()??Date.now();
 let serial=0,results=[],pending=new Map();
 function begin(page,phase='navigation'){
- if(!ALLOWED.has(page)||!['navigation','refresh'].includes(phase))return null;
+ if(!ALLOWED.has(page)||!['navigation','refresh','mount'].includes(phase))return null;
  const token=++serial;
  pending.set(token,{page,phase,started:now()});
  if(pending.size>12)pending.delete(pending.keys().next().value);
@@ -23,9 +23,11 @@ function finish(token,result='ready'){
 }
 function snapshot(){
  const items=results.map(({page,phase,result,elapsedMs})=>({page,phase,result,elapsedMs}));
- const summary={};
+ const summary={},mountSummary={};
  for(const page of ALLOWED){
-  const pageItems=items.filter(x=>x.page===page);
+  const pageItems=items.filter(x=>x.page===page&&x.phase!=='mount');
+  const mountTimes=items.filter(x=>x.page===page&&x.phase==='mount'&&x.result==='ready').map(x=>x.elapsedMs).sort((a,b)=>a-b);
+  if(mountTimes.length)mountSummary[page]={count:mountTimes.length,medianMs:mountTimes[Math.floor((mountTimes.length-1)/2)],maxMs:mountTimes.at(-1)};
   if(!pageItems.length)continue;
   const durations=pageItems.filter(x=>x.result==='ready').map(x=>x.elapsedMs).sort((a,b)=>a-b);
   const cancelled=pageItems.filter(x=>x.result==='cancelled').map(x=>x.elapsedMs);
@@ -36,7 +38,7 @@ function snapshot(){
    cancelledCount:cancelled.length,cancelledMaxMs:cancelled.length?Math.max(...cancelled):null,
    failedCount:failed.length};
  }
- return {schemaVersion:1,scope:'UI route elapsed time only, not API breakdown',samples:items,summary,
+ return {schemaVersion:1,scope:'UI route and DOM mount elapsed time, not API breakdown',samples:items,summary,mountSummary,
   memoryOnly:true,networkCalls:0,containsPrivateFields:false};
 }
 // Navigation/Resource Timing provides local-browser evidence without exposing

@@ -122,7 +122,8 @@ async function getTxt(targetUrl,options={}){
   try{
     const c=relay||options.signal?null:new AbortController();t=c?setTimeout(()=>c.abort(),9000):null;
     const signal=options.signal||c?.signal;
-    const r=await (typeof DashboardTransport!=='undefined'?DashboardTransport.publicRead(targetUrl,signal?{signal}:{}):fetch(fullUrl,{signal}));
+    const requestOptions=signal?{signal}:options.sharedPublic===true?{sharedPublic:true,sharedTag:options.sharedTag}:{};
+    const r=await (typeof DashboardTransport!=='undefined'?DashboardTransport.publicRead(targetUrl,requestOptions):fetch(fullUrl,{signal}));
     if(r.ok){const x=await r.text();if(typeof x==='string'&&x.trim()){NET.ok++;return x}}
     NET.fail++;
   }catch(e){
@@ -135,7 +136,7 @@ async function getTxt(targetUrl,options={}){
   }finally{if(t!==null)clearTimeout(t)}
   return null;
 }
-async function getJSON(u){const x=await getTxt(u);try{return JSON.parse(x)}catch(e){return null}}
+async function getJSON(u,options={}){const x=await getTxt(u,options);try{return JSON.parse(x)}catch(e){return null}}
 
 function openDg(){const relay=typeof DashboardTransport!=='undefined'&&DashboardTransport.isRelay();$('dgs').textContent='성공 '+NET.ok+'회 · 실패 '+NET.fail+'회'+(relay?' · 중계 연결':'');$('dgl').textContent=['NH 나무증권: '+NH_STATUS,'출처별 수신: '+srcSummary(Object.keys(Q)),'--- 통신 기록'].concat(NET.log.length?NET.log:['기록 없음']).join('\n');$('dgp').value=relay?window.MYINVEST_TRANSPORT_CONFIG.endpoint:MYP();$('dgp').readOnly=relay;const save=$('saveProxyBtn');if(save)save.disabled=relay;$('dg').classList.add('on')}
 function closeDg(){$('dg').classList.remove('on')}
@@ -155,9 +156,9 @@ const srcTag=(k,full)=>{const s=SRC[k];if(!s||!Q[k])return '';return full?(SRC_N
 const srcSummary=keys=>{const c={};keys.forEach(k=>{const s=SRC[k];if(Q[k]&&s)c[s]=(c[s]||0)+1});return Object.keys(c).map(s=>(SRC_NAME[s]||s)+' '+c[s]).join(' · ')||'수신 없음'};
 const srcLine=t=>t?`<div class="mini" style="font-size:9px;margin-top:2px;opacity:.75">출처 ${t}</div>`:'';
 
-async function fillNaver(want,fr){
+async function fillNaver(want,fr,onQuote=null){
   const current=publicReadScope(),W=new Set(want),T=[];let n=0;
-  const put=(k,o)=>{const q=nq(o);if(current()&&q&&W.has(k)){Q[k]=q;SRC[k]='N';QT[k]=Date.now();fr.add(k);n++}};
+  const put=(k,o)=>{const q=nq(o);if(current()&&q&&W.has(k)){Q[k]=q;SRC[k]='N';QT[k]=Date.now();fr.add(k);n++;if(typeof onQuote==='function')onQuote(k)}};
   [['^KS11','KOSPI'],['^KQ11','KOSDAQ']].forEach(([k,c])=>{if(W.has(k))T.push(getJSON('https://polling.finance.naver.com/api/realtime/domestic/index/'+c).then(j=>put(k,narr(j)[0])))});
   const wi={'.INX':'^GSPC','.IXIC':'^IXIC','.DJI':'^DJI','.SOX':'^SOX','.VIX':'^VIX'},wk=Object.keys(wi).filter(c=>W.has(wi[c]));
   if(wk.length)T.push(getJSON('https://stock.naver.com/api/polling/worldstock/index?reutersCodes='+wk.join(',')).then(j=>narr(j).forEach((o,i)=>{const rc=o.reutersCode||o.symbolCode||wk[i];if(wi[rc])put(wi[rc],o)})));
@@ -178,7 +179,7 @@ async function quote(s){
 const KY={};
 async function quoteKR(c){for(const x of['.KS','.KQ']){const q=await quote(c+x);if(q){KY[c]=c+x;return q}}return null}
 
-async function fillQuotes(list){
+async function fillQuotes(list,onQuote=null){
   const current=publicReadScope();let i=0;
   await Promise.all(Array.from({length:4},async()=>{
     while(i<list.length){
@@ -186,7 +187,7 @@ async function fillQuotes(list){
       const c=list[i++];
       const q=await(isKR(c)?quoteKR(c):quote(c));
       if(!current())return;
-      if(q){Q[c]=q;SRC[c]='Y';QT[c]=Date.now()}else if(Q[c])Q[c].refreshFailed=true;
+      if(q){Q[c]=q;SRC[c]='Y';QT[c]=Date.now();if(typeof onQuote==='function')onQuote(c)}else if(Q[c])Q[c].refreshFailed=true;
     }
   }));
 }
@@ -199,8 +200,13 @@ async function refreshMarket(requested=[]){   // '시장 종합' 카드(지수·
   try{
     const extra=Array.isArray(requested)?requested.filter(s=>typeof s==='string'&&/^[A-Za-z0-9^=.-]{1,32}$/.test(s)&&!['k3','k4','TICK'].includes(s)).slice(0,24):[];
     const list=CFG[sess()],want=[...new Set([...list.filter(x=>x.y).map(x=>x.y),...extra])],fr=new Set();
-    await fillNaver(want,fr);if(!current())return;
-    await fillQuotes(want.filter(c=>!fr.has(c)));if(!current())return;
+    // Paint the first verified quote while the slower sources continue.
+    // A route/session change must not update the old screen.
+    let firstVisible=false;
+    const firstQuote=()=>{if(firstVisible||!current())return;firstVisible=true;renderCards();updateTickGauge()};
+    await fillNaver(want,fr,firstQuote);if(!current())return;
+    await fillQuotes(want.filter(c=>!fr.has(c)),firstQuote);if(!current())return;
+    if(!firstVisible&&want.some(c=>Q[c]))firstQuote();
     const requestedNH=[...new Set([...list.filter(x=>NHF[x.id]).map(x=>x.id),...(Array.isArray(requested)?requested:[]).filter(id=>NHF[id])])],hasNH=requestedNH.length>0,nh=hasNH?await fillNH(requestedNH):{ok:0,fail:0};if(!current())return;
     const hasFut=list.some(x=>x.fut)||Array.isArray(requested)&&requested.includes('k3'),fu=hasFut?await fillFutures(new Set(Object.keys(NQ))):{ok:0,fail:0};if(!current())return;
     await fillAuthorizedMarketSources(requestedNH.includes('k4'));
@@ -314,18 +320,20 @@ const esc=v=>String(v).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[
 const ago=d=>{const m=(Date.now()-d)/60000;return m<1?'방금':m<60?Math.floor(m)+'분 전':Math.floor(m/1440)+'일 전'};
 
 async function fetchNews(q){
-  const x=await getTxt('https://news.google.com/rss/search?q='+encodeURIComponent(q)+'&hl=ko&gl=KR&ceid=KR:ko');if(!x)return null;
+  const x=await getTxt('https://news.google.com/rss/search?q='+encodeURIComponent(q)+'&hl=ko&gl=KR&ceid=KR:ko',{sharedPublic:true,sharedTag:'news'});if(!x)return null;
   const d=new DOMParser().parseFromString(x,'text/xml');if(d.querySelector('parsererror')||!d.querySelector('rss,feed'))return null;
   return[...d.querySelectorAll('item')].map(i=>{const g=t=>{const e=i.querySelector(t);return e?e.textContent:''};return{t:g('title'),l:g('link'),s:g('source'),d:new Date(g('pubDate')||NaN)}})
 }
 
 async function loadNews(){
+  const session=LS('invest_session_token');
   $('nst_mk').textContent='불러오는 중...';$('nst_hd').textContent='불러오는 중...';
   // Independent read-only feeds can load concurrently; each retains its own failure state.
   const [mks,hds]=await Promise.all([
     fetchNews('코스피 OR 증시 OR 나스닥 when:2d'),
     fetchNews('(삼성전자 OR SK하이닉스 OR 한미반도체 OR 알테오젠) when:2d')
   ]);
+  if(session!==LS('invest_session_token'))return false;
   const renderN=(list,el,stEl)=>{
     if(!Array.isArray(list)){$(el).replaceChildren();$(stEl).textContent='뉴스 수신 실패 · 미확인';return}
     const m={};list.forEach(a=>{const k=a.t.replace(/\s-\s[^-]+$/,'');if(!m[k]||a.d>m[k].d)m[k]={t:k,l:a.l,s:a.s,d:a.d}});
@@ -334,6 +342,7 @@ async function loadNews(){
     $(stEl).textContent=arr.length?arr.length+'건':'없음';
   };
   renderN(mks,'nl_mk','nst_mk');renderN(hds,'nl_hd','nst_hd');
+  return Array.isArray(mks)||Array.isArray(hds);
 }
 
 function setTick(){
