@@ -163,7 +163,12 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
    go('/home');assert page.locator('#pageViewport').evaluate('e=>e.scrollTop')==home_top
    if not development:
     page.evaluate("LS('invest_external_settings',{auto:true,minutes:10})");go('/accounts');assert page.evaluate('EXT_AUTO_TIMER!==null');go('/home');assert page.evaluate('EXT_AUTO_TIMER===null')
-   before=Counter(gas.reads);go('/market');go('/home');page.wait_for_timeout(100);assert Counter(gas.reads)==before
+   before=Counter(gas.reads);go('/market');go('/home');page.wait_for_timeout(100)
+   extra=Counter(gas.reads)-before
+   # Never log querystrings, credentials, account values or symbols from the session.
+   # Path-only counts distinguish actual duplicate reads from late pending traffic.
+   assert not extra,{'additionalPublicPaths':[(urlsplit(url).hostname,urlsplit(url).path,count) for url,count in extra.items()],
+                     'relay':page.evaluate('()=>({active:DashboardTransport.readState().active,queued:DashboardTransport.readState().queued})')}
    if development:
     go('/market');assert not page.locator('#marketSection').is_visible();page.get_by_role('button',name='거시경제 분석',exact=True).click();macro=page.locator('#workMacroLivePreview');macro.get_by_role('button',name='거시경제 분석 · 실제 시세로 열기',exact=True).click();page.wait_for_function("()=>document.querySelectorAll('#workMacroLivePreview .macro-card').length>0",timeout=60000)
     page.locator('.miv-overlay').get_by_role('button',name='✕ 닫기',exact=True).click();go('/home');assert macro.locator('.work-macro').count()==0
