@@ -157,62 +157,18 @@ async def sectors_checks(browser,artifact,tmp,width):
   if not args.public_feeds:await case(h,'API_FAILURE_IS_SEPARATE_FROM_VALID_ROWS',partial)
   async def rapid():
    if args.public_feeds:return
-   h.overrides[history_url('SPY')]={'text':feeds[history_url('SPY')],'delayMs':400};h.overrides[history_url('XLE')]={'text':feeds[history_url('XLE')]};await h.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click();await select_sector_market(h,'KR');await h.page.locator('.stv2-tabs button',has_text='단타').click();await select_sector_market(h,'US');await h.page.locator('.stv2-tabs button',has_text='스윙').click();await h.page.locator('.stv2-tabs button').filter(has_text=re.compile('^20일
-    await h.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("미국 11개 섹터 ETF 상대강도")&&document.querySelector(".stv2")?.textContent.includes("기간 20거래일")',timeout=12000)
+   h.overrides[history_url('SPY')]={'text':feeds[history_url('SPY')],'delayMs':400};h.overrides[history_url('XLE')]={'text':feeds[history_url('XLE')]};await h.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click();await select_sector_market(h,'KR');await h.page.locator('.stv2-tabs button',has_text='단타').click();await select_sector_market(h,'US');await h.page.locator('.stv2-tabs button',has_text='스윙').click();await h.page.locator('.stv2-tabs button').filter(has_text=re.compile('^20일$')).click()
+   try:
+    await h.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("미국 11개 섹터 ETF 상대강도")&&document.querySelector(".stv2")?.textContent.includes("기간 20거래일")')
    except Exception as exc:
-    # Strict assertions remain unchanged; record only bounded, non-sensitive UI booleans.
     state=await h.page.evaluate("""() => ({
       activeUS:document.querySelector('.stv2-toolbar .stv2-tabs button[aria-pressed=true]')?.textContent==='미국',
-      swing:document.querySelector('.stv2-toolbar')?.textContent.includes('스윙'),
       period20:document.querySelector('.stv2')?.textContent.includes('기간 20거래일'),
       etfTitle:document.querySelector('.stv2')?.textContent.includes('미국 11개 섹터 ETF 상대강도'),
-      oldView:document.querySelector('.stv2')?.textContent.includes('국내 상위 테마 구성종목 표본 분석'),
       hasLoading:document.querySelector('.stv2')?.textContent.includes('실제 일봉 데이터 분석 중'),
       hasError:document.querySelector('.stv2')?.textContent.includes('시계열 수신 또는 검증 실패'),
       selectedLabels:[...document.querySelectorAll('.stv2-toolbar .stv2-tabs button[aria-pressed=true]')].map(x=>x.textContent.slice(0,20)),
-      transport:typeof DashboardTransport?.readState==='function'?DashboardTransport.readState():null,
-      nav:DashboardShell?.getStatus?.().page
-    })""")
-    raise AssertionError('RAPID_UI_DIAGNOSTIC '+json.dumps(state,ensure_ascii=False)) from exc
-   assert '국내 상위 테마 구성종목 표본 분석' not in await h.page.locator('.stv2').inner_text();await h.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click();await h.go('news');assert await h.page.locator('.stv2').count()==0
-  if not args.public_feeds:await case(h,'RAPID_SELECTION_AND_NAVIGATION_DURING_LOAD',rapid)
-  assert not h.errors,h.errors;assert not any(r['action'] in ['nhAccounts','nhQuotes','order','saveExternalHoldings'] for r in h.requests)
-  timings.append({'area':'sectors','width':width,'mode':MODE,'firstDisplayMs':first,'firstFrameMs':h.first_frame_ms,'initialDataMs':h.initial_data_ms,'initialRenderSettleMs':h.initial_render_ms,'requestCount':len(h.requests),'lastResponseMs':max((r.get('endMs',0) for r in h.requests),default=0)})
- finally:await h.close()
-async def main():
- with tempfile.TemporaryDirectory() as tmp:
-  artifact=Path(tmp)/'public';build(artifact)
-  # Local fixtures need the synthetic pinned endpoint, not the real deployment.
-  if not args.published:
-   from public_integration_support import ENDPOINT
-   import shutil
-   shutil.rmtree(artifact);build(artifact,relay_endpoint=ENDPOINT)
-  async with async_playwright() as p:
-   browser=await p.chromium.launch(headless=True)
-   try:
-    for width in args.widths:
-     if args.only in ['all','clock'] and not args.public_feeds:await clock_checks(browser,artifact,tmp,width)
-     if args.only in ['all','chart']:await chart_checks(browser,artifact,tmp,width)
-     if args.only in ['all','sectors']:await sectors_checks(browser,artifact,tmp,width)
-   finally:await browser.close()
- args.output.joinpath('results.json').write_text(json.dumps(results,indent=2));args.output.joinpath('timings.json').write_text(json.dumps(timings,indent=2));print(json.dumps({'passed':sum(r['status']=='PASS' for r in results),'failed':sum(r['status']=='FAIL' for r in results),'mode':MODE}));return 1 if any(r['status']=='FAIL' for r in results) else 0
-raise SystemExit(asyncio.run(main()))
-)).click()
-   try:
-    await h.page.wait_for_function('()=>document.querySelector(".stv2")?.textContent.includes("미국 11개 섹터 ETF 상대강도")&&document.querySelector(".stv2")?.textContent.includes("기간 20거래일")',timeout=12000)
-   except Exception as exc:
-    # Strict assertions remain unchanged; record only bounded, non-sensitive UI booleans.
-    state=await h.page.evaluate("""() => ({
-      activeUS:document.querySelector('.stv2-toolbar .stv2-tabs button[aria-pressed=true]')?.textContent==='미국',
-      swing:document.querySelector('.stv2-toolbar')?.textContent.includes('스윙'),
-      period20:document.querySelector('.stv2')?.textContent.includes('기간 20거래일'),
-      etfTitle:document.querySelector('.stv2')?.textContent.includes('미국 11개 섹터 ETF 상대강도'),
-      oldView:document.querySelector('.stv2')?.textContent.includes('국내 상위 테마 구성종목 표본 분석'),
-      hasLoading:document.querySelector('.stv2')?.textContent.includes('실제 일봉 데이터 분석 중'),
-      hasError:document.querySelector('.stv2')?.textContent.includes('시계열 수신 또는 검증 실패'),
-      selectedLabels:[...document.querySelectorAll('.stv2-toolbar .stv2-tabs button[aria-pressed=true]')].map(x=>x.textContent.slice(0,20)),
-      transport:typeof DashboardTransport?.readState==='function'?DashboardTransport.readState():null,
-      nav:DashboardShell?.getStatus?.().page
+      transport:typeof DashboardTransport?.readState==='function'?DashboardTransport.readState():null
     })""")
     raise AssertionError('RAPID_UI_DIAGNOSTIC '+json.dumps(state,ensure_ascii=False)) from exc
    assert '국내 상위 테마 구성종목 표본 분석' not in await h.page.locator('.stv2').inner_text();await h.page.get_by_role('button',name='현재 페이지 갱신',exact=True).click();await h.go('news');assert await h.page.locator('.stv2').count()==0
