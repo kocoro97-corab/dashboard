@@ -133,7 +133,7 @@ function create(){
    const market=requestedMarket;
   if(!active||!ctxRef||!ctxRef.publicConnected?.()||analysisBusy||(market==='KR'&&loading))return;
   if(market==='KR'&&period==='1d'&&mode==='day'){if(category==='industry'&&!industryRows.length)void loadIndustries(force);return;}
-  const key=keyFor(market),viewKey=keyFor();if(!force&&analytics.has(key))return;if(force)SERIES_CACHE.clear();
+  const key=keyFor(market),viewKey=keyFor();if(!force&&analytics.has(key)&&!analytics.get(key)?.partial)return;if(force)SERIES_CACHE.clear();
   analysisBusy=true;analysisError='';analysisKey=key;const version=++analysisVersion;
   const controller=new AbortController();analysisController=controller;
   const context=Object.create(ctxRef);
@@ -145,6 +145,16 @@ function create(){
    if(base===null)throw Error('BENCHMARK_HISTORY_MISSING');
    if(!active||version!==analysisVersion||keyFor(market)!==key)return;
    const rows=[],failures=[],themes=[];
+   // Publish each independently validated sample as it completes. A partial
+   // panel is explicitly non-final and is never exported to strategy rankings.
+   function publishPartial(){
+     if(!active||version!==analysisVersion||keyFor(market)!==key)return;
+     analytics.set(key,{category,benchmarkSeries:benchmark,rows:rows.slice().sort((a,b)=>b.relative-a.relative),
+       benchmark:base,benchmarkSymbol,received:Date.now(),period,market,failures:failures.slice(),
+       themes:themes.slice().sort((a,b)=>b.relative-a.relative),asof:benchmark.last,strictRotation:null,partial:true});
+     draw();
+   }
+   publishPartial();
    if(market==='US'){
     // The US theme view must not download eleven sector ETF series hidden
     // behind a collapsed reference. They remain available in industry mode.
@@ -156,6 +166,7 @@ function create(){
      const quality=root.SectorInsights.sampleBreadth(sample,t.instruments.length);
       if(quality.rankable){const change=sample.reduce((a,x)=>a+x.change,0)/sample.length;themes.push({...t,sample,change,relative:change-base,asof:benchmark.last,quality})}
       else failures.push({symbol:t.id,reason:'SAMPLE_COVERAGE_INSUFFICIENT'});
+      publishPartial();
     });
    }else{
     if((typeof EXT_MASTER==='undefined'||!EXT_MASTER)&&typeof loadExternalMaster==='function')await loadExternalMaster();
@@ -171,6 +182,7 @@ function create(){
      const quality=root.SectorInsights.sampleBreadth(results,stocks.length);
      if(quality.rankable){const change=results.reduce((a,x)=>a+x.change,0)/results.length;rows.push({symbol:String(t.no),name:t.name,change,relative:change-base,asof:Math.min(...results.map(x=>x.asof)),coverage:quality.observed+'/'+quality.expected+'개 구성종목 동일가중 표본',sample:results,quality})}
      else failures.push({symbol:String(t.no),reason:'SAMPLE_COVERAGE_INSUFFICIENT'});
+     publishPartial();
     });
    }
    if(!active||version!==analysisVersion||keyFor(market)!==key)return;
@@ -179,7 +191,7 @@ function create(){
     root.MYInvestSectorCacheRotationBridge.evaluate({market,benchmark,rows,
      nowDay:root.MYInvestExchangeSessionProof?.localDay(Date.now(),'America/New_York')}):null;
    analytics.set(key,{category,benchmarkSeries:benchmark,rows:rows.sort((a,b)=>b.relative-a.relative),benchmark:base,benchmarkSymbol,received:Date.now(),period,market,failures,themes:themes.sort((a,b)=>b.relative-a.relative),asof:benchmark.last,strictRotation});
-  }catch(e){if(active&&version===analysisVersion&&keyFor()===key)analysisError='시계열 수신 또는 검증 실패 · 실제 데이터 연결 상태를 확인하세요.'}
+  }catch(e){if(active&&version===analysisVersion&&keyFor()===key)analysisError='시계열 수신 또는 검증 실패 · 일부 결과가 보이면 최종 순위가 아닙니다.'}
   finally{
    if(analysisController===controller)analysisController=null;
    if(active&&version===analysisVersion){analysisBusy=false;draw();if(keyFor()!==viewKey)void loadAnalytics()}
@@ -189,7 +201,8 @@ function create(){
   const key=keyFor(),data=analytics.get(key);
   if(market==='KR'&&category==='industry'){const titleBar=make('div',undefined,'stv2-industry-head'),refresh=button(industryBusy||analysisBusy?'갱신 중…':'국내 섹터 갱신',refreshCurrent);refresh.disabled=industryBusy||analysisBusy;titleBar.append(make('h3','국내 산업 구성종목 표본 분석'),refresh);list.append(titleBar)}
   if(analysisBusy)list.append(make('p',(analysisKey===key?'실제 일봉 데이터 분석 중…':'이전 요청 정리 후 선택 화면 자료 조회 중…')+' 다른 화면은 계속 이용할 수 있습니다.','stv2-status'));
-  if(analysisError&&!data)list.append(make('p',analysisError,'stv2-status'));
+  if(analysisError)list.append(make('p',analysisError,'stv2-status'));
+  if(data?.partial)list.append(make('p','검증된 일부 표본 먼저 표시 · 남은 시계열 조회 중/미완료 · 순위 확정 전, 투자전략 근거 미반영','stv2-status'));
   if(!data){if(!analysisBusy)list.append(button('실제 시계열 조회',()=>void loadAnalytics(true)));return}
   const n=PERIODS[period],label=market==='US'?'미국 11개 섹터 ETF 상대강도':(category==='industry'?'국내 산업 구성종목 표본 분석':'국내 상위 테마 구성종목 표본 분석');
   if(market==='US'&&category==='theme'){
@@ -241,7 +254,7 @@ function create(){
  function renderUSThemes(data){
   list.append(make('h3','미국 일반종목 테마 · 검증 표본'),make('p','운용사 공개 구성자료의 미국 상장 일반종목 표본 · 종가 가격수익률 동일가중 · 검증된 구성종목 60% 미만은 순위 보류 · 전체 미국 시장 순위 아님','stv2-muted'));
   const cards=make('div',undefined,'stv2-grid stv2-us-themes');
-  for(const [i,t] of (data.themes||[]).entries()){const card=button('',()=>usDetail(t));card.className='stv2-card';card.style.textAlign='left';const up=t.sample.filter(x=>x.change>0).length,down=t.sample.filter(x=>x.change<0).length;card.append(make('strong',(i+1)+'위 · '+t.name),make('p',PERIODS[period]+'일 표본 수익률 '+pct(t.change)+' · SPY 대비 '+pct(t.relative)),make('p','상승 '+up+' / 하락 '+down+' · 상승비율 '+(t.quality?.breadth==null?'미확인':t.quality.breadth.toFixed(1)+'%')+' · 확인 '+t.sample.length+'/'+t.instruments.length+'종목','stv2-muted'),make('p',t.sample.slice().sort((a,b)=>b.change-a.change).slice(0,3).map(x=>root.InstrumentNames?.label(x.symbol,x.name)||x.name+' ('+x.symbol+')').join(' · '),'stv2-muted'),make('p','구성 기준 '+t.asOf+(Date.now()-Date.parse(t.asOf)>7*86400000?' · 구성자료 7일 초과, 최신성 확인 필요':'')+' · 관측 '+new Date(t.asof).toLocaleDateString('ko-KR'),'stv2-muted'));cards.append(card)}
+  for(const [i,t] of (data.themes||[]).entries()){const card=button('',()=>usDetail(t));card.className='stv2-card';card.style.textAlign='left';const up=t.sample.filter(x=>x.change>0).length,down=t.sample.filter(x=>x.change<0).length;card.append(make('strong',(data.partial?'잠정 '+(i+1)+'번째 · ':(i+1)+'위 · ')+t.name),make('p',PERIODS[period]+'일 표본 수익률 '+pct(t.change)+' · SPY 대비 '+pct(t.relative)),make('p','상승 '+up+' / 하락 '+down+' · 상승비율 '+(t.quality?.breadth==null?'미확인':t.quality.breadth.toFixed(1)+'%')+' · 확인 '+t.sample.length+'/'+t.instruments.length+'종목','stv2-muted'),make('p',t.sample.slice().sort((a,b)=>b.change-a.change).slice(0,3).map(x=>root.InstrumentNames?.label(x.symbol,x.name)||x.name+' ('+x.symbol+')').join(' · '),'stv2-muted'),make('p','구성 기준 '+t.asOf+(Date.now()-Date.parse(t.asOf)>7*86400000?' · 구성자료 7일 초과, 최신성 확인 필요':'')+' · 관측 '+new Date(t.asof).toLocaleDateString('ko-KR'),'stv2-muted'));cards.append(card)}
   list.append(cards);if(!data.themes?.length)list.append(make('p','검증된 미국 일반종목 테마 자료가 없습니다. 새로고침 후 연결 상태를 확인하세요.','stv2-status'));
   list.append(make('p','순위는 표본 충족률 60% 이상인 테마 간 비교에 한정됩니다. 구성목록 기준일과 공식 출처를 확인하세요. 시세 새로고침과 구성자료 갱신은 별개이며 ETF 가격은 테마 수익률로 사용하지 않습니다.','stv2-muted'));
  }
