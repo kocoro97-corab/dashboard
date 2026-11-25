@@ -84,7 +84,10 @@ async function execute(key,operation,options={}){
   catch(error){if(!current()||options.signal?.aborted||['READ_CANCELLED','SESSION_CHANGED'].includes(error?.code))throw error;
    const safe=classify(error,{id,scope:'public',attempts:attempt});note(error,{key,id,scope:'public',attempts:attempt});
    const delay=retryDelay(error,attempt);if(attempt===3||!safe.retryable||delay>30000)throw error;
-   root.DashboardTransport?.deferReads?.(delay);await waitRetry(delay,options);
+   // Retry only this failed read. Verified relay saturation is throttled separately
+   // by DashboardTransport.noteBusyResponse; a generic upstream 502 must not
+   // block unrelated current-page requests in the shared transport queue.
+   await waitRetry(delay,options);
   }
  }})();
  pending.set(key,{promise:job,current,signal:options.signal});try{return await job}finally{if(pending.get(key)?.promise===job)pending.delete(key)}
