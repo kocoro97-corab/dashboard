@@ -114,6 +114,8 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
     assert panel.count()==1
     panel.locator('summary').click()
     page.wait_for_function("()=>document.querySelector('#devBrowserPerformanceResults')?.textContent.includes('JavaScript 요청')")
+    assert '대기 중인 읽기 요청' in page.locator('#devBrowserPerformanceResults').inner_text()
+    assert page.evaluate("()=>{const s=DashboardTransport.readState();return Number.isInteger(s.active)&&Number.isInteger(s.queued)&&Number.isInteger(s.limit)&&Number.isFinite(s.backpressureMs)}")
     # Content is already populated; the details disclosure is explicitly opened
     # before testing layout visibility to avoid relying on toggle-event timing.
     panel.evaluate("e=>e.open=true")
