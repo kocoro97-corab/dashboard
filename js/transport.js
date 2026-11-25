@@ -99,7 +99,8 @@
   }
   function readState(){
     const queue=waiting.filter(j=>!j.cancelled);
-    const active=[...running].filter(j=>!j.cancelled);
+    // In-flight requests continue occupying a physical relay slot after route cancellation.
+    const active=[...running];
     return {generation:epoch,active:running.size,queued:queue.length,completed,cancelled,
       limit:config().persistentRelay===true&&readClock()>=throttleUntil?2:1,
       backpressureMs:Math.max(0,Math.ceil(Math.max(pauseUntil,throttleUntil)-readClock())),
