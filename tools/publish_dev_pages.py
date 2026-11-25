@@ -55,15 +55,15 @@ def checked_dev_head(observed, expected=None):
 
 
 def publish(expected_source_sha=None, expected_dev_head=None):
+    # Never publish without both an exact approved source and a dev-pages lease.
+    if not expected_source_sha or not expected_dev_head:raise Stop('DEV_APPROVED_SHA_REQUIRED')
     if not shutil.which('gh'):raise Stop('OWNER_GITHUB_CLI_REQUIRED')
     if git(['status', '--porcelain', '--untracked-files=no'], ROOT):raise Stop('DEV_TRACKED_SOURCE_DIRTY')
     verified_source_commit(expected_source_sha)
     if api('user').get('login') != 'kocoro97-corab':raise Stop('OWNER_GITHUB_ACCOUNT_MISMATCH')
     target = 'repos/' + REPO
     repo = api(target, optional=True)
-    if repo is None:
-        repo = api('user/repos', 'POST', {'name': 'dashboard-v2-dev', 'description': DESCRIPTION,
-                    'private': False, 'auto_init': False, 'has_issues': False, 'has_projects': False, 'has_wiki': False})
+    if repo is None:raise Stop('DEV_REPOSITORY_MISSING')
     if repo.get('full_name') != REPO or repo.get('private') is not False:
         raise Stop('DEV_REPOSITORY_IDENTITY_MISMATCH')
     previous = api(target + '/contents/development-only.json?ref=' + BRANCH, optional=True)
@@ -87,18 +87,21 @@ def publish(expected_source_sha=None, expected_dev_head=None):
         git(['config', 'user.name', 'MY INVEST development'], checkout)
         git(['config', 'user.email', 'development@users.noreply.github.com'], checkout)
         git(['remote', 'add', 'origin', 'https://github.com/' + REPO + '.git'], checkout)
-        if previous is not None:
-            git(['fetch', '--depth=1', 'origin', BRANCH], checkout)
-            checked_dev_head(git(['rev-parse', 'FETCH_HEAD'], checkout), expected_dev_head)
-            git(['checkout', '-B', BRANCH, 'FETCH_HEAD'], checkout)
-        elif expected_dev_head:
-            raise Stop('DEV_PAGES_HEAD_CHANGED')
-            old = json.loads((checkout / 'asset-manifest.json').read_text())
-            for name in old:
-                path = Path(name)
-                if path.is_absolute() or '..' in path.parts:raise Stop('DEV_MANIFEST_PATH_INVALID')
-                if name not in manifest and (checkout / name).is_file():
-                    git(['rm', '--', name], checkout)
+        if previous is None:raise Stop('DEV_PAGES_HEAD_CHANGED')
+        git(['fetch', '--depth=1', 'origin', BRANCH], checkout)
+        checked_dev_head(git(['rev-parse', 'FETCH_HEAD'], checkout), expected_dev_head)
+        git(['checkout', '-B', BRANCH, 'FETCH_HEAD'], checkout)
+        # Old files must be removed *before* adding the new manifest. This was
+        # previously unreachable inside an elif that always raised.
+        old = json.loads((checkout / 'asset-manifest.json').read_text())
+        if not isinstance(old,dict):raise Stop('DEV_MANIFEST_INVALID')
+        for name in old:
+            if not isinstance(name,str):raise Stop('DEV_MANIFEST_PATH_INVALID')
+            path = Path(name)
+            if not name or path.is_absolute() or '..' in path.parts:
+                raise Stop('DEV_MANIFEST_PATH_INVALID')
+            if name not in manifest and (checkout / name).is_file():
+                git(['rm', '--', name], checkout)
         for source in artifact.rglob('*'):
             if source.is_file():
                 dest = checkout / source.relative_to(artifact)
@@ -130,8 +133,8 @@ def publish(expected_source_sha=None, expected_dev_head=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--publish-dev-pages', action='store_true', required=True)
-    parser.add_argument('--expect-source-sha', metavar='SHA40')
-    parser.add_argument('--expect-dev-head', metavar='SHA40')
+    parser.add_argument('--expect-source-sha', metavar='SHA40',required=True)
+    parser.add_argument('--expect-dev-head', metavar='SHA40',required=True)
     args=parser.parse_args()
     try:
         for value in (args.expect_source_sha, args.expect_dev_head):
