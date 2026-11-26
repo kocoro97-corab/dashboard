@@ -33,7 +33,7 @@
   function isRelay(){return config().mode==='relay'}
   // Shared physical read budget. Auth and reviewed writes are never replayed.
   const reads=new Set(['publicFetch','nhQuotes','nhExternalQuotes','nhAccounts','externalHoldings','externalHistory','externalAccounts','googleCalendarStatus','googleCalendarList','googleCalendarEvents']);
-  const waiting=[],running=new Set(),publicPending=new Map();let epoch=0,sharedEpoch=0,completed=0,cancelled=0,pauseUntil=0,pauseTimer=null,throttleUntil=0,sharedPromotions=0,sharedJoins=0,maxQueueWaitMs=0,maxPhysicalReadMs=0;
+  const waiting=[],running=new Set(),publicPending=new Map();let epoch=0,sharedEpoch=0,completed=0,cancelled=0,pauseUntil=0,pauseTimer=null,throttleUntil=0,sharedPromotions=0,sharedJoins=0,maxQueueWaitMs=0,maxPhysicalReadMs=0,foregroundRescueStarts=0;
   const readClock=()=>root.performance?.now?.()??Date.now();
   // Anonymous in-memory latency only: no URLs, tokens, account data, or payloads.
   const elapsed=since=>Number.isFinite(since)?Math.max(0,Math.min(86400000,Math.round(readClock()-since))):0;
@@ -76,9 +76,19 @@
       // Idle warming may use only one physical lease; leave another for the visible screen.
       // A promoted/shared request becomes foreground when its page is visible.
       if(headBackground&&[...running].some(j=>j.sharedPublic&&!j.cancelled&&j.sharedTag!==visibleTag))return;
-      if(running.size>=Math.min(head.limit,readClock()<throttleUntil?1:Infinity))return;
+      // Existing news/theme reads may still occupy both physical relay slots
+      // after a navigation. Reserve a single bounded third lease ONLY for the
+      // new visible page and ONLY when the previous two leases are shared
+      // public reads from a different route. The relay's verified 429/503
+      // backpressure always takes precedence; never expand normal concurrency.
+      const cfg=config();
+      const rescue=cfg.devSession===true&&cfg.persistentRelay===true&&
+        readClock()>=throttleUntil&&running.size===2&&!headBackground&&
+        [...running].every(j=>j.sharedPublic&&!j.cancelled&&j.sharedTag!==visibleTag);
+      const normalLimit=Math.min(head.limit,readClock()<throttleUntil?1:Infinity);
+      if(running.size>=(rescue?3:normalLimit))return;
       const job=waiting.shift();if(job.cancelled||!job.current()){job.cancel(failure('SESSION_CHANGED'));continue}
-      running.add(job);job.started=true;job.startedAt=readClock();maxQueueWaitMs=Math.max(maxQueueWaitMs,elapsed(job.enqueuedAt));
+      running.add(job);job.started=true;job.startedAt=readClock();if(rescue)foregroundRescueStarts++;maxQueueWaitMs=Math.max(maxQueueWaitMs,elapsed(job.enqueuedAt));
       // Do not abort a physical request on navigation: Worker lease release may
       // lag a browser abort. Keep its slot until the server response settles.
       Promise.resolve().then(job.run).then(value=>{if(job.current()&&!job.cancelled)job.resolve(value);else job.cancel(failure('SESSION_CHANGED'))},error=>job.reject(error))
@@ -108,7 +118,7 @@
       sharedActive:active.filter(j=>j.sharedPublic).length,sharedPromotions,sharedJoins,
       oldestQueuedMs:queue.length?Math.max(...queue.map(j=>elapsed(j.enqueuedAt))):0,
       oldestActiveMs:active.length?Math.max(...active.map(j=>elapsed(j.startedAt))):0,
-      maxQueueWaitMs,maxPhysicalReadMs};
+      maxQueueWaitMs,maxPhysicalReadMs,foregroundRescueStarts};
   }
   function post(payload,options){
     const c=config();options=options||{};
