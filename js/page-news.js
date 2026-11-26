@@ -105,7 +105,7 @@ function create(){
  const BRIEF_KEY='myinvest_public_ai_briefings_v1';
  const briefToday=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
  let briefingArea=null,selectedBrief='',briefOpen=true;
- let sharedPublicFeed=null,archivePanel=null;
+ let sharedPublicFeed=null,archivePanel=null,privateOriginal=null;
  function readBriefs(){try{const x=JSON.parse(localStorage.getItem(BRIEF_KEY)||'[]');if(!Array.isArray(x))return [];const rows=x.map(normalizeBrief).filter(Boolean).sort((a,b)=>b.at-a.at),unique=new Map();for(const r of rows)if(!unique.has(r.date))unique.set(r.date,r);return [...unique.values()].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,30)}catch{return []}}
  function renderBrief(){
   if(!active||!briefingArea)return;
@@ -178,17 +178,18 @@ function create(){
   active=true;ctxRef=ctx;newsHoldings=()=>holdings().map(x=>x.code);view=el('section',undefined,'nev5');const style=el('style');style.textContent=css;view.append(style,el('h2','뉴스·투자 브리핑'));
   const nav=el('div',undefined,'nev5-nav');for(const [name,page] of [['글로벌 시장','market'],['섹터·테마','sectors'],['AI 종목분석','stocks'],['투자전략','strategy']])nav.append(btn(name,()=>root.location.hash='#/'+page));
   const calendarButton=btn('▦ 투자 캘린더',()=>root.MYInvestCalendar?.open());calendarButton.dataset.investCalendarTrigger='true';nav.append(calendarButton);
-  const openBriefing=btn('오늘 AI 투자전략 등록·보기',()=>{
-    const box=view.querySelector('.nev5-management');if(!box)return;
-    box.open=true;
-    const editor=box.querySelector('.nev5-brief-editor');if(editor)editor.open=true;
-    const date=box.querySelector('.nev5-brief-editor input[type=date]');if(date)date.value=briefToday();
-    box.scrollIntoView?.({block:'start',behavior:'instant'});
-  });
-  openBriefing.dataset.todayBriefingAccess='true';nav.append(openBriefing);view.append(nav);
+  const openBriefing=btn('오늘의 AI 뉴스·투자전략 원문 보기',()=>{
+     view.querySelector('[data-news-block="private-original"]')?.scrollIntoView?.({block:'start',behavior:'instant'});
+     void privateOriginal?.refresh();
+   });
+   openBriefing.dataset.todayBriefingAccess='true';nav.append(openBriefing);view.append(nav);
   status=el('p','뉴스 피드 갱신 전에는 기존 수신 자료가 표시될 수 있습니다.','nev5-muted');view.append(status);
-  const sharedHost=el('div');sharedHost.dataset.newsBlock='briefing';view.append(sharedHost);
-  const briefStyle=el('style');briefStyle.textContent=BRIEF_CSS+'.nev5-news-top{display:block}.nev5-news-top>.page-content{max-height:none}.nev5-management{margin:12px 0;min-width:0}.nev5-management>summary{cursor:pointer;min-height:40px;padding:9px;background:#172238;border:1px solid #344158;border-radius:8px}.mifv1-stale{color:#ffd383}';view.append(briefStyle);
+  const privateHost=el('div');privateHost.dataset.newsBlock='private-original';view.append(privateHost);
+   privateOriginal=root.MYInvestPrivateOriginalBriefing?.mount(privateHost)||null;
+   void privateOriginal?.refresh();
+   const oldPublic=el('details',undefined,'nev5-legacy-public');oldPublic.append(el('summary','기존 공개 브리핑 파일 보기 (ChatGPT 원문과 별도)'));view.append(oldPublic);
+   const sharedHost=el('div');sharedHost.dataset.newsBlock='briefing';oldPublic.append(sharedHost);
+  const briefStyle=el('style');briefStyle.textContent=BRIEF_CSS+'.nev5-news-top{display:block}.nev5-news-top>.page-content{max-height:none}.nev5-legacy-public>summary{padding:9px;cursor:pointer}.nev5-management{margin:12px 0;min-width:0}.nev5-management>summary{cursor:pointer;min-height:40px;padding:9px;background:#172238;border:1px solid #344158;border-radius:8px}.mifv1-stale{color:#ffd383}';view.append(briefStyle);
   const newsTop=el('section',undefined,'nev5-news-top');newsTop.dataset.newsBlock='live-news';newsTop.append(el('h3','실시간 주요 뉴스'));
   newsDayHost=newsTop;newsTodayOnly=false;
   const newsActions=el('div',undefined,'nev5-nav');
@@ -202,7 +203,7 @@ function create(){
   newsDayStatus=el('p','수신된 기사 게시일 확인 중…','nev5-muted');newsDayStatus.setAttribute('role','status');newsTop.append(newsDayStatus);
   view.append(newsTop);
   symbolsArea=el('section');symbolsArea.dataset.newsBlock='symbols';view.append(symbolsArea);
-  const management=el('details',undefined,'nev5-management');management.dataset.newsBlock='history';management.append(el('summary','AI 브리핑 직접 등록·지난 보고서 관리'));view.insertBefore(management,newsTop);
+  const management=el('details',undefined,'nev5-management');management.dataset.newsBlock='history';management.append(el('summary','기존 수동 보고서 관리 (선택)'));view.append(management);
   const archiveHost=el('div');management.append(archiveHost);archivePanel=root.MYInvestBriefingPanelV1?.mount(archiveHost,{onChange:()=>sharedPublicFeed?.refreshLocal?.()});
   briefingArea=el('section',undefined,'nev5-brief');management.append(briefingArea);renderBrief();
   sharedPublicFeed=root.MYInvestPublicBriefingFeedV1?.mount(sharedHost,{fallbackRecords:()=>{
@@ -222,7 +223,7 @@ function create(){
    symbols();
    try{await annotateNews()}catch{if(active)status.textContent+=' · 종목명 연결 일부 미확인'}
    return {dataState:sourceFailed?'degraded':'ready'};
-  },unmount(){active=false;newsVersion++;newsDayHost=null;newsDayStatus=null;todayButton=null;recentButton=null;archivePanel?.destroy?.();archivePanel=null;sharedPublicFeed?.destroy?.();sharedPublicFeed=null;ctxRef=null;newsHoldings=()=>[];briefingArea=null;view?.remove();legacy.unmount()},getStatus:()=>({status:active?'ready':'unmounted',events:loadEvents().length})};
+  },unmount(){active=false;newsVersion++;newsDayHost=null;newsDayStatus=null;todayButton=null;recentButton=null;archivePanel?.destroy?.();archivePanel=null;sharedPublicFeed?.destroy?.();sharedPublicFeed=null;privateOriginal?.destroy?.();privateOriginal=null;ctxRef=null;newsHoldings=()=>[];briefingArea=null;view?.remove();legacy.unmount()},getStatus:()=>({status:active?'ready':'unmounted',events:loadEvents().length})};
 
 }
 root.MYInvestCalendar=Object.freeze({open:()=>{openCalendar();const id=++economicRequest;Promise.resolve(root.MYInvestEventContext?.refreshAll()).then(()=>{if(id===economicRequest&&calendarDialog?.isConnected)calendarRedraw?.()});return true},close:closeCalendar});DashboardPages.register('news',create);
