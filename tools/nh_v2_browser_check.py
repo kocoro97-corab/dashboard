@@ -177,7 +177,7 @@ def native_browser_check(target, username, password, binding=None):
                     root=rooted_request(request)
                     if root.url==target and root.method=='POST':report['networkFailureObserved']=True
                 page.on('requestfailed',failed)
-                page.goto(origin,wait_until='domcontentloaded')
+                page.goto(origin+'/#/accounts',wait_until='domcontentloaded')
                 # Match the passing anonymous diagnostic's browser-side metadata first.
                 # This is a visible identity/transport check, not a CORS bypass or retry.
                 report['phase']='BROWSER_METADATA'
@@ -197,6 +197,11 @@ def native_browser_check(target, username, password, binding=None):
                 if not page.evaluate("()=>LS('invest_is_admin')==='true'&&!LS('invest_password_change')"):raise RuntimeError('admin')
                 report['login']='PASS'
                 report['phase']='LIVE_NH_DISPLAY'
+                # Routed builds start the selected account view, not an unrelated
+                # home view. The legacy/shell-less fixture requires its actual
+                # visible read button; never depend on a hidden startup request.
+                if not page.evaluate("()=>!!window.DashboardShell"):
+                    page.locator('#nhAccountBtn').click()
                 page.wait_for_function("()=>!NH_ACCOUNT_BUSY&&NH_ACCOUNT_SESSION===LS('invest_session_token')",timeout=120000)
                 expected=state['accounts']
                 if not isinstance(expected,list) or not expected or any(a.get('errors') or any(not isinstance(a.get(m),dict) or a[m].get('partial') for m in ('domestic','overseas')) for a in expected):raise RuntimeError('inquiry')
@@ -214,9 +219,13 @@ def native_browser_check(target, username, password, binding=None):
                 report.update(gasCommunication='PASS',displayMatchesResponse='PASS')
                 token=page.evaluate("()=>LS('invest_session_token')")
                 report['phase']='SESSION_RELOAD'
+                state['accounts']=None
                 page.reload(wait_until='domcontentloaded')
-                page.wait_for_function("()=>$('appContainer').style.display==='block'&&!NH_ACCOUNT_BUSY&&NH_ACCOUNT_SESSION===LS('invest_session_token')",timeout=120000)
-                if page.evaluate("()=>LS('invest_session_token')")!=token:raise RuntimeError('reload')
+                page.wait_for_function("()=>$('appContainer').style.display==='block'&&!!LS('invest_session_token')",timeout=120000)
+                if not page.evaluate("()=>!!window.DashboardShell"):
+                    page.locator('#nhAccountBtn').click()
+                page.wait_for_function("()=>!NH_ACCOUNT_BUSY&&NH_ACCOUNT_SESSION===LS('invest_session_token')",timeout=120000)
+                if page.evaluate("()=>LS('invest_session_token')")!=token or not isinstance(state['accounts'],list):raise RuntimeError('reload')
                 report['reloadSession']='PASS'
                 report['phase']='WAITING_NATURAL_INACTIVITY_LOGOUT'
                 # Use real elapsed time. No timestamp editing, clock acceleration or token mutation.
