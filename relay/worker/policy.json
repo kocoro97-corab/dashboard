@@ -9,9 +9,6 @@
     "(삼성전자 OR SK하이닉스 OR 한미반도체 OR 알테오젠) when:2d",
     "코스피 OR 증시 OR 나스닥 when:2d"
   ],
-  "privateReads": [
-    "privateMorningBriefing"
-  ],
   "productionDeployment": "AKfycbxySfUKUai418Ar7C8RI6gwBJpjSZXH4y8EX2JhJZG9nGz7RVB0WCZGl3H1wHxOWGVd",
   "productionSheetHash": "a151f7f6339a9f699aa24cc0d8b968e7c11777c374942250dda33bed11a52c95",
   "reads": [
