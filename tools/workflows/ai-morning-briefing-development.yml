@@ -1,0 +1,77 @@
+# DEVELOPMENT ONLY: install into the isolated dashboard-v2-dev repository's
+# DEFAULT branch .github/workflows after owner approval and pinned-source review.
+# This source-repository copy under tools/workflows is NOT an active scheduler.
+name: MY INVEST AI morning briefing (isolated development)
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Recreate today's public AI briefing (paid API call)'
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    # 07:08 Asia/Seoul daily; GitHub schedule can run late (never exact 07:00).
+    - cron: '8 22 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: development-public-briefing
+  cancel-in-progress: false
+jobs:
+  public-ai-briefing:
+    if: ${{ vars.MYINVEST_AI_BRIEFING_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check out isolated DEV Pages only
+        uses: actions/checkout@v4
+        with:
+          ref: dev-pages
+          persist-credentials: true
+          path: dev-site
+      - name: Check out reviewed generator source
+        uses: actions/checkout@v4
+        with:
+          repository: kocoro97-corab/dashboard
+          # REQUIRED before activation: replace with exact reviewed PR #16
+          # 40-character commit after both Push/PR secret-free CI pass.
+          ref: PIN_APPROVED_SOURCE_COMMIT_HERE
+          persist-credentials: false
+          path: engine
+      - name: Install fixed Node runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generate AI public-market-only daily feed (one call/day)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          FORCE: ${{ inputs.force || 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${OPENAI_API_KEY:-}" ]]; then
+            echo 'NOT_RUN: OPENAI_API_KEY_NOT_CONFIGURED' >&2
+            exit 2
+          fi
+          cd dev-site
+          args=(--output data/myinvest-public-briefings-v1.json)
+          if [[ "$FORCE" == 'true' ]]; then args+=(--force); fi
+          node ../engine/scripts/ai_morning_briefing.cjs "${args[@]}"
+      - name: Publish only the validated public briefing JSON
+        working-directory: dev-site
+        shell: bash
+        run: |
+          set -euo pipefail
+          file=data/myinvest-public-briefings-v1.json
+          # Never stage any hidden files, credentials, calendar, app code or GAS.
+          git add -- "$file"
+          if git diff --cached --quiet -- "$file"; then
+            echo 'SKIPPED: current KST day already published'
+            exit 0
+          fi
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.name 'github-actions[bot]'
+          git commit -m 'data(dev): publish verified AI public-market briefing'
+          # Fast-forward only. Calendar refresh race fails safely.
+          git push origin HEAD:dev-pages
