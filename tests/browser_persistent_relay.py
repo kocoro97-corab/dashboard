@@ -27,8 +27,19 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
     unexpected.append(u.hostname);r.abort()
    context.add_init_script("if(!sessionStorage.getItem('myinvest_v2_dev:connection')){sessionStorage.setItem('myinvest_v2_dev:connection',JSON.stringify({endpoint:'https://old.synthetic.trycloudflare.com/api',code:'SYNTHETIC_OLD_CODE'}));sessionStorage.setItem('myinvest_v2_dev:invest_session_token',JSON.stringify('f'.repeat(64)));localStorage.setItem('invest_session_token','PRODUCTION_CANARY_UNCHANGED')}");context.route('**/*',route);page=context.new_page();page.on('pageerror',lambda e:errors.append(str(e)));page.goto(PAGE,wait_until='domcontentloaded');page.wait_for_selector('#devBanner');assert page.locator('#devEndpoint,#devCode').count()==0
    page.locator('#authId').fill('synthetic');page.locator('#authPw').fill('SYNTHETIC_PRIVATE_PASSWORD');page.locator('#authSubmitBtn').click();page.wait_for_function('()=>!!EXT_SAVED_REV&&NH_ACCOUNT_SESSION===LS("invest_session_token")');assert page.locator('#nhAccountBtn').is_enabled();assert page.locator('#nhAccountRows tr').count()==2;assert page.evaluate('AppContext.create().snapshot().knownSubtotal')==1000;page.locator('#dashboardNav a[href="#/market"]').click();page.wait_for_function('()=>Q["^GSPC"]?.p===102');token=page.evaluate('LS("invest_session_token")')
+   account_reads_before_reload=posted.count(('POST','nhAccounts'))
+   account_store_before_reload=posted.count(('POST','externalHoldings'))
    page.reload(wait_until='domcontentloaded');page.wait_for_selector('#devBanner');page.wait_for_function('()=>DashboardShell.getStatus().page==="market"');assert page.evaluate('LS("invest_session_token")')==token
    assert page.evaluate('JSON.parse(sessionStorage.getItem("myinvest_v2_dev:connection")).kind')=='persistent'
+   # This harness advertises the real authenticated account capability. After
+   # the visible market settles, warm only the general balance once.
+   page.wait_for_function("()=>!!LS('invest_session_token')&&NH_ACCOUNT_SESSION===LS('invest_session_token')&&!NH_ACCOUNT_BUSY")
+   assert posted.count(('POST','nhAccounts'))==account_reads_before_reload+1
+   assert posted.count(('POST','externalHoldings'))==account_store_before_reload and page.evaluate("!EXT_SAVED_REV")
+   page.locator('#dashboardNav a[href="#/accounts"]').click()
+   page.wait_for_function("()=>DashboardShell.getStatus().page==='accounts'&&!!EXT_SAVED_REV")
+   assert posted.count(('POST','nhAccounts'))==account_reads_before_reload+1
+
    page.evaluate('logout()');page.wait_for_function('()=>DashboardShell.getStatus().page===null');assert page.evaluate('NH_ACCOUNTS.length===0&&EXT_ASSETS.length===0');assert page.evaluate('localStorage.getItem("invest_session_token")')=='PRODUCTION_CANARY_UNCHANGED';assert not errors and not unexpected,(errors,unexpected);assert all(action not in ['order','saveExternalHoldings'] for _,action in posted)
    print(json.dumps({'status':'PASS','scope':'SYNTHETIC_PERSISTENT_WORKER_PAGES','width':width,'usernamePasswordOnly':'PASS','reloadSession':'PASS','privateAccountReads':'PASS_SYNTHETIC','publicMarket':'PASS_SYNTHETIC','oldTokenNotReplayed':'PASS','logout':'PASS','realNhCalls':0,'realStorageWrites':0}),flush=True);context.close();bridge.terminate();bridge.wait(timeout=5)
  finally:browser.close()
