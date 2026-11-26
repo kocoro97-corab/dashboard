@@ -73,14 +73,14 @@ function mount(host){
    if(closed)return;
    ++sequence;const activeId=sequence;current=null;failureCode='';content.textContent='';metadata.textContent='';
    if(!available()){show();return {ok:false,code:'DISABLED'}}
-   const token=typeof root.LS==='function'?root.LS('invest_session_token'):null;
+   const token=typeof LS==='function'?LS('invest_session_token'):null;
    if(typeof token!=='string'||!/^[a-f0-9]{64}$/i.test(token)){failureCode='AUTH_REQUIRED';show();return {ok:false,code:failureCode}}
    const mode=date?'date':'latest',input={action:ACTION,token,mode};if(date){if(!validDay(date))return {ok:false,code:'INVALID_DATE'};input.date=date}
    const beforeToken=token;
    try{
      const response=await root.DashboardTransport.post(input);
      const obj=await response.json();
-     if(closed||activeId!==sequence||beforeToken!==root.LS('invest_session_token'))return null;
+     if(closed||activeId!==sequence||beforeToken!==(typeof LS==='function'?LS('invest_session_token'):null))return null;
      if(!response.ok||obj?.success!==true){failureCode=obj?.code||'PRIVATE_BRIEFING_UNAVAILABLE';show();return {ok:false,code:failureCode}}
      const checked=validate(obj);
      if(!checked){failureCode='PRIVATE_BRIEFING_INVALID_RESPONSE';show();return {ok:false,code:failureCode}}
@@ -88,7 +88,7 @@ function mount(host){
      if(checked.report&&!await verifyText(checked.report.content,checked.report.sha256)){
        failureCode='PRIVATE_BRIEFING_INTEGRITY_FAILED';show();return {ok:false,code:failureCode}
      }
-     if(closed||activeId!==sequence||beforeToken!==root.LS('invest_session_token'))return null;
+     if(closed||activeId!==sequence||beforeToken!==(typeof LS==='function'?LS('invest_session_token'):null))return null;
      current=checked.report;selected=date||checked.report?.date||records[0]||'';
      if(!current)failureCode='PRIVATE_BRIEFING_NOT_FOUND';
      show();return {ok:!!current,code:failureCode||'OK'};
