@@ -78,6 +78,11 @@
       config.externalTestStore=config.accountReads&&data.developmentExternalTestStore===true;
       config.externalStore=config.accountReads&&data.developmentExternalStore===true;
       config.googleCalendarReadOnly=fixed&&data.developmentGoogleCalendarReadOnly===true;
+      // Enable the reader only after the pinned isolated Worker and verified GAS both advertise it.
+      // The capability is not persisted and never changes the server's authorization checks.
+      config.privateBriefings=fixedValid&&data.relayProfile==='persistent'&&
+        data.developmentPrivateBriefings===true&&Array.isArray(data.features)&&
+        data.features.includes('privateMorningBriefing');
       config.externalAccountCatalogVersion=data.externalAccountCatalogVersion===1?1:0;
       stage='storage';
       sessionStorage.setItem(KEY,JSON.stringify(fixed?{endpoint,kind:'persistent'}:{endpoint,code}));
@@ -106,3 +111,4 @@
   // Defer until transport.js exists, and preserve session reload in this tab.
   if(config.endpoint||fixed)window.addEventListener('DOMContentLoaded',()=>connect(),{once:true});
 })();
+
