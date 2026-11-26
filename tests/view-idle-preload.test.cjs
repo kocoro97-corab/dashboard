@@ -5,10 +5,10 @@ const Idle=require('../js/view-idle-preload.js');
 function fixture(){
  let next=0;
  const timers=new Map(),calls=[];
- const state={page:'home',revision:1,scope:'synthetic-session-A',authenticated:true,publicConnected:true,visible:true};
+ const state={page:'home',revision:1,scope:'synthetic-session-A',authenticated:true,publicConnected:true,visible:true,enabled:true,market:'KR'};
  const relay={active:0,queued:0,backpressureMs:0};
  const warm=Idle.create({state:()=>({...state}),readState:()=>({...relay}),
-  load:async kind=>{calls.push(kind)},
+  load:async kind=>{calls.push(kind.kind)},
   later:fn=>{const id=++next;timers.set(id,fn);return id},
   clearLater:id=>timers.delete(id)});
  async function fire(){const callbacks=[...timers.values()];timers.clear();callbacks.forEach(fn=>fn());await new Promise(resolve=>setImmediate(resolve))}
@@ -19,12 +19,14 @@ test('only permitted public target is prepared after foreground and idle',async(
  assert.equal(f.warm.schedule('home'),true);
  assert.deepEqual(f.calls,[]);
  await f.fire();
- assert.deepEqual(f.calls,['sectors']);
- assert.equal(f.warm.schedule('home'),false,'duplicate prefetch is suppressed');
+ assert.deepEqual(f.calls,['benchmark']);
+ assert.equal(f.warm.schedule('home'),true);
+ await f.fire();
+ assert.deepEqual(f.calls,['benchmark','market-inputs'],'repeat only fills inputs not already prepared');
  f.state.page='sectors';f.state.revision++;
  assert.equal(f.warm.schedule('sectors'),true);
  await f.fire();
- assert.deepEqual(f.calls,['sectors','news']);
+ assert.deepEqual(f.calls,['benchmark','market-inputs']);
  for(const page of ['accounts','settings','diagnostics']){
   f.state.page=page;f.state.revision++;
   assert.equal(f.warm.schedule(page),false,'private and diagnostic pages never prefetch');
@@ -61,7 +63,7 @@ test('relay queue, congestion or missing transport state prevent idle fetches',a
  }
  assert.equal(f.warm.schedule('home'),true);
  await f.fire();
- assert.deepEqual(f.calls,['sectors']);
+ assert.deepEqual(f.calls,['benchmark']);
 });
 test('a new authorized session resets one-time prefetch without persisting private data',async()=>{
  const f=fixture();
@@ -69,7 +71,7 @@ test('a new authorized session resets one-time prefetch without persisting priva
  f.state.scope='synthetic-session-B';
  f.state.revision++;
  f.warm.schedule('home');await f.fire();
- assert.deepEqual(f.calls,['sectors','sectors']);
+ assert.deepEqual(f.calls,['benchmark','benchmark']);
  assert.equal(typeof f.warm.snapshot,'undefined');
  assert.equal(typeof f.warm.send,'undefined');
 });

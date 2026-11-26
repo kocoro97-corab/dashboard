@@ -9,13 +9,8 @@ function stopTimers(){IV_IDS.forEach(clearInterval);IV_IDS=[]}
 
 async function initDashboard(){
   if(window.DashboardShell)return DashboardShell.start();
-  const session=LS('invest_session_token');
-  await loadProtectedHoldings();
-  if(session!==LS('invest_session_token'))return;
-  TS.w='wait';tickStatus();
-  embed($('tickq'),'single-quote',{symbol:'USI:TICK',width:'100%',colorTheme:'dark',isTransparent:true,locale:'kr'},ok=>{TS.w=ok?'ok':'fail';TS.wAt=new Date();tickStatus()});
-  const ti=LS('invest_tick');if(ti){$('tin').value=ti;setTick()}
-  showQ('^KS11','코스피','',1);fetchTopThemes();renderCards();clock();loadNHAccounts();refresh();loadExternalAssets();loadNews();
+  // Fail closed if the route shell isn't loaded; never auto-query hidden pages.
+  clock();
   startTimers();
 }
 

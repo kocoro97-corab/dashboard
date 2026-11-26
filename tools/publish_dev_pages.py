@@ -26,7 +26,8 @@ RETRY_PREVIEW_BRANCH = 'fix/relay-retry-isolation-preview-20261126'
 RETRY_PREVIEW_PR = 13
 UI_PREVIEW_BRANCH = 'feat/mobile-sector-news-calendar-ui-20261126'
 UI_PREVIEW_PR = 14
-APPROVED_SOURCE_BRANCHES = (SOURCE_BRANCH,PREVIEW_BRANCH,NEXT_PREVIEW_BRANCH,TIMING_PREVIEW_BRANCH,RETRY_PREVIEW_BRANCH,UI_PREVIEW_BRANCH)
+QUERY_PREVIEW_BRANCH = 'fix/verified-query-performance-20261126'
+APPROVED_SOURCE_BRANCHES = (SOURCE_BRANCH,PREVIEW_BRANCH,NEXT_PREVIEW_BRANCH,TIMING_PREVIEW_BRANCH,RETRY_PREVIEW_BRANCH,UI_PREVIEW_BRANCH,QUERY_PREVIEW_BRANCH)
 
 
 class Stop(Exception):pass
@@ -102,9 +103,19 @@ def require_reviewed_preview(source_sha, source_branch):
         RETRY_PREVIEW_BRANCH:(RETRY_PREVIEW_PR,TIMING_PREVIEW_BRANCH),
         UI_PREVIEW_BRANCH:(UI_PREVIEW_PR,RETRY_PREVIEW_BRANCH),
     }
-    if source_branch not in reviewed:raise Stop('DEV_SOURCE_BRANCH_NOT_APPROVED')
-    pr_id,expected_base = reviewed[source_branch]
-    pr = api('repos/kocoro97-corab/dashboard/pulls/' + str(pr_id))
+    if source_branch == QUERY_PREVIEW_BRANCH:
+        from urllib.parse import urlencode
+        expected_base = UI_PREVIEW_BRANCH
+        candidates = api('repos/kocoro97-corab/dashboard/pulls?' + urlencode({
+            'state':'open', 'head':'kocoro97-corab:' + QUERY_PREVIEW_BRANCH,
+            'base':expected_base}))
+        if not isinstance(candidates,list) or len(candidates)!=1:
+            raise Stop('DEV_PREVIEW_PR_MISMATCH')
+        pr = candidates[0]
+    else:
+        if source_branch not in reviewed:raise Stop('DEV_SOURCE_BRANCH_NOT_APPROVED')
+        pr_id,expected_base = reviewed[source_branch]
+        pr = api('repos/kocoro97-corab/dashboard/pulls/' + str(pr_id))
     if not isinstance(pr,dict) or pr.get('state') != 'open' or pr.get('draft') is not True or pr.get('merged_at') is not None:
         raise Stop('DEV_PREVIEW_PR_MISMATCH')
     head=pr.get('head') or {}
@@ -123,7 +134,7 @@ def build_with_preserved_calendar(artifact, checkout, source_branch=SOURCE_BRANC
     """
     if source_branch == SOURCE_BRANCH:
         return build(artifact, public_data=checkout / 'data')
-    if source_branch in (PREVIEW_BRANCH,NEXT_PREVIEW_BRANCH,TIMING_PREVIEW_BRANCH,RETRY_PREVIEW_BRANCH,UI_PREVIEW_BRANCH):
+    if source_branch in (PREVIEW_BRANCH,NEXT_PREVIEW_BRANCH,TIMING_PREVIEW_BRANCH,RETRY_PREVIEW_BRANCH,UI_PREVIEW_BRANCH,QUERY_PREVIEW_BRANCH):
         return build(artifact, public_data=checkout / 'data', source_branch=source_branch)
     raise Stop('DEV_SOURCE_BRANCH_NOT_APPROVED')
 

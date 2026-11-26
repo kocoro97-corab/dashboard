@@ -230,7 +230,7 @@ function suggestExternalNames(query){
   const list=$('externalMasterNames');if(!list)return;list.replaceChildren();if(!EXT_MASTER||!String(query).trim())return;
   const key=ExternalCore.norm(query);[...EXT_MASTER.byCode.values()].filter(x=>ExternalCore.norm(x.name).includes(key)||x.code.startsWith(key)).slice(0,20).forEach(x=>{const option=document.createElement('option');option.value=x.name;option.label=x.code+' · '+x.market+' · '+x.type;list.appendChild(option)});
 }
-function extSyncWithNH(){extResolveCodes();renderExternalAssets();if(EXT_PRICE_BUSY){EXT_PRICE_PENDING=true;return}if(EXT_ASSETS.some(x=>x.match.status==='matched'))refreshExternalPrices(true)}
+function extSyncWithNH({refreshPrices=true}={}){extResolveCodes();renderExternalAssets();if(!refreshPrices)return;if(EXT_PRICE_BUSY){EXT_PRICE_PENDING=true;return}if(EXT_ASSETS.some(x=>x.match.status==='matched'))refreshExternalPrices(true)}
 function parseExternalOcr(data,accountType){const type=window.ExternalAccountUI?ExternalAccountUI.inputType():accountType==='BROKER'?'GENERAL':accountType;const result=ExternalCore.parse(data,type,EXT_MASTER);window.EXT_OCR_WARNINGS=result.warnings;return window.ExternalAccountUI?ExternalAccountUI.attach(result.holdings):result.holdings}
 function showOcrReview(texts,summaries=[]){
   let el=$('externalOcrReview');if(!el){el=document.createElement('div');el.id='externalOcrReview';$('externalOcrProgress').after(el)}

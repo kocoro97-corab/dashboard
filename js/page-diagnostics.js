@@ -32,6 +32,12 @@ DashboardPages.register('diagnostics',()=>{
       maxQueueWaitMs:safeCounter(relay.maxQueueWaitMs),maxPhysicalReadMs:safeCounter(relay.maxPhysicalReadMs)}:null;
     const text=JSON.stringify({...hub.snapshot(),session:sessionEvidence(),
       performance:{browser:meter?.browserSnapshot?.(),routes:meter?.snapshot?.(),relay:relaySummary}});try{await navigator.clipboard.writeText(text);if(active)copyStatus.textContent='인증정보·계좌자료를 제외한 검증 결과를 복사했습니다.'}catch{if(active){copyText.value=text;copyText.hidden=false;copyText.select();copyStatus.textContent='아래 결과를 선택해 복사하세요.'}}}
+ async function copyPerformance(){
+  const meter=root.MYInvestWebPerformance;
+  const text=JSON.stringify({schemaVersion:1,browser:meter?.browserSnapshot?.(),routes:meter?.snapshot?.(),data:meter?.dataSnapshot?.()??[]});
+  try{await navigator.clipboard.writeText(text);if(active)copyStatus.textContent='속도 결과만 복사했습니다.'}
+  catch{if(active){copyText.value=text;copyText.hidden=false;copyText.select();copyStatus.textContent='선택된 속도 결과만 복사하세요.'}}
+ }
  function renderPerformance(){
   if(!performanceHost)return;
   const meter=root.MYInvestWebPerformance,local=meter?.browserSnapshot?.(),routes=meter?.snapshot?.();
@@ -98,7 +104,7 @@ DashboardPages.register('diagnostics',()=>{
   summary=node('div',null,'dv-summary');issues=node('div',null,'dv-issues');coverage=node('div');checks=node('div');copyText=node('textarea');copyText.readOnly=true;copyText.hidden=true;copyText.setAttribute('aria-label','통합 검증 결과');copyStatus=node('p');copyStatus.setAttribute('role','status');
   const actions=node('div',null,'dv-actions'),select=node('select');select.setAttribute('aria-label','오류 상태 필터');for(const [value,text] of [['all','전체 기록'],['active','발생 오류'],['resolved','해결 기록']]){const option=node('option',text);option.value=value;select.append(option)}select.value=filter;select.addEventListener('change',()=>{filter=select.value;draw()});
   const pageSelect=node('select');pageSelect.setAttribute('aria-label','오류 메뉴 필터');for(const [value,text] of [['all','전체 메뉴'],...Object.entries(DevelopmentDiagnosticLabels)]){const option=node('option',text);option.value=value;pageSelect.append(option)}pageSelect.value=pageFilter;pageSelect.addEventListener('change',()=>{pageFilter=pageSelect.value;draw()});
-  actions.append(select,pageSelect,button('상태 새로고침',draw),button('전체 결과 복사',copy));view.append(summary,actions,copyStatus,copyText,issues);
+  actions.append(select,pageSelect,button('상태 새로고침',draw),button('전체 결과 복사',copy),button('속도 결과만 복사',copyPerformance));view.append(summary,actions,copyStatus,copyText,issues);
   performanceDetails=node('details');performanceDetails.id='devBrowserPerformance';performanceDetails.append(node('summary','현재 PC·휴대폰 브라우저 속도 측정'));
   performanceHost=node('div');performanceHost.id='devBrowserPerformanceResults';
   const reloadPerformance=button('현재 브라우저 측정값 새로고침',renderPerformance);
