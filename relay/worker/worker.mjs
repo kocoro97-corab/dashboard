@@ -4,9 +4,9 @@
 import policy from './policy.json' with {type:'json'};
 const ORIGIN='https://kocoro97-corab.github.io',TOKEN=/^[a-fA-F0-9]{64}$/,MAX_RESPONSE=2*1024*1024;
 const failure=(code,status=502)=>Object.assign(new Error(code),{code,status});
-const auth=new Set(policy.auth),reads=new Set(policy.reads),writes=new Set(policy.writes),privateReads=new Set(policy.privateReads||[]);
+const auth=new Set(policy.auth),reads=new Set(policy.reads),writes=new Set(policy.writes);
 const safeMessages=new Set(['로그인 정보 또는 계정 승인 상태를 확인하세요.','소유자 NH 계좌 잔고는 관리자만 조회할 수 있습니다.','12자 이상 비밀번호로 변경한 후 이용하세요.','로그인 시도가 많습니다. 15분 후 다시 시도하세요.','계정 정보가 변경됐습니다. 다시 로그인하세요.','다시 로그인하세요.']);
-const safeCode=new Set(['PRIVATE_BRIEFING_BAD_REQUEST','PRIVATE_BRIEFING_FORBIDDEN','PRIVATE_BRIEFING_NOT_CONFIGURED','PRIVATE_BRIEFING_NOT_FOUND','PRIVATE_BRIEFING_DUPLICATE_DATE','PRIVATE_BRIEFING_ARCHIVE_LIMIT','PRIVATE_BRIEFING_ARCHIVE_UNAVAILABLE','PRIVATE_BRIEFING_TOO_LARGE','PRIVATE_BRIEFING_READ_FAILED','AUTH_REQUIRED','STORE_CONFLICT','STORE_CONFIRM','STORE_INVALID','STORE_DUPLICATE','STORE_NOT_FOUND','STORE_SCHEMA','STORE_WRITE_FAILED','STORE_RECOVERY_REQUIRED','STORE_ACCOUNT_IN_USE','STORE_CATALOG_LIMIT','STORE_CLIENT_UPGRADE_REQUIRED']);
+const safeCode=new Set(['AUTH_REQUIRED','STORE_CONFLICT','STORE_CONFIRM','STORE_INVALID','STORE_DUPLICATE','STORE_NOT_FOUND','STORE_SCHEMA','STORE_WRITE_FAILED','STORE_RECOVERY_REQUIRED','STORE_ACCOUNT_IN_USE','STORE_CATALOG_LIMIT','STORE_CLIENT_UPGRADE_REQUIRED']);
 const publicCodes=new Set(["AUTH_REQUIRED", "DEV_PAGE_REQUIRED", "INVALID_CODES", "RELAY_ACCESS_CLOSED", "RELAY_BAD_REQUEST", "RELAY_BAD_RESPONSE", "RELAY_BUSY", "RELAY_CONFIG_INVALID", "RELAY_CONTENT_TYPE", "RELAY_GAS_ACCESS_REQUIRED", "RELAY_HTTPS_REQUIRED", "RELAY_ISOLATION_REQUIRED", "RELAY_METHOD_DENIED", "RELAY_NON_JSON", "RELAY_ORIGIN_DENIED", "RELAY_PATH_DENIED", "RELAY_PREFLIGHT_DENIED", "RELAY_PUBLIC_FAILED", "RELAY_PUBLIC_URL_DENIED", "RELAY_RATE_LIMIT", "RELAY_REDIRECT_DENIED", "RELAY_REQUEST_SIZE", "RELAY_RESPONSE_INVALID", "RELAY_RESPONSE_TOO_LARGE", "RELAY_SCOPE_BLOCKED", "RELAY_TARGET_MISMATCH", "RELAY_UPSTREAM_HTTP", "RELAY_UPSTREAM_NETWORK", "RELAY_WRITE_OUTCOME_UNKNOWN", "STORE_CONFIRM"]);
 function equalKeys(value,keys){return Object.keys(value).sort().join('|')===[...keys].sort().join('|')}
 export function configuration(env){
@@ -16,9 +16,8 @@ export function configuration(env){
  if(!match||match[1]===policy.productionDeployment||expected.freshTestEnvironment!==true||expected.testEnvironment!=='nh-staging'||expected.gatewayVersion!==2||expected.storeEngine!=='account-store-v2'||expected.sheetHash===policy.productionSheetHash||['scriptHash','sheetHash','sourceDigest'].some(k=>!TOKEN.test(expected[k])))throw failure('RELAY_ISOLATION_REQUIRED',503);
  if(!/^[a-z0-9][a-z0-9-]{0,62}\.[a-z0-9][a-z0-9-]{0,62}\.workers\.dev$/.test(env.MYINVEST_PUBLIC_HOST||''))throw failure('RELAY_CONFIG_INVALID',503);
  for(const k of ['MYINVEST_PUBLIC_MARKET','MYINVEST_ACCOUNT_READS','MYINVEST_EXTERNAL_STORE'])if(!['true','false'].includes(env[k]))throw failure('RELAY_CONFIG_INVALID',503);
- if(env.MYINVEST_PRIVATE_BRIEFINGS!==undefined&&!['true','false'].includes(env.MYINVEST_PRIVATE_BRIEFINGS))throw failure('RELAY_CONFIG_INVALID',503);
  if(env.MYINVEST_EXTERNAL_STORE==='true'&&env.MYINVEST_ACCOUNT_READS!=='true'||!env.GATE)throw failure('RELAY_CONFIG_INVALID',503);
- return {upstream:env.MYINVEST_GAS_URL,host:env.MYINVEST_PUBLIC_HOST,expected,market:env.MYINVEST_PUBLIC_MARKET==='true',futures:env.MYINVEST_PUBLIC_MARKET==='true'&&env.MYINVEST_PUBLIC_FUTURES==='true',accounts:env.MYINVEST_ACCOUNT_READS==='true',store:env.MYINVEST_EXTERNAL_STORE==='true',privateBriefings:env.MYINVEST_PRIVATE_BRIEFINGS==='true'};
+ return {upstream:env.MYINVEST_GAS_URL,host:env.MYINVEST_PUBLIC_HOST,expected,market:env.MYINVEST_PUBLIC_MARKET==='true',futures:env.MYINVEST_PUBLIC_MARKET==='true'&&env.MYINVEST_PUBLIC_FUTURES==='true',accounts:env.MYINVEST_ACCOUNT_READS==='true',store:env.MYINVEST_EXTERNAL_STORE==='true'};
 }
 export function allowedMarketUrl(value){
  if(typeof value!=='string'||value.length>2048||!/^https:\/\/[^/?#]+\//i.test(value)||/[\x00-\x20\\]/.test(value)||/%(?![a-fA-F0-9]{2})/.test(value))return false;
@@ -79,14 +78,6 @@ function validatePayload(body){
  const action=body.action,keys=['action'];if(action==='login'){keys.push('user','pass');if(typeof body.user!=='string'||body.user.length>64||typeof body.pass!=='string'||body.pass.length>256)throw failure('RELAY_BAD_REQUEST',400)}
  else if(!['appVersion'].includes(action))keys.push('token');
  if(action==='publicFetch'){keys.push('url');if(!allowedMarketUrl(body.url))throw failure('RELAY_PUBLIC_URL_DENIED',403)}
- if(privateReads.has(action)){
-  keys.push('mode');
-  if(!['latest','date','list'].includes(body.mode))throw failure('RELAY_BAD_REQUEST',400);
-  if(body.mode==='date'){
-   keys.push('date');
-   if(typeof body.date!=='string'||!/^20[2-9][0-9]-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])$/.test(body.date))throw failure('RELAY_BAD_REQUEST',400);
-  }else if('date' in body)throw failure('RELAY_BAD_REQUEST',400);
- }
  if(action==='nhQuotes'){keys.push('items');if(!Array.isArray(body.items)||body.items.length<1||body.items.length>2||new Set(body.items.map(x=>x?.k)).size!==body.items.length||body.items.some(x=>!x||!equalKeys(x,['k','t','c'])||x.t!=='fut'||!({k3:'A01',k4:'A06'}[x.k])||x.c!==({k3:'A01',k4:'A06'}[x.k])))throw failure('RELAY_BAD_REQUEST',403)}
  if(action==='nhExternalQuotes'){keys.push('codes');if(!Array.isArray(body.codes)||body.codes.length<1||body.codes.length>40||body.codes.some(x=>typeof x!=='string'||!/^[A-Z0-9]{6}$/.test(x)))throw failure('INVALID_CODES',403)}
  if(action==='saveExternalAccounts')keys.push('accounts','brokers','expectedRevision','confirmReplace');
@@ -124,7 +115,7 @@ export function createHandler({fetcher=fetch,gatewayFactory=createGateway,readDe
   const declared=request.headers.get('Content-Length');if(declared&&(!/^\d+$/.test(declared)||Number(declared)>65536))throw failure('RELAY_REQUEST_SIZE',413);
   let raw;try{raw=await bounded(request,65536)}catch(error){if(error.code==='RELAY_RESPONSE_TOO_LARGE')throw failure('RELAY_REQUEST_SIZE',413);throw error}let body;try{body=JSON.parse(raw)}catch{throw failure('RELAY_BAD_REQUEST',400)}
   if(!body||Array.isArray(body)||typeof body!=='object'||['token','backendUrl','gasUrl','targetUrl','stagingBinding'].some(k=>k in body))throw failure('RELAY_BAD_REQUEST',400);
-  const action=body.action,allowed=auth.has(action)||config.market&&action==='publicFetch'||config.futures&&action==='nhQuotes'||config.accounts&&reads.has(action)||config.store&&writes.has(action)||config.privateBriefings&&privateReads.has(action);
+  const action=body.action,allowed=auth.has(action)||config.market&&action==='publicFetch'||config.futures&&action==='nhQuotes'||config.accounts&&reads.has(action)||config.store&&writes.has(action);
   if(!allowed)throw failure('RELAY_SCOPE_BLOCKED',403);
   const bearer=request.headers.get('Authorization');if(['appVersion','login'].includes(action)){if(bearer)throw failure('RELAY_BAD_REQUEST',400)}else{if(!/^Bearer [a-fA-F0-9]{64}$/.test(bearer||''))throw failure('AUTH_REQUIRED',401);body.token=bearer.slice(7)}
   validatePayload(body);
@@ -135,8 +126,7 @@ export function createHandler({fetcher=fetch,gatewayFactory=createGateway,readDe
   if(!quota.ok){headers['Retry-After']=quota.status===429?'60':'5';throw failure(quota.status===429?'RELAY_RATE_LIMIT':'RELAY_BUSY',quota.status)}
   lease=(await quota.json()).lease;if(typeof lease!=='string')throw failure('RELAY_CONFIG_INVALID',503);
   const readSignal=action==='publicFetch'?readDeadline():null,gateway=gatewayFactory(config,fetcher,proof,readSignal),metadata=await readWithin(()=>gateway.verify(),readSignal);let result;
-  if(privateReads.has(action)&&!metadata.features?.includes('privateMorningBriefing'))throw failure('RELAY_TARGET_MISMATCH',503);
-   if(action==='appVersion')result={...metadata,relayProfile:'persistent',developmentPublicMarket:config.market,developmentPublicFutures:config.futures,developmentIndustryMarket:config.market,developmentFuturesReadVersion:2,developmentReadResilienceVersion:1,developmentAccountReads:config.accounts,developmentPrivateBriefings:config.privateBriefings,developmentExternalStore:config.store,developmentExternalTestStore:false};
+  if(action==='appVersion')result={...metadata,relayProfile:'persistent',developmentPublicMarket:config.market,developmentPublicFutures:config.futures,developmentIndustryMarket:config.market,developmentFuturesReadVersion:2,developmentReadResilienceVersion:1,developmentAccountReads:config.accounts,developmentExternalStore:config.store,developmentExternalTestStore:false};
   else if(action==='publicFetch')result={success:true,text:await readWithin(()=>gateway.public(body.url,body.token),readSignal)};
   else{attemptedWrite=writes.has(action);result=await gateway.post(body);if(action==='nhQuotes')result=futureResult(result,body.items)}
   if(result.success!==true)result={success:false,code:safeCode.has(result.code)?result.code:'GAS_REJECTED',layer:['gas','storage','nh'].includes(result.layer)?result.layer:'gas',...(safeMessages.has(result.message)?{message:result.message}:{}),mustChangePassword:result.mustChangePassword===true};
