@@ -137,7 +137,7 @@
         const progress=document.getElementById('accountFetchProgress');
         if(progress)progress.textContent=ctx.accountReads()?'NH·외부계좌 실제 읽기 조회 중 · 보이는 이전 자료는 최신 여부를 확인하세요.':'현재 연결은 계좌 조회가 허용되지 않았습니다.';
         if(!ctx.accountReads())return;
-        const timing=root.MYInvestWebPerformance?.dataStart('accounts','ANY','general');
+        const timing=globalThis.MYInvestWebPerformance?.dataStart?.('accounts','ANY','general');
         try{
           await ctx.accounts(force,()=>timing?.first());
           timing?.end('ready');
