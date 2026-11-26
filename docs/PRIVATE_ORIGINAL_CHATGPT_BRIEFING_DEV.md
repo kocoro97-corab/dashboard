@@ -12,7 +12,7 @@
 - 허용 파일명: `YYYY-MM-DD`, `YYYY-MM-DD.txt`, `YYYY-MM-DD.md`. 허용 형식: Google Docs 및 UTF-8 텍스트. 완전히 동일한 원문이 필요하므로 일반 텍스트 파일이 선호된다.
 - `gas/PrivateOriginalBriefing.gs`는 DriveApp의 지정 폴더만 읽으며, 최대 탐색 수·파일 크기·미래 날짜·중복 파일을 검사한다. 실패 시 원문과 Drive ID를 반환하거나 로그하지 않는다.
 - `gas/Security.gs`는 승인된 세션 **및 관리자 권한**을 검사한 후에만 `privateMorningBriefing` 읽기를 허용한다.
-- `relay/worker/worker.mjs`는 `MYINVEST_PRIVATE_BRIEFINGS=true`가 **분리 테스트 Worker**에 명시되고, 검증된 테스트 GAS appVersion에 해당 기능이 있을 때만 action을 전달한다. 기본 비활성화.
+- 별도 `relay/private-original/worker-dev.mjs` (기존 `relay/worker/worker.mjs`의 해시·정책은 수정하지 않음)는 `MYINVEST_PRIVATE_BRIEFINGS=true`가 **분리 테스트 Worker**에 명시되고, 검증된 테스트 GAS appVersion에 해당 기능이 있을 때만 action을 전달한다. 기본 비활성화.
 - 브라우저 역시 `MYINVEST_TRANSPORT_CONFIG.privateBriefings===true`인 격리 개발 연결에 한해 전송하며 인증 토큰은 기존 Authorization 헤더를 통해서만 취급한다.
 - 비공개 원문은 공개 GitHub Pages, JSON 정적 자료, GitHub 저장소, 로컬스토리지, 계좌 스냅샷, 타이밍 로그에 저장하지 않는다.
 - SHA-256으로 **전송 무결성**을 확인하며, 원문이 실제 ChatGPT 예약 작업의 결과인지 암호학적으로 증명하는 기능은 아직 없다. 자동화의 원본 대조 지시와 저장 실측으로 별도 검증한다.
@@ -22,7 +22,7 @@
 1. 다음 예약 작업에서 비공개 Drive 파일 생성 성공과 실제 원문 일치 확인.
 2. 운영 GAS v26가 아닌 **독립 테스트 GAS**에 `PrivateOriginalBriefing.gs`와 해당 `Security.gs` 검증된 버전 적용.
 3. 테스트 GAS 앱 버전·서명·독립된 Sheets/Properties를 확인. 검증 대상이 운영 GAS가 아니어야 한다.
-4. 테스트 Worker에 별도 `MYINVEST_PRIVATE_BRIEFINGS` 기능 플래그를 소유자 승인 후 켠다.
+4. 해시가 고정된 기존 Worker를 변경하지 말고 새로운 독립 테스트 Worker를 검증한 뒤 `MYINVEST_PRIVATE_BRIEFINGS`를 소유자 승인 후 켠다.
 5. 개발 사이트 전용 `privateBriefings=true`를 소유자 승인 후 켠다. 설정만 바꿔도 운영 사이트·GAS·NH 인증을 변경하면 안 된다.
 6. 일반 승인 회원으로 원문 열람 거부, 관리자 세션으로 일자별 원문 수신, 로그아웃 시 UI 메모리 지움, 344/690/1440px 확인. 일자별 원문 텍스트 원본/수신 SHA-256 비교.
 7. 별도의 CI 합성 PASS만으로 실제 Google Drive/GAS 연결 PASS를 주장하지 않는다.
