@@ -5,7 +5,7 @@
 (function(root){
 'use strict';
 const VERSION=1,MAX_RECORDS=90,MAX_SECTIONS=12,MAX_SOURCES=30;
-const ORIGINS=new Set(['manual','chatgpt-task','dashboard-pipeline']);
+const ORIGINS=new Set(['manual','chatgpt-task','dashboard-pipeline','openai-api']);
 const KINDS=new Set(['overview','us-market','kr-market','futures','rates-fx','news',
  'sectors','daytrade','swing','risk','events','other']);
 const clockValid=t=>Number.isSafeInteger(t)&&t>0&&t<8640000000000000;
