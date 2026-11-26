@@ -22,5 +22,8 @@
     "restoreExternalHoldings",
     "saveExternalAccounts",
     "saveExternalHoldings"
+  ],
+  "privateReads": [
+    "privateMorningBriefing"
   ]
 }
