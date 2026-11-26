@@ -53,7 +53,7 @@ function createPrivateOriginalBriefingReader_(deps){
         if(blob.getSize()>MAX_BYTES)return error('PRIVATE_BRIEFING_TOO_LARGE');
         value=blob.getDataAsString('UTF-8');
       }
-      if(typeof value!=='string'||!value.length||new BlobSize(value)>MAX_BYTES)
+      if(typeof value!=='string'||!value.length||BlobSize(value)>MAX_BYTES)
         return error('PRIVATE_BRIEFING_TOO_LARGE');
       return {success:true,schemaVersion:1,private:true,cacheable:false,
         dates:available.slice(0,90),latestDate:available[0]||null,
