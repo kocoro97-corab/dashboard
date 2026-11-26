@@ -15,7 +15,7 @@ function result({sections,search=true,urls=[A,B],status='completed'}={}){
  return {status,output:[...(search?[{type:'web_search_call',action:{sources:urls.map(url=>({url}))}}]:[]),
   {type:'message',content:[{type:'output_text',text:JSON.stringify(data),annotations:[]}]}]};
 }
-test('server request uses paid web search and structured public-only brief, not user's scheduled ChatGPT task',()=>{
+test("server request uses paid web search and structured public-only brief, not user\'s scheduled ChatGPT task",()=>{
  const r=g.requestBody(date);
  assert.equal(r.store,false);
  assert.deepEqual(r.tools,[{type:'web_search'}]);
