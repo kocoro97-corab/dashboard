@@ -178,12 +178,10 @@ function create(){
   active=true;ctxRef=ctx;newsHoldings=()=>holdings().map(x=>x.code);view=el('section',undefined,'nev5');const style=el('style');style.textContent=css;view.append(style,el('h2','뉴스·투자 브리핑'));
   const nav=el('div',undefined,'nev5-nav');for(const [name,page] of [['글로벌 시장','market'],['섹터·테마','sectors'],['AI 종목분석','stocks'],['투자전략','strategy']])nav.append(btn(name,()=>root.location.hash='#/'+page));
   const calendarButton=btn('▦ 투자 캘린더',()=>root.MYInvestCalendar?.open());calendarButton.dataset.investCalendarTrigger='true';nav.append(calendarButton);
-  const openBriefing=btn('오늘 AI 투자전략 등록·보기',()=>{
-    const box=view.querySelector('.nev5-management');if(!box)return;
-    box.open=true;
-    const editor=box.querySelector('.nev5-brief-editor');if(editor)editor.open=true;
-    const date=box.querySelector('.nev5-brief-editor input[type=date]');if(date)date.value=briefToday();
-    box.scrollIntoView?.({block:'start',behavior:'instant'});
+  const openBriefing=btn('오늘의 AI 뉴스·투자전략 보기',()=>{
+    const box=view.querySelector('[data-news-block="briefing"]');
+    box?.scrollIntoView?.({block:'start',behavior:'instant'});
+    void sharedPublicFeed?.refresh?.();
   });
   openBriefing.dataset.todayBriefingAccess='true';nav.append(openBriefing);view.append(nav);
   status=el('p','뉴스 피드 갱신 전에는 기존 수신 자료가 표시될 수 있습니다.','nev5-muted');view.append(status);
@@ -202,7 +200,7 @@ function create(){
   newsDayStatus=el('p','수신된 기사 게시일 확인 중…','nev5-muted');newsDayStatus.setAttribute('role','status');newsTop.append(newsDayStatus);
   view.append(newsTop);
   symbolsArea=el('section');symbolsArea.dataset.newsBlock='symbols';view.append(symbolsArea);
-  const management=el('details',undefined,'nev5-management');management.dataset.newsBlock='history';management.append(el('summary','AI 브리핑 직접 등록·지난 보고서 관리'));view.insertBefore(management,newsTop);
+  const management=el('details',undefined,'nev5-management');management.dataset.newsBlock='history';management.append(el('summary','지난 보고서·기존 직접 등록 자료 관리 (선택)'));view.append(management);
   const archiveHost=el('div');management.append(archiveHost);archivePanel=root.MYInvestBriefingPanelV1?.mount(archiveHost,{onChange:()=>sharedPublicFeed?.refreshLocal?.()});
   briefingArea=el('section',undefined,'nev5-brief');management.append(briefingArea);renderBrief();
   sharedPublicFeed=root.MYInvestPublicBriefingFeedV1?.mount(sharedHost,{fallbackRecords:()=>{
