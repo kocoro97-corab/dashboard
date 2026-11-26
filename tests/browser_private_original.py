@@ -1,10 +1,38 @@
 """Synthetic private original test: no Google, GAS, NH, external secrets or real report text."""
-import asyncio,hashlib,json,sys,tempfile
+import asyncio,hashlib,json,re,sys,tempfile,time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'tools'))
 from playwright.async_api import async_playwright
 from build_dev_pages import build
 from public_integration_support import Harness,synthetic_feeds,ENDPOINT
+
+class PrivateHarness(Harness):
+ def __init__(self,*args,capability,**kwargs):
+  super().__init__(*args,**kwargs)
+  self.capability=capability
+  self.private_requests=[]
+ async def _route(self,route):
+  if route.request.url==self.endpoint and route.request.method=='POST':
+   body=json.loads(route.request.post_data or '{}')
+   if body.get('action') in ['appVersion','privateMorningBriefing']:
+    headers={'Access-Control-Allow-Origin':'https://kocoro97-corab.github.io','Cache-Control':'no-store'}
+    if body['action']=='appVersion':
+     response={'success':True,'freshTestEnvironment':True,'testEnvironment':'nh-staging',
+               'gatewayVersion':2,'storeEngine':'account-store-v2','relayProfile':'persistent',
+               'developmentPrivateBriefings':self.capability,'features':['privateMorningBriefing']}
+    else:
+     self.private_requests.append(body.get('mode'))
+     assert self.capability is True,'disabled bootstrap must not request the private archive'
+     assert re.fullmatch(r'Bearer [a-fA-F0-9]{64}',route.request.headers.get('authorization',''))
+     assert 'token' not in body
+     response={'success':True,'schemaVersion':1,'private':True,'cacheable':False,
+               'dates':['2026-11-26'],'latestDate':'2026-11-26',
+               'report':{'date':'2026-11-26','content':TEXT,'savedAt':int(time.time()*1000),
+                         'format':'verbatim-text','origin':'scheduled-task-archive-unverified',
+                         'contentSha256':hashlib.sha256(TEXT.encode()).hexdigest()}}
+    await route.fulfill(status=200,headers=headers,json=response)
+    return
+  await super()._route(route)
 
 TEXT='# 2026-11-26 ChatGPT synthetic original\n<Cite ref="example" />\n<script>window.__PRIVILEGE_CANARY=true</script>\n'
 async def main():
@@ -56,5 +84,26 @@ async def main():
       assert not any(r['action']=='privateMorningBriefing' for r in h.requests),'disabled news view may not read private data through a real relay'
       print(json.dumps({'width':width,'privateOriginalSynthetic':'PASS','SHA256':'PASS','noPublicFallback':'PASS','noExecution':'PASS','clearedAfterUnmount':'PASS'}))
      finally:await h.close()
+    # The app's normal dev_connect.js bootstrap must unlock the actual News page.
+    # Only the relay network response is simulated; no client flag is injected.
+    for width,capability in [(344,False),(344,True),(690,True),(1440,True)]:
+     h=await PrivateHarness(browser,artifact,synthetic_feeds(),width,capability=capability).start_browser(tmp)
+     try:
+      await h.login('news')
+      host=h.page.locator('[data-news-block="private-original"]')
+      await host.wait_for()
+      assert await h.page.evaluate('window.MYINVEST_TRANSPORT_CONFIG.privateBriefings') is capability
+      if capability:
+       await h.page.wait_for_function('(text)=>document.querySelector(\'[data-news-block="private-original"] pre\')?.textContent===text',arg=TEXT)
+       assert h.private_requests and set(h.private_requests)=={'latest'}
+       assert await h.page.evaluate('window.__PRIVILEGE_CANARY===undefined')
+       await h.go('strategy')
+       assert await host.count()==0
+      else:
+       assert '미활성화' in await host.inner_text()
+       assert h.private_requests==[]
+      print(json.dumps({'width':width,'configured':capability,'privateOriginalNormalBootstrap':'PASS'}))
+     finally:await h.close()
    finally:await browser.close()
 asyncio.run(main())
+
