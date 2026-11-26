@@ -282,10 +282,28 @@ class DevelopmentPublishGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             folder=Path(tmp)
             with patch.object(pub,'build',return_value={'index.html':'synthetic'}) as builder:
-                pub.build_with_preserved_calendar(folder/'pr17',folder,pub.PRIVATE_PREVIEW_BRANCH)
-                builder.assert_called_once_with(folder/'pr17',public_data=folder/'data',source_branch=pub.PRIVATE_PREVIEW_BRANCH)
+                for unapproved in (None, 'https://myinvest-v2-dev-relay.kocoro97.workers.dev/api',
+                                   pub.PRIVATE_PREVIEW_RELAY+'?extra=1'):
+                    with self.subTest(relay=unapproved):
+                        with self.assertRaisesRegex(pub.Stop,'DEV_PRIVATE_PREVIEW_RELAY_REQUIRED'):
+                            pub.build_with_preserved_calendar(folder/'pr17',folder,pub.PRIVATE_PREVIEW_BRANCH,unapproved)
+                builder.assert_not_called()
+                pub.build_with_preserved_calendar(folder/'pr17',folder,pub.PRIVATE_PREVIEW_BRANCH,pub.PRIVATE_PREVIEW_RELAY)
+                builder.assert_called_once_with(folder/'pr17',relay_endpoint=pub.PRIVATE_PREVIEW_RELAY,
+                                                use_public_config=False,public_data=folder/'data',
+                                                source_branch=pub.PRIVATE_PREVIEW_BRANCH)
         self.assertEqual(pub.REPO,'kocoro97-corab/dashboard-v2-dev')
         self.assertEqual(pub.BRANCH,'dev-pages')
+
+    def test_private_relay_gate_runs_before_network_or_build(self):
+        with patch.object(pub,'api') as api,patch.object(pub,'build') as builder,patch.object(pub,'git') as git:
+            with self.assertRaisesRegex(pub.Stop,'DEV_PRIVATE_PREVIEW_RELAY_REQUIRED'):
+                pub.publish(SOURCE,'b'*40,pub.PRIVATE_PREVIEW_BRANCH)
+            with self.assertRaisesRegex(pub.Stop,'DEV_PRIVATE_PREVIEW_RELAY_NOT_ALLOWED'):
+                pub.publish(SOURCE,'b'*40,pub.FOREGROUND_PREVIEW_BRANCH,pub.PRIVATE_PREVIEW_RELAY)
+            api.assert_not_called()
+            builder.assert_not_called()
+            git.assert_not_called()
 
     def test_preview_checkout_and_build_keep_original_publish_path(self):
         with patch.object(pub,'git',side_effect=[pub.PREVIEW_BRANCH,SOURCE]):
@@ -310,3 +328,4 @@ class DevelopmentPublishGateTests(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+
