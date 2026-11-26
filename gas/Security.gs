@@ -167,6 +167,14 @@ function doPost(e) {
     if(!session)return jsonResponse({success:false,message:'로그인이 필요합니다. 다시 로그인하세요.'});
     if(action==='sessionInfo')return jsonResponse(Object.assign({success:true,isAdmin:verifyAdmin(body.token),mustChangePassword:!!session.p},typeof securityEnvironmentSessionMetadata_==='function'?securityEnvironmentSessionMetadata_(session):{}));
     if(session.p)return jsonResponse({success:false,message:'12자 이상 비밀번호로 변경한 후 이용하세요.',mustChangePassword:true});
+    if(action==='privateMorningBriefing'){
+      const keys=Object.keys(body).sort().join(',');
+      if(!['action,mode,token','action,date,mode,token','action,token'].includes(keys))
+        return jsonResponse({success:false,code:'PRIVATE_BRIEFING_BAD_REQUEST'});
+      if(!verifyAdmin(body.token))
+        return jsonResponse({success:false,code:'PRIVATE_BRIEFING_FORBIDDEN'});
+      return jsonResponse(privateMorningBriefingRead_(body));
+    }
     if(['nhSnapshotRead','nhSnapshotCapture','nhSnapshotRestore'].includes(action))return handleNhSnapshotV2_(body.token,action,body);
     if(action==='nhStockQuotes')return handleNhStockQuotesV2(body.token,body.items);
     if(action==='externalAccounts')return handleExternalAccountCatalog_(body.token);
