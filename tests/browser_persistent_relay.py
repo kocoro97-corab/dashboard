@@ -1,17 +1,22 @@
 """No development code input: real Worker policy + synthetic GAS + built Pages."""
-import json,mimetypes,subprocess,sys,tempfile,urllib.request
+import json,mimetypes,os,subprocess,sys,tempfile,urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 from playwright.sync_api import sync_playwright
 from browser_reference_widgets import fulfill_reference_widget
+from public_integration_support import synthetic_feeds
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'tools'))
 from build_dev_pages import build
 ORIGIN='https://kocoro97-corab.github.io';PAGE=ORIGIN+'/dashboard-v2-dev/index.html#/accounts';ENDPOINT='https://myinvest-v2-dev-relay.synthetic.workers.dev/api'
 with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
  artifact=Path(tmp)/'public';build(artifact,relay_endpoint=ENDPOINT);browser=pw.chromium.launch(headless=True)
+ # The warm path only runs after a healthy visible route; feed complete
+ # market fixtures rather than the bridge's deliberately incomplete defaults.
+ fixture=Path(tmp)/'public-feeds.json';feeds=synthetic_feeds()
+ fixture.write_text(json.dumps({url:text for url,text in feeds.items() if '/%5EGSPC?' not in url}))
  try:
   for width in [1440,690,344]:
-   bridge=subprocess.Popen(['node','tests/worker_browser_bridge.mjs'],cwd=ROOT,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True);port=json.loads(bridge.stdout.readline())['port'];context=browser.new_context(viewport={'width':width,'height':960},service_workers='block');errors=[];unexpected=[];posted=[]
+   bridge=subprocess.Popen(['node','tests/worker_browser_bridge.mjs'],cwd=ROOT,env=dict(os.environ,MYINVEST_TEST_PUBLIC_FIXTURE=str(fixture)),stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True);port=json.loads(bridge.stdout.readline())['port'];context=browser.new_context(viewport={'width':width,'height':960},service_workers='block');errors=[];unexpected=[];posted=[]
    def route(r):
     if fulfill_reference_widget(r):return
     u=urlsplit(r.request.url)
@@ -25,7 +30,7 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
      with urllib.request.urlopen(req,timeout=15) as response:result=json.load(response)
      r.fulfill(status=result['status'],headers=result['headers'],body=result['body']);return
     unexpected.append(u.hostname);r.abort()
-   context.add_init_script("if(!sessionStorage.getItem('myinvest_v2_dev:connection')){sessionStorage.setItem('myinvest_v2_dev:connection',JSON.stringify({endpoint:'https://old.synthetic.trycloudflare.com/api',code:'SYNTHETIC_OLD_CODE'}));sessionStorage.setItem('myinvest_v2_dev:invest_session_token',JSON.stringify('f'.repeat(64)));localStorage.setItem('invest_session_token','PRODUCTION_CANARY_UNCHANGED')}");context.route('**/*',route);page=context.new_page();page.on('pageerror',lambda e:errors.append(str(e)));page.goto(PAGE,wait_until='domcontentloaded');page.wait_for_selector('#devBanner');assert page.locator('#devEndpoint,#devCode').count()==0
+   context.add_init_script("if(!sessionStorage.getItem('myinvest_v2_dev:connection')){sessionStorage.setItem('myinvest_v2_dev:connection',JSON.stringify({endpoint:'https://old.synthetic.trycloudflare.com/api',code:'SYNTHETIC_OLD_CODE'}));sessionStorage.setItem('myinvest_v2_dev:invest_session_token',JSON.stringify('f'.repeat(64)));localStorage.setItem('invest_session_token','PRODUCTION_CANARY_UNCHANGED')}");context.route('**/*',route);page=context.new_page();page.clock.set_fixed_time('2026-11-17T03:00:00Z');page.on('pageerror',lambda e:errors.append(str(e)));page.goto(PAGE,wait_until='domcontentloaded');page.wait_for_selector('#devBanner');assert page.locator('#devEndpoint,#devCode').count()==0
    page.locator('#authId').fill('synthetic');page.locator('#authPw').fill('SYNTHETIC_PRIVATE_PASSWORD');page.locator('#authSubmitBtn').click();page.wait_for_function('()=>!!EXT_SAVED_REV&&NH_ACCOUNT_SESSION===LS("invest_session_token")');assert page.locator('#nhAccountBtn').is_enabled();assert page.locator('#nhAccountRows tr').count()==2;assert page.evaluate('AppContext.create().snapshot().knownSubtotal')==1000;page.locator('#dashboardNav a[href="#/market"]').click();page.wait_for_function('()=>Q["^GSPC"]?.p===102');token=page.evaluate('LS("invest_session_token")')
    account_reads_before_reload=posted.count(('POST','nhAccounts'))
    account_store_before_reload=posted.count(('POST','externalHoldings'))
@@ -33,7 +38,13 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
    assert page.evaluate('JSON.parse(sessionStorage.getItem("myinvest_v2_dev:connection")).kind')=='persistent'
    # This harness advertises the real authenticated account capability. After
    # the visible market settles, warm only the general balance once.
-   page.wait_for_function("()=>!!LS('invest_session_token')&&NH_ACCOUNT_SESSION===LS('invest_session_token')&&!NH_ACCOUNT_BUSY")
+   try:
+    page.wait_for_function("()=>$('pageStatus')?.textContent.startsWith('연결됨')",timeout=12000)
+    page.wait_for_function("()=>!!LS('invest_session_token')&&NH_ACCOUNT_SESSION===LS('invest_session_token')&&!NH_ACCOUNT_BUSY",timeout=12000)
+   except Exception:
+    print(json.dumps(page.evaluate('''()=>({visible:!document.hidden,eligible:AppContext.create().canWarmAccount(),scheduler:!!window.MYInvestIdlePrefetch,ready:$('pageStatus')?.textContent.startsWith('연결됨'),transport:DashboardTransport.readState(),nhReady:NH_ACCOUNT_SESSION===LS('invest_session_token')})''')),flush=True)
+    print(json.dumps({'readCallsSinceReload':posted.count(('POST','nhAccounts'))-account_reads_before_reload}),flush=True)
+    raise
    assert posted.count(('POST','nhAccounts'))==account_reads_before_reload+1
    assert posted.count(('POST','externalHoldings'))==account_store_before_reload and page.evaluate("!EXT_SAVED_REV")
    page.locator('#dashboardNav a[href="#/accounts"]').click()

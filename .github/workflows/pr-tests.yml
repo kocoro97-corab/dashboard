@@ -31,33 +31,43 @@ jobs:
           .venv-browser/bin/python -m playwright install --with-deps chromium
       - name: Synthetic browser regression (no Google or NH secrets)
         run: |
-          .venv-browser/bin/python tests/browser_external.py
-          .venv-browser/bin/python tests/browser_diagnostics.py
-          .venv-browser/bin/python tests/browser_native_snapshot.py
-          .venv-browser/bin/python tests/browser_relay.py
-          .venv-browser/bin/python tests/browser_persistent_relay.py
-          .venv-browser/bin/python tests/browser_https_dev.py
-          .venv-browser/bin/python tests/browser_dev_connection_errors.py
-          .venv-browser/bin/python tests/browser_public_market.py
-          .venv-browser/bin/python tests/browser_relay_busy.py
-          .venv-browser/bin/python tests/browser_futures_display.py
-          .venv-browser/bin/python tests/browser_manual_preview.py
-          .venv-browser/bin/python tests/browser_account_inquiry.py
-          .venv-browser/bin/python tests/browser_app_shell.py
-          .venv-browser/bin/python tests/browser_market_sector_recheck.py
-          .venv-browser/bin/python tests/browser_integration_958.py
-          .venv-browser/bin/python tests/browser_sector_followup.py
-          .venv-browser/bin/python tests/browser_names_review.py
-          .venv-browser/bin/python tests/browser_invest_workflow.py
-          .venv-browser/bin/python tests/browser_public_briefing.py
-          .venv-browser/bin/python tests/browser_final_integration.py
-          .venv-browser/bin/python tests/browser_dense_review.py --widths 1440 344 --scales 1 1.5 --output /tmp/dense-ci
-          .venv-browser/bin/python tests/browser_work_handoff.py
-          .venv-browser/bin/python tests/browser_commit_review.py --extended
-          .venv-browser/bin/python tests/browser_external_catalog.py
-          .venv-browser/bin/python tests/browser_calendar_final.py
-          .venv-browser/bin/python tests/browser_calendar_oauth_bootstrap.py
-          .venv-browser/bin/python tests/browser_accounts_profile.py
+          result=0
+          failures=()
+          run_browser() {
+            if ! .venv-browser/bin/python "$@"; then
+              failures+=("$1")
+              result=1
+            fi
+          }
+          run_browser tests/browser_external.py
+          run_browser tests/browser_diagnostics.py
+          run_browser tests/browser_native_snapshot.py
+          run_browser tests/browser_relay.py
+          run_browser tests/browser_persistent_relay.py
+          run_browser tests/browser_https_dev.py
+          run_browser tests/browser_dev_connection_errors.py
+          run_browser tests/browser_public_market.py
+          run_browser tests/browser_relay_busy.py
+          run_browser tests/browser_futures_display.py
+          run_browser tests/browser_manual_preview.py
+          run_browser tests/browser_account_inquiry.py
+          run_browser tests/browser_app_shell.py
+          run_browser tests/browser_market_sector_recheck.py
+          run_browser tests/browser_integration_958.py
+          run_browser tests/browser_sector_followup.py
+          run_browser tests/browser_names_review.py
+          run_browser tests/browser_invest_workflow.py
+          run_browser tests/browser_public_briefing.py
+          run_browser tests/browser_final_integration.py
+          run_browser tests/browser_dense_review.py --widths 1440 344 --scales 1 1.5 --output /tmp/dense-ci
+          run_browser tests/browser_work_handoff.py
+          run_browser tests/browser_commit_review.py --extended
+          run_browser tests/browser_external_catalog.py
+          run_browser tests/browser_calendar_final.py
+          run_browser tests/browser_calendar_oauth_bootstrap.py
+          run_browser tests/browser_accounts_profile.py
+          if (( result )); then printf "Failed browser regressions: %s\n" "${failures[*]}"; fi
+          exit "$result"
   nh-staging-live:
     # Security/preflight preparation branches never consume live credentials in CI.
     if: github.event_name == 'pull_request' && github.head_ref != 'fix/issue-4-safe-diagnostics' && github.head_ref != 'fix/4b1-safety-checks' && github.head_ref != 'feat/nh-integration-v2' && github.head_ref != 'fix/visible-first-market-20261125' && github.head_ref != 'fix/visible-first-data-20261125' && github.head_ref != 'fix/relay-timing-diagnostics-20261125' && github.head_ref != 'fix/relay-retry-isolation-preview-20261126' && github.head_ref != 'feat/mobile-sector-news-calendar-ui-20261126' && github.head_ref != 'fix/verified-query-performance-20261126' && github.event.pull_request.head.repo.full_name == github.repository && vars.NH_STAGING_ENABLED == 'true'
