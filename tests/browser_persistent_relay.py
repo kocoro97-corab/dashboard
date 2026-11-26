@@ -37,12 +37,14 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
    page.reload(wait_until='domcontentloaded');page.wait_for_selector('#devBanner');page.wait_for_function('()=>DashboardShell.getStatus().page==="market"');assert page.evaluate('LS("invest_session_token")')==token
    assert page.evaluate('JSON.parse(sessionStorage.getItem("myinvest_v2_dev:connection")).kind')=='persistent'
    # This harness advertises the real authenticated account capability. After
-   # the visible market settles, warm only the general balance once.
+   # a visible home route settles, warm only the general balance once.
+   page.locator('#dashboardNav a[href="#/home"]').click()
+   page.wait_for_function('()=>DashboardShell.getStatus().page==="home"')
    try:
     page.wait_for_function("()=>$('pageStatus')?.textContent.startsWith('연결됨')",timeout=12000)
     page.wait_for_function("()=>!!LS('invest_session_token')&&NH_ACCOUNT_SESSION===LS('invest_session_token')&&!NH_ACCOUNT_BUSY",timeout=12000)
    except Exception:
-    print(json.dumps(page.evaluate('''()=>({visible:!document.hidden,eligible:AppContext.create().canWarmAccount(),scheduler:!!window.MYInvestIdlePrefetch,ready:$('pageStatus')?.textContent.startsWith('연결됨'),transport:DashboardTransport.readState(),nhReady:NH_ACCOUNT_SESSION===LS('invest_session_token')})''')),flush=True)
+    print(json.dumps(page.evaluate('''()=>({visible:!document.hidden,eligible:AppContext.create().canWarmAccount(),scheduler:!!window.MYInvestIdlePrefetch,ready:$('pageStatus')?.textContent.startsWith('연결됨'),shellError:$('pageStatus')?.classList.contains('shell-error'),transport:DashboardTransport.readState(),nhReady:NH_ACCOUNT_SESSION===LS('invest_session_token')})''')),flush=True)
     print(json.dumps({'readCallsSinceReload':posted.count(('POST','nhAccounts'))-account_reads_before_reload}),flush=True)
     raise
    assert posted.count(('POST','nhAccounts'))==account_reads_before_reload+1
