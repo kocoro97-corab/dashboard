@@ -44,3 +44,28 @@ test('public deadline bounds an already-pending shared metadata proof and releas
  const keepAlive=setTimeout(()=>{},100);const r=await handler(req({action:'publicFetch',url:'https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=1y'},{Authorization:'Bearer '+token}),f.env);clearTimeout(keepAlive);
  assert.equal(r.status,502);assert.equal(Object.keys(f.state.saved.get('quota').leases).length,0);late({...expected,success:true});await new Promise(r=>setImmediate(r));assert.equal(publicCalls,0);
 });
+
+test('verbatim task archive is denied by default, requires explicit dev flag, bearer and test GAS capability',async()=>{
+ const args={action:'privateMorningBriefing',mode:'latest'};
+ const bearer={Authorization:'Bearer '+token};
+ let f=await fixture();
+ assert.equal((await f.handler(req(args,bearer),f.env)).status,403);
+ assert.equal(f.calls.length,0);
+ f=await fixture({MYINVEST_PRIVATE_BRIEFINGS:'true'});
+ assert.equal((await f.handler(req(args),f.env)).status,401);
+ assert.equal((await f.handler(req({...args,token},bearer),f.env)).status,400);
+ assert.equal((await f.handler(req({...args,folderId:'SHOULD_NOT_PASS'},bearer),f.env)).status,400);
+ assert.equal((await f.handler(req({...args,mode:'date',date:'../../secret'},bearer),f.env)).status,400);
+ assert.equal((await f.handler(req(args,bearer),f.env)).status,503,'deny when test GAS does not prove capability');
+ assert.equal(f.calls.length,0);
+ f.gateway.verify=async()=>({...expected,success:true,features:['privateMorningBriefing']});
+ f.gateway.post=async body=>{f.calls.push(body);return {success:true,private:true,cacheable:false,schemaVersion:1,dates:['2026-11-26'],
+  report:{date:'2026-11-26',content:'<Cite />',contentSha256:'a'.repeat(64),format:'verbatim-text',origin:'scheduled-task-archive-unverified',savedAt:1795600000000}}};
+ const response=await f.handler(req(args,bearer),f.env);
+ assert.equal(response.status,200);
+ assert.equal((await response.json()).report.content,'<Cite />');
+ assert.equal(f.calls.length,1);
+ assert.equal(f.calls[0].token,token,'only verified relay inserts token into GAS request');
+ assert.equal(f.calls[0].mode,'latest');
+ assert.equal(response.headers.get('Cache-Control'),'no-store');
+});
