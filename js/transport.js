@@ -32,7 +32,7 @@
   }
   function isRelay(){return config().mode==='relay'}
   // Shared physical read budget. Auth and reviewed writes are never replayed.
-  const reads=new Set(['publicFetch','nhQuotes','nhExternalQuotes','nhAccounts','externalHoldings','externalHistory','externalAccounts','googleCalendarStatus','googleCalendarList','googleCalendarEvents']);
+  const reads=new Set(['publicFetch','nhQuotes','nhExternalQuotes','nhAccounts','externalHoldings','externalHistory','externalAccounts','googleCalendarStatus','googleCalendarList','googleCalendarEvents','privateMorningBriefing']);
   const waiting=[],running=new Set(),publicPending=new Map();let epoch=0,sharedEpoch=0,completed=0,cancelled=0,pauseUntil=0,pauseTimer=null,throttleUntil=0,sharedPromotions=0,sharedJoins=0,maxQueueWaitMs=0,maxPhysicalReadMs=0,foregroundRescueStarts=0;
   const readClock=()=>root.performance?.now?.()??Date.now();
   // Anonymous in-memory latency only: no URLs, tokens, account data, or payloads.
