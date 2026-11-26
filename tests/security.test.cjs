@@ -109,3 +109,19 @@ test('optional staging hooks leave default production metadata intact and can fa
   b.ctx.securityEnvironmentGuard_=()=>{throw Error('staging binding failed')};
   assert.equal(b.post({action:'login',user:'owner',pass:'old-pass'}).success,false);assert.equal(b.rows[1][1],'old-pass');
 });
+
+test('private task archive is served only to verified admin, not ordinary logged-in members',()=>{
+ const b=fastBackend();let calls=0;
+ b.ctx.privateMorningBriefingRead_=body=>{calls++;return {success:true,schemaVersion:1,report:{date:'2026-11-26',content:'synthetic original'}}};
+ assert.equal(b.post({action:'privateMorningBriefing',mode:'latest'}).success,false);
+ const member=b.ctx.securityCreateSession_('member',false);
+ assert.equal(b.post({action:'privateMorningBriefing',mode:'latest',token:member}).code,'PRIVATE_BRIEFING_FORBIDDEN');
+ assert.equal(calls,0);
+ const owner=b.ctx.securityCreateSession_('owner',false);
+ const result=b.post({action:'privateMorningBriefing',mode:'latest',token:owner});
+ assert.equal(result.success,true);
+ assert.equal(result.report.content,'synthetic original');
+ assert.equal(calls,1);
+ assert.equal(b.post({action:'privateMorningBriefing',mode:'latest',token:owner,redirectUrl:'https://evil.test'}).code,'PRIVATE_BRIEFING_BAD_REQUEST');
+ assert.equal(calls,1);
+});
