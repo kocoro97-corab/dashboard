@@ -21,13 +21,13 @@ function setup(){
  const stored=new Map();
  const localStorage={getItem:key=>stored.get(key)||null,setItem:(key,value)=>stored.set(key,value)};
  const document={createElement:tag=>new FakeNode(tag)};
- const root={MYINVEST_TRANSPORT_CONFIG:{publicIndustries:false}};
+ const root={MYINVEST_TRANSPORT_CONFIG:{publicIndustries:false},MYINVEST_DEV_DIAGNOSTICS:true,location:{hash:'#/sectors'}};
  const pages={};
  const DashboardPages={legacy:()=>({mount(){},unmount(){},refresh:async()=>{}}),register:(key,factory)=>{pages[key]=factory}};
  const themes=[{name:'검증용 국내 테마',rate:1.2,sc:85,rows:[]}];
  new Function('window','DashboardPages','document','localStorage','setTimeout','clearTimeout','THM',source)(root,DashboardPages,document,localStorage,()=>1,()=>{},themes);
  const ctx={development:()=>true,publicConnected:()=>false,subscribe:()=>()=>{},sectors:async()=>{}};
- return {stored,ctx,mount(){const container=new FakeNode('main'),app=pages.sectors();app.mount(container,ctx);const nodes=node=>[node,...node.children.flatMap(child=>child instanceof FakeNode?nodes(child):[])];return {app,container,nodes:()=>nodes(container),button:text=>nodes(container).find(x=>x.tagName==='BUTTON'&&x.textContent===text),findHeading:text=>nodes(container).find(x=>x.tagName==='H3'&&x.textContent===text)}}};
+ return {stored,ctx,root,mount(){const container=new FakeNode('main'),app=pages.sectors();app.mount(container,ctx);const nodes=node=>[node,...node.children.flatMap(child=>child instanceof FakeNode?nodes(child):[])];return {app,container,nodes:()=>nodes(container),button:text=>nodes(container).find(x=>x.tagName==='BUTTON'&&x.textContent===text),findHeading:text=>nodes(container).find(x=>x.tagName==='H3'&&x.textContent===text)}}};
 }
 test('selecting swing shows 5/20/60-day intervals',()=>{
  const h=setup().mount();assert.ok(h.button('스윙'));h.button('스윙').click();
@@ -76,4 +76,17 @@ test('swing periods sit immediately to the right on the same horizontal control 
  assert.deepEqual(intervals.children[0].children.map(x=>x.textContent),['5일','20일','60일']);
  h.button('단타').click();
  assert.ok(!h.nodes().some(x=>x.className==='stv2-swing-periods'),'intervals hidden in daytrade mode');
+});
+
+test('US swing visibly includes 5-minute pilot and 5/20/60-day modes without confusing evidence',()=>{
+ const s=setup(),h=s.mount();
+ h.button('미국').click();
+ h.button('스윙').click();
+ const pilot=h.button('5분');
+ assert.ok(pilot,'US swing must show the separately labeled five-minute reference');
+ assert.match(pilot.attrs['aria-label'],/AAPL 5분봉 검증/);
+ assert.equal(h.button('5일').attrs['aria-pressed'],'true');
+ assert.ok(h.nodes().some(x=>String(x.textContent).includes('5분: 별도 AAPL 시험')));
+ pilot.click();
+ assert.equal(s.root.location.hash,'#/diagnostics','pilot must lead to the isolated AAPL reference verification');
 });

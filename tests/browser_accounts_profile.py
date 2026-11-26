@@ -47,6 +47,13 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
    page.locator('#authId').fill('nh_test_v2');page.locator('#authPw').fill('SYNTHETIC_PRIVATE_PASSWORD');page.locator('#authSubmitBtn').click()
    page.wait_for_function("()=>EXT_SAVED_REV==='r1'&&NH_ACCOUNT_SESSION===LS('invest_session_token')")
    assert page.locator('#nhAccountBtn').is_enabled() and page.locator('#nhAccountRows tr').count()==2
+   assert page.evaluate("""() => {
+     const table=document.querySelector('#nhAccountRows')?.closest('table'),row=table?.querySelector('tbody tr'),nav=document.querySelector('#dashboardNav');
+     return table?.classList.contains('account-line-table')===true&&
+       !table.classList.contains('dense-stacked')&&
+       getComputedStyle(row).display==='table-row'&&
+       getComputedStyle(nav).display==='flex'&&getComputedStyle(nav).flexWrap==='nowrap';
+   }"""),'Fold must retain one-row NH holdings table and single-row menu'
    assert gas.calls.count('nhAccounts')==1 and 'protectedHoldings' not in gas.calls
    page.get_by_role('button',name='계좌 연결 상태 확인',exact=True).click();page.wait_for_function("()=>$('accountConnectionStatus').textContent.includes('격리 계좌 읽기 허용')")
    if mode=='test':

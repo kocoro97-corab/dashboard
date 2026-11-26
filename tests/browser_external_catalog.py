@@ -69,14 +69,16 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as p:
    page.locator('#externalBrokerCatalogRows tr').filter(has_text='가 합성증권').get_by_role('button',name='수정',exact=True).click();page.locator('#externalBrokerEdit').fill('다 합성증권');page.get_by_role('button',name='증권사 추가·수정',exact=True).click();page.wait_for_function("()=>ExternalAccountUI.list().every(x=>x.broker==='다 합성증권')")
    position=page.locator('#externalAssetRows tr').first.locator('input[type="number"]').first;position.fill('202');position.press('Tab');page.locator('#externalSaveBtn').click();page.wait_for_function("()=>EXT_SAVED_REV==='r3'")
    page.locator('button[onclick="showExternalHistory()"]').click();page.locator('#externalHistory').evaluate('e=>e.parentElement.open=true');page.locator('#externalHistory button').first.click();page.wait_for_function("()=>EXT_SAVED_REV==='r4'");assert gas.rows[0]['quantity']==101 and gas.rows[0]['accountId'] in ids
-   page.locator('a[href="#/accounts/holdings"]').click();page.wait_for_selector('#pageViewport th[scope="rowgroup"]');text=page.locator('#pageViewport').inner_text();assert '다 합성증권' in text and '수정 계좌' in text and '둘째 계좌' in text
-   assert page.locator('#pageViewport th[scope="rowgroup"]').count()>=2
+   page.locator('a[href="#/accounts/holdings"]').click();page.wait_for_selector('#pageViewport table.account-line-table tbody tr');text=page.locator('#pageViewport').inner_text();assert '다 합성증권' in text and '수정 계좌' in text and '둘째 계좌' in text
+   assert page.locator('#pageViewport table.account-line-table tbody tr').count()>=2
+   assert page.locator('#pageViewport table.account-line-table th[scope="rowgroup"]').count()==0
+   assert page.evaluate("""() => [...document.querySelectorAll('#pageViewport table.account-line-table tbody tr')].every(row=>getComputedStyle(row).display==='table-row')"""),'all holdings remain one physical ledger row'
    page.locator('a[href="#/accounts/overview"]').click();page.wait_for_function("()=>document.querySelectorAll('.account-report table').length>=5");assert page.locator('.account-report table').count()>=5 and page.locator('.account-report .summary-grid').count()==0
    page.locator('a[href="#/accounts/ocr"]').click();page.wait_for_selector('#externalAccountCatalogRows');before=copy.deepcopy(gas.accounts);gas.catalog+=1
    page.locator('#externalAccountCatalogRows tr').first.get_by_role('button',name='수정',exact=True).click();page.locator('#externalAccountAlias').fill('충돌 검증');page.get_by_role('button',name='계좌 정보 저장',exact=True).click();page.wait_for_function("()=>$('externalCatalogStatus').textContent.includes('STORE_CONFLICT')");assert gas.accounts==before
    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
    page.evaluate('logout()');page.wait_for_function("()=>DashboardShell.getStatus().page===null");assert page.locator('#externalAccountCatalogRows tr').count()==0 and page.locator('#externalAccountAlias').input_value()=='' and page.locator('#externalImageFiles').evaluate('e=>e.files.length')==0
    assert not errors and not unexpected,(errors,unexpected)
-   print(json.dumps({'status':'PASS','scope':'SYNTHETIC_EXTERNAL_ACCOUNT_CATALOG','width':width,'brokerAccountCRUD':'PASS','twoImagesAndMultipleAccounts':'PASS','saveReadRestore':'PASS','conflictAndNonemptyDeletion':'PASS','groupedTables':'PASS','logoutCleanup':'PASS','actualNhCalls':0,'realStorageWrites':0}),flush=True)
+   print(json.dumps({'status':'PASS','scope':'SYNTHETIC_EXTERNAL_ACCOUNT_CATALOG','width':width,'brokerAccountCRUD':'PASS','twoImagesAndMultipleAccounts':'PASS','saveReadRestore':'PASS','conflictAndNonemptyDeletion':'PASS','oneLineLedgerTables':'PASS','logoutCleanup':'PASS','actualNhCalls':0,'realStorageWrites':0}),flush=True)
    context.close()
  finally:browser.close()

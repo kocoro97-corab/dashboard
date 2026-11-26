@@ -201,3 +201,46 @@ test('cancelled route releases its UI result but still reports occupied physical
  assert.equal(f.api.readState().active,0);
  assert.equal(f.api.readState().maxPhysicalReadMs,1500);
 });
+
+test('one foreground account read starts when two previous-route public reads occupy both slots',async()=>{
+ const f=fixture();
+ f.location.hash='#/news';
+ const first=f.api.publicRead(newsUrl,{sharedPublic:true,sharedTag:'news'});
+ await f.tick();
+ f.location.hash='#/sectors';f.api.cancelReads({keepSharedPublic:true});
+ const second=f.api.publicRead(sectorUrl,{sharedPublic:true,sharedTag:'sectors'});
+ await f.tick();
+ assert.equal(f.calls.length,2);
+ f.location.hash='#/accounts';f.api.cancelReads({keepSharedPublic:true});
+ const foreground=f.api.post({action:'nhAccounts',token});
+ await f.tick();await f.tick();
+ assert.equal(f.calls.length,3,'one foreground read may use bounded rescue lease');
+ assert.equal(f.calls[2].action,'nhAccounts');
+ assert.equal(f.api.readState().active,3);
+ assert.equal(f.api.readState().foregroundRescueStarts,1);
+ const fourth=f.api.post({action:'externalAccounts',token});
+ await f.tick();
+ assert.equal(f.calls.length,3,'never start a fourth physical request');
+ for(const release of f.releases.slice(0,3))release();
+ await f.tick();await f.tick();
+ assert.equal(f.calls.length,4);
+ f.releases[3]();
+ await Promise.all([first,second,foreground,fourth]);
+ assert.equal(f.api.readState().active,0);
+});
+test('foreground lease rescue never runs in production (without devSession)',async()=>{
+ const f=fixture({development:false});
+ f.location.hash='#/news';
+ const first=f.api.publicRead(newsUrl);
+ const second=f.api.publicRead(sectorUrl);
+ await f.tick();await f.tick();
+ assert.equal(f.calls.length,2);
+ const third=f.api.post({action:'nhAccounts',token});
+ await f.tick();
+ assert.equal(f.calls.length,2,'production normal concurrency remains two');
+ f.releases[0]();await f.tick();await f.tick();
+ assert.equal(f.calls.length,3);
+ f.releases[1]();f.releases[2]();
+ await Promise.all([first,second,third]);
+ assert.equal(f.api.readState().foregroundRescueStarts,0);
+});

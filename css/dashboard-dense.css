@@ -55,3 +55,17 @@
 
 /* Core market cards keep 3 x 3 on Fold; detailed units and provenance open on tap. */
 #pageViewport .miv-indicator>.miv-value{font-size:clamp(11px,3.5vw,18px);white-space:nowrap;letter-spacing:-.3px}
+
+/* Fold-friendly navigation: one compact, horizontally scrollable row. */
+#dashboardNav.dashboard-nav{display:flex!important;grid-template-columns:none!important;flex-wrap:nowrap!important;overflow-x:auto!important;overflow-y:hidden!important;gap:4px;max-width:100%;scrollbar-width:thin;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+#dashboardNav.dashboard-nav>a{flex:0 0 auto;grid-column:auto!important;white-space:nowrap;min-height:38px;padding:6px 9px;font-size:clamp(11px,1.2vw,13px)}
+/* Preserve true column headings: each holding is one physical table row,
+   including on narrow Fold outer screens. Horizontal scroll is intentional. */
+#pageViewport .tw:has(>table.account-line-table){max-width:100%;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+#pageViewport table.account-line-table{display:table!important;table-layout:auto;width:max-content;min-width:100%;font-size:12px;border-collapse:collapse}
+#pageViewport table.account-line-table>thead{display:table-header-group!important;position:static!important;width:auto!important;height:auto!important;clip-path:none!important}
+#pageViewport table.account-line-table>tbody{display:table-row-group!important}
+#pageViewport table.account-line-table tr{display:table-row!important;background:transparent}
+#pageViewport table.account-line-table :is(th,td){display:table-cell!important;white-space:nowrap!important;min-width:0;border-bottom:1px solid var(--line);padding:7px 9px;overflow-wrap:normal}
+#pageViewport table.account-line-table td:before{content:none!important}
+#pageViewport table.account-line-table td.dense-wide{grid-column:auto}
