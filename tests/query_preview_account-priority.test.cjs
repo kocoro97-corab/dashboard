@@ -47,12 +47,14 @@ test('warm balance and account page share one call and fresh cache, while force 
  const code=src.slice(src.indexOf('let NH_ACCOUNT_PENDING'),src.indexOf('async function fetchNHAccounts('));
  let calls=0,session=token;let finish;
  const realm={LS:()=>session,NH_ACCOUNT_SESSION:null,NH_ACCOUNT_FETCHED_AT:0,
- fetchNHAccounts:()=>{calls++;return new Promise(resolve=>{finish=()=>{realm.NH_ACCOUNT_SESSION=session;realm.NH_ACCOUNT_FETCHED_AT=Date.now();resolve(true)}})}};
- const load=vm.runInNewContext(code+'\nloadNHAccounts',realm);
- const warm=load({sessionRead:true});assert.equal(load({force:true}),warm);
- finish();await warm;assert.equal(await load(),true);assert.equal(calls,1);
- const redo=load({force:true});finish();await redo;assert.equal(calls,2);
- session=null;assert.equal(await load(),false);assert.equal(calls,2);
+ fetchNHAccounts:()=>{calls++;return new Promise(resolve=>{finish=()=>{realm.NH_ACCOUNT_SESSION=session;realm.NH_ACCOUNT_FETCHED_AT=Date.now();vm.runInContext('NH_ACCOUNT_CACHE_READY=true',realm);resolve(true)}})}};
+ vm.createContext(realm);const load=vm.runInContext(code+'\nloadNHAccounts',realm);
+ const warm=load({force:false,sessionRead:true});assert.equal(load({force:true}),warm);
+ finish();await warm;assert.equal(await load({force:false,sessionRead:true}),true);assert.equal(calls,1);
+ const redo=load();finish();await redo;assert.equal(calls,2);
+ vm.runInContext('NH_ACCOUNT_CACHE_READY=false',realm);
+ const afterPartial=load({force:false,sessionRead:true});finish();await afterPartial;assert.equal(calls,3);
+ session=null;assert.equal(await load(),false);assert.equal(calls,3);
 });
 test('a warmed NH result cannot fan out into external account quote requests',()=>{
  const src=fs.readFileSync('js/external_accounts.js','utf8');

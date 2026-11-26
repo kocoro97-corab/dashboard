@@ -51,24 +51,25 @@
       chart(force=false){return publicConnected()?once('chart',()=>{if(force&&QX)return loadQ(qrg);if(!QX)return showQ('^KS11','코스피','',1)},force):Promise.resolve()},
       news(force=false){return publicConnected()?once('news',async()=>{if(await loadNews()===false)throw Error('PUBLIC_NEWS_UNAVAILABLE')},force,3*60*1000):Promise.resolve()},
       sectors(force=false){return publicConnected()?once('sectors',async()=>{if(force)THM_AT=0;if(await fetchTopThemes()===false)throw Error('PUBLIC_THEME_UNAVAILABLE')},force,10*60*1000):Promise.resolve()},
-      warmAccount(){return canWarmAccount()?loadNHAccounts({sessionRead:true}):Promise.resolve(false)},
+      warmAccount(){return canWarmAccount()?loadNHAccounts({force:false,sessionRead:true}):Promise.resolve(false)},
       canWarmAccount,
       accounts(force=false,onNh){
        if(!accountReads())return Promise.resolve();
        const token=LS('invest_session_token');
-       if(!force&&NH_ACCOUNT_SESSION===token&&NH_ACCOUNT_FETCHED_AT>0&&Date.now()-NH_ACCOUNT_FETCHED_AT<60000)onNh?.();
+       const owner=canWarmAccount();
+       if(owner&&!force&&hasRecentNHAccountRead(token))onNh?.();
        return once('accounts',async()=>{
         // Start the read-only, same-origin instrument catalog in parallel with
         // the existing sequential broker/store reads; do not increase relay
         // concurrency or modify NH credentials/requests.
         const master=typeof loadExternalMaster==='function'?loadExternalMaster():Promise.resolve();
         if(!development())await loadProtectedHoldings();
-        const owner=canWarmAccount(),nh=await loadNHAccounts({force,sessionRead:owner});
+        const nh=await loadNHAccounts({force:!owner||force,sessionRead:owner});
         if(nh===true&&token===LS('invest_session_token'))onNh?.();
         await master;
         await loadExternalAssets();
         if(owner&&nh!==true)throw Error('NH_ACCOUNT_READ_INCOMPLETE');
-      },force,60*1000)},
+      },force,owner?60*1000:Infinity)},
       state(){return {authenticated:!!LS('invest_session_token'),publicConnected:publicConnected(),privateReads:accountReads(),running:[...jobs.values()].filter(j=>j.busy).length}}
     };
   }
