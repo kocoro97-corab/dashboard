@@ -40,7 +40,8 @@ def synthetic_transport(route,*args,**kwargs):
     route.fulfill(content_type='application/json',body=json.dumps(data),headers={'Access-Control-Allow-Origin':'*'})
 
 def synthetic_expiry(page,expression,*args,**kwargs):
-    if "!LS('invest_session_token')" in expression:
+    # Accelerate only the exact inactivity wait, never login or reload.
+    if expression == "()=>!LS('invest_session_token')&&$('authGuard').style.display==='flex'":
         page.evaluate("()=>{localStorage.setItem('invest_last_active',String(Date.now()-SESSION_MS-1));renderSession()}")
     kwargs['timeout']=15000
     return real_wait(page,expression,*args,**kwargs)
