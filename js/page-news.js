@@ -146,7 +146,7 @@ function create(){
    const stamp=v=>v?new Date(v).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+' KST':'미확인';briefingArea.append(el('p','대상일 '+selected.date+' · 직접 등록 · 생성 '+stamp(selected.generatedAt)+' · 시장 관측 '+stamp(selected.observedAt)+' · 자료 조회 '+stamp(selected.retrievedAt)+' · 저장 '+stamp(selected.at),'nev5-muted'));
    viewer.textContent=selected.text;
    controls.append(btn('선택 보고서 삭제',()=>{try{localStorage.setItem(BRIEF_KEY,JSON.stringify(readBriefs().filter(r=>r.date!==selectedBrief)))}catch{return}selectedBrief='';renderBrief()}));
-  }else viewer.textContent='등록된 AI 브리핑이 없습니다.\n\n오전 7시 ChatGPT 브리핑의 자동 전달은 아직 연결되지 않았습니다. 위에서 받은 보고서를 직접 등록하면 이 화면에서 날짜별로 볼 수 있습니다.';
+  }else viewer.textContent='오늘 AI 투자전략이 아직 등록되지 않았습니다.\n\n오전 7시 ChatGPT 브리핑의 외부 자동 전달은 현재 연결되지 않았습니다. 상단의 ‘오늘 AI 투자전략 등록·보기’를 눌러 ChatGPT 보고서를 검토 후 붙여넣으면 날짜별로 볼 수 있습니다.';
   const bodyDetails=el('details',undefined,'nev5-brief-body');bodyDetails.open=briefOpen;bodyDetails.append(el('summary','브리핑 본문 접기·펼치기'),viewer);bodyDetails.addEventListener('toggle',()=>{if(bodyDetails.isConnected)briefOpen=bodyDetails.open});briefingArea.append(bodyDetails);sharedPublicFeed?.refreshLocal?.();
  }
  const BRIEF_CSS='.nev5-news-search{display:inline-flex;align-items:center;color:#b1d9ff;padding:7px 8px;min-height:38px}.nev5-news-top .news[hidden]{display:none!important}.nev5-news-top{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;align-items:start}.nev5-news-top>*{min-width:0}.nev5-news-top>.page-content{max-height:600px;overflow:auto}.nev5-news-top>.page-content>.page-note{display:none}.nev5-news-top #newsSection{grid-template-columns:1fr}.nev5-brief-body>summary{cursor:pointer;min-height:38px;padding:7px 0}.nev5-brief-editor label{display:grid;gap:3px}.nev5-brief-editor input{min-width:0;max-width:100%;box-sizing:border-box}@media(max-width:900px){.nev5-news-top{grid-template-columns:1fr}.nev5-news-top>.page-content{max-height:480px}}.nev5-brief{margin:8px 0 14px;background:#111c2d;border:1px solid #344158;padding:12px;border-radius:10px}.nev5-brief-row{display:flex;align-items:center;gap:10px;justify-content:space-between;flex-wrap:wrap;margin:8px 0}.nev5-brief-row h3{margin:0}.nev5-brief-row small{color:#b6c5d9}.nev5-brief-row select,.nev5-brief-editor input,.nev5-brief-editor textarea{background:#101a2a;color:#e7eef9;border:1px solid #465775;border-radius:7px;padding:8px}.nev5-brief-editor{flex:1;min-width:180px;border:1px solid #465775;border-radius:7px;padding:8px}.nev5-brief-editor summary{cursor:pointer}.nev5-brief-editor form{display:grid;gap:7px;margin-top:10px}.nev5-brief-editor textarea{width:100%;box-sizing:border-box;resize:vertical}.nev5-brief-row button{padding:7px 10px;color:#fff;background:#264365;border:1px solid #465775;border-radius:7px}.nev5-brief-scroll{height:clamp(350px,39vh,450px);overflow:auto;overscroll-behavior:contain;white-space:pre-wrap;overflow-wrap:anywhere;background:#0c1626;color:#edf3ff;padding:13px;border-radius:8px;border:1px solid #344158;line-height:1.5;font-size:13px}@media(max-width:900px){.nev5-brief-scroll{height:clamp(220px,34vh,320px)}}';
@@ -177,7 +177,15 @@ function create(){
  function mount(container,ctx){
   active=true;ctxRef=ctx;newsHoldings=()=>holdings().map(x=>x.code);view=el('section',undefined,'nev5');const style=el('style');style.textContent=css;view.append(style,el('h2','뉴스·투자 브리핑'));
   const nav=el('div',undefined,'nev5-nav');for(const [name,page] of [['글로벌 시장','market'],['섹터·테마','sectors'],['AI 종목분석','stocks'],['투자전략','strategy']])nav.append(btn(name,()=>root.location.hash='#/'+page));
-  const calendarButton=btn('▦ 투자 캘린더',()=>root.MYInvestCalendar?.open());calendarButton.dataset.investCalendarTrigger='true';nav.append(calendarButton);view.append(nav);
+  const calendarButton=btn('▦ 투자 캘린더',()=>root.MYInvestCalendar?.open());calendarButton.dataset.investCalendarTrigger='true';nav.append(calendarButton);
+  const openBriefing=btn('오늘 AI 투자전략 등록·보기',()=>{
+    const box=view.querySelector('.nev5-management');if(!box)return;
+    box.open=true;
+    const editor=box.querySelector('.nev5-brief-editor');if(editor)editor.open=true;
+    const date=box.querySelector('.nev5-brief-editor input[type=date]');if(date)date.value=briefToday();
+    box.scrollIntoView?.({block:'start',behavior:'instant'});
+  });
+  openBriefing.dataset.todayBriefingAccess='true';nav.append(openBriefing);view.append(nav);
   status=el('p','뉴스 피드 갱신 전에는 기존 수신 자료가 표시될 수 있습니다.','nev5-muted');view.append(status);
   const sharedHost=el('div');sharedHost.dataset.newsBlock='briefing';view.append(sharedHost);
   const briefStyle=el('style');briefStyle.textContent=BRIEF_CSS+'.nev5-news-top{display:block}.nev5-news-top>.page-content{max-height:none}.nev5-management{margin:12px 0;min-width:0}.nev5-management>summary{cursor:pointer;min-height:40px;padding:9px;background:#172238;border:1px solid #344158;border-radius:8px}.mifv1-stale{color:#ffd383}';view.append(briefStyle);
@@ -188,11 +196,13 @@ function create(){
   recentButton=btn('최근 수신 뉴스',()=>{newsTodayOnly=false;filterNewsByDay()});
   const sourceLink=el('a','Google 뉴스 원문 검색');sourceLink.href='https://news.google.com/search?q='+encodeURIComponent('한국 미국 증시')+'&hl=ko&gl=KR&ceid=KR:ko';
   sourceLink.target='_blank';sourceLink.rel='noopener noreferrer';sourceLink.className='nev5-news-search';
-  newsActions.append(todayButton,recentButton,sourceLink);newsTop.append(newsActions);
+  const retry=btn('기사 다시 조회',()=>{void root.DashboardShell?.refresh?.()});
+  retry.setAttribute('aria-label','현재 뉴스·이벤트 화면 공개 기사 재조회');
+  newsActions.append(todayButton,recentButton,retry,sourceLink);newsTop.append(newsActions);
   newsDayStatus=el('p','수신된 기사 게시일 확인 중…','nev5-muted');newsDayStatus.setAttribute('role','status');newsTop.append(newsDayStatus);
   view.append(newsTop);
   symbolsArea=el('section');symbolsArea.dataset.newsBlock='symbols';view.append(symbolsArea);
-  const management=el('details',undefined,'nev5-management');management.dataset.newsBlock='history';management.append(el('summary','지난 브리핑 조회·관리'));view.append(management);
+  const management=el('details',undefined,'nev5-management');management.dataset.newsBlock='history';management.append(el('summary','AI 브리핑 직접 등록·지난 보고서 관리'));view.insertBefore(management,newsTop);
   const archiveHost=el('div');management.append(archiveHost);archivePanel=root.MYInvestBriefingPanelV1?.mount(archiveHost,{onChange:()=>sharedPublicFeed?.refreshLocal?.()});
   briefingArea=el('section',undefined,'nev5-brief');management.append(briefingArea);renderBrief();
   sharedPublicFeed=root.MYInvestPublicBriefingFeedV1?.mount(sharedHost,{fallbackRecords:()=>{
