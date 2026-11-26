@@ -6,7 +6,7 @@ from playwright.async_api import async_playwright
 from build_dev_pages import build
 from public_integration_support import Harness,synthetic_feeds,ENDPOINT
 
-TEXT='# 2026-11-26 ChatGPT synthetic original\\n<Cite ref="example" />\\n<script>window.__PRIVILEGE_CANARY=true</script>\\n'
+TEXT='# 2026-11-26 ChatGPT synthetic original\n<Cite ref="example" />\n<script>window.__PRIVILEGE_CANARY=true</script>\n'
 async def main():
  with tempfile.TemporaryDirectory() as tmp:
   artifact=Path(tmp)/'private-synthetic';build(artifact,relay_endpoint=ENDPOINT)
@@ -49,6 +49,7 @@ async def main():
       assert data['first']['ok'] is True,data
       assert data['originalSame'] is True,data
       assert data['htmlExecuted'] is False,data
+      assert data['renderedMarkupTags'] is False,data
       assert data['dates']==2,data
       assert data['cleared'] is True,data
       assert data['calls']==[{'action':'privateMorningBriefing','mode':'latest','correctToken':True}],data
