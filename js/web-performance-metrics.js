@@ -2,7 +2,7 @@
 /* In-memory, anonymous UI latency measurement. Never sends or stores data. */
 const ALLOWED=new Set(['home','market','sectors','stocks','strategy','news','accounts','settings','diagnostics']);
 let now=()=>root.performance?.now?.()??Date.now();
-let serial=0,results=[],pending=new Map();
+let serial=0,results=[],pending=new Map(),dataRows=[],dataEpoch=0;
 function begin(page,phase='navigation'){
  if(!ALLOWED.has(page)||!['navigation','refresh','mount'].includes(phase))return null;
  const token=++serial;
@@ -59,7 +59,20 @@ function browserSnapshot(){
   memoryOnly:true,networkCalls:0,containsPrivateFields:false
  };
 }
-function clear(){pending.clear();results=[]}
-const api=Object.freeze({begin,finish,snapshot,browserSnapshot,clear});
+function dataStart(view,market,mode){
+ const eligible=['sectors','themes','stocks','strategy','accounts'].includes(view)&&['KR','US','MIX','ANY'].includes(market)&&['day','swing','general'].includes(mode);
+ const start=now(),epoch=dataEpoch;let first=null,ended=false;
+ const elapsed=()=>Math.max(0,Math.min(86400000,Math.round(now()-start)));
+ return Object.freeze({
+  first(){if(eligible&&epoch===dataEpoch&&!ended&&first===null)first=elapsed()},
+  end(status){if(!eligible||epoch!==dataEpoch||ended)return;ended=true;
+   dataRows.push({view,market,mode,firstMs:first,totalMs:elapsed(),status:['ready','partial','failed','cancelled'].includes(status)?status:'failed'});
+   if(dataRows.length>50)dataRows.shift();
+  }
+ });
+}
+function dataSnapshot(){return dataRows.map(row=>({...row}))}
+function clear(){pending.clear();results=[];dataRows=[];dataEpoch++}
+const api=Object.freeze({begin,finish,snapshot,browserSnapshot,dataStart,dataSnapshot,clear});
 if(typeof module==='object'&&module.exports)module.exports=api;else root.MYInvestWebPerformance=api;
 })(globalThis);

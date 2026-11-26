@@ -199,6 +199,7 @@ function enterDashboard(isAdmin){
 function clearAccountState(){
   if(window.ExternalAccountUI)ExternalAccountUI.clear();
   if(typeof NH_ACCOUNT_RUN!=='undefined')NH_ACCOUNT_RUN++;
+  if(typeof NH_ACCOUNT_PENDING!=='undefined')NH_ACCOUNT_PENDING=null;
   if(typeof NH_ACCOUNTS!=='undefined'){NH_ACCOUNTS=[];NH_ACCOUNT_UPDATED='';NH_ACCOUNT_FETCHED_AT=0;NH_ACCOUNT_SESSION='';NH_ACCOUNT_BUSY=false}
   if(typeof EXT_RUN_ID!=='undefined')EXT_RUN_ID++;
   if(typeof EXT_ASSETS!=='undefined'){EXT_ASSETS=[];EXT_PRICES={};EXT_PRICE_BUSY=false;EXT_PRICE_PENDING=false}

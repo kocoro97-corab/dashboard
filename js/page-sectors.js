@@ -54,6 +54,7 @@ async function readSeries(ctx,symbol){
  const value={symbol,currentPrice:currentObservedAt&&Number.isFinite(result.meta?.regularMarketPrice)&&result.meta.regularMarketPrice>0?result.meta.regularMarketPrice:null,currentObservedAt,instrumentType:result.meta?.instrumentType,bars:bars.map(x=>x.c),times:bars.map(x=>x.t),last:bars.at(-1).t*1000,volume:bars.map(x=>x.v),currency,exchange,
   sessionDates:proven?bars.map(x=>x.sessionDay):null,
   sessionProof:proven?{status:'ready',zone:proof.zone,closedDates:bars.map(x=>x.sessionDay),excludedOpenBars:proof.openDates.length}:{status:'unavailable',reason:proof?.reason||'원천 거래일 확인 불가'}};
+ if(ctx.signal?.aborted)throw Error('READ_CANCELLED');
  SERIES_CACHE.set(symbol,{at:Date.now(),value});return value;
 }
 function seriesDay(value,i){
@@ -89,7 +90,8 @@ async function usUniverse(){
 async function poolLimited(items,limit,fn){let index=0;await Promise.all(Array.from({length:Math.min(limit,items.length)},async()=>{while(index<items.length){const item=items[index++];await fn(item)}}))}
 
 function create(){
- const legacy=DashboardPages.legacy({ids:['themesSection'],refresh:(ctx,force)=>ctx.sectors(force)});
+ const needsKrTheme=()=>category==='theme'&&['KR','MIX'].includes(market);
+ const legacy=DashboardPages.legacy({ids:['themesSection'],refresh:(ctx,force)=>needsKrTheme()?ctx.sectors(force):undefined});
  let ctxRef=null,unsubscribe=null,legacyHolder=null,view,summary,list,notice,watchArea,market='KR',period='1d',mode='day',watch=saved(),active=false,loading=false,loadError='',analytics=new Map(),analysisBusy=false,analysisError='',analysisKey='',analysisVersion=0,analysisController=null,selectionTimer=null,detailVersion=0,category='theme',industryRows=[],industryReceived=null,industryBusy=false,industryError='',marketTimer=null,manualMarket=false;
  const css='.stv2{margin-bottom:18px}.stv2-heading{display:flex;gap:8px;align-items:center;justify-content:space-between}.stv2-heading h2{margin:0;min-width:0}.stv2-heading>button{flex-shrink:0}.stv2-industry-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.stv2-industry-head h3{margin:0}.stv2-mixed{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stv2-mixed>section{background:#172238;border:1px solid #344158;border-radius:9px;padding:11px;min-width:0}.stv2-mixed button{display:block;text-align:left;width:100%;margin:6px 0}.stv2-period-label{font-size:12px;color:#b6c5d9}.stv2-toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin:10px 0}.stv2-toolbar .stv2-tabs{margin:0}.stv2-mode-line{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}.stv2-mode-line .stv2-tabs{display:flex;flex-wrap:nowrap;white-space:nowrap;flex-shrink:0}.stv2-swing-periods{display:inline-flex;flex:0 0 auto;align-items:center;gap:6px}.stv2-region{padding:7px 11px;border:1px solid #72b5ff;border-radius:7px;background:#264365;color:#e7eef9}.stv2-etfs{margin-top:12px}.stv2-status p{overflow-wrap:anywhere}.stv2 button{cursor:pointer}.stv2-tabs{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}.stv2-tabs button{padding:7px 11px;border:1px solid #465775;border-radius:7px;background:#172238;color:#e7eef9}.stv2-tabs button[aria-pressed="true"]{border-color:#72b5ff;background:#264365}.stv2-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.stv2-card{padding:13px;background:#172238;border:1px solid #344158;border-radius:10px;min-width:0;color:#e7eef9}.stv2-muted{color:#b6c5d9;font-size:12px}.stv2-row{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}.stv2-row input{min-width:140px;max-width:100%}.stv2-table-scroll{width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}.stv2-table{width:100%;border-collapse:collapse}.stv2-table-scroll .stv2-table{min-width:max-content}.stv2-table td,.stv2-table th{padding:7px;border-bottom:1px solid #344158;text-align:left}.stv2-table button{color:#e7eef9;background:#264365;border:0;border-radius:5px;padding:5px}.stv2-status{padding:10px;border:1px solid #465775;border-radius:8px}.stv2-card:focus-visible{outline:2px solid #72b5ff}@media(max-width:650px){.stv2-mixed{grid-template-columns:1fr}}@media(max-width:550px){.stv2-grid{grid-template-columns:1fr}.stv2-table{font-size:12px}}';
  function saveDisplay(){try{localStorage.setItem(UI_KEY,JSON.stringify({market:manualMarket?market:null,mode,period,category}))}catch{}}
@@ -113,8 +115,9 @@ function create(){
  }
  function chooseMarket(next){if(!['KR','US','MIX'].includes(next))return false;if(next!==market)supersedeAnalytics();manualMarket=true;market=next;analysisError='';saveDisplay();draw();if((next==='KR'||next==='MIX')&&category==='theme'&&!data().length)void reload();scheduleAnalytics();return false}
  function tabs(parent,options,get,set){const box=make('div',undefined,'stv2-tabs');options.forEach(([value,label])=>{const b=button(label,()=>{const next=set(value);if(next!==false)draw()});b.setAttribute('aria-pressed',String(get()===value));box.append(b)});parent.append(box)}
+ let dayThemeTiming=null;
  function previewReady(){
-   if(active&&market==='KR'&&category==='theme'&&period==='1d'&&mode==='day')draw();
+   if(active&&market==='KR'&&category==='theme'&&period==='1d'&&mode==='day'){draw();if(typeof THM_PREVIEW!=='undefined'&&THM_PREVIEW.length)dayThemeTiming?.first()}
  }
  function data(){return typeof THM!=='undefined'&&Array.isArray(THM)?THM:[]}
  function holdings(){const codes=new Set();let snap;try{snap=ctxRef?.snapshot()}catch{return codes}if(!snap||!Array.isArray(snap.details)||!Array.isArray(snap.result?.rows)||snap.details.length!==snap.result.rows.length)return codes;for(let i=0;i<snap.details.length;i++){const d=snap.details[i],a=snap.result.rows[i],code=String(d?.code||'').trim();if(!/^\d{6}$/.test(code)||d.market!=='domestic'||d.currency!=='KRW'||d.draft||!a?.identity||a.issues?.includes('IDENTITY_UNKNOWN')||!Number.isFinite(d.quantity)||d.quantity<=0)continue;codes.add(code)}return codes}
@@ -125,7 +128,25 @@ function create(){
  function metrics(t){const rows=themeRows(t),priced=rows.filter(r=>safeNumber(r.rate)!==null),up=priced.filter(r=>r.rate>0).length,down=priced.filter(r=>r.rate<0).length,flat=priced.length-up-down,turnover=rows.filter(r=>safeNumber(r.val)!==null).reduce((sum,r)=>sum+r.val,0),coverage=rows.filter(r=>safeNumber(r.val)!==null).length;return {count:rows.length,priced:priced.length,up,down,flat,breadth:priced.length?up/priced.length*100:null,turnover:coverage?turnover:null,coverage}}
  function leaderRows(t){return themeRows(t).filter(r=>safeNumber(r.rate)!==null).slice().sort((a,b)=>(safeNumber(b.val)||0)-(safeNumber(a.val)||0)||b.rate-a.rate)}
  function dashboard(){const items=ranking();if(!items.length)return;const panel=make('section',undefined,'stv2-overview'),title=make('h3','당일 주도 테마 · 관측 요약');panel.append(title,make('p','네이버 수신 후보 '+items.length+'개 · 관측시각 미확인 · 수신 '+(typeof THM_AT!=='undefined'&&THM_AT?new Date(THM_AT).toLocaleString('ko-KR'):'미확인')+' · 기간: 당일만','stv2-muted'));const cards=make('div',undefined,'stv2-grid');for(const t of items.slice(0,4)){const m=metrics(t),c=button('',()=>detail(t));c.className='stv2-card';c.style.textAlign='left';c.append(make('strong',t.name),make('p','테마 등락률 '+pct(t.rate)+' · 강도 '+Math.round(t.sc)+'/100'),make('p','구성종목 상승 '+m.up+' / 하락 '+m.down+' / 보합 '+m.flat+' · 등락 확인 '+m.priced+'/'+m.count,'stv2-muted'),make('p','상승비율 '+(m.breadth===null?'미확인':m.breadth.toFixed(1)+'%')+' · 구성종목 거래대금 '+(m.turnover===null?'미확인':m.turnover.toLocaleString('ko-KR'))+' (원천 단위 확인 필요)','stv2-muted'));cards.append(c)}const all=items.flatMap(t=>leaderRows(t).slice(0,5).map(r=>({...r,theme:t.name}))),seen=new Set(),leaders=all.sort((a,b)=>(safeNumber(b.val)||0)-(safeNumber(a.val)||0)).filter(r=>{if(seen.has(r.code))return false;seen.add(r.code);return true}).slice(0,8);panel.append(make('h3','거래대금 상위 관심후보 · 수신 테마 구성종목'));if(leaders.length){const table=make('table',undefined,'stv2-table'),header=make('tr');['종목명 (코드)','테마','등락률','거래대금','분석'].forEach(x=>header.append(make('th',x)));table.append(header);for(const r of leaders){const tr=make('tr');tr.append(make('td',displayName(r.code)),make('td',r.theme),make('td',pct(r.rate)),make('td',safeNumber(r.val)===null?'미확인':r.val.toLocaleString('ko-KR')));const td=make('td');td.append(button('종목분석',()=>{if(window.MYInvestStockSelection)window.MYInvestStockSelection.open(r.code,{name:nameFor(r.code)||'',theme:r.theme,mode,period,source:'theme',rank:ranking().findIndex(t=>t.name===r.theme)+1,strength:ranking().find(t=>t.name===r.theme)?.sc??null,themeReturn:ranking().find(t=>t.name===r.theme)?.rate??null});else notice.textContent='종목분석 연결을 확인하세요.'}));tr.append(td);table.append(tr)}panel.append(table)}panel.append(make('p','거래대금 상위 관심후보는 수신된 테마의 구성종목 일부를 대상으로 하며, 가격 상승 또는 초과수익이 확인된 주도주라는 뜻은 아닙니다. 전체 시장 순위·기관/외국인 순매수·실시간 AI 추천이 아니고 중복 종목은 제거했습니다.','stv2-muted'));list.append(panel)}
- async function reload(){if(loading||!active||!ctxRef)return;loading=true;loadError='';notice.textContent='국내 테마 원천 데이터 새로고침 중…';try{await ctxRef.sectors(true)}catch{loadError='테마 데이터 수신 실패 · 중계와 네이버 원천 상태를 확인하세요.'}finally{loading=false;if(active){SERIES_CACHE.clear();analytics.clear();draw();void loadAnalytics()}}}
+ async function reload({force=false,resume=true}={}){
+  if(loading||!active||!ctxRef)return;
+  const release=root.MYInvestForegroundRead?.()||(()=>{}),epoch=analysisVersion;
+  const timing=market==='KR'&&category==='theme'&&period==='1d'&&mode==='day'?
+    root.MYInvestWebPerformance?.dataStart('themes','KR','day'):null;
+  dayThemeTiming=timing;loading=true;loadError='';notice.textContent='국내 테마 원천 데이터 새로고침 중…';
+  let ok=false;
+  try{await ctxRef.sectors(force);ok=true}
+  catch{loadError='테마 데이터 수신 실패 · 중계와 네이버 원천 상태를 확인하세요.'}
+  finally{
+   loading=false;
+   if(active){if(force){SERIES_CACHE.clear();analytics.clear()}draw()}
+   if(active&&epoch===analysisVersion&&ok&&data().length)timing?.first();
+   timing?.end(!active||epoch!==analysisVersion?'cancelled':ok?'ready':'failed');
+   if(dayThemeTiming===timing)dayThemeTiming=null;
+   if(active&&resume)void loadAnalytics();
+   release();
+  }
+ }
 
  function keyFor(which=market){return which+':'+period+':'+mode+':'+category}
  async function loadAnalytics(force=false,requestedMarket=market){
@@ -136,12 +157,21 @@ function create(){
   const key=keyFor(market),viewKey=keyFor();if(!force&&analytics.has(key)&&!analytics.get(key)?.partial)return;if(force)SERIES_CACHE.clear();
   analysisBusy=true;analysisError='';analysisKey=key;const version=++analysisVersion;
   const controller=new AbortController();analysisController=controller;
+  const release=root.MYInvestForegroundRead?.()||(()=>{});
+  const timing=root.MYInvestWebPerformance?.dataStart(category==='industry'?'sectors':'themes',market,mode);let outcome='failed';
   const context=Object.create(ctxRef);
   context.data={...ctxRef.data,publicRead:url=>ctxRef.data.publicRead(url,{signal:controller.signal})};
-  draw();
   try{
-   if(market==='KR'&&category==='industry'&&!industryRows.length){await loadIndustries(force);if(!industryRows.length)throw Error('INDUSTRY_UNAVAILABLE')}
-   const n=PERIODS[period],benchmarkSymbol=market==='US'?'SPY':'^KS11',benchmark=await series(context,benchmarkSymbol),base=ret(benchmark.bars,n);
+   draw();
+   const n=PERIODS[period],benchmarkSymbol=market==='US'?'SPY':'^KS11';
+   const benchmarkJob=series(context,benchmarkSymbol);
+   const industryJob=market==='KR'&&category==='industry'&&!industryRows.length?loadIndustries(force):undefined;
+   const codesJob=market==='KR'&&(typeof EXT_MASTER==='undefined'||!EXT_MASTER)&&typeof loadExternalMaster==='function'?loadExternalMaster():undefined;
+   let usUniverseUnavailable=false;
+   const universeJob=market==='US'&&category==='theme'?usUniverse().catch(()=>{usUniverseUnavailable=true;return {themes:[]}}):undefined;
+   const [benchmark]=await Promise.all([benchmarkJob,industryJob,codesJob]);
+   if(market==='KR'&&category==='industry'&&!industryRows.length)throw Error('INDUSTRY_UNAVAILABLE');
+   const base=ret(benchmark.bars,n);
    if(base===null)throw Error('BENCHMARK_HISTORY_MISSING');
    if(!active||version!==analysisVersion||keyFor(market)!==key)return;
    const rows=[],failures=[],themes=[];
@@ -152,14 +182,15 @@ function create(){
      analytics.set(key,{category,benchmarkSeries:benchmark,rows:rows.slice().sort((a,b)=>b.relative-a.relative),
        benchmark:base,benchmarkSymbol,received:Date.now(),period,market,failures:failures.slice(),
        themes:themes.slice().sort((a,b)=>b.relative-a.relative),asof:benchmark.last,strictRotation:null,partial:true});
-     draw();
+     draw();if(rows.length||themes.length)timing?.first();
    }
    publishPartial();
    if(market==='US'){
     // The US theme view must not download eleven sector ETF series hidden
     // behind a collapsed reference. They remain available in industry mode.
-    if(category==='industry')await poolLimited(US_SECTORS,3,async ([symbol,name])=>{try{if(!active||version!==analysisVersion||keyFor(market)!==key)return;const v=await series(context,symbol);const aligned=alignedWindow(v,benchmark,n);if(v.instrumentType!=='ETF'){failures.push({symbol,reason:'ETF_IDENTITY_MISMATCH'});return}if(aligned&&v.currency==='USD')rows.push({symbol,name,...aligned,coverage:'ETF',v});else failures.push({symbol,reason:v.bars.length<=n?'INSUFFICIENT_HISTORY':'DATE_MISMATCH'})}catch{failures.push({symbol,reason:'SERIES_UNAVAILABLE'})}});
-    const universe=category==='theme'?await usUniverse().catch(()=>{failures.push({symbol:'US_THEMES',reason:'UNIVERSE_UNAVAILABLE'});return {themes:[]}}):{themes:[]};
+    if(category==='industry')await poolLimited(US_SECTORS,3,async ([symbol,name])=>{try{if(!active||version!==analysisVersion||keyFor(market)!==key)return;const v=await series(context,symbol);const aligned=alignedWindow(v,benchmark,n);if(v.instrumentType!=='ETF'){failures.push({symbol,reason:'ETF_IDENTITY_MISMATCH'});return}if(aligned&&v.currency==='USD'){rows.push({symbol,name,...aligned,coverage:'ETF',v});if(rows.length===1)publishPartial()}else failures.push({symbol,reason:v.bars.length<=n?'INSUFFICIENT_HISTORY':'DATE_MISMATCH'})}catch{failures.push({symbol,reason:'SERIES_UNAVAILABLE'})}});
+    const universe=universeJob?await universeJob:{themes:[]};
+    if(usUniverseUnavailable)failures.push({symbol:'US_THEMES',reason:'UNIVERSE_UNAVAILABLE'});
     await poolLimited(universe.themes,2,async t=>{
      if(!active||version!==analysisVersion||keyFor(market)!==key)return;const sample=[];
      await poolLimited(t.instruments,2,async stock=>{if(!active||version!==analysisVersion||keyFor(market)!==key)return;try{const v=await series(context,stock.symbol);if(v.instrumentType!=='EQUITY'||v.exchange!==stock.exchange)throw Error('IDENTITY_MISMATCH');const aligned=alignedWindow(v,benchmark,n);if(aligned)sample.push({symbol:stock.symbol,name:stock.name,...aligned,currentPrice:v.currentPrice,currentObservedAt:v.currentObservedAt,returns:Object.fromEntries([1,5,20,60].map(days=>[days,alignedWindow(v,benchmark,days)?.change??null])),relativeByPeriod:Object.fromEntries([1,5,20,60].map(days=>[days,alignedWindow(v,benchmark,days)?.relative??null]))});else failures.push({symbol:stock.symbol,reason:'DATE_MISMATCH'})}catch{failures.push({symbol:stock.symbol,reason:'SERIES_UNAVAILABLE'})}});
@@ -169,7 +200,6 @@ function create(){
       publishPartial();
     });
    }else{
-    if((typeof EXT_MASTER==='undefined'||!EXT_MASTER)&&typeof loadExternalMaster==='function')await loadExternalMaster();
     const themes=(category==='industry'?industryRows:ranking()).slice(0,6);
     await poolLimited(themes,2,async t=>{
      if(!active||version!==analysisVersion||keyFor(market)!==key)return;
@@ -191,10 +221,14 @@ function create(){
     root.MYInvestSectorCacheRotationBridge.evaluate({market,benchmark,rows,
      nowDay:root.MYInvestExchangeSessionProof?.localDay(Date.now(),'America/New_York')}):null;
    analytics.set(key,{category,benchmarkSeries:benchmark,rows:rows.sort((a,b)=>b.relative-a.relative),benchmark:base,benchmarkSymbol,received:Date.now(),period,market,failures,themes:themes.sort((a,b)=>b.relative-a.relative),asof:benchmark.last,strictRotation});
+   outcome=rows.length||themes.length?failures.length?'partial':'ready':'failed';
   }catch(e){if(active&&version===analysisVersion&&keyFor()===key)analysisError='시계열 수신 또는 검증 실패 · 일부 결과가 보이면 최종 순위가 아닙니다.'}
   finally{
    if(analysisController===controller)analysisController=null;
    if(active&&version===analysisVersion){analysisBusy=false;draw();if(keyFor()!==viewKey)void loadAnalytics()}
+   if(outcome!=='failed')timing?.first();
+   timing?.end(!active||version!==analysisVersion?'cancelled':outcome);
+   release();
   }
  }
  function analyticsView(){
@@ -305,7 +339,7 @@ function create(){
  }
  function refreshCurrent(){
   if(loading||industryBusy||analysisBusy)return;
-  void (async()=>{if((market==='KR'||market==='MIX')&&category==='theme')await reload();
+  void (async()=>{if((market==='KR'||market==='MIX')&&category==='theme')await reload({force:true,resume:false});
     if((market==='KR'||market==='MIX')&&category==='industry')await loadIndustries(true);
     analytics.clear();await loadAnalytics(true);
   })();
@@ -391,4 +425,17 @@ function create(){
   },unmount:()=>{active=false;supersedeAnalytics();if(marketTimer!==null){clearTimeout(marketTimer);marketTimer=null}manualMarket=false;analysisVersion++;detailVersion++;analysisBusy=false;root.removeEventListener?.('myinvest:theme-preview',previewReady);unsubscribe?.();unsubscribe=null;ctxRef=null;view?.remove();legacy.unmount();legacyHolder?.remove();legacyHolder=null},getStatus:()=>({status:active?'ready':'unmounted',market,period,mode,category})};
 }
 DashboardPages.register('sectors',create);
+root.MYInvestSectorWarm=Object.freeze({
+ benchmark(ctx,market,signal){
+  if(signal?.aborted||!['KR','US'].includes(market))return Promise.reject(Error('READ_CANCELLED'));
+  const scope={signal,data:{publicRead:url=>ctx.data.publicRead(url,{signal})}};
+  return series(scope,market==='KR'?'^KS11':'SPY');
+ },
+ inputs(ctx,market,signal){
+  if(signal?.aborted)throw Error('READ_CANCELLED');
+  if(market==='US')return usUniverse();
+  if(market==='KR'&&root.MYINVEST_TRANSPORT_CONFIG?.publicIndustries===true)return root.IndustryData.read(ctx,null,false,{signal});
+ },
+ clear(){SERIES_CACHE.clear()}
+});
 })(window);

@@ -137,10 +137,13 @@
         const progress=document.getElementById('accountFetchProgress');
         if(progress)progress.textContent=ctx.accountReads()?'NH·외부계좌 실제 읽기 조회 중 · 보이는 이전 자료는 최신 여부를 확인하세요.':'현재 연결은 계좌 조회가 허용되지 않았습니다.';
         if(!ctx.accountReads())return;
+        const timing=root.MYInvestWebPerformance?.dataStart('accounts','ANY','general');
         try{
-          await ctx.accounts(force);
+          await ctx.accounts(force,()=>timing?.first());
+          timing?.end('ready');
           if(progress)progress.textContent='계좌 조회 요청 완료 · 실제 수신/누락 및 평가금액은 각 계좌의 확인 상태를 따르세요.';
         }catch(error){
+          timing?.end('failed');
           if(progress)progress.textContent='계좌 조회 실패 또는 일부 누락 · 연결 진단을 확인하세요. 이전 자료는 최신으로 간주하지 마세요.';
           throw error;
         }
