@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {createHash,webcrypto}=require('node:crypto');
-globalThis.crypto=webcrypto;
+if(!globalThis.crypto?.subtle)Object.defineProperty(globalThis,'crypto',{value:webcrypto,configurable:true});
 const api=require('../js/private-original-briefing.js');
 const text='# 2026-11-26 원문\n<Cite refs={["raw"]}/>\n**원문 표기**\n';
 const date='2026-11-26',hash=createHash('sha256').update(text).digest('hex');
