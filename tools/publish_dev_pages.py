@@ -26,7 +26,9 @@ RETRY_PREVIEW_BRANCH = 'fix/relay-retry-isolation-preview-20261126'
 RETRY_PREVIEW_PR = 13
 UI_PREVIEW_BRANCH = 'feat/mobile-sector-news-calendar-ui-20261126'
 UI_PREVIEW_PR = 14
-APPROVED_SOURCE_BRANCHES = (SOURCE_BRANCH,PREVIEW_BRANCH,NEXT_PREVIEW_BRANCH,TIMING_PREVIEW_BRANCH,RETRY_PREVIEW_BRANCH,UI_PREVIEW_BRANCH)
+FOREGROUND_PREVIEW_BRANCH = 'fix/foreground-relay-lease-20261126'
+FOREGROUND_PREVIEW_PR = 15
+APPROVED_SOURCE_BRANCHES = (SOURCE_BRANCH,PREVIEW_BRANCH,NEXT_PREVIEW_BRANCH,TIMING_PREVIEW_BRANCH,RETRY_PREVIEW_BRANCH,UI_PREVIEW_BRANCH,FOREGROUND_PREVIEW_BRANCH)
 
 
 class Stop(Exception):pass
@@ -101,6 +103,7 @@ def require_reviewed_preview(source_sha, source_branch):
         TIMING_PREVIEW_BRANCH:(TIMING_PREVIEW_PR,NEXT_PREVIEW_BRANCH),
         RETRY_PREVIEW_BRANCH:(RETRY_PREVIEW_PR,TIMING_PREVIEW_BRANCH),
         UI_PREVIEW_BRANCH:(UI_PREVIEW_PR,RETRY_PREVIEW_BRANCH),
+        FOREGROUND_PREVIEW_BRANCH:(FOREGROUND_PREVIEW_PR,UI_PREVIEW_BRANCH),
     }
     if source_branch not in reviewed:raise Stop('DEV_SOURCE_BRANCH_NOT_APPROVED')
     pr_id,expected_base = reviewed[source_branch]
@@ -123,7 +126,7 @@ def build_with_preserved_calendar(artifact, checkout, source_branch=SOURCE_BRANC
     """
     if source_branch == SOURCE_BRANCH:
         return build(artifact, public_data=checkout / 'data')
-    if source_branch in (PREVIEW_BRANCH,NEXT_PREVIEW_BRANCH,TIMING_PREVIEW_BRANCH,RETRY_PREVIEW_BRANCH,UI_PREVIEW_BRANCH):
+    if source_branch in (PREVIEW_BRANCH,NEXT_PREVIEW_BRANCH,TIMING_PREVIEW_BRANCH,RETRY_PREVIEW_BRANCH,UI_PREVIEW_BRANCH,FOREGROUND_PREVIEW_BRANCH):
         return build(artifact, public_data=checkout / 'data', source_branch=source_branch)
     raise Stop('DEV_SOURCE_BRANCH_NOT_APPROVED')
 
