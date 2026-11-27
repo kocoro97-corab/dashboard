@@ -110,3 +110,15 @@ owner 최초 실제 실행은 Worker 업로드에서 HTTP 400으로 중단됐고
 키 생성 전 이 실제 패키지를 외부 fetch가 차단된 Node에서 import·실행 검증한다.
 컴파일 실패 시 키 생성·업로드는 0건이다. 서버 오류 시 원문 오류 메시지나 비밀값 대신
 requestStage·숫자 providerCodes·고정 범주의 providerHints만 반환한다.
+
+### 업로드 후 저장소/로그 확인 중단 상태
+
+두 번째 owner 실행에서는 전용 Worker 업로드까지 성공했지만
+`PRIVATE_STORAGE_OR_NO_LOGGING_UNCONFIRMED`로 중단됐고 새 키는 회수됐다.
+이 결과만으로 저장소 바인딩 오류인지 관측 설정의 조회 위치 차이인지 확정하지 않는다.
+`tools/inspect_private_news_worker.py`로 전용 Worker의 `/settings`,
+`/script-settings`, 활성 버전 바인딩과 실제 업로드 코드만 GET으로 비교한다.
+부재 값을 비활성화로 간주하지 않는다. 출력은 boolean/고정 상태/버전 ID만 포함하며
+비밀값·namespace ID·원문·코드 본문은 출력하지 않는다.
+이 점검은 Google 인증·키 생성·GAS·주 Worker·설정 쓰기를 수행하지 않는다.
+현재 전용 Worker가 존재하므로 최초 설치 명령을 반복 실행하거나 Worker를 삭제하지 않는다.
