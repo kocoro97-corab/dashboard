@@ -1,9 +1,9 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
-const load=import('../relay/worker/worker.mjs');
+const load=import('../relay/worker/worker.mjs'),privateLoad=import('../relay/private-original/worker-dev.mjs');
 const token='a'.repeat(64),origin='https://kocoro97-corab.github.io',host='myinvest-v2-dev-relay.synthetic.workers.dev';
 const expected={freshTestEnvironment:true,testEnvironment:'nh-staging',scriptHash:'a'.repeat(64),sheetHash:'b'.repeat(64),sourceDigest:'c'.repeat(64),gatewayVersion:2,storeEngine:'account-store-v2'};
 function gate(){const saved=new Map();const storage={async get(k){return structuredClone(saved.get(k))},async put(k,v){saved.set(k,structuredClone(v))},transaction(fn){return fn(this)}};return {saved,storage}}
-async function fixture(extra={}){const api=await load,state=gate(),actor=new api.RelayGate({storage:state.storage}),binding={idFromName:()=>1,get:()=>({fetch:(url,init)=>actor.fetch(new Request(url,init))})};const env={MYINVEST_ENABLED:'true',MYINVEST_GAS_URL:'https://script.google.com/macros/s/SYNTHETIC_ISOLATED/exec',MYINVEST_PUBLIC_HOST:host,MYINVEST_EXPECTED_METADATA:JSON.stringify(expected),MYINVEST_PUBLIC_MARKET:'true',MYINVEST_ACCOUNT_READS:'true',MYINVEST_EXTERNAL_STORE:'true',GATE:binding,...extra};const calls=[],gateway={verify:async()=>({...expected,success:true}),post:async body=>{calls.push(body);return {success:true}},public:async(url,t)=>{calls.push({url,token:t});return 'SYNTHETIC_PUBLIC'}};return {api,env,state,actor,gateway,calls,handler:api.createHandler({gatewayFactory:()=>gateway})}}
+async function fixture(extra={},isolatedPrivate=false){const api=await (isolatedPrivate?privateLoad:load),state=gate(),actor=new api.RelayGate({storage:state.storage}),binding={idFromName:()=>1,get:()=>({fetch:(url,init)=>actor.fetch(new Request(url,init))})};const env={MYINVEST_ENABLED:'true',MYINVEST_GAS_URL:'https://script.google.com/macros/s/SYNTHETIC_ISOLATED/exec',MYINVEST_PUBLIC_HOST:host,MYINVEST_EXPECTED_METADATA:JSON.stringify(expected),MYINVEST_PUBLIC_MARKET:'true',MYINVEST_ACCOUNT_READS:'true',MYINVEST_EXTERNAL_STORE:'true',GATE:binding,...extra};const calls=[],gateway={verify:async()=>({...expected,success:true}),post:async body=>{calls.push(body);return {success:true}},public:async(url,t)=>{calls.push({url,token:t});return 'SYNTHETIC_PUBLIC'}};return {api,env,state,actor,gateway,calls,handler:api.createHandler({gatewayFactory:()=>gateway})}}
 function req(body={action:'appVersion'},headers={},url='https://'+host+'/api',method='POST'){return new Request(url,{method,headers:{Origin:origin,'Content-Type':'application/json','X-MyInvest-Dev-Client':'dashboard-v2-dev','CF-Connecting-IP':'192.0.2.1',...headers},body:method==='POST'?JSON.stringify(body):undefined})}
 test('persistent config cannot enable production, lack isolation or operate without rate state',async()=>{const f=await fixture();for(const change of [{MYINVEST_ENABLED:'false'},{GATE:null},{MYINVEST_EXPECTED_METADATA:JSON.stringify({...expected,freshTestEnvironment:false})},{MYINVEST_GAS_URL:'https://evil.example/exec'},{MYINVEST_PUBLIC_HOST:'localhost'},{MYINVEST_EXTERNAL_STORE:'yes'}])assert.throws(()=>f.api.configuration({...f.env,...change}));});
 test('HTTPS, route, exact origin, request method and client intent are enforced without upstream',async()=>{const f=await fixture();for(const r of [req({}, {},'http://'+host+'/api'),req({}, {Origin:'https://evil.example'}),req({}, {},'https://'+host+'/api?token=PRIVATE'),req({}, {'X-MyInvest-Dev-Client':''}),req({}, {},'https://'+host+'/other'),req({}, {},'https://'+host+'/api','GET')])assert.notEqual((await f.handler(r,f.env)).status,200);assert.equal(f.calls.length,0)});
@@ -43,4 +43,29 @@ test('public deadline bounds an already-pending shared metadata proof and releas
  const handler=f.api.createHandler({readDeadline:()=>AbortSignal.timeout(10),gatewayFactory:()=>({verify:()=>new Promise(r=>late=r),public:async()=>{publicCalls++;return 'public'}})});
  const keepAlive=setTimeout(()=>{},100);const r=await handler(req({action:'publicFetch',url:'https://query1.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=1y'},{Authorization:'Bearer '+token}),f.env);clearTimeout(keepAlive);
  assert.equal(r.status,502);assert.equal(Object.keys(f.state.saved.get('quota').leases).length,0);late({...expected,success:true});await new Promise(r=>setImmediate(r));assert.equal(publicCalls,0);
+});
+
+test('verbatim task archive is denied by default, requires explicit dev flag, bearer and test GAS capability',async()=>{
+ const args={action:'privateMorningBriefing',mode:'latest'};
+ const bearer={Authorization:'Bearer '+token};
+ let f=await fixture();
+ assert.equal((await f.handler(req(args,bearer),f.env)).status,403);
+ assert.equal(f.calls.length,0);
+ f=await fixture({MYINVEST_PRIVATE_BRIEFINGS:'true'},true);
+ assert.equal((await f.handler(req(args),f.env)).status,401);
+ assert.equal((await f.handler(req({...args,token},bearer),f.env)).status,400);
+ assert.equal((await f.handler(req({...args,folderId:'SHOULD_NOT_PASS'},bearer),f.env)).status,400);
+ assert.equal((await f.handler(req({...args,mode:'date',date:'../../secret'},bearer),f.env)).status,400);
+ assert.equal((await f.handler(req(args,bearer),f.env)).status,503,'deny when test GAS does not prove capability');
+ assert.equal(f.calls.length,0);
+ f.gateway.verify=async()=>({...expected,success:true,features:['privateMorningBriefing']});
+ f.gateway.post=async body=>{f.calls.push(body);return {success:true,private:true,cacheable:false,schemaVersion:1,dates:['2026-11-26'],
+  report:{date:'2026-11-26',content:'<Cite />',contentSha256:'a'.repeat(64),format:'verbatim-text',origin:'scheduled-task-archive-unverified',savedAt:1795600000000}}};
+ const response=await f.handler(req(args,bearer),f.env);
+ assert.equal(response.status,200);
+ assert.equal((await response.json()).report.content,'<Cite />');
+ assert.equal(f.calls.length,1);
+ assert.equal(f.calls[0].token,token,'only verified relay inserts token into GAS request');
+ assert.equal(f.calls[0].mode,'latest');
+ assert.equal(response.headers.get('Cache-Control'),'no-store');
 });

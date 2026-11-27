@@ -15,6 +15,7 @@ print('PASS: synthetic native snapshot UI adapter, desktop 1440 and mobile 344, 
 # Only tests replace the approved transport. The owner helper never replaces GAS responses.
 import json
 from unittest.mock import patch
+from urllib.parse import urlsplit
 from playwright.sync_api import Route, Page
 from nh_v2_browser_check import native_browser_check
 from test_nh_v2_final import TARGET
@@ -28,7 +29,11 @@ def synthetic_transport(route,*args,**kwargs):
     # This fixture isolates the original native adapter, not routed app startup.
     if "/js/app-shell.js" in route.request.url:
         route.fulfill(content_type="application/javascript",body="");return
-    if route.request.url!=TARGET:return real_continue(route,*args,**kwargs)
+    if route.request.url!=TARGET:
+        # Only loopback frontend assets may use the real transport. All external
+        # requests abort, including any accidental real GAS/NH URL.
+        if urlsplit(route.request.url).hostname in ('127.0.0.1','localhost'):return real_continue(route,*args,**kwargs)
+        return route.abort()
     body=json.loads(kwargs.get('post_data') or route.request.post_data or '{}');action=body.get('action')
     assert body.get('stagingBinding')=='f'*64
     if action=='nhAccounts':data={'success':True,'accounts':fixture.accounts,'gatewayVersion':2} if body.get('token') else {'success':False,'code':'AUTH_REQUIRED'}
@@ -40,7 +45,14 @@ def synthetic_transport(route,*args,**kwargs):
     route.fulfill(content_type='application/json',body=json.dumps(data),headers={'Access-Control-Allow-Origin':'*'})
 
 def synthetic_expiry(page,expression,*args,**kwargs):
-    if "!LS('invest_session_token')" in expression:
+    # The already published implementation no longer starts hidden account reads
+    # in a shell-less fixture. Exercise its visible button, not a production helper.
+    if expression in ("()=>!NH_ACCOUNT_BUSY&&NH_ACCOUNT_SESSION===LS('invest_session_token')", "()=>$('appContainer').style.display==='block'&&!NH_ACCOUNT_BUSY&&NH_ACCOUNT_SESSION===LS('invest_session_token')"):
+        real_wait(page,"()=>$('appContainer').style.display==='block'&&!!LS('invest_session_token')",timeout=15000)
+        if page.evaluate("()=>NH_ACCOUNT_SESSION!==LS('invest_session_token')"):
+            page.locator('#nhAccountBtn').click()
+    # Accelerate only the exact inactivity wait, never login or reload.
+    if expression == "()=>!LS('invest_session_token')&&$('authGuard').style.display==='flex'":
         page.evaluate("()=>{localStorage.setItem('invest_last_active',String(Date.now()-SESSION_MS-1));renderSession()}")
     kwargs['timeout']=15000
     return real_wait(page,expression,*args,**kwargs)

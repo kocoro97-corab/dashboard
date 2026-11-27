@@ -14,7 +14,7 @@ async def main():
    b=await pw.chromium.launch(headless=True)
    try:
     for width in [1440,344]:
-     h=await Harness(b,artifact,feeds,width).start_browser(tmp)
+     h=await Harness(b,artifact,feeds,width,private_reads=True).start_browser(tmp)
      try:
       await h.login('stocks');await h.page.wait_for_function('()=>InstrumentNames.lookup("AAPL")?.nameKo==="애플"')
       await h.page.locator('#stockSearch').fill('애플');await h.page.get_by_role('button',name='종목 분석',exact=True).click();await h.page.wait_for_function('()=>document.querySelector(".sva")?.textContent.includes("분석 완료")');assert await h.page.locator('#stockSearch').input_value()=='AAPL';assert '애플' in await h.page.locator('.sva h3').filter(has=h.page.locator('[data-instrument-symbol="AAPL"]')).inner_text();assert 'Apple Inc.' in await h.page.locator('.sva').inner_text()

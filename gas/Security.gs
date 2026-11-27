@@ -158,15 +158,30 @@ function doPost(e) {
     if(!body||Array.isArray(body)||typeof body!=='object')return jsonResponse({success:false,message:'잘못된 요청입니다.'});
     if(typeof securityEnvironmentGuard_==='function')securityEnvironmentGuard_(body);
     const action=body.action;
-    if(action==='appVersion')return jsonResponse(Object.assign({success:true,version:'v11-nh-v2',foreignIdentityVersion:typeof createNhForeignReferenceV2_==='function'?1:0,gatewayVersion:2,storeEngine:'account-store-v2',externalAccountCatalogVersion:1,securityVersion:1,features:['nhAccounts','externalHoldings','nhExternalQuotes','changePassword'],readOnly:true},typeof securityEnvironmentMetadata_==='function'?securityEnvironmentMetadata_():{}));
+    if(action==='appVersion')return jsonResponse(Object.assign({success:true,version:'v11-nh-v2',foreignIdentityVersion:typeof createNhForeignReferenceV2_==='function'?1:0,gatewayVersion:2,storeEngine:'account-store-v2',externalAccountCatalogVersion:1,securityVersion:1,features:['nhAccounts','externalHoldings','nhExternalQuotes','changePassword','privateMorningBriefing'],readOnly:true},typeof securityEnvironmentMetadata_==='function'?securityEnvironmentMetadata_():{}));
     if(action==='login')return securityLogin_(body.user,body.pass);
     if(action==='register')return securityRegister_(body.user,body.pass);
     if(action==='logout'){deleteSession_(body.token);return jsonResponse({success:true})}
     if(action==='changePassword')return securityChangePassword_(body.token,body.currentPass,body.newPass);
     const session=securitySession_(body.token);
     if(!session)return jsonResponse({success:false,message:'로그인이 필요합니다. 다시 로그인하세요.'});
-    if(action==='sessionInfo')return jsonResponse(Object.assign({success:true,isAdmin:verifyAdmin(body.token),mustChangePassword:!!session.p},typeof securityEnvironmentSessionMetadata_==='function'?securityEnvironmentSessionMetadata_(session):{}));
+    if(action==='sessionInfo'){
+      const admin=verifyAdmin(body.token);
+      const data=Object.assign({success:true,isAdmin:admin,mustChangePassword:!!session.p},typeof securityEnvironmentSessionMetadata_==='function'?securityEnvironmentSessionMetadata_(session):{});
+      const briefingOwner=PropertiesService.getScriptProperties().getProperty('MYINVEST_PRIVATE_BRIEFING_OWNER_USER');
+      data.canReadPrivateBriefing=!!(admin&&!session.p&&briefingOwner&&session.u===briefingOwner);
+      return jsonResponse(data);
+    }
     if(session.p)return jsonResponse({success:false,message:'12자 이상 비밀번호로 변경한 후 이용하세요.',mustChangePassword:true});
+    if(action==='privateMorningBriefing'){
+      const keys=Object.keys(body).sort().join(',');
+      if(!['action,mode,token','action,date,mode,token','action,token'].includes(keys))
+        return jsonResponse({success:false,code:'PRIVATE_BRIEFING_BAD_REQUEST'});
+      const briefingOwner=PropertiesService.getScriptProperties().getProperty('MYINVEST_PRIVATE_BRIEFING_OWNER_USER');
+      if(!briefingOwner||session.u!==briefingOwner||!verifyAdmin(body.token))
+        return jsonResponse({success:false,code:'PRIVATE_BRIEFING_FORBIDDEN'});
+      return jsonResponse(privateMorningBriefingRead_(body));
+    }
     if(['nhSnapshotRead','nhSnapshotCapture','nhSnapshotRestore'].includes(action))return handleNhSnapshotV2_(body.token,action,body);
     if(action==='nhStockQuotes')return handleNhStockQuotesV2(body.token,body.items);
     if(action==='externalAccounts')return handleExternalAccountCatalog_(body.token);

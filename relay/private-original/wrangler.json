@@ -1,0 +1,28 @@
+{
+  "name": "myinvest-v2-private-original-preview",
+  "main": "worker-dev.mjs",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "observability": {
+    "enabled": false
+  },
+  "vars": {
+    "MYINVEST_PRIVATE_BRIEFINGS": "false"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GATE",
+        "class_name": "RelayGate"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "RelayGate"
+      ]
+    }
+  ]
+}

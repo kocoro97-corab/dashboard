@@ -11,7 +11,12 @@
     td.colSpan=columns;td.textContent=value;tr.appendChild(td);el.replaceChildren(tr);
   }
   function disableControls(selector,reason){
-    document.querySelectorAll(selector).forEach(el=>{if(!el.closest('[data-shell-control]')){el.disabled=true;el.title=reason}});
+    document.querySelectorAll(selector).forEach(el=>{
+      // Header layout may move logout out of sessionTimerBox. Revocation must
+      // remain usable independently of data-query/store controls.
+      if(el.getAttribute('onclick')==='logout()'){el.disabled=false;el.removeAttribute('title');return}
+      if(!el.closest('[data-shell-control]')){el.disabled=true;el.title=reason}
+    });
   }
   function manualPreview(){
     if(!manualBound){

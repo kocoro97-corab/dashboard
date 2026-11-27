@@ -109,3 +109,29 @@ test('optional staging hooks leave default production metadata intact and can fa
   b.ctx.securityEnvironmentGuard_=()=>{throw Error('staging binding failed')};
   assert.equal(b.post({action:'login',user:'owner',pass:'old-pass'}).success,false);assert.equal(b.rows[1][1],'old-pass');
 });
+
+test('private task archive is served only to the configured owner, not members or other admins',()=>{
+ const b=fastBackend();let calls=0;
+ b.props.set('MYINVEST_PRIVATE_BRIEFING_OWNER_USER','owner');
+ b.ctx.privateMorningBriefingRead_=body=>{calls++;return {success:true,schemaVersion:1,report:{date:'2026-11-26',content:'synthetic original'}}};
+ assert.equal(b.post({action:'privateMorningBriefing',mode:'latest'}).success,false);
+ const member=b.ctx.securityCreateSession_('member',false);
+ assert.equal(b.post({action:'privateMorningBriefing',mode:'latest',token:member}).code,'PRIVATE_BRIEFING_FORBIDDEN');
+ b.rows.push(['other-admin','synthetic-password','approved','true']);
+ const otherAdmin=b.ctx.securityCreateSession_('other-admin',false);
+ assert.equal(b.post({action:'sessionInfo',token:otherAdmin}).canReadPrivateBriefing,false);
+ assert.equal(b.post({action:'privateMorningBriefing',mode:'latest',token:otherAdmin}).code,'PRIVATE_BRIEFING_FORBIDDEN');
+ assert.equal(calls,0);
+ const owner=b.ctx.securityCreateSession_('owner',false);
+ assert.equal(b.post({action:'sessionInfo',token:owner}).canReadPrivateBriefing,true);
+ const result=b.post({action:'privateMorningBriefing',mode:'latest',token:owner});
+ assert.equal(result.success,true);
+ assert.equal(result.report.content,'synthetic original');
+ assert.equal(calls,1);
+ assert.equal(b.post({action:'privateMorningBriefing',mode:'latest',token:owner,redirectUrl:'https://evil.test'}).code,'PRIVATE_BRIEFING_BAD_REQUEST');
+ assert.equal(calls,1);
+ b.props.delete('MYINVEST_PRIVATE_BRIEFING_OWNER_USER');
+ assert.equal(b.post({action:'sessionInfo',token:owner}).canReadPrivateBriefing,false);
+ assert.equal(b.post({action:'privateMorningBriefing',mode:'latest',token:owner}).code,'PRIVATE_BRIEFING_FORBIDDEN');
+ assert.equal(calls,1);
+});

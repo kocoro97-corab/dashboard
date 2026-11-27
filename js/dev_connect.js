@@ -78,6 +78,24 @@
       config.externalTestStore=config.accountReads&&data.developmentExternalTestStore===true;
       config.externalStore=config.accountReads&&data.developmentExternalStore===true;
       config.googleCalendarReadOnly=fixed&&data.developmentGoogleCalendarReadOnly===true;
+      // A separate fixed reader reuses the same isolated GAS login authority.
+      // No credential is replayed on a fallback route, and primary capabilities stay intact.
+      config.privateBriefings=false;
+      if(window.MYINVEST_PRIVATE_BRIEFING_RELAY){
+        const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
+        try{
+          const privateResponse=await DashboardTransport.post({action:'appVersion'},{privateBriefingProbe:true,signal:controller.signal});
+          const reader=await privateResponse.json();
+          config.privateBriefings=privateResponse.ok&&reader.success===true&&reader.relayProfile==='persistent'&&
+            reader.developmentPrivateBriefings===true&&reader.developmentPrivateBriefingAuthority==='gas-login-owner-v1'&&
+            /^[a-f0-9]{32}$/.test(reader.developmentPrivateBriefingRevision||'')&&
+            Array.isArray(reader.privateBriefingRelayFeatures)&&reader.privateBriefingRelayFeatures.includes('privateMorningBriefing')&&
+            reader.freshTestEnvironment===true&&reader.testEnvironment==='nh-staging'&&reader.gatewayVersion===2&&reader.storeEngine==='account-store-v2'&&
+            ['scriptHash','sheetHash','sourceDigest'].every(key=>/^[a-f0-9]{64}$/i.test(data[key]||'')&&reader[key]===data[key]);
+        }catch{}finally{clearTimeout(timer)}
+      }
+      // Mounted News views may have tried before the isolated server was verified.
+      window.dispatchEvent(new Event('myinvest-private-briefing-capability'));
       config.externalAccountCatalogVersion=data.externalAccountCatalogVersion===1?1:0;
       stage='storage';
       sessionStorage.setItem(KEY,JSON.stringify(fixed?{endpoint,kind:'persistent'}:{endpoint,code}));
@@ -106,3 +124,4 @@
   // Defer until transport.js exists, and preserve session reload in this tab.
   if(config.endpoint||fixed)window.addEventListener('DOMContentLoaded',()=>connect(),{once:true});
 })();
+

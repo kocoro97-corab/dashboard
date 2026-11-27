@@ -390,15 +390,27 @@ function mergeNhAccountResultsV2(previous,incoming){
     return result;
   });
 }
-async function loadNHAccounts(){
-  if(NH_ACCOUNT_BUSY)return;NH_ACCOUNT_BUSY=true;const run=++NH_ACCOUNT_RUN;
+let NH_ACCOUNT_PENDING=null,NH_ACCOUNT_CACHE_READY=false;
+function hasRecentNHAccountRead(token){
+ return !!token&&NH_ACCOUNT_CACHE_READY&&NH_ACCOUNT_SESSION===token&&NH_ACCOUNT_FETCHED_AT>0&&Date.now()-NH_ACCOUNT_FETCHED_AT<60000;
+}
+function loadNHAccounts({force=true,sessionRead=false}={}){
+ const token=LS('invest_session_token');
+ if(!token)return Promise.resolve(false);
+ if(NH_ACCOUNT_PENDING?.token===token)return NH_ACCOUNT_PENDING.job;
+ if(!force&&sessionRead&&hasRecentNHAccountRead(token))return Promise.resolve(true);
+ const job=fetchNHAccounts({sessionRead}).finally(()=>{if(NH_ACCOUNT_PENDING?.job===job)NH_ACCOUNT_PENDING=null});
+ NH_ACCOUNT_PENDING={token,job};return job;
+}
+async function fetchNHAccounts({sessionRead=false}={}){
+  if(NH_ACCOUNT_BUSY)return false;NH_ACCOUNT_CACHE_READY=false;NH_ACCOUNT_BUSY=true;const run=++NH_ACCOUNT_RUN;
   const btn=$('nhAccountBtn'),st=$('nhAccountStatus');
   if(btn){btn.disabled=true;btn.textContent='조회 중...'}
   if(st)st.textContent='NH 일반계좌 및 국내·해외 잔고 조회 중...';
   try{
     const tk=LS('invest_session_token');
     if(!tk)throw new Error('로그인이 필요합니다.');
-    const res=await post({action:'nhAccounts',token:tk});
+    const res=await post({action:'nhAccounts',token:tk},sessionRead?{sessionAccountRead:true}:undefined);
     const data=JSON.parse(await res.text());
     if(run!==NH_ACCOUNT_RUN||tk!==LS('invest_session_token'))return;
     if(!data.success){
@@ -409,10 +421,12 @@ async function loadNHAccounts(){
     NH_ACCOUNT_FETCHED_AT=Date.now();
     NH_ACCOUNT_SESSION=tk;
     renderNHAccounts();
-    if(typeof extSyncWithNH==='function')extSyncWithNH();
+    if(typeof extSyncWithNH==='function')extSyncWithNH({refreshPrices:!sessionRead});
     const count=NH_ACCOUNTS.length;
     if(st)st.textContent='조회 '+(NH_ACCOUNT_UPDATED||hms(new Date()))+' · 일반계좌 '+count+'개 · 모의계좌 제외'+(NH_ACCOUNTS.some(a=>['domestic','overseas'].some(k=>a[k]&&(a[k].stale||a[k].partial)))?' · 일부 이전 조회값 유지':'')+(data.gatewayVersion===2?' · ISA·연금저축·IRP: OCR·수동 관리(직접조회 미검증)':'');
-  }catch(e){if(run!==NH_ACCOUNT_RUN)return;if(st)st.textContent='조회 실패(기존 조회값 유지) · '+SafeDiagnostics.message(e,'FRONTEND_NETWORK');if(typeof renderExternalAssets==='function')renderExternalAssets()}
+    NH_ACCOUNT_CACHE_READY=!data.partial&&data.accounts.every(a=>!(Array.isArray(a.errors)&&a.errors.length)&&['domestic','overseas'].every(k=>!a[k]?.partial&&!a[k]?.stale));
+    return sessionRead?NH_ACCOUNT_CACHE_READY:true;
+  }catch(e){if(run!==NH_ACCOUNT_RUN)return false;if(['SESSION_CHANGED','READ_CANCELLED'].includes(e?.code))return false;if(st)st.textContent='조회 실패(기존 조회값 유지) · '+SafeDiagnostics.message(e,'FRONTEND_NETWORK');if(typeof renderExternalAssets==='function')renderExternalAssets();return false}
   finally{if(run===NH_ACCOUNT_RUN){NH_ACCOUNT_BUSY=false;if(btn){btn.disabled=false;btn.textContent='↻ 계좌 잔고 조회'}}}
 }
 let NH_ACCOUNT_UPDATED='';
@@ -439,4 +453,3 @@ function renderNHAccounts(){
 }
 
 function clock(){const n=new Date(),p=v=>String(v).padStart(2,'0');$('clock').textContent=`${n.getMonth()+1}.${n.getDate()} ${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())} KST`}
-

@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory() as tmp,sync_playwright() as pw:
  try:
   for width in args.widths:
    for area in (['market','sectors'] if args.area=='both' else [args.area]):
-    bridge=subprocess.Popen(['node','tests/worker_browser_bridge.mjs'],cwd=ROOT,env=dict(os.environ,MYINVEST_TEST_PUBLIC_FIXTURE=str(fixture)),stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True);port=json.loads(bridge.stdout.readline())['port'];ctx=browser.new_context(viewport={'width':width,'height':1000},timezone_id='Asia/Seoul',service_workers='block');page=ctx.new_page();errors=[];requests=[]
+    bridge=subprocess.Popen(['node','tests/worker_browser_bridge.mjs'],cwd=ROOT,env=dict(os.environ,MYINVEST_TEST_PUBLIC_FIXTURE=str(fixture),MYINVEST_TEST_PUBLIC_ONLY='1'),stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True);port=json.loads(bridge.stdout.readline())['port'];ctx=browser.new_context(viewport={'width':width,'height':1000},timezone_id='Asia/Seoul',service_workers='block');page=ctx.new_page();errors=[];requests=[]
     def route(r):
      if fulfill_reference_widget(r):return
      u=urlsplit(r.request.url)
