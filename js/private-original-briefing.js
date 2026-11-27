@@ -56,7 +56,9 @@ function mount(host){
    for(const day of records){const opt=node('option',day);opt.value=day;choose.append(opt)}
    choose.value=selected;
    if(current){
-     status.textContent='비공개 Drive 저장 원문 · 읽기 전용 · 앱 화면에서 재작성하지 않음';
+     const todayKst=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul'}).format(new Date());
+     const label=current.date===todayKst?'오늘 원문':('지난 보관 원문 ('+current.date+')');
+     status.textContent=label+' · 비공개 Drive · 읽기 전용 · 앱에서 재작성하지 않음';
      metadata.textContent=current.date+' · 저장시각 '+new Date(current.savedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+
        ' KST · 원문 SHA-256 대조 완료 · 작성 주체의 진위는 별도 검증 전';
      content.textContent=current.content;
@@ -83,7 +85,7 @@ function mount(host){
      if(closed||activeId!==sequence||beforeToken!==(typeof LS==='function'?LS('invest_session_token'):null))return null;
      if(!response.ok||obj?.success!==true){failureCode=obj?.code||'PRIVATE_BRIEFING_UNAVAILABLE';show();return {ok:false,code:failureCode}}
      const checked=validate(obj);
-     if(!checked){failureCode='PRIVATE_BRIEFING_INVALID_RESPONSE';show();return {ok:false,code:failureCode}}
+     if(!checked||(date&&checked.report&&checked.report.date!==date)){failureCode='PRIVATE_BRIEFING_INVALID_RESPONSE';show();return {ok:false,code:failureCode}}
      records=checked.dates;
      if(checked.report&&!await verifyText(checked.report.content,checked.report.sha256)){
        failureCode='PRIVATE_BRIEFING_INTEGRITY_FAILED';show();return {ok:false,code:failureCode}

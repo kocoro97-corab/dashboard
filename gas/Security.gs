@@ -165,13 +165,20 @@ function doPost(e) {
     if(action==='changePassword')return securityChangePassword_(body.token,body.currentPass,body.newPass);
     const session=securitySession_(body.token);
     if(!session)return jsonResponse({success:false,message:'로그인이 필요합니다. 다시 로그인하세요.'});
-    if(action==='sessionInfo')return jsonResponse(Object.assign({success:true,isAdmin:verifyAdmin(body.token),mustChangePassword:!!session.p},typeof securityEnvironmentSessionMetadata_==='function'?securityEnvironmentSessionMetadata_(session):{}));
+    if(action==='sessionInfo'){
+      const admin=verifyAdmin(body.token);
+      const data=Object.assign({success:true,isAdmin:admin,mustChangePassword:!!session.p},typeof securityEnvironmentSessionMetadata_==='function'?securityEnvironmentSessionMetadata_(session):{});
+      const briefingOwner=PropertiesService.getScriptProperties().getProperty('MYINVEST_PRIVATE_BRIEFING_OWNER_USER');
+      data.canReadPrivateBriefing=!!(admin&&!session.p&&briefingOwner&&session.u===briefingOwner);
+      return jsonResponse(data);
+    }
     if(session.p)return jsonResponse({success:false,message:'12자 이상 비밀번호로 변경한 후 이용하세요.',mustChangePassword:true});
     if(action==='privateMorningBriefing'){
       const keys=Object.keys(body).sort().join(',');
       if(!['action,mode,token','action,date,mode,token','action,token'].includes(keys))
         return jsonResponse({success:false,code:'PRIVATE_BRIEFING_BAD_REQUEST'});
-      if(!verifyAdmin(body.token))
+      const briefingOwner=PropertiesService.getScriptProperties().getProperty('MYINVEST_PRIVATE_BRIEFING_OWNER_USER');
+      if(!briefingOwner||session.u!==briefingOwner||!verifyAdmin(body.token))
         return jsonResponse({success:false,code:'PRIVATE_BRIEFING_FORBIDDEN'});
       return jsonResponse(privateMorningBriefingRead_(body));
     }

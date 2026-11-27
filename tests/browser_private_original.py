@@ -84,6 +84,23 @@ async def main():
       assert not any(r['action']=='privateMorningBriefing' for r in h.requests),'disabled news view may not read private data through a real relay'
       print(json.dumps({'width':width,'privateOriginalSynthetic':'PASS','SHA256':'PASS','noPublicFallback':'PASS','noExecution':'PASS','clearedAfterUnmount':'PASS'}))
      finally:await h.close()
+    # News already mounted with the capability disabled, then the handshake
+    # finishes. It must fetch without a reload or an admin pressing a button.
+    h=await PrivateHarness(browser,artifact,synthetic_feeds(),344,capability=False).start_browser(tmp)
+    try:
+     await h.login('news')
+     host=h.page.locator('[data-news-block="private-original"]')
+     assert '미활성화' in await host.inner_text()
+     assert not h.private_requests
+     h.capability=True
+     await h.page.evaluate("MYINVEST_TRANSPORT_CONFIG.privateBriefings=true; dispatchEvent(new Event('myinvest-private-briefing-capability'))")
+     await h.page.wait_for_function("(t)=>document.querySelector('[data-news-block=private-original] pre')?.textContent===t",arg=TEXT)
+     assert h.private_requests==['latest']
+     await h.go('strategy')
+     await h.page.evaluate("dispatchEvent(new Event('myinvest-private-briefing-capability'))")
+     assert h.private_requests==['latest']
+     print(json.dumps({'width':344,'delayedCapabilityReadOnce':'PASS','noReadAfterLeaving':'PASS'}))
+    finally:await h.close()
     # The app's normal dev_connect.js bootstrap must unlock the actual News page.
     # Only the relay network response is simulated; no client flag is injected.
     for width,capability in [(344,False),(344,True),(690,True),(1440,True)]:
@@ -97,8 +114,15 @@ async def main():
        await h.page.wait_for_function('(text)=>document.querySelector(\'[data-news-block="private-original"] pre\')?.textContent===text',arg=TEXT)
        assert h.private_requests and set(h.private_requests)=={'latest'}
        assert await h.page.evaluate('window.__PRIVILEGE_CANARY===undefined')
+       assert await h.page.evaluate('(text)=>![localStorage,sessionStorage].some(s=>Object.values(s).some(v=>String(v).includes(text)))',TEXT)
        await h.go('strategy')
        assert await host.count()==0
+       await h.go('news')
+       await h.page.wait_for_function('(text)=>document.querySelector(\'[data-news-block="private-original"] pre\')?.textContent===text',arg=TEXT)
+       await h.page.evaluate('logout()')
+       await h.page.wait_for_function('()=>DashboardShell.getStatus().page===null')
+       assert await host.count()==0
+       assert TEXT not in await h.page.locator('body').inner_text()
       else:
        assert '미활성화' in await host.inner_text()
        assert h.private_requests==[]

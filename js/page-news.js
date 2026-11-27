@@ -106,6 +106,7 @@ function create(){
  const briefToday=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
  let briefingArea=null,selectedBrief='',briefOpen=true;
  let sharedPublicFeed=null,archivePanel=null,privateOriginal=null;
+ const refreshPrivateAfterConnection=()=>{if(active&&root.MYInvestPrivateOriginalBriefing?.available())void privateOriginal?.refresh()};
  function readBriefs(){try{const x=JSON.parse(localStorage.getItem(BRIEF_KEY)||'[]');if(!Array.isArray(x))return [];const rows=x.map(normalizeBrief).filter(Boolean).sort((a,b)=>b.at-a.at),unique=new Map();for(const r of rows)if(!unique.has(r.date))unique.set(r.date,r);return [...unique.values()].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,30)}catch{return []}}
  function renderBrief(){
   if(!active||!briefingArea)return;
@@ -186,6 +187,7 @@ function create(){
   status=el('p','뉴스 피드 갱신 전에는 기존 수신 자료가 표시될 수 있습니다.','nev5-muted');view.append(status);
   const privateHost=el('div');privateHost.dataset.newsBlock='private-original';view.append(privateHost);
    privateOriginal=root.MYInvestPrivateOriginalBriefing?.mount(privateHost)||null;
+   root.addEventListener('myinvest-private-briefing-capability',refreshPrivateAfterConnection);
    void privateOriginal?.refresh();
    const oldPublic=el('details',undefined,'nev5-legacy-public');oldPublic.append(el('summary','기존 공개 브리핑 파일 보기 (ChatGPT 원문과 별도)'));view.append(oldPublic);
    const sharedHost=el('div');sharedHost.dataset.newsBlock='briefing';oldPublic.append(sharedHost);
@@ -223,7 +225,7 @@ function create(){
    symbols();
    try{await annotateNews()}catch{if(active)status.textContent+=' · 종목명 연결 일부 미확인'}
    return {dataState:sourceFailed?'degraded':'ready'};
-  },unmount(){active=false;newsVersion++;newsDayHost=null;newsDayStatus=null;todayButton=null;recentButton=null;archivePanel?.destroy?.();archivePanel=null;sharedPublicFeed?.destroy?.();sharedPublicFeed=null;privateOriginal?.destroy?.();privateOriginal=null;ctxRef=null;newsHoldings=()=>[];briefingArea=null;view?.remove();legacy.unmount()},getStatus:()=>({status:active?'ready':'unmounted',events:loadEvents().length})};
+  },unmount(){active=false;root.removeEventListener('myinvest-private-briefing-capability',refreshPrivateAfterConnection);newsVersion++;newsDayHost=null;newsDayStatus=null;todayButton=null;recentButton=null;archivePanel?.destroy?.();archivePanel=null;sharedPublicFeed?.destroy?.();sharedPublicFeed=null;privateOriginal?.destroy?.();privateOriginal=null;ctxRef=null;newsHoldings=()=>[];briefingArea=null;view?.remove();legacy.unmount()},getStatus:()=>({status:active?'ready':'unmounted',events:loadEvents().length})};
 
 }
 root.MYInvestCalendar=Object.freeze({open:()=>{openCalendar();const id=++economicRequest;Promise.resolve(root.MYInvestEventContext?.refreshAll()).then(()=>{if(id===economicRequest&&calendarDialog?.isConnected)calendarRedraw?.()});return true},close:closeCalendar});DashboardPages.register('news',create);

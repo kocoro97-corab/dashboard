@@ -2,6 +2,7 @@
  * Fixed upstream only; no browser-to-GAS fallback, accounts, tokens or body logs.
  */
 import policy from './policy.json' with {type:'json'};
+import {createDedicatedDriveArchiveReader,createServiceAccountToken,validDedicatedAccount} from './drive-archive.mjs';
 const ORIGIN='https://kocoro97-corab.github.io',TOKEN=/^[a-fA-F0-9]{64}$/,MAX_RESPONSE=2*1024*1024;
 const failure=(code,status=502)=>Object.assign(new Error(code),{code,status});
 const auth=new Set(policy.auth),reads=new Set(policy.reads),writes=new Set(policy.writes),privateReads=new Set(policy.privateReads||[]);
@@ -17,8 +18,11 @@ export function configuration(env){
  if(!/^[a-z0-9][a-z0-9-]{0,62}\.[a-z0-9][a-z0-9-]{0,62}\.workers\.dev$/.test(env.MYINVEST_PUBLIC_HOST||''))throw failure('RELAY_CONFIG_INVALID',503);
  for(const k of ['MYINVEST_PUBLIC_MARKET','MYINVEST_ACCOUNT_READS','MYINVEST_EXTERNAL_STORE'])if(!['true','false'].includes(env[k]))throw failure('RELAY_CONFIG_INVALID',503);
  if(env.MYINVEST_PRIVATE_BRIEFINGS!==undefined&&!['true','false'].includes(env.MYINVEST_PRIVATE_BRIEFINGS))throw failure('RELAY_CONFIG_INVALID',503);
+ const dedicated=env.MYINVEST_PRIVATE_BRIEFING_PROVIDER==='dedicated-drive';
+ if(env.MYINVEST_PRIVATE_BRIEFING_PROVIDER!==undefined&&!dedicated)throw failure('RELAY_CONFIG_INVALID',503);
+ if(dedicated&&(env.MYINVEST_PRIVATE_BRIEFINGS!=='true'||!validDedicatedAccount(env.MYINVEST_NEWS_READER_EMAIL,env.MYINVEST_NEWS_READER_PEM,env.MYINVEST_NEWS_FOLDER_ID)))throw failure('RELAY_CONFIG_INVALID',503);
  if(env.MYINVEST_EXTERNAL_STORE==='true'&&env.MYINVEST_ACCOUNT_READS!=='true'||!env.GATE)throw failure('RELAY_CONFIG_INVALID',503);
- return {upstream:env.MYINVEST_GAS_URL,host:env.MYINVEST_PUBLIC_HOST,expected,market:env.MYINVEST_PUBLIC_MARKET==='true',futures:env.MYINVEST_PUBLIC_MARKET==='true'&&env.MYINVEST_PUBLIC_FUTURES==='true',accounts:env.MYINVEST_ACCOUNT_READS==='true',store:env.MYINVEST_EXTERNAL_STORE==='true',privateBriefings:env.MYINVEST_PRIVATE_BRIEFINGS==='true'};
+ return {upstream:env.MYINVEST_GAS_URL,host:env.MYINVEST_PUBLIC_HOST,expected,market:env.MYINVEST_PUBLIC_MARKET==='true',futures:env.MYINVEST_PUBLIC_MARKET==='true'&&env.MYINVEST_PUBLIC_FUTURES==='true',accounts:env.MYINVEST_ACCOUNT_READS==='true',store:env.MYINVEST_EXTERNAL_STORE==='true',privateBriefings:env.MYINVEST_PRIVATE_BRIEFINGS==='true',dedicated};
 }
 export function allowedMarketUrl(value){
  if(typeof value!=='string'||value.length>2048||!/^https:\/\/[^/?#]+\//i.test(value)||/[\x00-\x20\\]/.test(value)||/%(?![a-fA-F0-9]{2})/.test(value))return false;
@@ -104,7 +108,7 @@ async function readWithin(operation,signal){
   Promise.resolve().then(()=>{if(signal.aborted)throw failure('RELAY_UPSTREAM_NETWORK');return operation()}).then(resolve,reject).finally(()=>signal.removeEventListener('abort',abort));
  });
 }
-export function createHandler({fetcher=fetch,gatewayFactory=createGateway,readDeadline=()=>AbortSignal.timeout(25000)}={}){const proof={};return async function(request,env){
+export function createHandler({fetcher=fetch,gatewayFactory=createGateway,readDeadline=()=>AbortSignal.timeout(25000),privateArchiveFactory=createDedicatedDriveArchiveReader}={}){const proof={},readers=new WeakMap();return async function(request,env){
  let lease=null,gate=null,attemptedWrite=false;const origin=request.headers.get('Origin')===ORIGIN;
  const headers={'Content-Type':'application/json;charset=utf-8','Cache-Control':'no-store','Pragma':'no-cache','Vary':'Origin','X-Content-Type-Options':'nosniff','Strict-Transport-Security':'max-age=31536000'};
  if(origin){headers['Access-Control-Allow-Origin']=ORIGIN;headers['Access-Control-Expose-Headers']='Retry-After'}
@@ -137,6 +141,15 @@ export function createHandler({fetcher=fetch,gatewayFactory=createGateway,readDe
   const readSignal=action==='publicFetch'?readDeadline():null,gateway=gatewayFactory(config,fetcher,proof,readSignal),metadata=await readWithin(()=>gateway.verify(),readSignal);let result;
   if(privateReads.has(action)&&!metadata.features?.includes('privateMorningBriefing'))throw failure('RELAY_TARGET_MISMATCH',503);
    if(action==='appVersion')result={...metadata,relayProfile:'persistent',developmentPublicMarket:config.market,developmentPublicFutures:config.futures,developmentIndustryMarket:config.market,developmentFuturesReadVersion:2,developmentReadResilienceVersion:1,developmentAccountReads:config.accounts,developmentPrivateBriefings:config.privateBriefings,developmentExternalStore:config.store,developmentExternalTestStore:false};
+  else if(config.dedicated&&privateReads.has(action)){
+   const owner=await gateway.post({action:'sessionInfo',token:body.token});
+   if(owner?.success!==true||owner?.isAdmin!==true||owner?.canReadPrivateBriefing!==true||owner?.mustChangePassword!==false)result={success:false,code:'PRIVATE_BRIEFING_FORBIDDEN',layer:'gas'};
+   else{
+    let read=readers.get(env);
+    if(!read){read=privateArchiveFactory({folderId:env.MYINVEST_NEWS_FOLDER_ID,fetcher,getToken:createServiceAccountToken({email:env.MYINVEST_NEWS_READER_EMAIL,pem:env.MYINVEST_NEWS_READER_PEM,fetcher})});readers.set(env,read)}
+    result=await read({mode:body.mode,date:body.date});
+   }
+  }
   else if(action==='publicFetch')result={success:true,text:await readWithin(()=>gateway.public(body.url,body.token),readSignal)};
   else{attemptedWrite=writes.has(action);result=await gateway.post(body);if(action==='nhQuotes')result=futureResult(result,body.items)}
   if(result.success!==true)result={success:false,code:safeCode.has(result.code)?result.code:'GAS_REJECTED',layer:['gas','storage','nh'].includes(result.layer)?result.layer:'gas',...(safeMessages.has(result.message)?{message:result.message}:{}),mustChangePassword:result.mustChangePassword===true};

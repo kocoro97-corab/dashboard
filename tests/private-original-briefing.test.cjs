@@ -12,14 +12,15 @@ function fixture({files=[{name:'2026-11-26.txt',body:original}],configured=true}
   getMimeType:()=>row.mime||'text/plain',
   getId:()=>String(i),
   getLastUpdated:()=>new Date(now-1000),
-  getBlob:()=>({getSize:()=>Buffer.byteLength(row.body||''),getDataAsString:()=>row.body})
+  getSize:()=>row.size??Buffer.byteLength(row.body||''),
+  getBlob:()=>{state.blobs=(state.blobs||0)+1;return {getBytes:()=>[...Buffer.from(row.bytes??row.body??'')],getDataAsString:()=>row.body}}
  }));
  const DriveApp={getFolderById:id=>{assert.equal(id,folder);const items=[...objects];return {getFiles:()=>({hasNext:()=>items.length>0,next:()=>{state.reads++;return items.shift()}})}}};
  const DocumentApp={openById:id=>({getBody:()=>({getText:()=>files[Number(id)].body})})};
  const Utilities={
   formatDate:()=>new Date(now+9*3600000).toISOString().slice(0,10),
   DigestAlgorithm:{SHA_256:'sha256'},Charset:{UTF_8:'utf8'},
-  computeDigest:(_,text)=>[...crypto.createHash('sha256').update(text).digest()],
+  computeDigest:(_,text)=>[...crypto.createHash('sha256').update(Buffer.from(text)).digest()],
   newBlob:txt=>({getBytes:()=>[...Buffer.from(txt)]})
  };
  const ctx=vm.createContext({Date,PropertiesService:{getScriptProperties:()=>properties},DriveApp,DocumentApp,Utilities});
@@ -49,4 +50,14 @@ test('duplicate dates, oversized report, inaccessible folder fail closed without
  const duplicates=fixture({files:[{name:'2026-11-26',body:'A'},{name:'2026-11-26.txt',body:'B'}]});
  assert.equal(duplicates.reader.readArchive().code,'PRIVATE_BRIEFING_DUPLICATE_DATE');
  assert.equal(fixture({files:[{name:'2026-11-26.txt',body:'x'.repeat(290000)}]}).reader.readArchive().code,'PRIVATE_BRIEFING_TOO_LARGE');
+});
+
+test('uses documented File size and Blob byte APIs, rejects changed or invalid UTF-8',()=>{
+ const invalid=fixture({files:[{name:'2026-11-26.txt',body:'\ufffd',bytes:[0xff],size:1}]});
+ assert.equal(invalid.reader.readArchive().code,'PRIVATE_BRIEFING_READ_FAILED');
+ const changed=fixture({files:[{name:'2026-11-26.txt',body:'ABC',bytes:[65,66],size:3}]});
+ assert.equal(changed.reader.readArchive().code,'PRIVATE_BRIEFING_READ_FAILED');
+ const tooLarge=fixture({files:[{name:'2026-11-26.txt',body:'a',size:280001}]});
+ assert.equal(tooLarge.reader.readArchive().code,'PRIVATE_BRIEFING_TOO_LARGE');assert.equal(tooLarge.state.blobs,undefined);
+ assert.equal(fixture().reader.readArchive({mode:'latest',date:'2026-11-26'}).code,'PRIVATE_BRIEFING_BAD_REQUEST');
 });

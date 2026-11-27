@@ -11,12 +11,11 @@ function createPrivateOriginalBriefingReader_(deps){
     new Date(s+'T00:00:00Z').toISOString().slice(0,10)===s;
   const error=code=>({success:false,code,layer:'gas'});
   const today=()=>deps.Utilities.formatDate(new Date(deps.now()),'Asia/Seoul','yyyy-MM-dd');
-  const sha256=text=>deps.Utilities.computeDigest(deps.Utilities.DigestAlgorithm.SHA_256,text,deps.Utilities.Charset.UTF_8)
+  const sha256=bytes=>deps.Utilities.computeDigest(deps.Utilities.DigestAlgorithm.SHA_256,bytes)
     .map(n=>('0'+(n&255).toString(16)).slice(-2)).join('');
   function readArchive({mode='latest',date}={}){
-    if(!['latest','date','list'].includes(mode)||date!==undefined&&!validDay(date))
+    if(!['latest','date','list'].includes(mode)||(mode==='date'?!validDay(date):date!==undefined))
       return error('PRIVATE_BRIEFING_BAD_REQUEST');
-    if(mode==='date'&&!date)return error('PRIVATE_BRIEFING_BAD_REQUEST');
     let folderId;
     try{folderId=deps.properties().getProperty('MYINVEST_PRIVATE_BRIEFING_FOLDER_ID')}catch{return error('PRIVATE_BRIEFING_NOT_CONFIGURED')}
     if(typeof folderId!=='string'||!/^[A-Za-z0-9_-]{20,128}$/.test(folderId))
@@ -45,25 +44,32 @@ function createPrivateOriginalBriefingReader_(deps){
     const record=files.get(chosen);
     if(!record)return error('PRIVATE_BRIEFING_NOT_FOUND');
     try{
-      let value;
+      let value,rawBytes;
       if(record.mime==='application/vnd.google-apps.document')
         value=deps.DocumentApp.openById(record.file.getId()).getBody().getText();
       else {
+        const size=record.file.getSize();
+        if(!Number.isSafeInteger(size)||size<0)return error('PRIVATE_BRIEFING_READ_FAILED');
+        if(size>MAX_BYTES)return error('PRIVATE_BRIEFING_TOO_LARGE');
         const blob=record.file.getBlob();
-        if(blob.getSize()>MAX_BYTES)return error('PRIVATE_BRIEFING_TOO_LARGE');
+        rawBytes=blob.getBytes();
+        if(rawBytes.length>MAX_BYTES)return error('PRIVATE_BRIEFING_TOO_LARGE');
+        if(rawBytes.length!==size)return error('PRIVATE_BRIEFING_READ_FAILED');
         value=blob.getDataAsString('UTF-8');
       }
-      if(typeof value!=='string'||!value.length||BlobSize(value)>MAX_BYTES)
-        return error('PRIVATE_BRIEFING_TOO_LARGE');
+      if(typeof value!=='string'||!value.length)return error('PRIVATE_BRIEFING_READ_FAILED');
+      const utf8=deps.Utilities.newBlob(value,'text/plain').getBytes();
+      if(utf8.length>MAX_BYTES)return error('PRIVATE_BRIEFING_TOO_LARGE');
+      const decodedHash=sha256(utf8);
+      if(rawBytes&&sha256(rawBytes)!==decodedHash)return error('PRIVATE_BRIEFING_READ_FAILED');
       return {success:true,schemaVersion:1,private:true,cacheable:false,
         dates:available.slice(0,90),latestDate:available[0]||null,
-        report:{date:chosen,content:value,contentSha256:sha256(value),
+        report:{date:chosen,content:value,contentSha256:decodedHash,
           // SHA256 proves transfer integrity, not ChatGPT authorship.
           origin:'scheduled-task-archive-unverified',format:'verbatim-text',
           savedAt:record.file.getLastUpdated().getTime()}};
     }catch{return error('PRIVATE_BRIEFING_READ_FAILED')}
   }
-  function BlobSize(value){return deps.Utilities.newBlob(value,'text/plain').getBytes().length}
   return Object.freeze({readArchive});
 }
 function privateMorningBriefingRead_(body){

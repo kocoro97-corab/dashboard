@@ -18,7 +18,7 @@ jobs:
           node-version: '22'
       - name: Node regressions and GAS syntax
         run: |
-          for file in tests/*.test.cjs tests/*.test.js; do node "$file" || exit 1; done
+          for file in tests/*.test.cjs tests/*.test.js tests/*.test.mjs; do node "$file" || exit 1; done
           node -e "const fs=require('fs'),vm=require('vm');for(const dir of ['js','gas'])for(const name of fs.readdirSync(dir))if(/\.(js|gs)$/.test(name))new vm.Script(fs.readFileSync(dir+'/'+name,'utf8'),{filename:name})"
       - name: Python storage/deployment/master regressions
         run: |

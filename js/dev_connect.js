@@ -83,6 +83,8 @@
       config.privateBriefings=fixedValid&&data.relayProfile==='persistent'&&
         data.developmentPrivateBriefings===true&&Array.isArray(data.features)&&
         data.features.includes('privateMorningBriefing');
+      // Mounted News views may have tried before the isolated server was verified.
+      window.dispatchEvent(new Event('myinvest-private-briefing-capability'));
       config.externalAccountCatalogVersion=data.externalAccountCatalogVersion===1?1:0;
       stage='storage';
       sessionStorage.setItem(KEY,JSON.stringify(fixed?{endpoint,kind:'persistent'}:{endpoint,code}));
