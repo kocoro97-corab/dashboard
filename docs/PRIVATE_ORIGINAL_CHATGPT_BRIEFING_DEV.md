@@ -314,3 +314,33 @@ GAS target (fulfilled in process); only loopback frontend assets may continue.
 After this guard was inspected, all three native mock/browser/CORS scenarios passed.
 The first unguarded local rerun was rejected by automatic approval review as a
 possible live NH path; it was not run. The guarded offline variant was approved.
+
+### Development publication receipt (2026-11-27)
+
+Published frontend source: `388acca3725cb5f20f2cbecd8bc31a7ca96a9ccb`.
+Development Pages commit: `bcb6fe971851973e04d76c00b6190cdb6af3be5f`.
+URL: https://kocoro97-corab.github.io/dashboard-v2-dev/index.html#/news
+Both source CI runs passed (push 45939891778, PR 45939899416); Pages reported built
+for that exact development commit. Live HTTP hashes matched asset-manifest for
+index, transport, connection bootstrap, private original reader, news page and four
+representative calendar datasets. The build retained all prior validated public
+calendar snapshots. The prior target was d9ddab96d3175fbae8dd4a5713a2d869c5ee84e5.
+No source PR merge or operating deployment occurred.
+
+The managed Codex environment receives HTTP 403 when accessing the live Worker,
+so real owner DOM rendering cannot be asserted from this machine. The owner was
+asked to log out/re-login on the published news page (existing primary-only tokens
+lack the private reader's server-side owner proof). Actual owner UI/DOM hash and
+ordinary member denial remain NOT_RUN until evidence arrives. Next actual 07:00
+save remains NOT_RUN; the recovered November 27 original is not scheduled-save proof.
+
+The full owner-browser verifier is now itself tested with exclusively in-process
+synthetic APIs and local frontend artifacts. It checks the original source/server/
+DOM hashes and three viewport widths and logout removal. No real request is allowed
+to continue in that fixture. Logout receipt is checked by HTTP status and DOM
+removal: awaiting an ignored logout fetch body can hang CDP after the view unmounts.
+Server token revocation is separately established by the owner's live API test;
+the browser tool does not claim an additional revoked-token test. Phase progress
+and bounded teardown expose no original content or credentials. The new fixture is
+included in secret-free PR CI. These helper-only changes do not republish the UI;
+the verified publication above continues to be the frontend source of record.

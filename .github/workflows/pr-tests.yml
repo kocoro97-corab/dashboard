@@ -51,6 +51,7 @@ jobs:
           .venv-browser/bin/python tests/browser_invest_workflow.py
           .venv-browser/bin/python tests/browser_public_briefing.py
           .venv-browser/bin/python tests/browser_private_original.py
+          .venv-browser/bin/python tests/browser_private_owner_verifier.py
           .venv-browser/bin/python tests/browser_final_integration.py
           .venv-browser/bin/python tests/browser_dense_review.py --widths 1440 344 --scales 1 1.5 --output /tmp/dense-ci
           .venv-browser/bin/python tests/browser_work_handoff.py
