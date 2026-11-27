@@ -303,3 +303,14 @@ No screenshots, browser traces, keys or original report files are written. The
 printed result contains only hashes, counts and statuses; other-member and next
 actual scheduled-save results remain NOT_RUN. It requires an installed Playwright
 Chromium runtime and fails without exposing browser exceptions or credentials.
+
+CI for integration source 2976a00 stopped in browser_native_snapshot's shell-less
+synthetic fixture: the published implementation intentionally does not start hidden
+account reads, but the old owner-browser helper/test waited for one. The fixture now
+clicks its existing visible read button before the two exact account waits, matching
+the currently published behavior. No account/GAS/owner-live helper was modified.
+The fixture also explicitly aborts every remote request except its literal synthetic
+GAS target (fulfilled in process); only loopback frontend assets may continue.
+After this guard was inspected, all three native mock/browser/CORS scenarios passed.
+The first unguarded local rerun was rejected by automatic approval review as a
+possible live NH path; it was not run. The guarded offline variant was approved.
