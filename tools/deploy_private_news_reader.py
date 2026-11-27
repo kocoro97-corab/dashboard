@@ -8,7 +8,7 @@ import news_reader_owner_preflight as preflight
 import calendar_owner_preflight as owner
 import worker_code_only as worker
 import nh_v2_upgrade as gas
-from nh_v2_fresh import private_path
+from nh_v2_fresh import private_path,target,OLD_DEPLOYMENT,PRODUCTION_DEPLOYMENT_ID
 from nh_staging_test import WebApp,ApiFailure
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -110,6 +110,9 @@ def deploy(environment,account,cf_token,user,password,folder):
     if gcp['existingUserManagedKeyCount']!=0:raise Stop('EXISTING_READER_KEYS_REQUIRE_REVIEW')
     if not re.fullmatch(r'[가-힣A-Za-z0-9][가-힣A-Za-z0-9_.@-]{1,63}',user or ''):raise Stop('EXISTING_OWNER_USER_REQUIRED')
     folder=folder_id(folder);env=private_path(environment,False);plan=json.loads((env/'fresh-plan.json').read_text())
+    target(plan['scriptId'])
+    deployment=re.fullmatch(r'https://script\.google\.com/macros/s/([A-Za-z0-9_-]+)/exec',plan.get('url',''))
+    if not deployment or deployment[1] in (OLD_DEPLOYMENT,PRODUCTION_DEPLOYMENT_ID):raise Stop('EXISTING_ISOLATED_GAS_TARGET_REQUIRED')
     api,base=cloud_api(account,cf_token)
     progress('VERIFYING_ORIGINAL_PRIMARY_AND_GAS')
     snapshot=owner.inspect(lambda p:api('GET',p),account,owner_dir=env)
