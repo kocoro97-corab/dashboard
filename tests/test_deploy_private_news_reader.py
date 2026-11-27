@@ -25,13 +25,16 @@ class State:
             return self.settings
         if method=='PUT':
             if self.fault=='cf-permission':raise m.worker.Stop('CLOUDFLARE_REQUEST_REJECTED',http=403)
+            if self.fault=='cf-bad-module':raise m.worker.Stop('CLOUDFLARE_REQUEST_REJECTED',http=400,stage='PRIVATE_WORKER_UPLOAD',provider_codes=[10021],hints=['MULTIPART'])
             parts=list(BytesParser(policy=default).parsebytes(('Content-Type: '+mime+'\r\n\r\n').encode()+body).iter_parts())
             config=json.loads(parts[0].get_payload(decode=True));self.settings={'bindings':copy.deepcopy(config['bindings']),'observability':{'enabled':False}}
             self.config=config
             for row in self.settings['bindings']:
                 if row['type']=='secret_text':row.pop('text',None)
             assert config['migrations']['new_sqlite_classes']==['RelayGate']
-            assert len(parts)==4
+            assert len(parts)==3
+            assert all(part.get_content_type()=='application/javascript+module' for part in parts[1:])
+            assert b"import policy from './policy.json'" not in parts[1].get_payload(decode=True)
             return {}
         if path.endswith('/subdomain') and method=='POST':return {}
         raise AssertionError('Unexpected mutation')
@@ -83,12 +86,28 @@ class DeploymentTests(unittest.TestCase):
         with self.assertRaisesRegex(m.Stop,'EXISTING_PRIVATE_WORKER_REVIEW_REQUIRED'):state.execute()
         self.assertFalse(any(method in ('POST','PUT','DELETE') for method,_ in state.calls))
     def test_permission_and_live_read_failures_revoke_only_the_new_key(self):
-        for fault in ['cf-permission','read-failed']:
+        for fault in ['cf-permission','cf-bad-module','read-failed']:
             with self.subTest(fault=fault):
                 state=State(fault);report=state.execute()
                 self.assertEqual(report['status'],'PARTIAL');self.assertEqual(report['keyRecovery'],'CREATED_KEY_REVOKED')
                 self.assertEqual([path for method,path in state.calls if method=='DELETE'],['https://iam.googleapis.com/synthetic/keys/'+state.key_id])
                 self.assertEqual(report['primaryWorkerWrites'],0);self.assertEqual(report['gasSourceWrites'],0)
+                if fault=='cf-bad-module':
+                    self.assertEqual(report['providerCodes'],[10021]);self.assertEqual(report['providerHints'],['MULTIPART'])
+                    self.assertEqual(report['requestStage'],'PRIVATE_WORKER_UPLOAD')
+    def test_exact_api_module_package_compiles_without_json_modules_or_network(self):
+        modules=m.worker_modules()
+        self.assertEqual(set(modules),{'worker.mjs','drive-archive.mjs'})
+        self.assertNotIn(b"import policy from './policy.json'",modules['worker.mjs'])
+        self.assertIn(b'const policy=',modules['worker.mjs'])
+        m.validate_package(modules)
+    def test_failed_package_check_does_not_create_a_key_or_upload_worker(self):
+        state=State()
+        with patch.object(m,'validate_package',side_effect=m.Stop('PRIVATE_PACKAGE_CHECK_FAILED')):
+            report=state.execute()
+        self.assertEqual(report['keyCreateCalls'],0)
+        self.assertFalse(report['privateWorkerUploadAttempted'])
+        self.assertFalse(any(method in ('POST','PUT','DELETE') for method,_ in state.calls))
     def test_google_key_identity_and_approved_folder_are_pinned(self):
         with self.assertRaises(m.Stop):m.folder_id('anotherPrivateFolder000001')
         value={'type':'service_account','project_id':'unapproved-project','client_email':m.preflight.READER,'private_key_id':'a'*40,'private_key':'PRIVATE_CANARY'}

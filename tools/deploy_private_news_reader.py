@@ -2,7 +2,7 @@
 Owner Cloud Shell only. A new service-account key goes from RAM to Worker Secrets.
 No plaintext key file, original report file, Pages deployment or folder ACL write.
 """
-import argparse,base64,getpass,hashlib,json,os,re,secrets,subprocess,sys,time,urllib.error,urllib.parse,urllib.request,uuid
+import argparse,base64,getpass,hashlib,json,os,re,secrets,shutil,subprocess,sys,tempfile,time,urllib.error,urllib.parse,urllib.request,uuid
 from pathlib import Path
 import news_reader_owner_preflight as preflight
 import calendar_owner_preflight as owner
@@ -35,7 +35,11 @@ def cloud_api(account,token):
         reads|={primary+x for x in ('/settings','/secrets','/deployments','/versions')}
         reads.add('/accounts/'+account+'/workers/subdomain')
         if not (method=='GET' and path in reads or method=='PUT' and path==base or method=='POST' and path==base+'/subdomain'):raise Stop('PRIVATE_NEWS_SCOPE_DENIED')
-        return raw(method,path,body,mime)
+        try:return raw(method,path,body,mime)
+        except worker.Stop as error:
+            if method=='PUT' and path==base:error.stage='PRIVATE_WORKER_UPLOAD'
+            elif method=='POST' and path==base+'/subdomain':error.stage='PRIVATE_WORKER_SUBDOMAIN'
+            raise
     return api,base
 
 def absent(api,base):
@@ -73,12 +77,31 @@ def key_material(result):
         return key_id,pem
     except Exception:raise Stop('NEW_SERVICE_KEY_IDENTITY_INVALID') from None
 
-def upload_body(metadata):
+def worker_modules():
+    source=(ROOT/'relay/private-original/worker-dev.mjs').read_bytes().decode('utf-8')
+    marker="import policy from './policy.json' with {type:'json'};"
+    if source.count(marker)!=1:raise Stop('PRIVATE_MODULE_LAYOUT_REVIEW_REQUIRED')
+    policy=json.loads((ROOT/'relay/private-original/policy.json').read_bytes())
+    # The direct upload API accepts JSON metadata, not application/json modules.
+    source=source.replace(marker,'const policy='+json.dumps(policy,ensure_ascii=False,separators=(',',':'))+';')
+    return {'worker.mjs':source.encode('utf-8'),'drive-archive.mjs':(ROOT/'relay/private-original/drive-archive.mjs').read_bytes()}
+
+def validate_package(modules):
+    if not shutil.which('node'):raise Stop('LOCAL_NODE_REQUIRED_BEFORE_KEY_CREATION')
+    child={k:v for k,v in os.environ.items() if not re.search('TOKEN|PASSWORD|SECRET|API_KEY',k,re.I)}
+    with tempfile.TemporaryDirectory(prefix='myinvest-public-news-module-') as temporary:
+        root=Path(temporary)
+        for name,raw in modules.items():(root/name).write_bytes(raw)
+        program='globalThis.fetch=()=>{throw Error("NETWORK_DISABLED")};const m=await import(process.argv[1]);if(typeof m.default.fetch!=="function"||typeof m.RelayGate!=="function")process.exit(1);const r=await m.default.fetch(new Request("https://example.invalid/api"),{});if(r.status!==503)process.exit(1)'
+        try:r=subprocess.run(['node','--input-type=module','-e',program,(root/'worker.mjs').as_uri()],capture_output=True,timeout=20,env=child)
+        except subprocess.TimeoutExpired:raise Stop('PRIVATE_PACKAGE_CHECK_TIMEOUT') from None
+        except OSError:raise Stop('PRIVATE_PACKAGE_NODE_UNAVAILABLE') from None
+        if r.returncode:raise Stop('PRIVATE_PACKAGE_CHECK_FAILED')
+
+def upload_body(metadata,modules=None):
+    modules=worker_modules() if modules is None else modules
     boundary='myinvest-private-news-'+uuid.uuid4().hex;parts=[]
-    files=[('metadata',None,'application/json',json.dumps(metadata).encode()),
-      ('worker.mjs','worker.mjs','application/javascript+module',(ROOT/'relay/private-original/worker-dev.mjs').read_bytes()),
-      ('drive-archive.mjs','drive-archive.mjs','application/javascript+module',(ROOT/'relay/private-original/drive-archive.mjs').read_bytes()),
-      ('policy.json','policy.json','application/json',(ROOT/'relay/private-original/policy.json').read_bytes())]
+    files=[('metadata',None,'application/json',json.dumps(metadata).encode())]+[(name,name,'application/javascript+module',raw) for name,raw in modules.items()]
     for name,filename,mime,raw in files:
         disposition='form-data; name="'+name+'"'+('; filename="'+filename+'"' if filename else '')
         parts.append(('--'+boundary+'\r\nContent-Disposition: '+disposition+'\r\nContent-Type: '+mime+'\r\n\r\n').encode()+raw+b'\r\n')
@@ -135,6 +158,8 @@ def deploy(environment,account,cf_token,user,password,folder):
         finally:
             if web.token:web.call('logout')
         primary_unchanged();absent(api,base)
+        progress('CHECKING_PUBLIC_MODULE_PACKAGE_BEFORE_KEY_CREATION')
+        modules=worker_modules();validate_package(modules)
         progress('CREATING_ONE_KEY_IN_MEMORY')
         key_attempted=True
         key_id,pem=key_material(key_client('POST',key_url,{'privateKeyType':'TYPE_GOOGLE_CREDENTIALS_FILE','keyAlgorithm':'KEY_ALG_RSA_2048'}))
@@ -142,7 +167,7 @@ def deploy(environment,account,cf_token,user,password,folder):
         config=metadata(plan,expected,user,pem,folder,stamp)
         primary_unchanged();absent(api,base)
         progress('CREATING_ONLY_PRIVATE_NEWS_WORKER')
-        body,mime=upload_body(config);worker_attempted=True
+        body,mime=upload_body(config,modules);worker_attempted=True
         api('PUT',base,body,mime)
         settings=api('GET',base+'/settings');bindings={b['name']:b for b in settings.get('bindings',[])}
         if bindings.get('MYINVEST_NEWS_DEPLOYMENT_MARKER',{}).get('text')!=stamp or bindings.get('MYINVEST_ROLE',{}).get('text')!=ROLE:raise Stop('PRIVATE_WORKER_CREATION_UNCONFIRMED')
@@ -179,7 +204,9 @@ def deploy(environment,account,cf_token,user,password,folder):
             try:key_client('DELETE',key_url+'/'+key_id);cleanup='CREATED_KEY_REVOKED'
             except Exception:cleanup='CREATED_KEY_REVOCATION_UNCONFIRMED'
         code=str(error) if isinstance(error,Stop) else error.code if isinstance(error,(worker.Stop,owner.Stop,ApiFailure)) else 'PRIVATE_NEWS_SETUP_FAILED'
-        return {**fixed,'status':'PARTIAL' if worker_attempted or key_attempted else 'NOT_RUN','code':code,'keyCreateCalls':int(key_attempted),'privateWorkerUploadAttempted':worker_attempted,'keyRecovery':cleanup,'keyFileWritten':False,'browserOriginalDisplay':'NOT_RUN',**({'http':error.http} if isinstance(error,(worker.Stop,owner.Stop,ApiFailure)) and error.http else {})}
+        diagnostic={}
+        if isinstance(error,worker.Stop):diagnostic={'requestStage':error.stage,'providerCodes':error.provider_codes,'providerHints':error.hints}
+        return {**fixed,'status':'PARTIAL' if worker_attempted or key_attempted else 'NOT_RUN','code':code,'keyCreateCalls':int(key_attempted),'privateWorkerUploadAttempted':worker_attempted,'keyRecovery':cleanup,'keyFileWritten':False,'browserOriginalDisplay':'NOT_RUN',**diagnostic,**({'http':error.http} if isinstance(error,(worker.Stop,owner.Stop,ApiFailure)) and error.http else {})}
     finally:
         if logged:
             try:post('logout',logged)
