@@ -52,3 +52,15 @@
 - 격리 개발 Worker에는 서버 비밀 설정으로 정확한 폴더 ID와 전용 계정의 인증정보를 구성한다. 전용 계정으로 OAuth 토큰을 받고 Drive API에는 GET만 허용한다. 개발 GAS는 정해 둔 소유자의 로그인·관리자 여부만 판단하고 원문 읽기용 Drive OAuth를 받지 않는다.
 - 설정 후 먼저 전용 계정으로 해당 폴더 읽기 성공을 확인하고, 지정 폴더 외 요청이 소스에서 불가능한지 확인한다. 기존 7시 예약의 ACL 검사도 실제 확인된 소유자 및 해당 전용 Viewer 한 명만 허용하도록 바꾼다. 전용 계정 ID가 검증되기 전에는 예약 정책을 바꾸지 않는다.
 - 승인된 개발 사이트에서 날짜별 실제 원본·화면 일치를 비교하고, 로그아웃/다른 승인 사용자로는 접근이 거부되는지 확인한다. 모든 검증 전 운영 배포 금지. 장애 시 개발 Worker에서 기능을 끄고, 불필요해진 Viewer 권한은 사용자의 승인 범위에 맞춰 제거한다.
+
+## 8. 기존 owner Cloud Shell 읽기 전용 연결 점검
+
+`python3 tools/news_reader_owner_preflight.py`는 기존 gcloud 로그인과 Cloudflare 숨김 입력을 사용한다.
+기존 프로젝트·전용 계정·Drive API·프로젝트 IAM 역할·사용자 관리 키의 개수와
+개발 Worker/owner bundle/별도 원문 Worker의 존재를 확인한다.
+일반 사용자 키 생성, 비밀값 업로드, Worker/GAS 배포, 권한 공유, 원문 파일 쓰기는 하지 않는다.
+Cloudflare Account ID와 기존 API token을 숨김 입력하며 결과에는 값·원문·비공개 경로를 담지 않는다.
+`PASS`는 메타데이터 읽기 점검만의 성공이다. `readyForActivation:false`,
+`liveOriginalDisplay:NOT_RUN`을 유지하며, 이를 원문 표시나 예약 저장 성공으로 보고하지 않는다.
+원문 Worker가 없으면 새로 만들지 않고 존재 여부만 보고한다.
+다른 개발 작업의 미활성 Worker 후보가 있으면 이를 활성화하거나 덮어쓰지 않는다.
