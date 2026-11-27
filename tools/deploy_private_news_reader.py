@@ -19,6 +19,10 @@ ROLE='myinvest-private-original-reader-v1'
 LOGGING_OFF={'observability':{'enabled':False},'logpush':False}
 class Stop(Exception):pass
 
+class ReceiptFailure(Stop):
+    def __init__(self,code,diagnostic):
+        super().__init__(code);self.diagnostic=diagnostic
+
 def progress(value):print('[news] '+value,file=sys.stderr,flush=True)
 def sha(value):return hashlib.sha256(value).hexdigest()
 def folder_id(value):
@@ -138,6 +142,65 @@ def validate_package(modules):
         except OSError:raise Stop('PRIVATE_PACKAGE_NODE_UNAVAILABLE') from None
         if r.returncode:raise Stop('PRIVATE_PACKAGE_CHECK_FAILED')
 
+ARCHIVE_PROBE=r'''
+import {createDedicatedDriveArchiveReader,createServiceAccountToken} from './relay/private-original/drive-archive.mjs';
+let input='';for await(const chunk of process.stdin){input+=chunk;if(input.length>16000)process.exit(2)}
+const x=JSON.parse(input);input='';let stage='TOKEN',http=null;
+const network=globalThis.fetch;
+const fetcher=async(url,opts)=>{
+ const u=new URL(url);
+ if(u.href==='https://oauth2.googleapis.com/token'&&opts.method==='POST')stage='TOKEN';
+ else if(u.origin==='https://www.googleapis.com'&&u.pathname==='/drive/v3/files'&&opts.method==='GET')stage='LIST';
+ else if(u.origin==='https://www.googleapis.com'&&/^\/drive\/v3\/files\/[A-Za-z0-9_-]{20,128}$/.test(u.pathname)&&u.search==='?alt=media'&&opts.method==='GET')stage='MEDIA';
+ else throw Error('scope');
+ http=null;const r=await network(url,opts);http=r.status;return r;
+};
+const getToken=createServiceAccountToken({email:x.email,pem:x.pem,fetcher});
+const read=createDedicatedDriveArchiveReader({folderId:x.folder,getToken,fetcher});
+const data=await read({mode:'date',date:'2026-11-27'});
+const safe=new Set(['PRIVATE_BRIEFING_NOT_FOUND','PRIVATE_BRIEFING_DUPLICATE_DATE','PRIVATE_BRIEFING_ARCHIVE_LIMIT','PRIVATE_BRIEFING_ARCHIVE_UNAVAILABLE','PRIVATE_BRIEFING_TOO_LARGE','PRIVATE_BRIEFING_READ_FAILED']);
+let out={success:false,stage,http,code:safe.has(data.code)?data.code:'ARCHIVE_PROBE_FAILED'};
+if(data.success===true&&typeof data.report?.content==='string'){
+ const bytes=new TextEncoder().encode(data.report.content);
+ const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+ out={success:hash===data.report.contentSha256,stage:'COMPLETE',http,code:hash===data.report.contentSha256?'ORIGINAL_VERIFIED':'HASH_MISMATCH',bytes:bytes.length,contentSha256:hash};
+}
+console.log(JSON.stringify(out));
+'''
+
+def archive_probe(pem,folder):
+    """Exact existing reader; credentials enter Node only through its anonymous stdin pipe."""
+    child={k:v for k,v in os.environ.items() if not re.search('TOKEN|PASSWORD|SECRET|API_KEY',k,re.I)}
+    payload=json.dumps({'email':preflight.READER,'pem':pem,'folder':folder})
+    for attempt in range(6):
+        try:
+            result=subprocess.run(['node','--input-type=module','-e',ARCHIVE_PROBE],cwd=ROOT,input=payload,text=True,capture_output=True,timeout=50,env=child)
+            if result.returncode or len(result.stdout)>2048:raise ValueError()
+            out=json.loads(result.stdout)
+            if not isinstance(out,dict) or out.get('stage') not in ('TOKEN','LIST','MEDIA','COMPLETE') or type(out.get('success')) is not bool or out.get('http') is not None and (type(out['http']) is not int or not 100<=out['http']<=599):raise ValueError()
+            if out.get('success'):
+                if out.get('stage')!='COMPLETE' or not re.fullmatch('[a-f0-9]{64}',out.get('contentSha256','')) or type(out.get('bytes')) is not int or not 0<out['bytes']<=280000:raise ValueError()
+                return {'success':True,'bytes':out['bytes'],'contentSha256':out['contentSha256']}
+            safe={'PRIVATE_BRIEFING_NOT_FOUND','PRIVATE_BRIEFING_DUPLICATE_DATE','PRIVATE_BRIEFING_ARCHIVE_LIMIT','PRIVATE_BRIEFING_ARCHIVE_UNAVAILABLE','PRIVATE_BRIEFING_TOO_LARGE','PRIVATE_BRIEFING_READ_FAILED','ARCHIVE_PROBE_FAILED','HASH_MISMATCH'}
+            diagnostic={'archiveStage':out['stage'],'archiveHttp':out['http'],'archiveCode':out.get('code') if out.get('code') in safe else 'OTHER_REDACTED','archiveAttempts':attempt+1}
+        except Exception:raise ReceiptFailure('LOCAL_ARCHIVE_PROBE_UNCONFIRMED',{'archiveStage':'LOCAL_PROBE','archiveAttempts':attempt+1}) from None
+        retry=out['stage']=='TOKEN' and (out.get('http') in (None,400,429) or out.get('http',0)>=500)
+        if not retry or attempt==5:raise ReceiptFailure('DEDICATED_READER_ORIGINAL_UNCONFIRMED',diagnostic)
+        delay=min(2**(attempt+1),30)
+        progress('WAITING_FOR_GOOGLE_KEY_PROPAGATION_'+str(delay)+'S');time.sleep(delay)
+
+def validate_receipt(status,data,original):
+    data=data if isinstance(data,dict) else {};report=data.get('report');report=report if isinstance(report,dict) else {}
+    content=report.get('content');digest=sha(content.encode()) if isinstance(content,str) else None
+    safe={'PRIVATE_BRIEFING_FORBIDDEN','AUTH_REQUIRED','PRIVATE_BRIEFING_NOT_FOUND','PRIVATE_BRIEFING_DUPLICATE_DATE','PRIVATE_BRIEFING_ARCHIVE_LIMIT','PRIVATE_BRIEFING_ARCHIVE_UNAVAILABLE','PRIVATE_BRIEFING_TOO_LARGE','PRIVATE_BRIEFING_READ_FAILED','GAS_REJECTED','RELAY_BAD_RESPONSE','RELAY_RATE_LIMIT','RELAY_BUSY'}
+    checks={'http':status,'responseSuccess':data.get('success') is True,'responseCode':data.get('code') if data.get('code') in safe else 'NONE_OR_REDACTED',
+      'cacheDisabled':data.get('cacheable') is False,'dateMatches':report.get('date')=='2026-11-27','contentPresent':isinstance(content,str),
+      'responseHashMatches':digest is not None and digest==report.get('contentSha256'),'sourceHashMatches':digest is not None and digest==original['contentSha256'],
+      'sourceBytesMatch':isinstance(content,str) and len(content.encode())==original['bytes']}
+    if status!=200 or not all(checks[k] for k in ('responseSuccess','cacheDisabled','dateMatches','contentPresent','responseHashMatches','sourceHashMatches','sourceBytesMatch')):
+        raise ReceiptFailure('LIVE_ORIGINAL_RECEIPT_OR_HASH_UNCONFIRMED',checks)
+    return digest,len(content.encode())
+
 def upload_body(metadata,modules=None):
     modules=worker_modules() if modules is None else modules
     boundary='myinvest-private-news-'+uuid.uuid4().hex;parts=[]
@@ -181,6 +244,7 @@ def deploy(environment,account,cf_token,user,password,folder,resume_version=None
     snapshot=owner.inspect(lambda p:api('GET',p),account,owner_dir=env)
     if not snapshot['ownerCheckoutVerified'] or not snapshot.get('ownerCheckoutInspection',{}).get('sourceRevisionMatches'):raise Stop('VERIFIED_EXISTING_OWNER_BUNDLE_REQUIRED')
     current=owner.public_probe();gas.check_metadata(current,plan)
+    if resume_version=='inspected-active':resume_version=worker.active(api,base)['version']
     resume=resume_snapshot(api,base,resume_version) if resume_version else None
     if not resume:absent(api,base)
     def private_unchanged():
@@ -211,6 +275,8 @@ def deploy(environment,account,cf_token,user,password,folder,resume_version=None
         progress('CREATING_ONE_KEY_IN_MEMORY')
         key_attempted=True
         key_id,pem=key_material(key_client('POST',key_url,{'privateKeyType':'TYPE_GOOGLE_CREDENTIALS_FILE','keyAlgorithm':'KEY_ALG_RSA_2048'}))
+        progress('VERIFYING_DEDICATED_READER_TOKEN_AND_ORIGINAL_BEFORE_UPLOAD')
+        original=archive_probe(pem,folder)
         expected={k:v for k,v in current.items() if k in ('freshTestEnvironment','testEnvironment','scriptHash','sheetHash','sourceDigest','revision','gatewayVersion','storeEngine','storeVersion')}
         config=metadata(plan,expected,user,pem,folder,stamp)
         if resume:config.pop('migrations')
@@ -239,23 +305,22 @@ def deploy(environment,account,cf_token,user,password,folder,resume_version=None
         if status!=401 or anonymous.get('code')!='AUTH_REQUIRED':raise Stop('ANONYMOUS_ACCESS_BLOCK_UNCONFIRMED')
         status,login=post('login',user=user,**{'pass':password});logged=login.get('token')
         if status!=200 or login.get('success') is not True or not re.fullmatch('[a-fA-F0-9]{64}',logged or ''):raise Stop('PRIVATE_OWNER_LOGIN_UNCONFIRMED')
-        status,data=post('privateMorningBriefing',logged,mode='date',date='2026-11-27');report=data.get('report',{})
-        if status!=200 or data.get('success') is not True or data.get('cacheable') is not False or report.get('date')!='2026-11-27' or not isinstance(report.get('content'),str) or sha(report['content'].encode())!=report.get('contentSha256'):raise Stop('LIVE_ORIGINAL_RECEIPT_OR_HASH_UNCONFIRMED')
-        digest=report['contentSha256'];size=len(report['content'].encode());del data,report
+        status,data=post('privateMorningBriefing',logged,mode='date',date='2026-11-27')
+        digest,size=validate_receipt(status,data,original);del data
         status,logout=post('logout',logged)
         if status!=200 or logout.get('success') is not True:raise Stop('OWNER_LOGOUT_UNCONFIRMED')
         status,denied=post('privateMorningBriefing',logged,mode='date',date='2026-11-27')
         if status not in (200,401,403) or denied.get('success') is not False or denied.get('code') not in ('PRIVATE_BRIEFING_FORBIDDEN','AUTH_REQUIRED'):raise Stop('LOGOUT_ACCESS_BLOCK_UNCONFIRMED')
         logged=None;primary_unchanged()
         active=worker.active(api,base)
-        return {**fixed,'status':'PASS','phase':'PRIVATE_READER_LIVE_API_VERIFIED','keyCreateCalls':1,'privateWorkerCreated':not bool(resume),'resumedExistingPrivateWorker':bool(resume),'existingNamespacePreserved':bool(resume),'loggingDisable':logging,'workerVersion':active['version'],'sourceRevision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'originalDate':'2026-11-27','originalBytes':size,'serverContentSha256':digest,'anonymousBlocked':True,'loggedOutBlocked':True,'generalMemberLiveTest':'NOT_RUN','browserOriginalDisplay':'NOT_RUN','nextScheduledSave':'NOT_RUN','primaryPendingVersionPreserved':snapshot['latestVersionIsActive'] is False,'keyFileWritten':False}
+        return {**fixed,'status':'PASS','phase':'PRIVATE_READER_LIVE_API_VERIFIED','keyCreateCalls':1,'privateWorkerCreated':not bool(resume),'resumedExistingPrivateWorker':bool(resume),'existingNamespacePreserved':bool(resume),'loggingDisable':logging,'workerVersion':active['version'],'sourceRevision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'originalDate':'2026-11-27','originalBytes':size,'sourceContentSha256':original['contentSha256'],'serverContentSha256':digest,'sourceServerHashMatch':True,'anonymousBlocked':True,'loggedOutBlocked':True,'generalMemberLiveTest':'NOT_RUN','browserOriginalDisplay':'NOT_RUN','nextScheduledSave':'NOT_RUN','primaryPendingVersionPreserved':snapshot['latestVersionIsActive'] is False,'keyFileWritten':False}
     except Exception as error:
         cleanup='KEY_CREATE_RESULT_REVIEW_REQUIRED' if key_attempted and key_id is None else 'NOT_NEEDED'
         if key_id:
             try:key_client('DELETE',key_url+'/'+key_id);cleanup='CREATED_KEY_REVOKED'
             except Exception:cleanup='CREATED_KEY_REVOCATION_UNCONFIRMED'
         code=str(error) if isinstance(error,Stop) else error.code if isinstance(error,(worker.Stop,owner.Stop,ApiFailure)) else 'PRIVATE_NEWS_SETUP_FAILED'
-        diagnostic={}
+        diagnostic=error.diagnostic if isinstance(error,ReceiptFailure) else {}
         if isinstance(error,worker.Stop):diagnostic={'requestStage':error.stage,'providerCodes':error.provider_codes,'providerHints':error.hints}
         return {**fixed,'status':'PARTIAL' if worker_attempted or key_attempted else 'NOT_RUN','code':code,'keyCreateCalls':int(key_attempted),'privateWorkerUploadAttempted':worker_attempted,'keyRecovery':cleanup,'keyFileWritten':False,'browserOriginalDisplay':'NOT_RUN',**diagnostic,**({'http':error.http} if isinstance(error,(worker.Stop,owner.Stop,ApiFailure)) and error.http else {})}
     finally:

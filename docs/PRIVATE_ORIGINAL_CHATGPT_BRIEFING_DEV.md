@@ -150,3 +150,35 @@ The owner command still requires hidden existing Cloudflare credentials, dashboa
 owner credentials, and the approved original folder address. No private key file
 is created. Local provisioning simulations do not establish live API, browser,
 general-member denial, or future scheduled-save success.
+
+### Original receipt failure diagnostics (2026-11-27)
+
+The owner successfully uploaded the resumed Worker, but the original receipt/hash
+check failed. Its new key was revoked. This establishes neither a file-read success
+nor a hash mismatch: the previous combined check hid the distinction.
+
+Before any further upload, the installer now runs the exact existing Drive reader
+in a local Node child process using the dedicated service-account key through an
+anonymous stdin pipe. No key or original file is written. Only fixed stage names
+(TOKEN, LIST, MEDIA), numeric HTTP status, fixed error categories, byte count and
+SHA-256 can leave that process. It uses the same pinned folder, scope, date and
+reader checks as the Worker, without owner impersonation. Newly created keys can
+require 60 seconds or more to propagate, per Google's official key-management
+documentation. Only token-stage transient failures are retried, with bounded
+2/4/8/16/30 second backoff on the same RAM-held key; Drive permission/file/schema
+failures stop directly. This is a possible cause to check, not an established
+explanation of the owner's earlier failure.
+
+The live server response is separately checked for HTTP status, success, no-cache
+contract, date, content type, internal hash, source hash and source byte count.
+Failures report only booleans and allowlisted codes. On success the output includes
+source/server hashes and their equality; DOM and future scheduled-save validation
+remain NOT_RUN. Failure still revokes only the newly created key.
+
+`--resume-private-version inspected-active` selects the active private version by
+read-only inspection at command start, then applies all existing exact code,
+role, binding, namespace, latest-version and concurrency guards. This avoids
+reusing the stale version ID after a preceding successful upload. It does not
+permit foreign code or unreviewed bindings, and never changes the primary Worker.
+
+Official reference: https://docs.cloud.google.com/iam/docs/keys-create-delete

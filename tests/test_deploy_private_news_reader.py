@@ -85,8 +85,8 @@ class State:
             if self.fault=='unknown-binding':self.settings['bindings'].append({'name':'FOREIGN','type':'plain_text','text':'preserve'})
         base='/accounts/'+'a'*32+'/workers/scripts/'+m.preflight.PREVIEW
         def active(api,path):return {'id':'synthetic-deployment','version':self.private_version if path==base else self.primary_version}
-        with patch.object(m.preflight,'google_snapshot',return_value={'existingUserManagedKeyCount':0}),patch.object(m,'folder_id',return_value=self.folder),patch.object(m,'private_path',return_value=Path('/synthetic-owner')),patch.object(Path,'read_text',return_value=json.dumps(self.plan)),patch.object(m,'cloud_api',return_value=(self.api,base)),patch.object(m.owner,'inspect',return_value={'ownerCheckoutVerified':True,'ownerCheckoutInspection':{'sourceRevisionMatches':True},'latestVersionIsActive':False}),patch.object(m.owner,'public_probe',return_value=self.meta),patch.object(m.gas,'check_metadata'),patch.object(m.worker,'active',side_effect=active),patch.object(m.worker,'recent_versions',side_effect=lambda api,path:[{'id':self.private_version if path==base else 'pending-existing'}]),patch.object(m,'access_token',return_value='SYNTHETIC_TOKEN'),patch.object(m,'google_api',return_value=(self.google,'https://iam.googleapis.com/synthetic/keys')),patch.object(m,'WebApp',side_effect=self.web),patch.object(m,'post',side_effect=self.post),patch.object(m.subprocess,'check_output',return_value='f'*40):
-            return m.deploy(Path('/synthetic-owner'),'a'*32,'SYNTHETIC_TOKEN','fixture-owner','SYNTHETIC_PASSWORD',self.folder,self.private_version if resume else None)
+        with patch.object(m.preflight,'google_snapshot',return_value={'existingUserManagedKeyCount':0}),patch.object(m,'folder_id',return_value=self.folder),patch.object(m,'private_path',return_value=Path('/synthetic-owner')),patch.object(Path,'read_text',return_value=json.dumps(self.plan)),patch.object(m,'cloud_api',return_value=(self.api,base)),patch.object(m.owner,'inspect',return_value={'ownerCheckoutVerified':True,'ownerCheckoutInspection':{'sourceRevisionMatches':True},'latestVersionIsActive':False}),patch.object(m.owner,'public_probe',return_value=self.meta),patch.object(m.gas,'check_metadata'),patch.object(m.worker,'active',side_effect=active),patch.object(m.worker,'recent_versions',side_effect=lambda api,path:[{'id':self.private_version if path==base else 'pending-existing'}]),patch.object(m,'access_token',return_value='SYNTHETIC_TOKEN'),patch.object(m,'google_api',return_value=(self.google,'https://iam.googleapis.com/synthetic/keys')),patch.object(m,'WebApp',side_effect=self.web),patch.object(m,'archive_probe',side_effect=m.ReceiptFailure('DEDICATED_READER_ORIGINAL_UNCONFIRMED',{'archiveStage':'LIST','archiveHttp':403}) if self.fault=='probe-failed' else None,return_value={'success':True,'bytes':len(self.original.encode()),'contentSha256':hashlib.sha256(self.original.encode()).hexdigest()}),patch.object(m,'post',side_effect=self.post),patch.object(m.subprocess,'check_output',return_value='f'*40):
+            return m.deploy(Path('/synthetic-owner'),'a'*32,'SYNTHETIC_TOKEN','fixture-owner','SYNTHETIC_PASSWORD',self.folder,'inspected-active' if resume=='auto' else self.private_version if resume else None)
 
 class DeploymentTests(unittest.TestCase):
     def test_success_only_creates_private_worker_and_transfers_one_memory_key(self):
@@ -108,6 +108,14 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual(report['loggingDisable']['readbackObservability'],'ABSENT_AFTER_EXPLICIT_DISABLE')
         methods=[(method,path.rsplit('/',1)[-1]) for method,path in state.calls]
         self.assertLess(methods.index(('PATCH','script-settings')),methods.index(('POST','keys')))
+    def test_auto_resume_still_inspects_exact_active_version_and_storage(self):
+        state=State();report=state.execute(resume='auto')
+        self.assertEqual(report['status'],'PASS');self.assertTrue(report['existingNamespacePreserved'])
+        self.assertTrue(report['sourceServerHashMatch'])
+    def test_original_probe_failure_revokes_new_key_before_upload(self):
+        state=State('probe-failed');report=state.execute()
+        self.assertEqual(report['keyRecovery'],'CREATED_KEY_REVOKED')
+        self.assertFalse(report['privateWorkerUploadAttempted']);self.assertEqual(report['archiveStage'],'LIST')
     def test_changed_code_binding_or_namespace_stops_resume_without_mutation(self):
         for fault in ('code-changed','namespace-changed','unknown-binding'):
             with self.subTest(fault=fault):
