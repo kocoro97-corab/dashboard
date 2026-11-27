@@ -139,7 +139,7 @@ def build_with_preserved_calendar(artifact, checkout, source_branch=SOURCE_BRANC
     """
     validate_preview_relay(source_branch, relay_endpoint)
     if source_branch == PRIVATE_PREVIEW_BRANCH:
-        return build(artifact, relay_endpoint=relay_endpoint, use_public_config=False,
+        return build(artifact, private_briefing_endpoint=relay_endpoint,
                      public_data=checkout / 'data', source_branch=source_branch)
     if source_branch == SOURCE_BRANCH:
         return build(artifact, public_data=checkout / 'data')
@@ -166,7 +166,7 @@ def publish(expected_source_sha=None, expected_dev_head=None, source_branch=SOUR
     previous = api(target + '/contents/development-only.json?ref=' + BRANCH, optional=True)
     if previous is not None:
         marker = json.loads(base64.b64decode(previous['content']))
-        if marker.get('myinvestDevelopmentOnly') is not True or marker.get('sourceBranch') not in APPROVED_SOURCE_BRANCHES:
+        if marker.get('myinvestDevelopmentOnly') is not True or marker.get('sourceBranch') not in (*APPROVED_SOURCE_BRANCHES,'fix/verified-query-performance-20261126'):
             raise Stop('DEV_REPOSITORY_MARKER_MISMATCH')
     elif not (repo.get('size', 0) == 0 and repo.get('description') == DESCRIPTION):
         raise Stop('DEV_REPOSITORY_NOT_EMPTY_OR_OURS')

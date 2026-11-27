@@ -26,3 +26,27 @@ test('lost account catalog write response remains uncertain without retry',async
 test('persistent platform HTML error after a write has uncertain outcome',async()=>{const endpoint='https://relay.synthetic.workers.dev/api',f=setup({mode:'relay',endpoint,persistentRelay:true});f.ctx.MYINVEST_PERSISTENT_RELAY={endpoint};f.ctx.fetch=async()=>new Response('<html>synthetic edge failure</html>',{status:502});await assert.rejects(f.api.post({action:'saveExternalHoldings',token:'a'.repeat(64)}),e=>e.code==='RELAY_WRITE_OUTCOME_UNKNOWN')});
 test('persistent known storage conflict response remains readable without retry',async()=>{const endpoint='https://relay.synthetic.workers.dev/api',f=setup({mode:'relay',endpoint,persistentRelay:true});f.ctx.MYINVEST_PERSISTENT_RELAY={endpoint};let count=0;f.ctx.fetch=async()=>{count++;return new Response(JSON.stringify({success:false,code:'STORE_CONFLICT',layer:'storage'}),{headers:{'Content-Type':'application/json'}})};const r=await f.api.post({action:'saveExternalAccounts',token:'a'.repeat(64)});assert.equal((await r.json()).code,'STORE_CONFLICT');assert.equal(count,1)});
 test('public read diagnostics retain only known codes and numeric status, never provider messages',async()=>{for(const code of ['RELAY_PUBLIC_URL_DENIED','AUTH_REQUIRED','PRIVATE_TOKEN']){const f=setup({mode:'relay',endpoint:'https://relay.synthetic.workers.dev/api'});f.ctx.fetch=async()=>({ok:false,status:403,json:async()=>({success:false,code,message:'PRIVATE_BODY',url:'PRIVATE_URL'})});await assert.rejects(f.api.publicRead('https://stock.naver.com/synthetic'),e=>{assert.equal(e.code,code==='PRIVATE_TOKEN'?'RELAY_PUBLIC_FAILED':code);assert.equal(e.http,403);assert.ok(!JSON.stringify(e).includes('PRIVATE'));return true});assert.equal(f.calls.length,0)}});
+test('private owner auth uses only the pinned reader; market, accounts and OAuth retain primary routing',async()=>{
+ const primary='https://myinvest-v2-dev-relay.kocoro97.workers.dev/api',reader='https://myinvest-v2-private-original-preview.kocoro97.workers.dev/api';
+ const f=setup({mode:'relay',endpoint:primary,persistentRelay:true,devSession:true,privateBriefings:true});
+ f.ctx.location=new URL('https://kocoro97-corab.github.io/dashboard-v2-dev/#/news');f.ctx.AppRouter={validHash:()=>true};f.ctx.MYINVEST_PERSISTENT_RELAY={endpoint:primary};
+ f.ctx.MYINVEST_PRIVATE_BRIEFING_RELAY={profile:'isolated-private-original',endpoint:reader};
+ for(const action of ['login','privateMorningBriefing','logout','sessionInfo','publicFetch','googleCalendarStatus']){
+  await f.api.post({action,...(action==='login'?{user:'SYNTHETIC',pass:'SYNTHETIC_PASSWORD'}:{token:'a'.repeat(64)})});
+  const [url,options]=f.calls.at(-1);assert.equal(url,['login','logout','privateMorningBriefing'].includes(action)?reader:primary);
+  assert.equal(options.credentials,'omit');assert.equal(options.redirect,'error');assert.equal(options.cache,'no-store');
+ }
+});
+test('private capability probe cannot replay credentials or use a caller-selected endpoint',async()=>{
+ const primary='https://myinvest-v2-dev-relay.kocoro97.workers.dev/api',reader='https://myinvest-v2-private-original-preview.kocoro97.workers.dev/api';
+ const f=setup({mode:'relay',endpoint:primary,persistentRelay:true,devSession:true,privateBriefings:false});
+ f.ctx.location=new URL('https://kocoro97-corab.github.io/dashboard-v2-dev/');f.ctx.MYINVEST_PERSISTENT_RELAY={endpoint:primary};
+ f.ctx.MYINVEST_PRIVATE_BRIEFING_RELAY={profile:'isolated-private-original',endpoint:reader};
+ await f.api.post({action:'appVersion'},{privateBriefingProbe:true});assert.equal(f.calls[0][0],reader);
+ assert.throws(()=>f.api.post({action:'privateMorningBriefing',token:'a'.repeat(64)}),e=>e.code==='PRIVATE_BRIEFING_UNAVAILABLE');
+ assert.throws(()=>f.api.post({action:'appVersion',token:'a'.repeat(64)},{privateBriefingProbe:true}));
+ assert.throws(()=>f.api.post({action:'login',pass:'SYNTHETIC_PASSWORD'},{privateBriefingProbe:true}));
+ f.ctx.MYINVEST_PRIVATE_BRIEFING_RELAY.endpoint='https://unapproved.synthetic.workers.dev/api';
+ assert.throws(()=>f.api.post({action:'appVersion'},{privateBriefingProbe:true}),e=>e.code==='RELAY_CONFIG_INVALID');
+ assert.equal(f.calls.length,1);
+});

@@ -24,7 +24,7 @@ def fixed_relay(value):
 
 
 def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True, public_data=None,
-          source_branch='feat/nh-integration-v2'):
+          source_branch='feat/nh-integration-v2',private_briefing_endpoint=None):
     # Only the original V2 branch and this specific isolated performance review
     # may identify the source of a development Pages artifact.
     if source_branch not in ('feat/nh-integration-v2','fix/visible-first-market-20261125','fix/visible-first-data-20261125','fix/relay-timing-diagnostics-20261125','fix/relay-retry-isolation-preview-20261126','feat/mobile-sector-news-calendar-ui-20261126','fix/foreground-relay-lease-20261126','feat/private-original-briefing-read-20261126'):
@@ -35,6 +35,9 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True, pub
         if set(doc)!={'profile','endpoint'} or doc['profile']!='isolated-persistent':raise ValueError('PERSISTENT_RELAY_CONFIG_INVALID')
         relay_endpoint=doc['endpoint']
     if relay_endpoint is not None:relay_endpoint=fixed_relay(relay_endpoint)
+    private_endpoint='https://myinvest-v2-private-original-preview.kocoro97.workers.dev/api'
+    if private_briefing_endpoint is not None and (private_briefing_endpoint!=private_endpoint or relay_endpoint!='https://myinvest-v2-dev-relay.kocoro97.workers.dev/api' or source_branch!='feat/private-original-briefing-read-20261126'):
+        raise ValueError('DEV_PRIVATE_READER_ENDPOINT_INVALID')
     output = Path(output)
     if output.exists() and any(output.iterdir()):
         raise ValueError('DEV_OUTPUT_NOT_EMPTY')
@@ -53,6 +56,8 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True, pub
     if relay_endpoint == 'https://myinvest-v2-dev-relay.kocoro97.workers.dev/api':
         # Exact development consent routes only; no wildcard form destinations.
         text=text.replace("form-action 'none'", "form-action https://myinvest-v2-dev-relay.kocoro97.workers.dev/oauth/google/start https://accounts.google.com/o/oauth2/v2/auth")
+    if private_briefing_endpoint:
+        text=text.replace("https://*.trycloudflare.com ","https://*.trycloudflare.com https://myinvest-v2-private-original-preview.kocoro97.workers.dev ")
     debug_anchor = '<script defer src="js/debug.js?v=3-safe"></script>'
     if text.count(debug_anchor) != 1:raise ValueError('DEV_DIAGNOSTIC_ANCHOR_CHANGED')
     text = text.replace(debug_anchor, '<script>window.MYINVEST_DEV_DIAGNOSTICS=true;</script>\n<script defer src="js/development-diagnostics.js?v=1"></script>\n'+debug_anchor)
@@ -61,6 +66,8 @@ def build(output, root=ROOT, relay_endpoint=None, *, use_public_config=True, pub
         raise ValueError('DEV_TRANSPORT_MARKER_CHANGED')
     if relay_endpoint:
         text=text.replace(marker, '<script>window.MYINVEST_PERSISTENT_RELAY=Object.freeze('+json.dumps({'profile':'isolated','endpoint':relay_endpoint},separators=(',',':'))+');</script>\n'+marker)
+    if private_briefing_endpoint:
+        text=text.replace(marker,'<script>window.MYINVEST_PRIVATE_BRIEFING_RELAY=Object.freeze('+json.dumps({'profile':'isolated-private-original','endpoint':private_briefing_endpoint},separators=(',',':'))+');</script>\n'+marker)
     text = text.replace(marker, '<script>window.MYINVEST_TRANSPORT_CONFIG={mode:"relay",endpoint:"",devSession:true};</script>\n<script defer src="js/dev_market.js?v=1"></script>\n<script defer src="js/dev_inspection.js?v=1"></script>\n<script defer src="js/dev_connect.js?v=1"></script>\n' + marker)
     # Development OCR remains available from pinned local assets, but is requested
     # by dev_ocr.js only after explicit user-granted development access.

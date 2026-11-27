@@ -289,11 +289,29 @@ class DevelopmentPublishGateTests(unittest.TestCase):
                             pub.build_with_preserved_calendar(folder/'pr17',folder,pub.PRIVATE_PREVIEW_BRANCH,unapproved)
                 builder.assert_not_called()
                 pub.build_with_preserved_calendar(folder/'pr17',folder,pub.PRIVATE_PREVIEW_BRANCH,pub.PRIVATE_PREVIEW_RELAY)
-                builder.assert_called_once_with(folder/'pr17',relay_endpoint=pub.PRIVATE_PREVIEW_RELAY,
-                                                use_public_config=False,public_data=folder/'data',
+                builder.assert_called_once_with(folder/'pr17',private_briefing_endpoint=pub.PRIVATE_PREVIEW_RELAY,
+                                                public_data=folder/'data',
                                                 source_branch=pub.PRIVATE_PREVIEW_BRANCH)
         self.assertEqual(pub.REPO,'kocoro97-corab/dashboard-v2-dev')
         self.assertEqual(pub.BRANCH,'dev-pages')
+
+    def test_private_preview_keeps_primary_and_oauth_and_adds_only_fixed_reader(self):
+        from build_dev_pages import build
+        with tempfile.TemporaryDirectory() as tmp:
+            output=Path(tmp)/'dual'
+            build(output,source_branch=pub.PRIVATE_PREVIEW_BRANCH,private_briefing_endpoint=pub.PRIVATE_PREVIEW_RELAY)
+            html=(output/'index.html').read_text()
+            self.assertIn('MYINVEST_PRIVATE_BRIEFING_RELAY',html)
+            self.assertIn('https://myinvest-v2-dev-relay.kocoro97.workers.dev/api',html)
+            self.assertIn('https://myinvest-v2-dev-relay.kocoro97.workers.dev/oauth/google/start',html)
+            self.assertIn(pub.PRIVATE_PREVIEW_RELAY,html)
+            self.assertTrue((output/'js/private-original-briefing.js').is_file())
+            self.assertFalse((output/'gas').exists())
+            self.assertFalse((output/'relay').exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            for bad in (pub.PRIVATE_PREVIEW_RELAY+'?token=synthetic','https://another.synthetic.workers.dev/api'):
+                with self.assertRaisesRegex(ValueError,'DEV_PRIVATE_READER_ENDPOINT_INVALID'):
+                    build(Path(tmp)/'invalid',source_branch=pub.PRIVATE_PREVIEW_BRANCH,private_briefing_endpoint=bad)
 
     def test_private_relay_gate_runs_before_network_or_build(self):
         with patch.object(pub,'api') as api,patch.object(pub,'build') as builder,patch.object(pub,'git') as git:

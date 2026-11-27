@@ -248,3 +248,58 @@ python tests/workerd_private_reader.py \
 
 Actual Cloudflare-to-Google success and original DOM display remain unverified
 until the owner runs the corrected installer and the browser test is completed.
+
+### Owner live API receipt and frontend integration (2026-11-27)
+
+The owner-run corrected installer reported PASS, private Worker version
+`61638b2a-0335-4b03-9822-2dbbf3840f4f`, Worker source
+`f017593cb193be57a8a189811a7f5af96bba8bbc`. Original date 2026-11-27,
+16,526 UTF-8 bytes; source and server SHA-256 both:
+`688fb86de4e2d2f03c90703b69164c820d7e9c2147247cfc372dde5b35a2fff3`.
+Anonymous and revoked/logout tokens were denied. Existing namespace and primary
+pending version were preserved, no primary/GAS/archive/ACL/account writes or NH
+calls occurred. This establishes a live API read and hash comparison, not DOM
+rendering or a future scheduled save. The November 27 file is owner-recovered.
+
+The already published performance implementation at source 34cc071 is reused via
+file-level three-way integration from common ancestor 374a219, preserving the PR17
+news reader and compact navigation/account-table UI. No new optimization is added.
+For transport concurrency the currently published 34cc071 implementation (two
+physical slots) is retained; the preceding unpublished third-lease rescue test is
+updated to verify the published physical-slot rule. The published implementation's
+existing regression fixtures are carried forward as well. No branch/PR is merged.
+
+The PR17 development build now retains the primary relay for public market,
+accounts, session metadata and Calendar, including existing Calendar form CSP.
+A second exact endpoint is pinned only for appVersion capability probing,
+login/logout and privateMorningBriefing. Before enabling it, both relays must
+advertise the same isolated GAS script/sheet/source hashes; the private relay must
+advertise its owner-login authority, feature and revision marker. Credentials are
+sent once to the selected endpoint, without replay/fallback. Missing private
+capability leaves the main dashboard available and disables the private reader.
+Existing primary-issued sessions need a new login to obtain the private server's
+hashed owner-session proof. Members and other admins do not acquire that proof.
+
+Both origins are explicitly permitted by the development CSP. The private endpoint
+is never substituted for the primary relay. Calendar data from the actual current
+dev-pages checkout is still independently validated and preserved. Previous
+publication markers from the user-approved performance source branch are accepted
+only as existing target metadata, not as permission to publish arbitrary sources.
+
+Local validation: all 117 Node test files and 429 Python tests passed before the
+additional build/live-receipt tests; private original browser synthetic scenarios
+passed at 1440/690/344 (8 scenarios), including normal dual-endpoint bootstrap,
+late capability, hash verification, no HTML execution and cleanup. Additional
+publication and owner-browser receipt unit tests passed. These are synthetic.
+
+`tools/verify_private_news_live_browser.py` is an owner-terminal, read-only browser
+check for the real published news page. It requires only hidden existing dashboard
+ID/password (no Google/Cloudflare keys). It checks the exact published source,
+anonymous denial, source/server/DOM SHA-256 and byte count, 1440/690/344 layout,
+no persistent original copy and logout cleanup. Its network guard permits only
+fixed development assets plus appVersion/login/logout/sessionInfo/private reads;
+NH/account/public-market requests are explicitly blocked rather than simulated.
+No screenshots, browser traces, keys or original report files are written. The
+printed result contains only hashes, counts and statuses; other-member and next
+actual scheduled-save results remain NOT_RUN. It requires an installed Playwright
+Chromium runtime and fails without exposing browser exceptions or credentials.

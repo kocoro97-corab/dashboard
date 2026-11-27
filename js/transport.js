@@ -33,15 +33,17 @@
   function isRelay(){return config().mode==='relay'}
   // Shared physical read budget. Auth and reviewed writes are never replayed.
   const reads=new Set(['publicFetch','nhQuotes','nhExternalQuotes','nhAccounts','externalHoldings','externalHistory','externalAccounts','googleCalendarStatus','googleCalendarList','googleCalendarEvents','privateMorningBriefing']);
-  const waiting=[],running=new Set(),publicPending=new Map();let epoch=0,sharedEpoch=0,completed=0,cancelled=0,pauseUntil=0,pauseTimer=null,throttleUntil=0,sharedPromotions=0,sharedJoins=0,maxQueueWaitMs=0,maxPhysicalReadMs=0,foregroundRescueStarts=0;
+  const waiting=[],running=new Set(),publicPending=new Map();let epoch=0,sharedEpoch=0,accountEpoch=0,completed=0,cancelled=0,pauseUntil=0,pauseTimer=null,throttleUntil=0,sharedPromotions=0,sharedJoins=0,maxQueueWaitMs=0,maxPhysicalReadMs=0;
   const readClock=()=>root.performance?.now?.()??Date.now();
   // Anonymous in-memory latency only: no URLs, tokens, account data, or payloads.
   const elapsed=since=>Number.isFinite(since)?Math.max(0,Math.min(86400000,Math.round(readClock()-since))):0;
   const abortError=()=>Object.assign(new Error('READ_CANCELLED'),{name:'AbortError',code:'READ_CANCELLED'});
   function cancelReads(options={}){
     const keepShared=options?.keepSharedPublic===true;
-    epoch++;if(!keepShared)sharedEpoch++;
-    for(const job of [...waiting,...running])if(!keepShared||!job.sharedPublic)job.cancel(failure('SESSION_CHANGED'));
+    const keepAccount=options?.keepAccountRead===true;
+    epoch++;if(!keepShared)sharedEpoch++;if(!keepAccount)accountEpoch++;
+    for(const job of [...waiting,...running])
+      if(!(keepShared&&job.sharedPublic)&&!(keepAccount&&job.accountRead))job.cancel(failure('SESSION_CHANGED'));
     root.dispatchEvent?.(new Event('myinvest:cancel-reads'));pump();
   }
   function promoteShared(tag){
@@ -69,40 +71,31 @@
     while(waiting.length){
       const visibleTag=(root.location?.hash||'').replace(/^#\//,'');
       // The visible route wins before any spare physical relay slot is leased.
-      const candidate=waiting.findIndex(j=>!j.cancelled&&j.current()&&(!j.sharedPublic||j.sharedTag===visibleTag));
+      const background=j=>j.accountRead?visibleTag.split('/')[0]!=='accounts':j.sharedPublic&&j.sharedTag!==visibleTag;
+      const candidate=waiting.findIndex(j=>!j.cancelled&&j.current()&&!background(j));
       if(candidate>0)waiting.unshift(waiting.splice(candidate,1)[0]);
       const head=waiting[0];
-      const headBackground=head.sharedPublic&&head.sharedTag!==visibleTag;
+      const headBackground=background(head);
       // Idle warming may use only one physical lease; leave another for the visible screen.
       // A promoted/shared request becomes foreground when its page is visible.
-      if(headBackground&&[...running].some(j=>j.sharedPublic&&!j.cancelled&&j.sharedTag!==visibleTag))return;
-      // Existing news/theme reads may still occupy both physical relay slots
-      // after a navigation. Reserve a single bounded third lease ONLY for the
-      // new visible page and ONLY when the previous two leases are shared
-      // public reads from a different route. The relay's verified 429/503
-      // backpressure always takes precedence; never expand normal concurrency.
-      const cfg=config();
-      const rescue=cfg.devSession===true&&cfg.persistentRelay===true&&
-        readClock()>=throttleUntil&&running.size===2&&!headBackground&&
-        [...running].every(j=>j.sharedPublic&&!j.cancelled&&j.sharedTag!==visibleTag);
-      const normalLimit=Math.min(head.limit,readClock()<throttleUntil?1:Infinity);
-      if(running.size>=(rescue?3:normalLimit))return;
+      if(headBackground&&[...running].some(j=>background(j)))return;
+      if(running.size>=Math.min(head.limit,readClock()<throttleUntil?1:Infinity))return;
       const job=waiting.shift();if(job.cancelled||!job.current()){job.cancel(failure('SESSION_CHANGED'));continue}
-      running.add(job);job.started=true;job.startedAt=readClock();if(rescue)foregroundRescueStarts++;maxQueueWaitMs=Math.max(maxQueueWaitMs,elapsed(job.enqueuedAt));
+      running.add(job);job.started=true;job.startedAt=readClock();maxQueueWaitMs=Math.max(maxQueueWaitMs,elapsed(job.enqueuedAt));
       // Do not abort a physical request on navigation: Worker lease release may
       // lag a browser abort. Keep its slot until the server response settles.
       Promise.resolve().then(job.run).then(value=>{if(job.current()&&!job.cancelled)job.resolve(value);else job.cancel(failure('SESSION_CHANGED'))},error=>job.reject(error))
-        .finally(()=>{maxPhysicalReadMs=Math.max(maxPhysicalReadMs,elapsed(job.startedAt));job.detach();running.delete(job);completed++;pump()});
+        .finally(()=>{maxPhysicalReadMs=Math.max(maxPhysicalReadMs,elapsed(job.startedAt));job.detach();running.delete(job);completed++;pump();root.dispatchEvent?.(new Event('myinvest:read-capacity'))});
     }
   }
-  function enqueueRead(run,current,signal,limit,sharedTag=null){
+  function enqueueRead(run,current,signal,limit,sharedTag=null,accountRead=false){
     if(waiting.length>=128)return Promise.reject(failure('READ_QUEUE_FULL'));
     return new Promise((resolve,reject)=>{
-      const job={run,current,resolve,reject,limit,sharedPublic:sharedTag!==null,sharedTag,cancelled:false,started:false,enqueuedAt:readClock(),startedAt:null,detach(){signal?.removeEventListener('abort',onAbort)},cancel(error){if(this.cancelled)return;this.cancelled=true;cancelled++;this.detach();reject(error)}};
+      const job={run,current,resolve,reject,limit,sharedPublic:sharedTag!==null,sharedTag,accountRead,cancelled:false,started:false,enqueuedAt:readClock(),startedAt:null,detach(){signal?.removeEventListener('abort',onAbort)},cancel(error){if(this.cancelled)return;this.cancelled=true;cancelled++;this.detach();reject(error)}};
       const onAbort=()=>{job.cancel(abortError());pump()};
       if(signal?.aborted){job.cancel(abortError());return}
       signal?.addEventListener('abort',onAbort,{once:true});
-      if(sharedTag===null){const position=waiting.findIndex(x=>x.sharedPublic);if(position>=0)waiting.splice(position,0,job);else waiting.push(job)}
+      if(sharedTag===null&&!accountRead){const position=waiting.findIndex(x=>x.sharedPublic||x.accountRead);if(position>=0)waiting.splice(position,0,job);else waiting.push(job)}
       else waiting.push(job);
       pump();
     });
@@ -118,10 +111,24 @@
       sharedActive:active.filter(j=>j.sharedPublic).length,sharedPromotions,sharedJoins,
       oldestQueuedMs:queue.length?Math.max(...queue.map(j=>elapsed(j.enqueuedAt))):0,
       oldestActiveMs:active.length?Math.max(...active.map(j=>elapsed(j.startedAt))):0,
-      maxQueueWaitMs,maxPhysicalReadMs,foregroundRescueStarts};
+      maxQueueWaitMs,maxPhysicalReadMs};
+  }
+  const accountSession=c=>c?.devSession===true&&c?.persistentRelay===true&&c?.accountReads===true&&typeof LS==='function'&&LS('invest_is_admin')==='true'&&LS('invest_password_change')!==true;
+  const PRIVATE_ENDPOINT='https://myinvest-v2-private-original-preview.kocoro97.workers.dev/api';
+  function requestEndpoint(c,data,options){
+    const probe=options.privateBriefingProbe===true;
+    const privateRead=data.action==='privateMorningBriefing';
+    const ownerAuth=c.privateBriefings===true&&['login','logout'].includes(data.action);
+    if(!probe&&!privateRead&&!ownerAuth)return c.endpoint;
+    const pinned=root.MYINVEST_PRIVATE_BRIEFING_RELAY;
+    if(c.devSession!==true||c.persistentRelay!==true||c.endpoint!=='https://myinvest-v2-dev-relay.kocoro97.workers.dev/api'||pinned?.profile!=='isolated-private-original'||pinned.endpoint!==PRIVATE_ENDPOINT)throw failure('RELAY_CONFIG_INVALID');
+    if(probe&&(data.action!=='appVersion'||Object.keys(data).length!==1)||!probe&&c.privateBriefings!==true)throw failure('PRIVATE_BRIEFING_UNAVAILABLE');
+    return PRIVATE_ENDPOINT;
   }
   function post(payload,options){
     const c=config();options=options||{};
+    if(options.sessionAccountRead===true&&!(c.mode==='relay'&&payload.action==='nhAccounts'&&accountSession(c)&&typeof payload.token==='string'&&payload.token===LS('invest_session_token')))throw failure('AUTH_REQUIRED');
+    if((payload?.action==='privateMorningBriefing'||options.privateBriefingProbe===true)&&(c.mode!=='relay'||options.privateBriefingProbe===true&&payload.token!=null))throw failure('RELAY_CONFIG_INVALID');
     if(c.mode==='direct')return root.fetch(MYP(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),signal:options.signal});
     const data={...payload},headers={'Content-Type':'application/json'};
     if(c.devAccessCode!=null){
@@ -138,10 +145,11 @@
       if(typeof data.token!=='string'||!/^[a-fA-F0-9]{64}$/.test(data.token))throw failure('AUTH_REQUIRED');
       headers.Authorization='Bearer '+data.token;delete data.token;
     }
-    const queued=reads.has(data.action),endpoint=c.endpoint,generation=epoch,sharedGeneration=sharedEpoch,token=payload.token,route=root.location?.hash,access=c.devAccessCode;
+    const queued=reads.has(data.action),primaryEndpoint=c.endpoint,endpoint=requestEndpoint(c,data,options),generation=epoch,sharedGeneration=sharedEpoch,token=payload.token,route=root.location?.hash,access=c.devAccessCode;
     const sharedPublic=queued&&data.action==='publicFetch'&&options.sharedPublic===true&&c.devSession===true&&c.publicMarket===true&&['sectors','news'].includes(options.sharedTag)&&isSharedPublicUrl(data.url,options.sharedTag)&&!options.signal;
     if(options.sharedPublic===true&&!sharedPublic)throw failure('RELAY_CONFIG_INVALID');
-    const current=()=>(sharedPublic?sharedGeneration===sharedEpoch:generation===epoch&&route===root.location?.hash)&&c===root.MYINVEST_TRANSPORT_CONFIG&&c.endpoint===endpoint&&c.mode==='relay'&&c.devAccessCode===access&&!options.signal?.aborted&&(token==null||token===(typeof LS==='function'?LS('invest_session_token'):null));
+    const accountRead=options.sessionAccountRead===true,accountGeneration=accountEpoch;
+    const current=()=>(accountRead?accountGeneration===accountEpoch&&accountSession(c):sharedPublic?sharedGeneration===sharedEpoch:generation===epoch&&route===root.location?.hash)&&c===root.MYINVEST_TRANSPORT_CONFIG&&c.endpoint===primaryEndpoint&&c.mode==='relay'&&c.devAccessCode===access&&!options.signal?.aborted&&(token==null||token===(typeof LS==='function'?LS('invest_session_token'):null));
     const send=()=>{
       const controller=queued&&typeof root.AbortController==='function'?new root.AbortController():null;
       const timer=controller&&root.setTimeout?root.setTimeout(()=>controller.abort(),35000):null;
@@ -161,7 +169,7 @@
     })
       .finally(()=>{if(timer!==null)root.clearTimeout(timer)});
     };
-    return queued?enqueueRead(send,current,options.signal,c.persistentRelay===true?2:1,sharedPublic?options.sharedTag:null):send();
+    return queued?enqueueRead(send,current,options.signal,c.persistentRelay===true?2:1,sharedPublic?options.sharedTag:null,accountRead):send();
   }
 
   async function publicRead(url,options){

@@ -1,25 +1,31 @@
 """Synthetic private original test: no Google, GAS, NH, external secrets or real report text."""
-import asyncio,hashlib,json,re,sys,tempfile,time
+import asyncio,hashlib,json,re,sys,tempfile,time,urllib.request
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'tools'))
 from playwright.async_api import async_playwright
 from build_dev_pages import build
 from public_integration_support import Harness,synthetic_feeds,ENDPOINT
 
+PRIMARY='https://myinvest-v2-dev-relay.kocoro97.workers.dev/api'
+READER='https://myinvest-v2-private-original-preview.kocoro97.workers.dev/api'
 class PrivateHarness(Harness):
  def __init__(self,*args,capability,**kwargs):
   super().__init__(*args,**kwargs)
+  self.endpoint=PRIMARY
   self.capability=capability
   self.private_requests=[]
  async def _route(self,route):
-  if route.request.url==self.endpoint and route.request.method=='POST':
+  if route.request.url in (self.endpoint,READER) and route.request.method=='POST':
    body=json.loads(route.request.post_data or '{}')
    if body.get('action') in ['appVersion','privateMorningBriefing']:
     headers={'Access-Control-Allow-Origin':'https://kocoro97-corab.github.io','Cache-Control':'no-store'}
     if body['action']=='appVersion':
      response={'success':True,'freshTestEnvironment':True,'testEnvironment':'nh-staging',
                'gatewayVersion':2,'storeEngine':'account-store-v2','relayProfile':'persistent',
-               'developmentPrivateBriefings':self.capability,'features':['privateMorningBriefing']}
+               'scriptHash':'a'*64,'sheetHash':'b'*64,'sourceDigest':'c'*64,
+               'developmentPrivateBriefings':self.capability,'features':[],
+               'developmentPrivateBriefingAuthority':'gas-login-owner-v1','developmentPrivateBriefingRevision':'d'*32,
+               'privateBriefingRelayFeatures':['privateMorningBriefing']}
     else:
      self.private_requests.append(body.get('mode'))
      assert self.capability is True,'disabled bootstrap must not request the private archive'
@@ -32,6 +38,13 @@ class PrivateHarness(Harness):
                          'contentSha256':hashlib.sha256(TEXT.encode()).hexdigest()}}
     await route.fulfill(status=200,headers=headers,json=response)
     return
+  if route.request.url==READER:
+   payload={'headers':route.request.headers,'method':route.request.method,'body':route.request.post_data}
+   def send():
+    request=urllib.request.Request('http://127.0.0.1:'+str(self.port),data=json.dumps(payload).encode(),headers={'Content-Type':'application/json'})
+    with urllib.request.urlopen(request,timeout=20) as response:return json.load(response)
+   result=await asyncio.to_thread(send)
+   await route.fulfill(status=result['status'],headers=result['headers'],body=result['body']);return
   await super()._route(route)
 
 TEXT='# 2026-11-26 ChatGPT synthetic original\n<Cite ref="example" />\n<script>window.__PRIVILEGE_CANARY=true</script>\n'
@@ -84,6 +97,7 @@ async def main():
       assert not any(r['action']=='privateMorningBriefing' for r in h.requests),'disabled news view may not read private data through a real relay'
       print(json.dumps({'width':width,'privateOriginalSynthetic':'PASS','SHA256':'PASS','noPublicFallback':'PASS','noExecution':'PASS','clearedAfterUnmount':'PASS'}))
      finally:await h.close()
+    artifact=Path(tmp)/'dual-reader';build(artifact,relay_endpoint=PRIMARY,source_branch='feat/private-original-briefing-read-20261126',private_briefing_endpoint=READER)
     # News already mounted with the capability disabled, then the handshake
     # finishes. It must fetch without a reload or an admin pressing a button.
     h=await PrivateHarness(browser,artifact,synthetic_feeds(),344,capability=False).start_browser(tmp)

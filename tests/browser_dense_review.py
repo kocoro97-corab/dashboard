@@ -21,7 +21,7 @@ async def main():
      for scale in a.scales:
       # Native browser zoom reduces layout viewport and increases DPR. This
       # viewport/DPR equivalence tests reflow; it is not physical device testing.
-      h=await Harness(b,artifact,feeds,math.floor(width/scale),a.published,height=math.floor(1000/scale),device_scale=scale).start_browser(tmp)
+      h=await Harness(b,artifact,feeds,math.floor(width/scale),a.published,height=math.floor(1000/scale),device_scale=scale,private_reads=True).start_browser(tmp)
       if a.artifact:h.endpoint=re.search(r'https://[a-z0-9.-]+\.workers\.dev/api',(artifact/'index.html').read_text())[0]
       try:
        await h.page.clock.set_fixed_time('2026-11-18T03:00:00Z');await h.login('accounts');await h.page.wait_for_function('()=>DashboardShell.getStatus().running===0')

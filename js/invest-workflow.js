@@ -11,7 +11,24 @@ function current(){for(const key of [SELECT,STRATEGY])try{const x=JSON.parse(ses
 function select(symbol,options={}){const value=clean({...options,symbol:String(symbol||'').trim().toUpperCase()});if(!value)return null;try{const json=JSON.stringify(value);sessionStorage.setItem(SELECT,json);sessionStorage.setItem(STRATEGY,json)}catch{return null}event('myinvest:workflow-selection');return value}
 function clear(){epoch++;analyses.clear();pending.clear();themeGroups=[];for(const k of [SELECT,STRATEGY])try{sessionStorage.removeItem(k)}catch{}}
 function publish(analysis){if(!analysis||!valid(analysis.symbol)||!Array.isArray(analysis.bars)||analysis.bars.length<21)return false;analyses.set(analysis.symbol,{...analysis,receivedAt:analysis.receivedAt||Date.now()});while(analyses.size>64)analyses.delete(analyses.keys().next().value);return true}
-async function ensure(selection,force=false){if(!selection||!valid(selection.symbol)||!analyzer)throw Error('ANALYSIS_UNAVAILABLE');const cached=analyses.get(selection.symbol);if(!force&&cached&&Date.now()-cached.receivedAt<300000)return cached;if(pending.has(selection.symbol))return pending.get(selection.symbol);const version=epoch,diagnosticRoute=root.location?.hash;const job=analyzer(selection.symbol).then(data=>{if(version!==epoch)throw Error('SESSION_CHANGED');publish(data);return data}).catch(error=>{if(version===epoch&&diagnosticRoute===root.location?.hash&&!['SESSION_CHANGED','READ_CANCELLED'].includes(error?.code||error?.message))root.DevelopmentDiagnostics?.note({source:'analysis',code:error?.code||error?.message});throw error}).finally(()=>{if(pending.get(selection.symbol)===job)pending.delete(selection.symbol)});pending.set(selection.symbol,job);return job}
+async function ensure(selection,force=false,{signal,background=false}={}){
+ if(!selection||!valid(selection.symbol)||!analyzer)throw Error('ANALYSIS_UNAVAILABLE');
+ if(signal?.aborted)throw Error('READ_CANCELLED');
+ const symbol=selection.symbol,cached=analyses.get(symbol);
+ if(!force&&cached&&Date.now()-cached.receivedAt<300000)return cached;
+ const prior=pending.get(symbol);
+ if(prior&&!prior.signal?.aborted)return prior.job;
+ const version=epoch,diagnosticRoute=root.location?.hash;
+ const job=analyzer(symbol,{signal}).then(data=>{
+  if(version!==epoch)throw Error('SESSION_CHANGED');
+  if(signal?.aborted)throw Error('READ_CANCELLED');
+  publish(data);return data;
+ }).catch(error=>{
+  if(!background&&version===epoch&&diagnosticRoute===root.location?.hash&&!['SESSION_CHANGED','READ_CANCELLED'].includes(error?.code||error?.message))root.DevelopmentDiagnostics?.note({source:'analysis',code:error?.code||error?.message});
+  throw error;
+ }).finally(()=>{if(pending.get(symbol)?.job===job)pending.delete(symbol)});
+ pending.set(symbol,{job,signal});return job;
+}
 function compatible(h,exchange){if(h.market==='domestic')return h.currency==='KRW';const id=String(h.instrumentId||''),e={NMS:'XNAS',NGM:'XNAS',NCM:'XNAS',NYQ:'XNYS',PCX:'ARCX',ASE:'XASE',BTS:'BATS'}[exchange];return h.currency==='USD'&&!!e&&id.split(':')[1]===e}
 function holdings(ctx,selection,analysis){let snap;try{snap=ctx?.snapshot()}catch{return []}if(!Array.isArray(snap?.details)||!Array.isArray(snap?.result?.rows))return [];if(snap.details.length!==snap.result.rows.length)return [];return snap.details.filter((h,i)=>{const a=snap.result.rows[i];return valid(h?.code)&&!h.draft&&a?.identity&&!a.issues?.includes('IDENTITY_UNKNOWN')&&Number.isFinite(h.quantity)&&h.quantity>0&&Number.isFinite(h.avgPrice)&&h.avgPrice>0&&(!selection||h.code===selection.symbol)&&(!analysis||compatible(h,analysis.exchange))})}
 function registerThemes(groups){const incoming=Array.isArray(groups)?groups:[],markets=new Set(incoming.map(g=>g.market+':'+(g.kind||'theme')));themeGroups=[...themeGroups.filter(g=>!markets.has(g.market+':'+(g.kind||'theme'))),...incoming].filter(g=>g&&typeof g.name==='string'&&Array.isArray(g.stocks)).slice(0,80).map(g=>({...g,stocks:g.stocks.filter(s=>valid(s.symbol)).slice(0,60)}));event('myinvest:workflow-themes')}

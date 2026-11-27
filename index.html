@@ -74,7 +74,7 @@
     </section>
     <section class="card" id="nhAccountSection">
       <div class="sh"><div><h2>일반계좌 · NH 나무 조회 전용</h2><p>일반계좌(01·02)만 조회 · ISA·연금저축·IRP 및 모의계좌 제외 · 주문 기능 없음</p><div class="mini" id="nhAccountStatus">계좌 조회 대기</div></div>
-        <div class="hr"><select id="nhAssetFilter" onchange="renderNHAccounts()"><option value="all">국내+해외 전체</option><option value="domestic">국내주식</option><option value="overseas">해외주식</option></select><button id="nhAccountBtn" onclick="loadNHAccounts()">↻ 계좌 잔고 조회</button></div></div>
+        <div class="hr"><select id="nhAssetFilter" onchange="renderNHAccounts()"><option value="all">국내+해외 전체</option><option value="domestic">국내주식</option><option value="overseas">해외주식</option></select><button id="nhAccountBtn" onclick="loadNHAccounts({force:true})">↻ 계좌 잔고 조회</button></div></div>
       <div class="grid three" id="nhAccountCards" style="margin-bottom:8px"></div>
       <div class="tw"><table class="account-line-table"><thead><tr><th>계좌</th><th>구분</th><th>종목</th><th>코드</th><th>수량</th><th>평단가</th><th>현재가</th><th>평가금액(원)</th><th>평가손익(원)</th><th>수익률</th></tr></thead><tbody id="nhAccountRows"><tr><td colspan="10" style="text-align:center">조회 버튼을 눌러 NH 계좌 잔고를 불러오세요.</td></tr></tbody></table></div>
     </section>
