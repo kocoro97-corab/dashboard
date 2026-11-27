@@ -387,3 +387,44 @@ browser failure as PARTIAL rather than NOT_RUN. Three independent fresh-context
 synthetic repetitions passed with no external Google/NH calls. No timeout increase,
 force click, test removal, permission change or additional application behavior
 change was used for this timing correction.
+
+### Formatted viewer for the original rich briefing (2026-11-27)
+
+After development publication c7eb1d73 the owner confirmed that the original is now
+visible, but the literal source display is not a usable viewer. A read-only format
+inspection found Markdown headings/tables plus ChatGPT grid/grid-item, box, title,
+row, caption, text, Cite, Link, icon/divider and SVG shape notation. No original
+content was copied into fixtures or rewritten in Drive.
+
+`js/private-briefing-viewer.js` maps that presentation into explicitly constructed
+DOM nodes. It renders headings, emphasis, lists, tables, cards, captions and bounded
+SVG shapes. It never uses innerHTML, DOMParser, eval, a component runtime or an
+iframe. Supplied styles/JS props/events are not executed. Script/resource/form/
+foreignObject/use tags are excluded; SVG attributes are restricted to bounded
+numeric geometry, known paint values and path data. Image resources are never
+loaded. Links permit absolute HTTP(S) only without embedded credentials and use
+noopener/noreferrer. Unresolvable ChatGPT internal Cite IDs become plain original
+citation markers; no citation URL, news item, calculation or market value is invented.
+The viewer has text/node/depth limits and preserves the unchanged raw source if
+formatting cannot be completed.
+
+The default article is formatted; '원문 보기 · 서식 코드 포함' is collapsed. Its raw
+pre text retains the exact receipt, including CRLF, markup and original SHA-256.
+The file, private API contract, owner gate, backend key and original archive remain
+unchanged. This is an in-memory presentation of the same response, not another
+stored file or a public feed. Both article and source clear on refresh/logout.
+
+Formatted visible text necessarily differs from markup bytes. The owner verifier
+now labels hash scope as `unchanged-raw-source-details`, checks formatted content
+is present, and reports heading/table/card/diagram structure. It does not claim
+that formatted visible text has the original markup SHA. Synthetic fixtures assert
+raw source hash, closed source details, safe structured DOM and no attempted image/
+SVG-resource request at 1440/690/344. Malicious source scripts, event attributes
+and remote resource values are included only in synthetic fixtures. Optional local
+screenshots explicitly show SYNTHETIC ONLY content; live owner verification still
+writes no screenshot, trace, original or credential file.
+
+Validation before CI: all 118 Node files, all 432 Python tests, the eight private
+original browser scenarios and the structured owner-verifier mock passed. Real
+formatted owner display remains pending development publication/recheck. Next real
+scheduled save remains NOT_RUN, independent of the owner's recovered November 27 file.
