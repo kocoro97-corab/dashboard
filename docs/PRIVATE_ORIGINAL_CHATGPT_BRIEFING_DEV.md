@@ -64,3 +64,39 @@ Cloudflare Account ID와 기존 API token을 숨김 입력하며 결과에는 �
 `liveOriginalDisplay:NOT_RUN`을 유지하며, 이를 원문 표시나 예약 저장 성공으로 보고하지 않는다.
 원문 Worker가 없으면 새로 만들지 않고 존재 여부만 보고한다.
 다른 개발 작업의 미활성 Worker 후보가 있으면 이를 활성화하거나 덮어쓰지 않는다.
+
+## 9. 기존 GAS/주 Worker를 변경하지 않는 전용 서버 설치
+
+실제 owner 점검에서 주 Worker의 미활성 후보가 발견됐다. 이를 보존하기 위해
+`tools/deploy_private_news_reader.py --apply`는 주 Worker와 GAS에 쓰기를 하지 않는다.
+운영이나 Pages도 이 도구의 API 허용 범위에 없다.
+
+전용 Worker는 같은 격리 GAS의 기존 login을 사용한다. 서버 비밀 설정으로 지정한
+소유자의 login이 GAS에서 관리자·비밀번호 변경 불필요로 확인된 경우에만, 발급된
+세션 token의 SHA-256을 전용 Durable Object에 최대 8시간 보관한다. 원문 조회 때마다
+GAS sessionInfo의 유효성·관리자·비밀번호 상태를 다시 확인하고 이 token 해시도 확인한다.
+다른 관리자·일반 회원·임의의 기존 주 Worker token은 원문 권한을 얻지 못한다.
+GAS가 명시적으로 원문 권한을 거부한 경우에도 이를 우회하지 않는다.
+원문이나 원문 캐시, 비밀번호, 원본 session token을 이 저장소에 보관하지 않는다.
+
+도구는 다음만 수행한다.
+
+1. 기존 Google 소유자·프로젝트·전용 계정·역할 없음·사용자 관리 키 0개와
+   기존 owner bundle/주 Worker 배포/후보 이력을 읽기 검증한다.
+2. 기존 격리 GAS에 지정 소유자의 로그인 가능 여부를 확인하고 임시 세션을 로그아웃한다.
+3. 전용 계정 키 한 개를 IAM에서 생성해 프로세스 메모리에서만 읽고 전용 Worker Secrets로
+   직접 전달한다. JSON 키 파일이나 원문 파일은 생성하지 않는다.
+4. 정확한 전용 Worker가 없는 경우에만 해당 Worker와 새 SQLite RelayGate를 만든다.
+   NH·계좌·저장·일반 공개시장 action은 이 Worker에서 차단하고 관측 로그도 끈다.
+   기존 계정의 무료 Worker/SQLite 기능만 사용하며 과금 설정·요금제 변경 API는 없다.
+5. 공개 metadata가 원래 격리 GAS와 일치하는지, 익명 차단, 실제 소유자 인증,
+   2026-11-27 원문의 서버 수신·UTF-8 SHA-256, 로그아웃 후 차단을 점검한다.
+6. 실패 시 생성 ID가 확인된 새 키만 회수한다. 결과가 불명확하면 자동 재생성하지 않는다.
+   이미 존재하는 전용 Worker나 기존 키가 있으면 덮어쓰기·회전하지 않고 검토 대상으로 남긴다.
+
+입력은 기존 Cloudflare Account ID/token, MY INVEST 소유자 ID/비밀번호, 승인된 보관함
+주소 또는 ID이며 숨김 입력이다. Google 비밀번호나 서비스 계정 키를 채팅에 요청하지 않는다.
+출력의 `PRIVATE_READER_LIVE_API_VERIFIED`는 서버 API 검증만 의미한다.
+일반 회원 실제 시험·브라우저 원문 표시·다음 예약 저장은 각각 NOT_RUN으로 유지한다.
+현재 개발 사이트의 승인된 성능 개선판과 주 Worker/OAuth 경로는 그대로 두며,
+후속 프런트엔드 통합에서는 소유자 login/비공개 원문 action만 전용 경로로 연결해야 한다.
