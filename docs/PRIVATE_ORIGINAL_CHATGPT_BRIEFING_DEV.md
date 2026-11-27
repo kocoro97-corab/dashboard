@@ -375,3 +375,15 @@ This fixes the disabled recovery control and reproduces the primary-token recove
 path. The actual owner's original display remains FAIL/awaiting recheck until the
 new development build and a real visible logout/re-login are verified. The screenshot
 alone cannot establish every server-side denial cause; no privilege is broadened.
+
+CI 45953830301 passed for 01ee180; its independent PR run 45953837882 reached the
+new owner-verifier mock scenario, verified all original hashes, but timed out at
+logout after rapidly resizing 1440→690→344. The viewport-dependent header menu is
+updated on animation frames; an immediate visibility check could race its closure.
+The verifier now waits for two animation frames after each viewport change, then
+uses the actual menu/logout controls. It explicitly checks an enabled logout
+button, reports separate control/response/DOM phases, and reports an attempted
+browser failure as PARTIAL rather than NOT_RUN. Three independent fresh-context
+synthetic repetitions passed with no external Google/NH calls. No timeout increase,
+force click, test removal, permission change or additional application behavior
+change was used for this timing correction.
