@@ -70,7 +70,7 @@ class State:
         return Web()
     def post(self,action,token=None,**values):
         self.calls.append(('HTTP',action))
-        if action=='appVersion':return 200,{**self.meta,'developmentPrivateBriefingAuthority':'gas-login-owner-v1'}
+        if action=='appVersion':return 200,{**self.meta,'developmentPrivateBriefingAuthority':'gas-login-owner-v1','developmentPrivateBriefingRevision':next(r['text'] for r in self.config['bindings'] if r['name']=='MYINVEST_NEWS_DEPLOYMENT_MARKER')}
         if action=='login':return 200,{'success':True,'token':'e'*64}
         if action=='logout':self.logged_out=True;return 200,{'success':True}
         if not token:return 401,{'success':False,'code':'AUTH_REQUIRED'}

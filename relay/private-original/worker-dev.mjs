@@ -2,7 +2,7 @@
  * Fixed upstream only; no browser-to-GAS fallback, accounts, tokens or body logs.
  */
 import policy from './policy.json' with {type:'json'};
-import {createDedicatedDriveArchiveReader,createServiceAccountToken,validDedicatedAccount} from './drive-archive.mjs';
+import {createDedicatedDriveArchiveReader,createServiceAccountToken,validDedicatedAccount,safeArchiveDiagnostic} from './drive-archive.mjs';
 const ORIGIN='https://kocoro97-corab.github.io',TOKEN=/^[a-fA-F0-9]{64}$/,MAX_RESPONSE=2*1024*1024;
 const failure=(code,status=502)=>Object.assign(new Error(code),{code,status});
 const auth=new Set(policy.auth),reads=new Set(policy.reads),writes=new Set(policy.writes),privateReads=new Set(policy.privateReads||[]);
@@ -152,7 +152,7 @@ export function createHandler({fetcher=fetch,gatewayFactory=createGateway,readDe
   lease=(await quota.json()).lease;if(typeof lease!=='string')throw failure('RELAY_CONFIG_INVALID',503);
   const readSignal=action==='publicFetch'?readDeadline():null,gateway=gatewayFactory(config,fetcher,proof,readSignal),metadata=await readWithin(()=>gateway.verify(),readSignal);let result;
   if(privateReads.has(action)&&!config.loginOwner&&!metadata.features?.includes('privateMorningBriefing'))throw failure('RELAY_TARGET_MISMATCH',503);
-   if(action==='appVersion')result={...metadata,relayProfile:'persistent',developmentPublicMarket:config.market,developmentPublicFutures:config.futures,developmentIndustryMarket:config.market,developmentFuturesReadVersion:2,developmentReadResilienceVersion:1,developmentAccountReads:config.accounts,developmentPrivateBriefings:config.privateBriefings,developmentExternalStore:config.store,developmentExternalTestStore:false,...(config.loginOwner?{developmentPrivateBriefingAuthority:'gas-login-owner-v1',privateBriefingRelayFeatures:['privateMorningBriefing']}: {})};
+   if(action==='appVersion')result={...metadata,relayProfile:'persistent',developmentPublicMarket:config.market,developmentPublicFutures:config.futures,developmentIndustryMarket:config.market,developmentFuturesReadVersion:2,developmentReadResilienceVersion:1,developmentAccountReads:config.accounts,developmentPrivateBriefings:config.privateBriefings,developmentExternalStore:config.store,developmentExternalTestStore:false,...(config.loginOwner?{developmentPrivateBriefingAuthority:'gas-login-owner-v1',developmentPrivateBriefingRevision:/^[a-f0-9]{32}$/.test(env.MYINVEST_NEWS_DEPLOYMENT_MARKER||'')?env.MYINVEST_NEWS_DEPLOYMENT_MARKER:undefined,privateBriefingRelayFeatures:['privateMorningBriefing']}: {})};
   else if(config.loginOwner&&action==='login'){
    result=await gateway.post(body);
    if(result.success===true&&result.isAdmin===true&&result.mustChangePassword===false&&body.user===env.MYINVEST_NEWS_OWNER_USER){
@@ -175,7 +175,7 @@ export function createHandler({fetcher=fetch,gatewayFactory=createGateway,readDe
   }
   else if(action==='publicFetch')result={success:true,text:await readWithin(()=>gateway.public(body.url,body.token),readSignal)};
   else{attemptedWrite=writes.has(action);result=await gateway.post(body);if(action==='nhQuotes')result=futureResult(result,body.items)}
-  if(result.success!==true)result={success:false,code:safeCode.has(result.code)?result.code:'GAS_REJECTED',layer:['gas','storage','nh'].includes(result.layer)?result.layer:'gas',...(safeMessages.has(result.message)?{message:result.message}:{}),mustChangePassword:result.mustChangePassword===true};
+  if(result.success!==true)result={...(config.loginOwner&&privateReads.has(action)&&safeArchiveDiagnostic(result.archiveDiagnostic)?{archiveDiagnostic:safeArchiveDiagnostic(result.archiveDiagnostic)}:{}),success:false,code:safeCode.has(result.code)?result.code:'GAS_REJECTED',layer:['gas','storage','nh'].includes(result.layer)?result.layer:'gas',...(safeMessages.has(result.message)?{message:result.message}:{}),mustChangePassword:result.mustChangePassword===true};
   return reply(200,result);
  }catch(error){const code=attemptedWrite?'RELAY_WRITE_OUTCOME_UNKNOWN':publicCodes.has(error.code)?error.code:'RELAY_BAD_RESPONSE';return reply(Number.isInteger(error.status)&&error.status>=400&&error.status<=599?error.status:502,{success:false,code,layer:'relay'})}
  finally{if(lease&&gate)await gate.fetch('https://gate/release',{method:'POST',body:JSON.stringify({lease})}).catch(()=>{})}

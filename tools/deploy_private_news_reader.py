@@ -17,6 +17,9 @@ ENDPOINT='https://'+HOST+'/api'
 FOLDER_HASH='db18cd877473eb77afd569a89e219af45bc398c916b6212e15926c759fb9072b'
 ROLE='myinvest-private-original-reader-v1'
 LOGGING_OFF={'observability':{'enabled':False},'logpush':False}
+# Exact public package previously uploaded by the owner (source 658803e). Not arbitrary history.
+PREVIOUS_MODULE_HASHES={'worker.mjs':'1235e3feb78d9119375c3a32f70308f0e77c5159efcd7b3e1c4d326c133db823',
+ 'drive-archive.mjs':'2a7c964bf8660016b1e0b0ab03d82684342d61e1a364eaab78d7b1ebdb3f1865'}
 class Stop(Exception):pass
 
 class ReceiptFailure(Stop):
@@ -89,7 +92,8 @@ def resume_snapshot(api,base,version):
     gate=bindings['GATE'];resource=api('GET',base+'/versions/'+version).get('resources',{}).get('bindings',[])
     version_gate=next((b for b in resource if b.get('name')=='GATE'),{})
     if gate.get('class_name')!='RelayGate' or not gate.get('namespace_id') or gate.get('namespace_id')!=version_gate.get('namespace_id') or version_gate.get('class_name')!='RelayGate':raise Stop('PRIVATE_EXISTING_STORAGE_UNCONFIRMED')
-    if not inspection.module_matches(api('GET',base+'/content/v2')):raise Stop('PRIVATE_CODE_CHANGED_STOP')
+    content=api('GET',base+'/content/v2')
+    if not inspection.module_matches(content) and not inspection.module_matches(content,PREVIOUS_MODULE_HASHES):raise Stop('PRIVATE_CODE_CHANGED_STOP')
     if worker.active(api,base)!=active or worker.recent_versions(api,base)!=history:raise Stop('CONCURRENT_PRIVATE_CHANGE_STOP')
     return {'active':active,'history':history,'bindings':bindings,'stamp':stamp,'namespace':gate['namespace_id']}
 
@@ -197,9 +201,32 @@ def validate_receipt(status,data,original):
       'cacheDisabled':data.get('cacheable') is False,'dateMatches':report.get('date')=='2026-11-27','contentPresent':isinstance(content,str),
       'responseHashMatches':digest is not None and digest==report.get('contentSha256'),'sourceHashMatches':digest is not None and digest==original['contentSha256'],
       'sourceBytesMatch':isinstance(content,str) and len(content.encode())==original['bytes']}
+    detail=data.get('archiveDiagnostic')
+    if isinstance(detail,dict) and detail.get('stage') in ('TOKEN','KEY_IMPORT','TOKEN_SIGN','TOKEN_REQUEST','TOKEN_RESPONSE','LIST','MEDIA') and (detail.get('http') is None or type(detail['http']) is int and 100<=detail['http']<=599):
+        checks.update(archiveStage=detail['stage'],archiveHttp=detail.get('http'))
     if status!=200 or not all(checks[k] for k in ('responseSuccess','cacheDisabled','dateMatches','contentPresent','responseHashMatches','sourceHashMatches','sourceBytesMatch')):
         raise ReceiptFailure('LIVE_ORIGINAL_RECEIPT_OR_HASH_UNCONFIRMED',checks)
     return digest,len(content.encode())
+
+def wait_private_revision(current,stamp):
+    for attempt in range(12):
+        try:
+            status,info=post('appVersion')
+            if status==200 and info.get('success') is True and info.get('developmentPrivateBriefingAuthority')=='gas-login-owner-v1' and info.get('scriptHash')==current['scriptHash'] and info.get('sourceDigest')==current['sourceDigest'] and info.get('developmentPrivateBriefingRevision')==stamp:return
+        except Exception:pass
+        if attempt==11:raise Stop('PRIVATE_EXACT_REVISION_ACTIVATION_UNCONFIRMED')
+        progress('WAITING_FOR_EXACT_PRIVATE_WORKER_REVISION');time.sleep(3)
+
+def read_live_original(token,original):
+    for attempt in range(6):
+        status,data=post('privateMorningBriefing',token,mode='date',date='2026-11-27')
+        try:return validate_receipt(status,data,original)
+        except ReceiptFailure as error:
+            detail=error.diagnostic;http=detail.get('archiveHttp')
+            transient=detail.get('archiveStage') in ('TOKEN','TOKEN_REQUEST','TOKEN_RESPONSE') and (http is None or http in (400,429) or http>=500)
+            if not transient or attempt==5:raise
+            delay=min(2**(attempt+1),30)
+            progress('WAITING_FOR_WORKER_GOOGLE_TOKEN_'+str(delay)+'S');time.sleep(delay)
 
 def upload_body(metadata,modules=None):
     modules=worker_modules() if modules is None else modules
@@ -256,7 +283,7 @@ def deploy(environment,account,cf_token,user,password,folder,resume_version=None
     def primary_unchanged():
         if worker.active(api,primary)!=original_active or worker.recent_versions(api,primary)!=original_history:raise Stop('PRIMARY_CHANGED_STOP_NO_PRIMARY_WRITES')
     primary_unchanged()
-    stamp=resume['stamp'] if resume else secrets.token_hex(16);key_id=None;key_attempted=False;worker_attempted=False;logged=None;key_client,key_url=google_api(access_token())
+    stamp=secrets.token_hex(16);key_id=None;key_attempted=False;worker_attempted=False;logged=None;key_client,key_url=google_api(access_token())
     fixed={'primaryWorkerWrites':0,'gasSourceWrites':0,'folderPermissionWrites':0,'originalFileWrites':0,'accountStoreWrites':False,'nhCalls':0,'accountCalls':0,'orderCalls':0,'credentialsIncluded':False}
     try:
         progress('VALIDATING_EXISTING_GAS_OWNER_LOGIN')
@@ -294,19 +321,12 @@ def deploy(environment,account,cf_token,user,password,folder,resume_version=None
         logging=disable_logging(api,base)
         api('POST',base+'/subdomain',{'enabled':True,'previews_enabled':False})
         progress('VERIFYING_LIVE_PRIVATE_AUTH_AND_ORIGINAL')
-        for attempt in range(6):
-            try:
-                status,info=post('appVersion')
-                if status==200 and info.get('success') is True and info.get('developmentPrivateBriefingAuthority')=='gas-login-owner-v1' and info.get('scriptHash')==current['scriptHash'] and info.get('sourceDigest')==current['sourceDigest']:break
-            except Exception:pass
-            if attempt==5:raise Stop('PRIVATE_PUBLIC_ACTIVATION_UNCONFIRMED')
-            time.sleep(3)
+        wait_private_revision(current,stamp)
         status,anonymous=post('privateMorningBriefing',mode='date',date='2026-11-27')
         if status!=401 or anonymous.get('code')!='AUTH_REQUIRED':raise Stop('ANONYMOUS_ACCESS_BLOCK_UNCONFIRMED')
         status,login=post('login',user=user,**{'pass':password});logged=login.get('token')
         if status!=200 or login.get('success') is not True or not re.fullmatch('[a-fA-F0-9]{64}',logged or ''):raise Stop('PRIVATE_OWNER_LOGIN_UNCONFIRMED')
-        status,data=post('privateMorningBriefing',logged,mode='date',date='2026-11-27')
-        digest,size=validate_receipt(status,data,original);del data
+        digest,size=read_live_original(logged,original)
         status,logout=post('logout',logged)
         if status!=200 or logout.get('success') is not True:raise Stop('OWNER_LOGOUT_UNCONFIRMED')
         status,denied=post('privateMorningBriefing',logged,mode='date',date='2026-11-27')

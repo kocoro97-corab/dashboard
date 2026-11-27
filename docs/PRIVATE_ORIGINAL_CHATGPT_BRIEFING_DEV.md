@@ -182,3 +182,36 @@ reusing the stale version ID after a preceding successful upload. It does not
 permit foreign code or unreviewed bindings, and never changes the primary Worker.
 
 Official reference: https://docs.cloud.google.com/iam/docs/keys-create-delete
+
+### Worker-only archive failure and exact revision readiness (2026-11-27)
+
+The owner's latest execution passed the dedicated service-account source read in
+Cloud Shell, then the Worker returned HTTP 200 with success false and
+`PRIVATE_BRIEFING_ARCHIVE_UNAVAILABLE`. No original content was returned. The false
+hash flags therefore do not establish a hash mismatch. Its new key was revoked.
+
+An actual workerd 1.20261127.1 local runtime probe (compatibility 2026-11-01) passed
+PKCS8 import, JWT signing, token response validation, Drive list/media parsing and
+original hash verification against synthetic transports. This is a runtime/mocked
+transport check, not a successful Google request from Cloudflare.
+
+The old appVersion readiness check only compared unchanged GAS metadata, so it
+could accept a preceding Worker with the prior revoked key during propagation.
+This is a confirmed readiness defect, but its contribution to the owner's failure
+is not yet proven. Each upload now generates a new non-secret deployment marker;
+the private appVersion advertises it, and the installer waits for that exact marker
+before logging in or requesting the original. It never treats matching GAS metadata
+alone as evidence that the new private upload is serving traffic.
+
+The reader reports only allowlisted KEY_IMPORT/TOKEN_SIGN/TOKEN_REQUEST/
+TOKEN_RESPONSE/LIST/MEDIA stages and numeric HTTP statuses to an already authorized
+owner on failure. No provider message, URL, key, token, folder ID, file ID or content
+is included. The Worker strips unexpected diagnostic fields and stages. Transient
+Worker token failures retry with a bounded backoff on the same key/session; owner
+permission denial and list/media failures stop without retry.
+
+Resume accepts the exact current package or the one exact public package previously
+uploaded by the owner (source 658803e), with both module SHA-256 values pinned in
+the installer. Arbitrary historical versions and mixed packages are not accepted.
+All role, bindings, existing namespace, latest-version and concurrency checks remain.
+The namespace stays unchanged; the new marker is intentionally rotated on upload.

@@ -21,7 +21,7 @@ def observability_state(settings):
         'logpush':bool_state(settings.get('logpush')),
         'tailConsumerCount':len(settings['tail_consumers']) if isinstance(settings.get('tail_consumers'),list) else None}
 
-def module_matches(content):
+def module_matches(content,expected_hashes=None):
     expected=deploy.worker_modules();raw=content.get('body');kind=content.get('contentType','')
     if content.get('entrypoint') not in (None,'worker.mjs'):return False
     if not isinstance(raw,bytes) or len(raw)>2*1024*1024:return False
@@ -34,7 +34,8 @@ def module_matches(content):
         if name=='metadata':continue
         if name not in expected or name in actual or part.is_multipart() or part.defects:return False
         actual[name]=part.get_payload(decode=True)
-    return actual==expected
+    hashes={name:deploy.sha(raw) for name,raw in actual.items()}
+    return hashes==expected_hashes if expected_hashes is not None else actual==expected
 
 def inspect(account,token):
     if not re.fullmatch('[a-fA-F0-9]{32}',account or ''):raise Stop('ACCOUNT_ID_INVALID')

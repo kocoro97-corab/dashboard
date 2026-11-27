@@ -38,6 +38,28 @@ class ReceiptTests(unittest.TestCase):
             with self.assertRaises(m.ReceiptFailure) as error:m.archive_probe('SYNTHETIC_PEM','syntheticFolder000000001')
         sleep.assert_not_called();self.assertEqual(error.exception.diagnostic['archiveStage'],'LIST')
         self.assertNotIn('CANARY',json.dumps(error.exception.diagnostic))
+    def test_exact_revision_wait_rejects_old_worker_with_matching_gas_metadata(self):
+        current={'scriptHash':'a'*64,'sourceDigest':'b'*64};stamp='c'*32
+        old={**current,'success':True,'developmentPrivateBriefingAuthority':'gas-login-owner-v1','developmentPrivateBriefingRevision':'d'*32}
+        with patch.object(m,'post',side_effect=[(200,old),(200,{**old,'developmentPrivateBriefingRevision':stamp})]) as post,patch.object(m.time,'sleep') as sleep:
+            m.wait_private_revision(current,stamp)
+        self.assertEqual(post.call_count,2);sleep.assert_called_once_with(3)
+        with patch.object(m,'post',return_value=(200,old)),patch.object(m.time,'sleep'):
+            with self.assertRaisesRegex(m.Stop,'PRIVATE_EXACT_REVISION_ACTIVATION_UNCONFIRMED'):m.wait_private_revision(current,stamp)
+    def test_worker_token_visibility_retries_same_session_but_denial_stops(self):
+        temporary={'success':False,'code':'PRIVATE_BRIEFING_ARCHIVE_UNAVAILABLE','archiveDiagnostic':{'stage':'TOKEN_RESPONSE','http':400,'raw':'PRIVATE_CANARY'}}
+        with patch.object(m,'post',side_effect=[(200,temporary),(200,self.response())]) as post,patch.object(m.time,'sleep') as sleep:
+            self.assertEqual(m.read_live_original('SYNTHETIC_SESSION',self.original())[0],self.original()['contentSha256'])
+        self.assertEqual(post.call_count,2);sleep.assert_called_once_with(2)
+        with patch.object(m,'post',return_value=(200,{'success':False,'code':'PRIVATE_BRIEFING_FORBIDDEN'})),patch.object(m.time,'sleep') as sleep:
+            with self.assertRaises(m.ReceiptFailure) as error:m.read_live_original('SYNTHETIC_SESSION',self.original())
+        sleep.assert_not_called();self.assertEqual(error.exception.diagnostic['responseCode'],'PRIVATE_BRIEFING_FORBIDDEN')
+    def test_runtime_diagnostics_are_allowlisted_and_separate_from_hash_mismatch(self):
+        for diagnostic in ({'stage':'LIST','http':403,'body':'PRIVATE_CANARY'},{'stage':'PRIVATE_CANARY','http':400},{'stage':'TOKEN_RESPONSE','http':'PRIVATE_CANARY'}):
+            with self.assertRaises(m.ReceiptFailure) as error:
+                m.validate_receipt(200,{'success':False,'code':'PRIVATE_BRIEFING_ARCHIVE_UNAVAILABLE','archiveDiagnostic':diagnostic},self.original())
+            self.assertNotIn('PRIVATE_CANARY',json.dumps(error.exception.diagnostic))
+            self.assertEqual('archiveStage' in error.exception.diagnostic,diagnostic['stage']=='LIST')
     def test_probe_executes_existing_reader_and_hashes_text_without_emitting_it(self):
         real_run=subprocess.run
         fixture=r'''

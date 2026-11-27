@@ -72,3 +72,19 @@ test('service account token never accepts a broader returned scope',async()=>{
  const get=createServiceAccountToken({email:account,pem,now:()=>stamp,fetcher:async()=>Response.json({access_token:'synthetic-token-000001',token_type:'Bearer',expires_in:3600,scope:'https://www.googleapis.com/auth/drive'})});
  await assert.rejects(get(),/archive authorization/);
 });
+test('archive diagnostics identify Google stages without returning key, token, folder or response bodies',async()=>{
+ const unavailable=await createDedicatedDriveArchiveReader({folderId:folder,now:()=>stamp,getToken:createServiceAccountToken({email:account,pem:'invalid-synthetic-key',fetcher:async()=>{throw Error('unexpected network')}})})({mode:'date',date});
+ assert.deepEqual(unavailable.archiveDiagnostic,{stage:'KEY_IMPORT',http:null});
+ const authorization=createServiceAccountToken({email:account,pem,now:()=>stamp,fetcher:async()=>new Response('PRIVATE_PROVIDER_BODY_CANARY',{status:400})});
+ const denied=await createDedicatedDriveArchiveReader({folderId:folder,now:()=>stamp,getToken:authorization})({mode:'date',date});
+ assert.deepEqual(denied.archiveDiagnostic,{stage:'TOKEN_RESPONSE',http:400});
+ for(const failureStage of ['LIST','MEDIA']){
+  const read=createDedicatedDriveArchiveReader({folderId:folder,now:()=>stamp,getToken:async()=> 'PRIVATE_TOKEN_CANARY',fetcher:async url=>{
+   if(failureStage==='MEDIA'&&url.pathname.endsWith('/files'))return Response.json({files:[row]});
+   return new Response('PRIVATE_PROVIDER_BODY_CANARY',{status:403});
+  }});
+  const out=await read({mode:'date',date});
+  assert.deepEqual(out.archiveDiagnostic,{stage:failureStage,http:403});
+  for(const privateValue of ['PRIVATE_TOKEN_CANARY','PRIVATE_PROVIDER_BODY_CANARY',folder,fileId,pem])assert.ok(!JSON.stringify(out).includes(privateValue));
+ }
+});
