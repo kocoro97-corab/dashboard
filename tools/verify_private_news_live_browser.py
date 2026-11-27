@@ -53,7 +53,7 @@ async def verify(user,password,args):
             phase='SERVER_ORIGINAL';progress(phase);result=receipt(data,args.content_sha,args.date,args.bytes)
             if response.status!=200 or 'no-store' not in response.headers.get('cache-control','').lower():raise Stop('PRIVATE_CACHE_POLICY_UNCONFIRMED')
             del data
-            phase='DOM_ORIGINAL';progress(phase);await page.wait_for_function("document.querySelector('[data-news-block=private-original] pre')?.textContent.length>0")
+            phase='DOM_ORIGINAL';progress(phase);await page.wait_for_function("()=>document.querySelector('[data-news-block=private-original] pre')?.textContent.length>0")
             widths={}
             for width in (1440,690,344):
                 progress('VIEWPORT_'+str(width))
@@ -63,12 +63,14 @@ async def verify(user,password,args):
                 widths[str(width)]={'hash':'PASS','noDocumentOverflow':observed['noDocumentOverflow']}
             phase='LOGOUT_CLEAR';progress(phase)
             async with page.expect_response(lambda r:r.url==READER and r.request.method=='POST' and json.loads(r.request.post_data or '{}').get('action')=='logout',timeout=30000) as logged_out:
-                await page.evaluate('logout()')
+                logout=page.locator('#appContainer button[onclick="logout()"]')
+                if not await logout.is_visible():await page.locator('header .dense-header-tools > summary').click()
+                await logout.click()
             # Logout hides/unmounts the page before ignored fetch bodies are drained.
             # Verify the response status and DOM cleanup; server-token revocation is
             # independently covered by the owner's live API receipt.
             if (await logged_out.value).status!=200:raise Stop('LOGOUT_TRANSPORT_UNCONFIRMED')
-            await page.wait_for_function("document.querySelector('[data-news-block=private-original] pre')===null")
+            await page.wait_for_function("()=>document.querySelector('[data-news-block=private-original] pre')===null")
             if 'AUTH_ROUTE_MISMATCH' in blocked:raise Stop('AUTH_ROUTE_MISMATCH')
             return {'status':'PASS' if not errors and all(v['noDocumentOverflow'] for v in widths.values()) else 'PARTIAL','phase':'REAL_BROWSER_ORIGINAL_VERIFIED','sourceSha':args.source_sha,'original':result,'sourceServerDomHashMatch':True,'anonymousBlocked':True,'logoutCleared':True,'widths':widths,'pageErrors':len(errors),'scopeBlockedRequests':blocked,'nhCalls':0,'accountCalls':0,'orderCalls':0,'originalFileWrites':0,'credentialsIncluded':False,'screenshotsWritten':False,'generalMemberLiveTest':'NOT_RUN','nextScheduledSave':'NOT_RUN'}
         except Stop as error:return {'status':'PARTIAL','phase':phase,'code':str(error),'credentialsIncluded':False,'nhCalls':0,'accountCalls':0,'orderCalls':0}

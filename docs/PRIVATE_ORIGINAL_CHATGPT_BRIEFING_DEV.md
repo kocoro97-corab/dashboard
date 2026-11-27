@@ -344,3 +344,34 @@ the browser tool does not claim an additional revoked-token test. Phase progress
 and bounded teardown expose no original content or credentials. The new fixture is
 included in secret-free PR CI. These helper-only changes do not republish the UI;
 the verified publication above continues to be the frontend source of record.
+
+### Fold owner denied screen: visible logout control regression (2026-11-27)
+
+The owner's Fold screenshot showed the private card's authorization-denied message.
+The owner confirmed that the browser ID is the same ID used for the successful
+Cloud Shell original read. This rules out assuming an ID mismatch; it does not
+establish that the browser's token was issued through the private owner login.
+The session timer resets on activity and is not proof of a fresh login.
+
+A confirmed UI defect prevented the normal recovery action: dashboard-presentation
+moves the session buttons into the app header, where DevelopmentInspection's broad
+query/store-control disable selector also disabled logout. Prior browser regressions
+called logout() directly and missed the broken button. The development-only control
+filter now explicitly keeps that existing logout button enabled, regardless of its
+position; other query/store controls retain their restrictions. No auth, GAS,
+Worker, secret, permissions or account/order path is changed.
+
+The private-card denial text now distinguishes a session without original-read
+permission and directs an explicit logout/re-login using the same owner ID.
+Browser fixtures now model primary-issued tokens without owner proof: they must
+remain denied until the actual visible logout button and login form are used.
+The 344px fixture opens/closes the existing header menu using its summary control;
+it never force-clicks through overlays or bypasses the logout function. All eight
+private-original browser scenarios and the owner-verifier synthetic scenario
+passed at 1440/690/344. The read-only owner verifier also uses the visible button.
+CSP-safe wait predicates are functions, avoiding string-evaluation restrictions.
+
+This fixes the disabled recovery control and reproduces the primary-token recovery
+path. The actual owner's original display remains FAIL/awaiting recheck until the
+new development build and a real visible logout/re-login are verified. The screenshot
+alone cannot establish every server-side denial cause; no privilege is broadened.

@@ -66,7 +66,8 @@ function mount(host){
      content.textContent='';metadata.textContent='';
      status.textContent=!available()?'비공개 원문 자동 조회 연결 미활성화 · 테스트 GAS 및 중계 설정이 필요합니다. 별도 AI 재생성이나 직접 입력은 필요하지 않습니다.':
        failureCode==='PRIVATE_BRIEFING_NOT_FOUND'?'아직 비공개 Drive 보관본이 없습니다. 다음 예약 작업의 저장 결과를 확인하세요.':
-       failureCode==='PRIVATE_BRIEFING_FORBIDDEN'||failureCode==='AUTH_REQUIRED'?'관리자 인증이 필요합니다. 다시 로그인하거나 계정 권한을 확인하세요.':
+       failureCode==='PRIVATE_BRIEFING_FORBIDDEN'?'이 세션에는 원문 읽기 권한이 없습니다. 상단 로그아웃 후 같은 소유자 ID로 다시 로그인해 인증하세요.':
+       failureCode==='AUTH_REQUIRED'?'소유자 로그인이 필요합니다. 상단 로그아웃 후 다시 로그인하세요.':
        failureCode==='PRIVATE_BRIEFING_INTEGRITY_FAILED'?'원문 무결성 검사 실패 · 표시하지 않습니다.':
        '비공개 원문을 불러오지 못했습니다. 연결 또는 읽기 권한을 확인하세요.';
    }

@@ -14,6 +14,7 @@ class PrivateHarness(Harness):
   self.endpoint=PRIMARY
   self.capability=capability
   self.private_requests=[]
+  self.owner_attested=False
  async def _route(self,route):
   if route.request.url in (self.endpoint,READER) and route.request.method=='POST':
    body=json.loads(route.request.post_data or '{}')
@@ -36,6 +37,7 @@ class PrivateHarness(Harness):
                'report':{'date':'2026-11-26','content':TEXT,'savedAt':int(time.time()*1000),
                          'format':'verbatim-text','origin':'scheduled-task-archive-unverified',
                          'contentSha256':hashlib.sha256(TEXT.encode()).hexdigest()}}
+    if body['action']=='privateMorningBriefing' and not self.owner_attested:response={'success':False,'code':'PRIVATE_BRIEFING_FORBIDDEN'}
     await route.fulfill(status=200,headers=headers,json=response)
     return
   if route.request.url==READER:
@@ -44,6 +46,10 @@ class PrivateHarness(Harness):
     request=urllib.request.Request('http://127.0.0.1:'+str(self.port),data=json.dumps(payload).encode(),headers={'Content-Type':'application/json'})
     with urllib.request.urlopen(request,timeout=20) as response:return json.load(response)
    result=await asyncio.to_thread(send)
+   if payload['method']=='POST':
+    action=json.loads(payload['body'] or '{}').get('action')
+    if action=='login':self.owner_attested=json.loads(result['body']).get('success') is True
+    elif action=='logout':self.owner_attested=False
    await route.fulfill(status=result['status'],headers=result['headers'],body=result['body']);return
   await super()._route(route)
 
@@ -108,12 +114,21 @@ async def main():
      assert not h.private_requests
      h.capability=True
      await h.page.evaluate("MYINVEST_TRANSPORT_CONFIG.privateBriefings=true; dispatchEvent(new Event('myinvest-private-briefing-capability'))")
+     await h.page.wait_for_function("()=>document.querySelector('.mipr1-status')?.textContent.includes('인증')")
+     assert h.private_requests==['latest'],'a primary-issued session has no owner proof'
+     logout=h.page.locator('#appContainer button[onclick="logout()"]')
+     assert await logout.is_enabled(),'moving logout into the header must not disable it'
+     if not await logout.is_visible():await h.page.locator('header .dense-header-tools > summary').click()
+     await logout.click()
+     await h.page.wait_for_function("()=>!LS('invest_session_token')&&$('authGuard').style.display==='flex'")
+     await h.page.locator('#authId').fill('synthetic');await h.page.locator('#authPw').fill('SYNTHETIC_PRIVATE_PASSWORD');await h.page.locator('#authSubmitBtn').click()
      await h.page.wait_for_function("(t)=>document.querySelector('[data-news-block=private-original] pre')?.textContent===t",arg=TEXT)
-     assert h.private_requests==['latest']
+     assert h.private_requests==['latest','latest']
+     if await h.page.locator('header .dense-header-tools').evaluate('(el)=>el.open'):await h.page.locator('header .dense-header-tools > summary').click()
      await h.go('strategy')
      await h.page.evaluate("dispatchEvent(new Event('myinvest-private-briefing-capability'))")
-     assert h.private_requests==['latest']
-     print(json.dumps({'width':344,'delayedCapabilityReadOnce':'PASS','noReadAfterLeaving':'PASS'}))
+     assert h.private_requests==['latest','latest']
+     print(json.dumps({'width':344,'primarySessionDeniedUntilVisibleRelogin':'PASS','delayedCapabilityReadOnce':'PASS','noReadAfterLeaving':'PASS'}))
     finally:await h.close()
     # The app's normal dev_connect.js bootstrap must unlock the actual News page.
     # Only the relay network response is simulated; no client flag is injected.
@@ -133,7 +148,9 @@ async def main():
        assert await host.count()==0
        await h.go('news')
        await h.page.wait_for_function('(text)=>document.querySelector(\'[data-news-block="private-original"] pre\')?.textContent===text',arg=TEXT)
-       await h.page.evaluate('logout()')
+       logout=h.page.locator('#appContainer button[onclick="logout()"]');assert await logout.is_enabled()
+       if not await logout.is_visible():await h.page.locator('header .dense-header-tools > summary').click()
+       await logout.click()
        await h.page.wait_for_function('()=>DashboardShell.getStatus().page===null')
        assert await host.count()==0
        assert TEXT not in await h.page.locator('body').inner_text()
