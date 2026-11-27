@@ -23,19 +23,33 @@ class State:
                 if self.fault=='already-exists':return {}
                 raise m.worker.Stop('CLOUDFLARE_REQUEST_REJECTED',http=404)
             return self.settings
+        if path.endswith('/versions/'+self.private_version):
+            gate=copy.deepcopy(self.settings['bindings'][-1])
+            if self.fault=='namespace-changed':gate['namespace_id']='another-namespace'
+            return {'resources':{'bindings':[gate]}}
+        if path.endswith('/content/v2'):
+            body,kind=m.upload_body({})
+            if self.fault=='code-changed':body=body.replace(b'const policy=',b'const foreign=')
+            return {'body':body,'contentType':kind}
         if method=='PUT':
             if self.fault=='cf-permission':raise m.worker.Stop('CLOUDFLARE_REQUEST_REJECTED',http=403)
             if self.fault=='cf-bad-module':raise m.worker.Stop('CLOUDFLARE_REQUEST_REJECTED',http=400,stage='PRIVATE_WORKER_UPLOAD',provider_codes=[10021],hints=['MULTIPART'])
             parts=list(BytesParser(policy=default).parsebytes(('Content-Type: '+mime+'\r\n\r\n').encode()+body).iter_parts())
-            config=json.loads(parts[0].get_payload(decode=True));self.settings={'bindings':copy.deepcopy(config['bindings']),'observability':{'enabled':False}}
+            config=json.loads(parts[0].get_payload(decode=True));self.settings={'bindings':copy.deepcopy(config['bindings']),'logpush':False}
+            self.settings['bindings'][-1]['namespace_id']='synthetic-namespace'
             self.config=config
             for row in self.settings['bindings']:
                 if row['type']=='secret_text':row.pop('text',None)
-            assert config['migrations']['new_sqlite_classes']==['RelayGate']
+            assert config['migrations']['new_sqlite_classes']==['RelayGate'] if 'migrations' in config else self.resuming
             assert len(parts)==3
             assert all(part.get_content_type()=='application/javascript+module' for part in parts[1:])
             assert b"import policy from './policy.json'" not in parts[1].get_payload(decode=True)
             return {}
+        if path.endswith('/script-settings'):
+            if method=='PATCH':
+                assert body==m.LOGGING_OFF
+                if self.fault=='logging-on':return {'observability':{'enabled':True},'logpush':False}
+            return {'logpush':False}
         if path.endswith('/subdomain') and method=='POST':return {}
         raise AssertionError('Unexpected mutation')
     def google(self,method,url,body=None):
@@ -63,11 +77,16 @@ class State:
         if self.fault=='read-failed':return 200,{'success':False,'code':'PRIVATE_BRIEFING_NOT_FOUND'}
         if getattr(self,'logged_out',False):return 200,{'success':False,'code':'PRIVATE_BRIEFING_FORBIDDEN'}
         return 200,{'success':True,'cacheable':False,'report':{'date':'2026-11-27','content':self.original,'contentSha256':hashlib.sha256(self.original.encode()).hexdigest()}}
-    def execute(self):
+    def execute(self,resume=False):
+        self.resuming=resume
+        if resume:
+            self.settings={'bindings':copy.deepcopy(m.metadata(self.plan,self.meta,'fixture-owner',self.pem,self.folder,'f'*32)['bindings']),'logpush':False}
+            self.settings['bindings'][-1]['namespace_id']='synthetic-namespace'
+            if self.fault=='unknown-binding':self.settings['bindings'].append({'name':'FOREIGN','type':'plain_text','text':'preserve'})
         base='/accounts/'+'a'*32+'/workers/scripts/'+m.preflight.PREVIEW
         def active(api,path):return {'id':'synthetic-deployment','version':self.private_version if path==base else self.primary_version}
-        with patch.object(m.preflight,'google_snapshot',return_value={'existingUserManagedKeyCount':0}),patch.object(m,'folder_id',return_value=self.folder),patch.object(m,'private_path',return_value=Path('/synthetic-owner')),patch.object(Path,'read_text',return_value=json.dumps(self.plan)),patch.object(m,'cloud_api',return_value=(self.api,base)),patch.object(m.owner,'inspect',return_value={'ownerCheckoutVerified':True,'ownerCheckoutInspection':{'sourceRevisionMatches':True},'latestVersionIsActive':False}),patch.object(m.owner,'public_probe',return_value=self.meta),patch.object(m.gas,'check_metadata'),patch.object(m.worker,'active',side_effect=active),patch.object(m.worker,'recent_versions',return_value=[{'id':'pending-existing'}]),patch.object(m,'access_token',return_value='SYNTHETIC_TOKEN'),patch.object(m,'google_api',return_value=(self.google,'https://iam.googleapis.com/synthetic/keys')),patch.object(m,'WebApp',side_effect=self.web),patch.object(m,'post',side_effect=self.post),patch.object(m.subprocess,'check_output',return_value='f'*40):
-            return m.deploy(Path('/synthetic-owner'),'a'*32,'SYNTHETIC_TOKEN','fixture-owner','SYNTHETIC_PASSWORD',self.folder)
+        with patch.object(m.preflight,'google_snapshot',return_value={'existingUserManagedKeyCount':0}),patch.object(m,'folder_id',return_value=self.folder),patch.object(m,'private_path',return_value=Path('/synthetic-owner')),patch.object(Path,'read_text',return_value=json.dumps(self.plan)),patch.object(m,'cloud_api',return_value=(self.api,base)),patch.object(m.owner,'inspect',return_value={'ownerCheckoutVerified':True,'ownerCheckoutInspection':{'sourceRevisionMatches':True},'latestVersionIsActive':False}),patch.object(m.owner,'public_probe',return_value=self.meta),patch.object(m.gas,'check_metadata'),patch.object(m.worker,'active',side_effect=active),patch.object(m.worker,'recent_versions',side_effect=lambda api,path:[{'id':self.private_version if path==base else 'pending-existing'}]),patch.object(m,'access_token',return_value='SYNTHETIC_TOKEN'),patch.object(m,'google_api',return_value=(self.google,'https://iam.googleapis.com/synthetic/keys')),patch.object(m,'WebApp',side_effect=self.web),patch.object(m,'post',side_effect=self.post),patch.object(m.subprocess,'check_output',return_value='f'*40):
+            return m.deploy(Path('/synthetic-owner'),'a'*32,'SYNTHETIC_TOKEN','fixture-owner','SYNTHETIC_PASSWORD',self.folder,self.private_version if resume else None)
 
 class DeploymentTests(unittest.TestCase):
     def test_success_only_creates_private_worker_and_transfers_one_memory_key(self):
@@ -81,6 +100,24 @@ class DeploymentTests(unittest.TestCase):
         secret={r['name']:r for r in state.config['bindings'] if r['type']=='secret_text'}
         self.assertEqual(secret['MYINVEST_NEWS_READER_PEM']['text'],state.pem)
         self.assertEqual(secret['MYINVEST_NEWS_FOLDER_ID']['text'],state.folder)
+    def test_resume_reuses_storage_omits_migrations_and_disables_logging_before_key(self):
+        state=State();report=state.execute(resume=True)
+        self.assertEqual(report['status'],'PASS');self.assertTrue(report['resumedExistingPrivateWorker'])
+        self.assertTrue(report['existingNamespacePreserved']);self.assertFalse(report['privateWorkerCreated'])
+        self.assertNotIn('migrations',state.config)
+        self.assertEqual(report['loggingDisable']['readbackObservability'],'ABSENT_AFTER_EXPLICIT_DISABLE')
+        methods=[(method,path.rsplit('/',1)[-1]) for method,path in state.calls]
+        self.assertLess(methods.index(('PATCH','script-settings')),methods.index(('POST','keys')))
+    def test_changed_code_binding_or_namespace_stops_resume_without_mutation(self):
+        for fault in ('code-changed','namespace-changed','unknown-binding'):
+            with self.subTest(fault=fault):
+                state=State(fault)
+                with self.assertRaises(m.Stop):state.execute(resume=True)
+                self.assertFalse(any(method in ('PATCH','POST','PUT','DELETE') for method,_ in state.calls))
+    def test_logging_patch_rejection_stops_resume_before_key_creation(self):
+        state=State('logging-on');report=state.execute(resume=True)
+        self.assertEqual(report['code'],'EXPLICIT_PRIVATE_LOGGING_DISABLE_UNCONFIRMED')
+        self.assertEqual(report['keyCreateCalls'],0);self.assertFalse(report['privateWorkerUploadAttempted'])
     def test_existing_private_worker_stops_before_any_key_creation(self):
         state=State('already-exists')
         with self.assertRaisesRegex(m.Stop,'EXISTING_PRIVATE_WORKER_REVIEW_REQUIRED'):state.execute()
@@ -117,8 +154,16 @@ class DeploymentTests(unittest.TestCase):
         calls=[]
         with patch.object(m.worker,'api_client',return_value=lambda *args:calls.append(args)):
             api,base=m.cloud_api('a'*32,'SYNTHETIC_TOKEN')
-            for method,path in [('PUT',base.replace(m.preflight.PREVIEW,m.worker.NAME)),('DELETE',base),('PUT',base+'/secrets'),('POST',base+'/deployments')]:
+            for method,path in [('PUT',base.replace(m.preflight.PREVIEW,m.worker.NAME)),('DELETE',base),('PUT',base+'/secrets'),('POST',base+'/deployments'),('PATCH',base+'/settings'),('PATCH',base+'/script-settings')]:
                 with self.assertRaises(m.Stop):api(method,path)
         self.assertEqual(calls,[])
+    def test_logging_api_accepts_only_exact_private_disable_body(self):
+        calls=[]
+        with patch.object(m.worker,'api_client',return_value=lambda *args:calls.append(args)):
+            api,base=m.cloud_api('a'*32,'SYNTHETIC_TOKEN')
+            api('PATCH',base+'/script-settings',m.LOGGING_OFF)
+            for body in ({'observability':{'enabled':True}}, {**m.LOGGING_OFF,'tail_consumers':[]}):
+                with self.assertRaises(m.Stop):api('PATCH',base+'/script-settings',body)
+        self.assertEqual(len(calls),1)
 
 if __name__=='__main__':unittest.main()

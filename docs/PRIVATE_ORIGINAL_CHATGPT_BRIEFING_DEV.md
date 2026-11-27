@@ -122,3 +122,31 @@ requestStage·숫자 providerCodes·고정 범주의 providerHints만 반환한�
 비밀값·namespace ID·원문·코드 본문은 출력하지 않는다.
 이 점검은 Google 인증·키 생성·GAS·주 Worker·설정 쓰기를 수행하지 않는다.
 현재 전용 Worker가 존재하므로 최초 설치 명령을 반복 실행하거나 Worker를 삭제하지 않는다.
+
+### Resume the inspected private Worker (2026-11-27)
+
+The owner inspection confirmed active/latest version
+`b23968a4-80ee-4453-b061-8551d317b4a4`, exact uploaded modules, and matching
+`RelayGate` namespace in both metadata views. Cloudflare omitted observability
+fields while reporting Logpush false. Omission alone is not a logging-off proof.
+The previous attempt revoked its new key; it did not delete this Worker.
+
+`tools/deploy_private_news_reader.py --apply --resume-private-version VERSION`
+requires the exact still-active/latest version, original deployment marker,
+expected public binding values and secret binding types, identical modules, and
+matching namespace. Unknown bindings, foreign code, pending versions, or concurrent
+changes stop before key creation. It explicitly PATCHes only this private Worker's
+`script-settings` with `observability.enabled=false` and `logpush=false`. A successful
+acknowledgement and two settings reads must report Logpush false, no tail consumers,
+and observability false or the provider's omitted representation. The report names
+that representation `ABSENT_AFTER_EXPLICIT_DISABLE`; read-only absence is never
+accepted as equivalent evidence.
+
+After this check, one replacement service-account key moves only through RAM to
+Worker Secrets. The upload omits migrations and must retain the existing namespace.
+Primary Worker code/settings, pending calendar version, GAS, folder permissions,
+and original files remain untouched. Failure revokes only the newly created key.
+The owner command still requires hidden existing Cloudflare credentials, dashboard
+owner credentials, and the approved original folder address. No private key file
+is created. Local provisioning simulations do not establish live API, browser,
+general-member denial, or future scheduled-save success.

@@ -16,6 +16,7 @@ HOST='myinvest-v2-private-original-preview.kocoro97.workers.dev'
 ENDPOINT='https://'+HOST+'/api'
 FOLDER_HASH='db18cd877473eb77afd569a89e219af45bc398c916b6212e15926c759fb9072b'
 ROLE='myinvest-private-original-reader-v1'
+LOGGING_OFF={'observability':{'enabled':False},'logpush':False}
 class Stop(Exception):pass
 
 def progress(value):print('[news] '+value,file=sys.stderr,flush=True)
@@ -31,10 +32,12 @@ def cloud_api(account,token):
     raw=worker.api_client(token);base='/accounts/'+account+'/workers/scripts/'+preflight.PREVIEW
     primary='/accounts/'+account+'/workers/scripts/'+worker.NAME
     def api(method,path,body=None,mime='application/json'):
-        reads={base+x for x in ('/settings','/deployments','/versions','/content/v2')}
+        reads={base+x for x in ('/settings','/script-settings','/deployments','/versions','/content/v2')}
         reads|={primary+x for x in ('/settings','/secrets','/deployments','/versions')}
         reads.add('/accounts/'+account+'/workers/subdomain')
-        if not (method=='GET' and path in reads or method=='PUT' and path==base or method=='POST' and path==base+'/subdomain'):raise Stop('PRIVATE_NEWS_SCOPE_DENIED')
+        version_read=path.startswith(base+'/versions/') and worker.UUID.fullmatch(path.rsplit('/',1)[-1])
+        logging_patch=method=='PATCH' and path==base+'/script-settings' and body==LOGGING_OFF
+        if not (method=='GET' and (path in reads or version_read) or method=='PUT' and path==base or method=='POST' and path==base+'/subdomain' or logging_patch):raise Stop('PRIVATE_NEWS_SCOPE_DENIED')
         try:return raw(method,path,body,mime)
         except worker.Stop as error:
             if method=='PUT' and path==base:error.stage='PRIVATE_WORKER_UPLOAD'
@@ -48,6 +51,43 @@ def absent(api,base):
         if error.http==404:return
         raise
     raise Stop('EXISTING_PRIVATE_WORKER_REVIEW_REQUIRED')
+
+def logging_clear(settings):
+    if not isinstance(settings,dict) or settings.get('logpush') is not False:return False
+    obs=settings.get('observability')
+    if obs is not None and (not isinstance(obs,dict) or obs.get('enabled') is not False):return False
+    # Omission is accepted only after the explicit PATCH succeeds, never on inspection alone.
+    return settings.get('tail_consumers') in (None,[])
+
+def disable_logging(api,base):
+    acknowledged=api('PATCH',base+'/script-settings',LOGGING_OFF)
+    readback=api('GET',base+'/script-settings')
+    combined=api('GET',base+'/settings')
+    if not all(logging_clear(s) for s in (acknowledged,readback,combined)):
+        raise Stop('EXPLICIT_PRIVATE_LOGGING_DISABLE_UNCONFIRMED')
+    return {'explicitDisableAcknowledged':True,'readbackObservability':
+        'ABSENT_AFTER_EXPLICIT_DISABLE' if readback.get('observability') is None else 'FALSE'}
+
+def resume_snapshot(api,base,version):
+    import inspect_private_news_worker as inspection
+    if not isinstance(version,str) or not worker.UUID.fullmatch(version):raise Stop('EXPECTED_PRIVATE_VERSION_REQUIRED')
+    active=worker.active(api,base);history=worker.recent_versions(api,base)
+    if active['version']!=version or not history or history[0]['id']!=version:raise Stop('CONCURRENT_PRIVATE_CHANGE_STOP')
+    settings=api('GET',base+'/settings');rows=settings.get('bindings',[])
+    if not isinstance(rows,list) or any(not isinstance(b,dict) or not isinstance(b.get('name'),str) for b in rows):raise Stop('PRIVATE_BINDINGS_INVALID')
+    bindings={b['name']:b for b in rows};stamp=bindings.get('MYINVEST_NEWS_DEPLOYMENT_MARKER',{}).get('text')
+    if len(bindings)!=len(rows) or not re.fullmatch('[a-f0-9]{32}',stamp or ''):raise Stop('PRIVATE_DEPLOYMENT_MARKER_INVALID')
+    expected=metadata({'url':''},{},'','','',stamp)['bindings']
+    if set(bindings)!={b['name'] for b in expected}:raise Stop('PRIVATE_BINDINGS_CHANGED_STOP')
+    for b in expected:
+        actual=bindings[b['name']]
+        if actual.get('type')!=b['type'] or b['type']=='plain_text' and actual.get('text')!=b['text']:raise Stop('PRIVATE_BINDINGS_CHANGED_STOP')
+    gate=bindings['GATE'];resource=api('GET',base+'/versions/'+version).get('resources',{}).get('bindings',[])
+    version_gate=next((b for b in resource if b.get('name')=='GATE'),{})
+    if gate.get('class_name')!='RelayGate' or not gate.get('namespace_id') or gate.get('namespace_id')!=version_gate.get('namespace_id') or version_gate.get('class_name')!='RelayGate':raise Stop('PRIVATE_EXISTING_STORAGE_UNCONFIRMED')
+    if not inspection.module_matches(api('GET',base+'/content/v2')):raise Stop('PRIVATE_CODE_CHANGED_STOP')
+    if worker.active(api,base)!=active or worker.recent_versions(api,base)!=history:raise Stop('CONCURRENT_PRIVATE_CHANGE_STOP')
+    return {'active':active,'history':history,'bindings':bindings,'stamp':stamp,'namespace':gate['namespace_id']}
 
 def google_api(token):
     prefix='https://iam.googleapis.com/v1/projects/'+preflight.PROJECT+'/serviceAccounts/'+preflight.READER+'/keys'
@@ -128,7 +168,7 @@ def post(action,token=None,**values):
     try:return status,json.loads(raw)
     except ValueError:raise Stop('PRIVATE_RESPONSE_NOT_JSON') from None
 
-def deploy(environment,account,cf_token,user,password,folder):
+def deploy(environment,account,cf_token,user,password,folder,resume_version=None):
     progress('VERIFYING_EXISTING_GOOGLE_READER');gcp=preflight.google_snapshot()
     if gcp['existingUserManagedKeyCount']!=0:raise Stop('EXISTING_READER_KEYS_REQUIRE_REVIEW')
     if not re.fullmatch(r'[가-힣A-Za-z0-9][가-힣A-Za-z0-9_.@-]{1,63}',user or ''):raise Stop('EXISTING_OWNER_USER_REQUIRED')
@@ -141,13 +181,18 @@ def deploy(environment,account,cf_token,user,password,folder):
     snapshot=owner.inspect(lambda p:api('GET',p),account,owner_dir=env)
     if not snapshot['ownerCheckoutVerified'] or not snapshot.get('ownerCheckoutInspection',{}).get('sourceRevisionMatches'):raise Stop('VERIFIED_EXISTING_OWNER_BUNDLE_REQUIRED')
     current=owner.public_probe();gas.check_metadata(current,plan)
-    absent(api,base)
+    resume=resume_snapshot(api,base,resume_version) if resume_version else None
+    if not resume:absent(api,base)
+    def private_unchanged():
+        if resume:
+            if resume_snapshot(api,base,resume_version)!=resume:raise Stop('CONCURRENT_PRIVATE_CHANGE_STOP')
+        else:absent(api,base)
     primary='/accounts/'+account+'/workers/scripts/'+worker.NAME
     original_active=worker.active(api,primary);original_history=worker.recent_versions(api,primary)
     def primary_unchanged():
         if worker.active(api,primary)!=original_active or worker.recent_versions(api,primary)!=original_history:raise Stop('PRIMARY_CHANGED_STOP_NO_PRIMARY_WRITES')
     primary_unchanged()
-    stamp=secrets.token_hex(16);key_id=None;key_attempted=False;worker_attempted=False;logged=None;key_client,key_url=google_api(access_token())
+    stamp=resume['stamp'] if resume else secrets.token_hex(16);key_id=None;key_attempted=False;worker_attempted=False;logged=None;key_client,key_url=google_api(access_token())
     fixed={'primaryWorkerWrites':0,'gasSourceWrites':0,'folderPermissionWrites':0,'originalFileWrites':0,'accountStoreWrites':False,'nhCalls':0,'accountCalls':0,'orderCalls':0,'credentialsIncluded':False}
     try:
         progress('VALIDATING_EXISTING_GAS_OWNER_LOGIN')
@@ -157,16 +202,20 @@ def deploy(environment,account,cf_token,user,password,folder):
             if login.get('isAdmin') is not True or login.get('mustChangePassword') is not False or not re.fullmatch('[a-fA-F0-9]{64}',web.token or ''):raise Stop('EXISTING_APPROVED_OWNER_LOGIN_REQUIRED')
         finally:
             if web.token:web.call('logout')
-        primary_unchanged();absent(api,base)
+        primary_unchanged();private_unchanged()
         progress('CHECKING_PUBLIC_MODULE_PACKAGE_BEFORE_KEY_CREATION')
         modules=worker_modules();validate_package(modules)
+        if resume:
+            progress('EXPLICITLY_DISABLING_ONLY_PRIVATE_LOGGING')
+            disable_logging(api,base);private_unchanged();primary_unchanged()
         progress('CREATING_ONE_KEY_IN_MEMORY')
         key_attempted=True
         key_id,pem=key_material(key_client('POST',key_url,{'privateKeyType':'TYPE_GOOGLE_CREDENTIALS_FILE','keyAlgorithm':'KEY_ALG_RSA_2048'}))
         expected={k:v for k,v in current.items() if k in ('freshTestEnvironment','testEnvironment','scriptHash','sheetHash','sourceDigest','revision','gatewayVersion','storeEngine','storeVersion')}
         config=metadata(plan,expected,user,pem,folder,stamp)
-        primary_unchanged();absent(api,base)
-        progress('CREATING_ONLY_PRIVATE_NEWS_WORKER')
+        if resume:config.pop('migrations')
+        primary_unchanged();private_unchanged()
+        progress('RESUMING_ONLY_VERIFIED_PRIVATE_NEWS_WORKER' if resume else 'CREATING_ONLY_PRIVATE_NEWS_WORKER')
         body,mime=upload_body(config,modules);worker_attempted=True
         api('PUT',base,body,mime)
         settings=api('GET',base+'/settings');bindings={b['name']:b for b in settings.get('bindings',[])}
@@ -174,7 +223,9 @@ def deploy(environment,account,cf_token,user,password,folder):
         if set(bindings)!={b['name'] for b in config['bindings']}:raise Stop('PRIVATE_BINDING_NAMES_UNCONFIRMED')
         for b in config['bindings']:
             if b['type']=='plain_text' and bindings[b['name']].get('text')!=b['text'] or b['type']=='secret_text' and bindings[b['name']].get('type')!='secret_text':raise Stop('PRIVATE_BINDING_TYPE_OR_VALUE_UNCONFIRMED')
-        if bindings['GATE'].get('type')!='durable_object_namespace' or bindings['GATE'].get('class_name')!='RelayGate' or settings.get('observability',{}).get('enabled') is not False:raise Stop('PRIVATE_STORAGE_OR_NO_LOGGING_UNCONFIRMED')
+        if bindings['GATE'].get('type')!='durable_object_namespace' or bindings['GATE'].get('class_name')!='RelayGate' or not bindings['GATE'].get('namespace_id'):raise Stop('PRIVATE_STORAGE_UNCONFIRMED')
+        if resume and bindings['GATE']['namespace_id']!=resume['namespace']:raise Stop('PRIVATE_STORAGE_CHANGED_STOP')
+        logging=disable_logging(api,base)
         api('POST',base+'/subdomain',{'enabled':True,'previews_enabled':False})
         progress('VERIFYING_LIVE_PRIVATE_AUTH_AND_ORIGINAL')
         for attempt in range(6):
@@ -197,7 +248,7 @@ def deploy(environment,account,cf_token,user,password,folder):
         if status not in (200,401,403) or denied.get('success') is not False or denied.get('code') not in ('PRIVATE_BRIEFING_FORBIDDEN','AUTH_REQUIRED'):raise Stop('LOGOUT_ACCESS_BLOCK_UNCONFIRMED')
         logged=None;primary_unchanged()
         active=worker.active(api,base)
-        return {**fixed,'status':'PASS','phase':'PRIVATE_READER_LIVE_API_VERIFIED','keyCreateCalls':1,'privateWorkerCreated':True,'workerVersion':active['version'],'sourceRevision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'originalDate':'2026-11-27','originalBytes':size,'serverContentSha256':digest,'anonymousBlocked':True,'loggedOutBlocked':True,'generalMemberLiveTest':'NOT_RUN','browserOriginalDisplay':'NOT_RUN','nextScheduledSave':'NOT_RUN','primaryPendingVersionPreserved':snapshot['latestVersionIsActive'] is False,'keyFileWritten':False}
+        return {**fixed,'status':'PASS','phase':'PRIVATE_READER_LIVE_API_VERIFIED','keyCreateCalls':1,'privateWorkerCreated':not bool(resume),'resumedExistingPrivateWorker':bool(resume),'existingNamespacePreserved':bool(resume),'loggingDisable':logging,'workerVersion':active['version'],'sourceRevision':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'originalDate':'2026-11-27','originalBytes':size,'serverContentSha256':digest,'anonymousBlocked':True,'loggedOutBlocked':True,'generalMemberLiveTest':'NOT_RUN','browserOriginalDisplay':'NOT_RUN','nextScheduledSave':'NOT_RUN','primaryPendingVersionPreserved':snapshot['latestVersionIsActive'] is False,'keyFileWritten':False}
     except Exception as error:
         cleanup='KEY_CREATE_RESULT_REVIEW_REQUIRED' if key_attempted and key_id is None else 'NOT_NEEDED'
         if key_id:
@@ -213,7 +264,7 @@ def deploy(environment,account,cf_token,user,password,folder):
             except Exception:pass
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--owner-dir',type=Path,default=Path('/home/kocoro97/myinvest-v2-fresh-private-r2'));p.add_argument('--apply',action='store_true',required=True);a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--owner-dir',type=Path,default=Path('/home/kocoro97/myinvest-v2-fresh-private-r2'));p.add_argument('--apply',action='store_true',required=True);p.add_argument('--resume-private-version');a=p.parse_args()
     try:
         if not sys.stdin.isatty():raise Stop('HIDDEN_OWNER_TERMINAL_REQUIRED')
         account=getpass.getpass('Existing Cloudflare Account ID (hidden): ')
@@ -221,7 +272,7 @@ def main():
         user=getpass.getpass('Existing MY INVEST owner ID (hidden, not Google): ')
         password=getpass.getpass('Existing MY INVEST password (hidden): ')
         folder=getpass.getpass('Approved archive folder URL or ID (hidden): ')
-        result=deploy(a.owner_dir,account,cf_token,user,password,folder)
+        result=deploy(a.owner_dir,account,cf_token,user,password,folder,a.resume_private_version)
     except (Stop,worker.Stop,owner.Stop) as error:result={'status':'NOT_RUN','code':error.code if isinstance(error,(worker.Stop,owner.Stop)) else str(error),'credentialsIncluded':False,'nhCalls':0,'orderCalls':0}
     except (EOFError,KeyboardInterrupt):result={'status':'NOT_RUN','code':'OWNER_INPUT_INTERRUPTED','credentialsIncluded':False}
     except Exception:result={'status':'NOT_RUN','code':'PRIVATE_NEWS_OWNER_STEP_FAILED','credentialsIncluded':False}
