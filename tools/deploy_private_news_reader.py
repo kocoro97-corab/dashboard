@@ -17,9 +17,9 @@ ENDPOINT='https://'+HOST+'/api'
 FOLDER_HASH='db18cd877473eb77afd569a89e219af45bc398c916b6212e15926c759fb9072b'
 ROLE='myinvest-private-original-reader-v1'
 LOGGING_OFF={'observability':{'enabled':False},'logpush':False}
-# Exact public package previously uploaded by the owner (source 658803e). Not arbitrary history.
-PREVIOUS_MODULE_HASHES={'worker.mjs':'1235e3feb78d9119375c3a32f70308f0e77c5159efcd7b3e1c4d326c133db823',
- 'drive-archive.mjs':'2a7c964bf8660016b1e0b0ab03d82684342d61e1a364eaab78d7b1ebdb3f1865'}
+# Exact public package previously uploaded by the owner (source 0640f48). Not arbitrary history.
+PREVIOUS_MODULE_HASHES={'worker.mjs':'d79e226b0cb752ba40614880cfada347eb8e732bf1550092bd52faceed775a13',
+ 'drive-archive.mjs':'81e8b418263532600614c6be61084a83dea3db6a3190acc3f1ca2429716972bd'}
 class Stop(Exception):pass
 
 class ReceiptFailure(Stop):

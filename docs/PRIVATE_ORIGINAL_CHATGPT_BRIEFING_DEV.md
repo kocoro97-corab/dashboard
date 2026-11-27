@@ -215,3 +215,36 @@ uploaded by the owner (source 658803e), with both module SHA-256 values pinned i
 the installer. Arbitrary historical versions and mixed packages are not accepted.
 All role, bindings, existing namespace, latest-version and concurrency checks remain.
 The namespace stays unchanged; the new marker is intentionally rotated on upload.
+
+### Confirmed unsupported redirect option and fix (2026-11-27)
+
+The owner reported `archiveStage=TOKEN_REQUEST, archiveHttp=null` after exact
+revision readiness passed. A workerd Request-construction reproduction confirmed
+that Workers rejects `redirect: 'error'` with TypeError before sending HTTP; it
+supports only `follow` and `manual`. Node and the previous injected fetch mocks
+accepted/bypassed this option, so their passing results missed the platform defect.
+
+The token POST and both authenticated Drive GETs now use `redirect: 'manual'`.
+Their existing `response.ok` checks reject all redirect responses without following
+Location. Credentials therefore remain on the fixed Google endpoints. No OAuth
+scope, archive ACL, account identity, original file or primary Worker change is
+needed. Resume now pins the preceding owner-uploaded package from source 0640f48.
+
+The committed opt-in runtime regression exercises actual workerd Request/fetch
+semantics, with globalOutbound routed exclusively to an internal synthetic service
+(no internet service configured). It reproduces the old TOKEN_REQUEST failure,
+checks the successful original SHA-256, and rejects TOKEN/LIST/MEDIA 302 responses
+without any request to the redirect destination. Five runtime scenarios passed.
+All keys and texts in that fixture are newly generated synthetic test material;
+real owner keys are never used or written by the test.
+
+Example (using an already installed workerd 1.20261127.1):
+
+```
+python tests/workerd_private_reader.py \
+  --workerd /path/to/node_modules/.bin/workerd \
+  --schema /path/to/node_modules/workerd/workerd.capnp
+```
+
+Actual Cloudflare-to-Google success and original DOM display remain unverified
+until the owner runs the corrected installer and the browser test is completed.

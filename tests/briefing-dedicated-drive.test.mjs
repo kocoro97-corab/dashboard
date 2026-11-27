@@ -12,7 +12,7 @@ const row={id:fileId,name:date+'.txt',mimeType:'text/plain',size:String(Buffer.b
 test('server token uses only the isolated service account, no owner impersonation or redirect',async()=>{
  let calls=0;assert.equal(validDedicatedAccount(account,pem,folder),true);assert.equal(validDedicatedAccount('owner@example.test',pem,folder),false);
  const get=createServiceAccountToken({email:account,pem,now:()=>stamp,fetcher:async(url,opts)=>{
-  calls++;assert.equal(url,'https://oauth2.googleapis.com/token');assert.equal(opts.redirect,'error');
+  calls++;assert.equal(url,'https://oauth2.googleapis.com/token');assert.equal(opts.redirect,'manual');
   const form=new URLSearchParams(opts.body),jwt=form.get('assertion'),[h,p,s]=jwt.split('.');
   assert.equal(form.get('grant_type'),'urn:ietf:params:oauth:grant-type:jwt-bearer');
   assert.equal(JSON.parse(Buffer.from(h,'base64url')).alg,'RS256');
@@ -27,7 +27,7 @@ test('server token uses only the isolated service account, no owner impersonatio
 test('reads exact dated text from the pinned archive; does not expose IDs or token',async()=>{
  const requests=[];
  const read=createDedicatedDriveArchiveReader({folderId:folder,now:()=>stamp,getToken:async()=> 'synthetic-token-000001',fetcher:async(url,opts)=>{
-  requests.push(url);assert.equal(url.origin,'https://www.googleapis.com');assert.equal(opts.method,'GET');assert.equal(opts.redirect,'error');
+  requests.push(url);assert.equal(url.origin,'https://www.googleapis.com');assert.equal(opts.method,'GET');assert.equal(opts.redirect,'manual');
   if(url.pathname.endsWith('/files')){assert.equal(url.searchParams.get('q'),"'"+folder+"' in parents and trashed = false");return Response.json({files:[row]});}
   assert.equal(url.pathname,'/drive/v3/files/'+fileId);return new Response(text);
  }});

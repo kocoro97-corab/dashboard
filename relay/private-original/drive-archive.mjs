@@ -33,7 +33,8 @@ export function createDedicatedDriveArchiveReader({folderId, getToken, fetcher=f
     try{
       let token;try{token=await getToken()}catch(error){return fail('ARCHIVE_UNAVAILABLE',safeArchiveDiagnostic(error?.archiveDiagnostic)||{stage,http})}
       if(typeof token!=='string'||!token||/[\r\n]/.test(token))return fail('ARCHIVE_UNAVAILABLE',{stage,http});
-      const get = async (url,accept)=>{http=null;const r=await fetcher(url,{method:'GET',redirect:'error',headers:{Authorization:'Bearer '+token,Accept:accept},signal:AbortSignal.timeout(12000)});http=r.status;return r};
+      // Workers supports manual/follow only. Reject non-2xx; never forward credentials on redirects.
+      const get = async (url,accept)=>{http=null;const r=await fetcher(url,{method:'GET',redirect:'manual',headers:{Authorization:'Bearer '+token,Accept:accept},signal:AbortSignal.timeout(12000)});http=r.status;return r};
       const files=new Map();let pageToken=null, inspected=0, remainingPages=4;
       do {
         if(remainingPages--===0)return fail('ARCHIVE_LIMIT');
@@ -103,7 +104,7 @@ export function createServiceAccountToken({email,pem,fetcher=fetch,now=()=>Date.
    const unsigned=header+'.'+body;
    stage='TOKEN_SIGN';const sig=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',key,new TextEncoder().encode(unsigned));
    stage='TOKEN_REQUEST';
-   const r=await fetcher(TOKEN_URL,{method:'POST',redirect:'error',signal:AbortSignal.timeout(10000),
+   const r=await fetcher(TOKEN_URL,{method:'POST',redirect:'manual',signal:AbortSignal.timeout(10000),
      headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},
      body:new URLSearchParams({grant_type:'urn:ietf:params:oauth:grant-type:jwt-bearer',assertion:unsigned+'.'+encode(new Uint8Array(sig))}).toString()});
    stage='TOKEN_RESPONSE';http=r.status;
